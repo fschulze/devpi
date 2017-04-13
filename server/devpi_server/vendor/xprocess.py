@@ -17,6 +17,7 @@ def do_xkill(info):
         # (taskkill only kills the setuptools wrapper process)
         if hasattr(std.signal, "CTRL_BREAK_EVENT"):
             os.kill(info.pid, std.signal.CTRL_BREAK_EVENT)
+            os.waitpid(info.pid, 0)
             return 1
         else:
             subprocess.check_call("taskkill /F /PID %s" % info.pid)
@@ -24,6 +25,7 @@ def do_xkill(info):
     else:
         try:
             os.kill(info.pid, 9)
+            os.waitpid(info.pid, os.WNOHANG)
         except OSError:
             return -1
         else:
@@ -125,6 +127,7 @@ class XProcess:
         if restart:
             if info.pid is not None:
                 info.kill()
+                info.wait()
             controldir = info.controldir.ensure(dir=1)
             #controldir.remove()
             wait, args = preparefunc(controldir)
