@@ -34,8 +34,10 @@ def test_devpi_stage_created(monkeypatch, pypistage, mock):
 
 
 def test_index_projects_arg(monkeypatch, tmpdir):
+    from devpi_server import __version__ as devpi_server_version
     from devpi_web.main import get_indexer
     import devpi_server.main
+    import pkg_resources
     XOM = devpi_server.main.XOM
     xom_container = []
 
@@ -58,15 +60,17 @@ def test_index_projects_arg(monkeypatch, tmpdir):
 
     monkeypatch.setattr(devpi_server.main, "XOM", MyXOM)
 
-    result = devpi_server.main.main(
-        ["devpi-server", "--serverdir", str(tmpdir), "--init"])
-    assert not result
+    server_version = pkg_resources.parse_version(devpi_server_version)
+    if server_version >= pkg_resources.parse_version('4.2.0.dev'):
+        result = devpi_server.main.main(
+            ["devpi-server", "--serverdir", str(tmpdir), "--init"])
+        assert not result
     result = devpi_server.main.main(
         ["devpi-server", "--serverdir", str(tmpdir), "--recreate-search-index"])
     assert result == 0
     assert tmpdir.join('.indices').check()
-    (xom1, xom2) = xom_container
-    ix = get_indexer(xom2.config)
+    xom = xom_container[-1]
+    ix = get_indexer(xom.config)
     result = ix.query_projects('foo')
     assert result['info']['found'] == 1
     assert result['items'][0]['data'] == {
