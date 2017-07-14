@@ -1,0 +1,1 @@
+use ``is_prerelease`` attribute of Version class when available and only access the tuple if not.

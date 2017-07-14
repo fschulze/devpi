@@ -91,6 +91,9 @@ class Version(CompareMixin):
         return self.string
 
     def is_prerelease(self):
+        is_prerelease = getattr(self.cmpval, 'is_prerelease', None)
+        if is_prerelease is not None:
+            return is_prerelease
         for x in self.cmpval:
             if x.startswith('*') and x < '*final':
                 return True
