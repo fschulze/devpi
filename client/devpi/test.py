@@ -9,7 +9,6 @@ import pkg_resources
 import py
 from devpi_common.archive import Archive
 import json
-import tox
 
 from devpi_common.url import URL
 from devpi_common.metadata import get_sorted_versions
@@ -116,7 +115,8 @@ class DevIndex:
             import detox.main
             return detox.main.main
         else:
-            return tox.cmdline
+            from tox.session import main
+            return main
 
     def get_tox_args(self, unpack_path):
         hub = self.hub
