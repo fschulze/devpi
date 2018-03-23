@@ -1,0 +1,1 @@
+fix #404: upstream error logging was broken due to the use of a wrong attribute.

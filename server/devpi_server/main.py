@@ -397,10 +397,6 @@ class FatalResponse:
     def __init__(self, excinfo=None):
         self.reason = repr(excinfo[1])
 
-    @property
-    def status(self):
-        return "%s %s" % (self.status_code, self.reason)
-
     def __repr__(self):
         return "%s(%r)" % (self.__class__.__name__, self.reason)
 

@@ -324,7 +324,7 @@ def httpget(pypiurls):
                         xself.raw = py.io.BytesIO(fakeresponse["content"])
 
                 @property
-                def status(xself):
+                def reason(xself):
                     return "%s" % xself.status_code
 
                 def __repr__(xself):
