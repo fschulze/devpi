@@ -5,7 +5,6 @@ from devpi_web import hookspecs
 from devpi_web.description import render_description
 from devpi_web.doczip import unpack_docs, remove_docs
 from devpi_web.indexing import iter_projects, preprocess_project
-from devpi_web.whoosh_index import Index
 from devpi_server.log import threadlog
 from pkg_resources import resource_filename
 from pluggy import PluginManager, HookimplMarker
@@ -126,7 +125,9 @@ class ThemeChameleonRendererLookup(ChameleonRendererLookup):
         return ChameleonRendererLookup.__call__(self, info)
 
 
-def get_pluginmanager(load_entry_points=True):
+def get_pluginmanager(config, load_entry_points=True):
+    if hasattr(config, 'devpi_web_pm'):
+        return config.devpi_web_pm
     pm = PluginManager("devpiweb", implprefix="devpiweb_")
     pm.add_hookspecs(hookspecs)
     if load_entry_points:
@@ -173,14 +174,21 @@ def includeme(config):
     config.add_request_method(navigation_info, reify=True)
     config.add_request_method(status_info, reify=True)
     config.add_request_method(query_docs_html, reify=True)
-    config.registry['devpiweb-pluginmanager'] = get_pluginmanager()
     config.scan()
 
 
 def get_indexer(config):
-    indices_dir = config.serverdir.join('.indices')
-    indices_dir.ensure_dir()
-    return Index(indices_dir.strpath)
+    pm = get_pluginmanager(config)
+    indexers = {
+        x['name']: x
+        for x in pm.hook.devpiweb_indexer_backend()}
+    (name, sep, setting_str) = config.args.indexer_backend.partition(':')
+    settings = {}
+    if setting_str:
+        for item in setting_str.split(','):
+            (key, value) = item.split('=', 1)
+            settings[key] = value
+    return indexers[name]['indexer'](config=config, settings=settings)
 
 
 @hookimpl
@@ -202,6 +210,7 @@ def devpiserver_pyramid_configure(config, pyramid_config):
     # by using include, the package name doesn't need to be set explicitly
     # for registrations of static views etc
     pyramid_config.include('devpi_web.main')
+    pyramid_config.registry['devpiweb-pluginmanager'] = get_pluginmanager(config)
     pyramid_config.registry['search_index'] = get_indexer(config)
 
     # monkeypatch mimetypes.guess_type on because pyramid-1.5.1/webob
@@ -234,6 +243,10 @@ def devpiserver_add_parser_options(parser):
              "This is only needed if there where indexing related errors in a "
              "devpi-web release and you want to upgrade only devpi-web "
              "without a full devpi-server import/export.")
+    indexing.addoption(
+        "--indexer-backend", type=str, metavar="NAME", default="whoosh",
+        action="store",
+        help="the indexer backend to use")
 
 
 @hookimpl

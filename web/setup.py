@@ -42,7 +42,9 @@ setup(
             for x in "2.7 3.4 3.5 3.6".split()],
     entry_points={
         'devpi_server': [
-            "devpi-web = devpi_web.main"]},
+            "devpi-web = devpi_web.main"],
+        'devpi_web': [
+            "devpi-web-whoosh = devpi_web.whoosh_index"]},
     install_requires=[
         'Whoosh<3',
         'beautifulsoup4>=4.3.2',
