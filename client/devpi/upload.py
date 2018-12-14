@@ -236,8 +236,10 @@ def get_name_version_doczip(basename):
     DOCZIPSUFFIX = ".doc.zip"
     assert basename.endswith(DOCZIPSUFFIX)
     fn = basename[:-len(DOCZIPSUFFIX)]
-    name, version = name_version_regex.match(fn).groups()[:2]
-    return name, version
+    m = name_version_regex.match(fn)
+    if m:
+        return m.groups()[:2]
+    return (fn, None)
 
 
 class DocZipMeta(CompareMixin):
