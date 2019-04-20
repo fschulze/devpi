@@ -14,6 +14,7 @@ from devpi_common.request import new_requests_session
 from .config import parseoptions, get_pluginmanager
 from .log import configure_logging, threadlog
 from .model import BaseStage
+from .readonly import DictViewReadonly, ensure_deeply_readonly
 from .views import apireturn
 from . import mythread
 from . import __version__ as server_version
@@ -345,6 +346,7 @@ class XOM:
             return FatalResponse(repr(sys.exc_info()[1]))
 
     def create_app(self):
+        from devpi_server.middleware import EventMiddleware
         from devpi_server.middleware import OutsideURLMiddleware
         from devpi_server.view_auth import DevpiAuthenticationPolicy
         from devpi_server.views import ContentTypePredicate
@@ -435,6 +437,7 @@ class XOM:
         )
         if self.config.args.profile_requests:
             pyramid_config.add_tween("devpi_server.main.tween_request_profiling")
+        pyramid_config.add_request_method(add_event_info)
         pyramid_config.add_request_method(get_remote_ip)
         pyramid_config.add_request_method(stage_url)
         pyramid_config.add_request_method(simpleindex_url)
@@ -459,7 +462,9 @@ class XOM:
             # and replayed through the PypiProjectChange event
             if not self.config.args.requests_only:
                 self.thread_pool.register(self.replica_thread)
-        return OutsideURLMiddleware(app, self)
+        app = OutsideURLMiddleware(app, self)
+        app = EventMiddleware(app, self)
+        return app
 
     def is_master(self):
         return self.config.role == "master"
@@ -476,6 +481,14 @@ class FatalResponse:
 
     def __repr__(self):
         return "%s(%r)" % (self.__class__.__name__, self.reason)
+
+
+def add_event_info(request, action, **kwargs):
+    # small dance so any items that can't be handled throw a traceback
+    # right away and not only when first accessed
+    kwargs = DictViewReadonly(dict(ensure_deeply_readonly(kwargs)))
+    request._devpi_events.append(
+        (action, kwargs))
 
 
 def get_remote_ip(request):

@@ -30,6 +30,7 @@ from .model import InvalidIndex, InvalidIndexconfig, InvalidUser
 from .model import ReadonlyIndex
 from .model import RemoveValue
 from .model import UpstreamError
+from .readonly import ensure_deeply_readonly
 from .readonly import get_mutable_deepcopy
 from .log import thread_push_log, thread_pop_log, threadlog
 
@@ -183,21 +184,32 @@ def tween_keyfs_transaction(handler, registry):
     is_replica = registry["xom"].is_replica()
     def request_tx_handler(request):
         write  = is_mutating_http_method(request.method) and not is_replica
+        request._devpi_events = []
         with keyfs.transaction(write=write) as tx:
             threadlog.debug("in-transaction %s", tx.at_serial)
             response = handler(request)
-        set_header_devpi_serial(response, tx)
+        if tx.commit_serial is not None:
+            serial = tx.commit_serial
+        else:
+            serial = tx.at_serial
+        set_header_devpi_serial(response, serial)
+        events = ensure_deeply_readonly(request._devpi_events)
+        del request._devpi_events
+        commited = tx.commit_serial is not None
+        if commited:
+            assert tx.write
+        request.environ['devpi.events_info'] = dict(
+            commited=commited,
+            events=events,
+            request=request,
+            serial=serial)
         return response
     return request_tx_handler
 
 
-def set_header_devpi_serial(response, tx):
+def set_header_devpi_serial(response, serial):
     if isinstance(response._app_iter, collections.Iterator):
         return
-    if tx.commit_serial is not None:
-        serial = tx.commit_serial
-    else:
-        serial = tx.at_serial
     response.headers[str("X-DEVPI-SERIAL")] = str(serial)
 
 
