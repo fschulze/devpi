@@ -10,6 +10,7 @@ from pluggy import PluginManager, HookimplMarker
 from pyramid.renderers import get_renderer
 from pyramid_chameleon.renderer import ChameleonRendererLookup
 import os
+import re
 import sys
 
 
@@ -329,3 +330,10 @@ def devpiserver_on_remove_file(stage, relpath):
             os.path.basename(relpath).rsplit('.doc.zip')[0].rsplit('-', 1)
         )
         remove_docs(stage, project, version)
+
+
+@devpiserver_hookimpl(optionalhook=True)
+def devpiserver_is_mutating_request(request):
+    if request.method == 'POST' and request.content_type == 'text/xml' and re.match('.*/[^/]+/[^/]+/$', request.path):
+        # xmlrpc request for pip search
+        return False

@@ -197,15 +197,18 @@ def make_uuid_headers(nodeinfo):
 
 
 def tween_keyfs_transaction(handler, registry):
-    keyfs = registry["xom"].keyfs
-    is_replica = registry["xom"].is_replica()
+    xom = registry["xom"]
+    keyfs = xom.keyfs
+    is_replica = xom.is_replica()
+
     def request_tx_handler(request):
-        write  = is_mutating_http_method(request.method) and not is_replica
+        write = is_mutating_request(xom, request) and not is_replica
         with keyfs.transaction(write=write) as tx:
             threadlog.debug("in-transaction %s", tx.at_serial)
             response = handler(request)
         set_header_devpi_serial(response, tx)
         return response
+
     return request_tx_handler
 
 
@@ -219,8 +222,13 @@ def set_header_devpi_serial(response, tx):
     response.headers[str("X-DEVPI-SERIAL")] = str(serial)
 
 
-def is_mutating_http_method(method):
-    return method in ("PUT", "POST", "PATCH", "DELETE", "PUSH")
+def is_mutating_request(xom, request):
+    if request.method in ("GET", "HEAD"):
+        return False
+    res = xom.config.hook.devpiserver_is_mutating_request(request=request)
+    if res is not None:
+        return res
+    return request.method in ("PUT", "POST", "PATCH", "DELETE", "PUSH")
 
 
 def get_actions(json):

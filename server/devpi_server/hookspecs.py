@@ -121,3 +121,10 @@ def devpiserver_on_upload_sync(log, application_url, stage, project, version):
 def devpiserver_on_remove_file(stage, relpath):
     """ called when a relpath is removed from a private stage
     """
+
+
+@hookspec(firstresult=True)
+def devpiserver_is_mutating_request(request):
+    """Return None if unknown or boolean if known whether the request
+    mutates the DB.
+    """

@@ -12,7 +12,7 @@ from webob.headers import EnvironHeaders, ResponseHeaders
 from . import mythread
 from .fileutil import dumps, loads, rename
 from .log import thread_push_log, threadlog
-from .views import is_mutating_http_method, H_MASTER_UUID, make_uuid_headers
+from .views import is_mutating_request, H_MASTER_UUID, make_uuid_headers
 from .model import UpstreamError
 
 H_REPLICA_UUID = str("X-DEVPI-REPLICA-UUID")
@@ -319,7 +319,7 @@ def tween_replica_proxy(handler, registry):
     xom = registry["xom"]
     def handle_replica_proxy(request):
         assert not hasattr(xom.keyfs, "tx"), "no tx should be ongoing"
-        if is_mutating_http_method(request.method):
+        if is_mutating_request(xom, request):
             return proxy_write_to_master(xom, request)
         else:
             return handler(request)
