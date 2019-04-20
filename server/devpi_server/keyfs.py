@@ -387,9 +387,11 @@ class TypedKey:
 class Transaction(object):
     def __init__(self, keyfs, at_serial=None, write=False):
         self.keyfs = keyfs
-        self.conn = keyfs._storage.get_connection(write=write, closing=False)
         self.commit_serial = None
         self.write = write
+        if self.write:
+            # open connection immediately
+            self.conn
         if at_serial is None:
             at_serial = self.conn.last_changelog_serial
         self.at_serial = at_serial
@@ -397,6 +399,11 @@ class Transaction(object):
         self.dirty = set()
         self.closed = False
         self.doomed = False
+
+    @cached_property
+    def conn(self):
+        return self.keyfs._storage.get_connection(
+            write=self.write, closing=False)
 
     def iter_serial_and_value_backwards(self, relpath, last_serial):
         while last_serial >= 0:
