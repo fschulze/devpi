@@ -766,6 +766,10 @@ class PrivateStage(BaseStage):
     def list_versions_perstage(self, project):
         return self.key_projversions(project).get()
 
+    def get_versiondata_serial_perstage(self, project, version):
+        project = normalize_name(project)
+        return self.key_projversion(project, version).last_serial
+
     def get_versiondata_perstage(self, project, version, readonly=True):
         project = normalize_name(project)
         return self.key_projversion(project, version).get(readonly=readonly)
