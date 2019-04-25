@@ -28,10 +28,15 @@ def preprocess_project(stage, name_input):
         'home_page', 'keywords', 'license', 'platform', 'summary'))
     versions = get_sorted_versions(stage.list_versions_perstage(name))
     result = dict(name=name)
+    last_serial = -1
     for i, version in enumerate(versions):
         if i == 0:
             verdata = stage.get_versiondata_perstage(name, version)
             result.update(verdata)
+        if hasattr(stage, 'get_versiondata_serial_perstage'):
+            last_serial = max(
+                last_serial,
+                stage.get_versiondata_serial_perstage(name, version))
         links = stage.get_linkstore_perstage(name, version).get_links(rel="doczip")
         if links:
             result['doc_version'] = version
