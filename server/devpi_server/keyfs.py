@@ -449,6 +449,12 @@ class Transaction(object):
 
     def get_last_serial_and_value_at(self, typedkey, at_serial, raise_on_error=True):
         relpath = typedkey.relpath
+        if hasattr(self.conn, 'get_relpath_at'):
+            # if the storage has direct support for this, then use it
+            (last_serial, val) = self.conn.get_relpath_at(relpath, at_serial)
+            if val is None:
+                raise KeyError(relpath)  # was deleted
+            return (last_serial, val)
         try:
             (keyname, last_serial) = self.conn.db_read_typedkey(relpath)
         except KeyError:
@@ -463,9 +469,9 @@ class Transaction(object):
                 if last_serial > at_serial:
                     (last_serial, val) = next(serials_and_values)
                     continue
-                if val is not None or not raise_on_error:
-                    return (last_serial, val)
-                raise KeyError(relpath)  # was deleted
+                if val is None or raise_on_error:
+                    raise KeyError(relpath)  # was deleted
+                return (last_serial, val)
         except StopIteration:
             pass
 

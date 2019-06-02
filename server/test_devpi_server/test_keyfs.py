@@ -737,3 +737,18 @@ def test_keyfs_sqlite_fs(gentmp):
         with open(tx.conn.io_file_os_path('foo'), 'rb') as f:
             assert f.read() == b'bar'
     assert sorted(x.basename for x in tmp.listdir()) == ['.sqlite', 'foo']
+
+
+def test_keyfs_sqlite2_fs(gentmp):
+    from devpi_server import keyfs_sqlite2_fs
+    tmp = gentmp()
+    keyfs = KeyFS(tmp, keyfs_sqlite2_fs.Storage)
+    with keyfs.transaction(write=True) as tx:
+        assert tx.conn.io_file_os_path('foo') == tmp.join('foo').strpath
+        tx.conn.io_file_set('foo', b'bar')
+        tx.conn._sqlconn.commit()
+    with keyfs.transaction(write=False) as tx:
+        assert tx.conn.io_file_get('foo') == b'bar'
+        with open(tx.conn.io_file_os_path('foo'), 'rb') as f:
+            assert f.read() == b'bar'
+    assert sorted(x.basename for x in tmp.listdir()) == ['.sqlite2', 'foo']
