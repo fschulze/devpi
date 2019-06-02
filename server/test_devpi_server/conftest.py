@@ -184,6 +184,14 @@ def speed_up_sqlite_fs():
     Storage.ensure_tables_exist = old
 
 
+@pytest.fixture(autouse=True, scope="session")
+def speed_up_sqlite2_fs():
+    from devpi_server.keyfs_sqlite2_fs import Storage
+    old = _speed_up_sqlite(Storage)
+    yield
+    Storage.ensure_tables_exist = old
+
+
 @pytest.fixture(scope="session")
 def mock():
     try:
