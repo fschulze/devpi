@@ -225,6 +225,14 @@ def speed_up_sqlite_fs():
     Storage._execute_conn_pragmas = old
 
 
+@pytest.fixture(autouse=True, scope="session")
+def speed_up_sqlite2_fs():
+    from devpi_server.keyfs_sqlite2_fs import Storage
+    old = _speed_up_sqlite(Storage)
+    yield
+    Storage._execute_conn_pragmas = old
+
+
 @pytest.fixture(scope="session")
 def mock():
     from unittest import mock

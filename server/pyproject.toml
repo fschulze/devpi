@@ -92,6 +92,7 @@ devpi-server-views = "devpi_server.views"
 devpi-server-sqla = "devpi_server.keyfs_sqla"
 devpi-server-sqlite = "devpi_server.keyfs_sqlite"
 devpi-server-sqlite-fs = "devpi_server.keyfs_sqlite_fs"
+devpi-server-sqlite2-fs = "devpi_server.keyfs_sqlite2_fs"
 
 
 [project.entry-points.devpi_web]
