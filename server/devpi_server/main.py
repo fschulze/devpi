@@ -345,9 +345,9 @@ class XOM:
             return FatalResponse(repr(sys.exc_info()[1]))
 
     def create_app(self):
+        from devpi_server.middleware import OutsideURLMiddleware
         from devpi_server.view_auth import DevpiAuthenticationPolicy
         from devpi_server.views import ContentTypePredicate
-        from devpi_server.views import OutsideURLMiddleware
         from devpi_server.views import route_url, INSTALLER_USER_AGENT
         from pkg_resources import get_distribution
         from pyramid.authorization import ACLAuthorizationPolicy
