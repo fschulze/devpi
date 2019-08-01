@@ -25,6 +25,7 @@ import json
 from devpi_common.request import new_requests_session
 from devpi_common.validation import normalize_name, is_valid_archive_name
 
+from .config import hookimpl
 from .filestore import BadGateway
 from .model import InvalidIndex, InvalidIndexconfig, InvalidUser
 from .model import ReadonlyIndex
@@ -917,14 +918,6 @@ class PyPIView:
                         request, 409,
                         "%s already exists in non-volatile index" % (
                             content.filename,))
-                try:
-                    self.xom.config.hook.devpiserver_on_upload_sync(
-                        log=request.log, application_url=request.application_url,
-                        stage=stage, project=project, version=version)
-                except Exception as e:
-                    abort_submit(
-                        request, 200,
-                        "OK, but a trigger plugin failed: %s" % e, level="warn")
             else:
                 if "version" in request.POST:
                     self._set_versiondata_form(stage, request.POST)
@@ -947,6 +940,12 @@ class PyPIView:
                             content.filename,))
             link.add_log(
                 'upload', request.authenticated_userid, dst=stage.name)
+            metadata = stage.get_versiondata_perstage(link.project, link.version)
+            request.add_event_info(
+                "devpi-server.%s" % action,
+                relpath=link.relpath,
+                index=stage.name,
+                metadata=metadata)
         else:
             abort_submit(request, 400, "action %r not supported" % action)
         return Response("")
@@ -1309,3 +1308,14 @@ def abort_if_invalid_project(request, project):
             project.encode("ascii")
     except (UnicodeEncodeError, UnicodeDecodeError):
         abort(request, 400, "unicode project names not allowed")
+
+
+@hookimpl
+def devpiserver_request_events(request, events, commited, exception):
+    xom = request.registry['xom']
+    for action, data in events:
+        if action == 'devpi-server.file_upload' and commited:
+            stage = xom.model.getstage(data['index'])
+            xom.config.hook.devpiserver_on_upload_sync(
+                log=request.log, application_url=request.application_url,
+                stage=stage, project=data['metadata']['name'], version=data['metadata']['version'])

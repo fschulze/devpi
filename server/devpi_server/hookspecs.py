@@ -133,7 +133,9 @@ def devpiserver_indexconfig_defaults(index_type):
     to avoid clashes between key names in different plugins."""
 
 
-@hookspec
+@hookspec(warn_on_impl=DeprecationWarning(
+    "devpiserver_on_upload_sync is deprecated, use devpiserver_request_events "
+    "instead and use 'devpi-server.file_upload' events"))
 def devpiserver_on_upload_sync(log, application_url, stage, project, version):
     """Called after release upload.
 

@@ -73,7 +73,8 @@ if __name__ == "__main__":
             "devpi-server-extpypi = devpi_server.extpypi",
             "devpi-server-model = devpi_server.model",
             "devpi-server-sqlite = devpi_server.keyfs_sqlite",
-            "devpi-server-sqlite-fs = devpi_server.keyfs_sqlite_fs"],
+            "devpi-server-sqlite-fs = devpi_server.keyfs_sqlite_fs",
+            "devpi-server-views = devpi_server.views"],
         'devpi_web': [
             "devpi-server-status = devpi_server.views"],
         'pytest11': [

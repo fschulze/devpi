@@ -1626,7 +1626,8 @@ def test_upload_trigger(mapp):
                 (application_url, stage.name, project, version))
     plugin = Plugin()
     plugin.results = []
-    mapp.xom.config.pluginmanager.register(plugin)
+    with pytest.warns(DeprecationWarning):
+        mapp.xom.config.pluginmanager.register(plugin)
     mapp.create_and_use()
     mapp.upload_file_pypi("pkg1-2.6.tgz", b"123", "pkg1", "2.6", code=200)
     assert plugin.results == [
