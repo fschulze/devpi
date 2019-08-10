@@ -344,8 +344,8 @@ def test_simple_refresh(mapp, model, pypistage, testapp):
     assert r.status_code == 302
     assert r.location.endswith("/root/pypi/+simple/hello/")
     with model.keyfs.transaction(write=False):
-        info = pypistage.key_projsimplelinks("hello").get()
-    assert info["links"] == []
+        links = list(pypistage.key_projsimplelinks("hello").get())
+    assert links == []
 
 
 def test_inheritance_project_listing_ignore_bases(mapp):
@@ -395,8 +395,7 @@ def test_simple_refresh_inherited(mapp, model, pypistage, testapp, project,
     assert r.status_code == 302
     assert r.location.endswith("/%s/+simple/%s/" % (stagename, project))
     with model.keyfs.transaction(write=False):
-        info = pypistage.key_projsimplelinks(project).get()
-    elist = info["links"]
+        elist = list(pypistage.key_projsimplelinks(project).get())
     assert len(elist) == 1
     assert elist[0][0].endswith("-2.0.zip")
 

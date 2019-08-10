@@ -21,7 +21,6 @@ from .config import hookimpl
 from .model import BaseStageCustomizer
 from .model import BaseStage, make_key_and_href, SimplelinkMeta
 from .model import ensure_boolean
-from .model import join_requires
 from .readonly import ensure_deeply_readonly
 from .log import threadlog
 
@@ -100,6 +99,11 @@ class PyPIStage(BaseStage):
         self.key_projects = self.keyfs.PROJECTS(user=username, index=index)
         # used to log about stale projects only once
         self._offline_logging = set()
+
+    def key_projserial(self, project):
+        return self.keyfs.PROJSERIAL(
+            user=self.username, index=self.index,
+            project=normalize_name(project))
 
     @property
     def cache_expiry(self):
@@ -306,19 +310,20 @@ class PyPIStage(BaseStage):
 
     def is_project_cached(self, project):
         """ return True if we have some cached simpelinks information. """
-        return self.key_projsimplelinks(project).exists()
+        return self.key_projserial(project).exists()
 
-    def _save_cache_links(self, project, links, requires_python, serial):
+    def _save_cache_links(self, project, links, serial):
         assert links != ()  # we don't store the old "Not Found" marker anymore
         assert isinstance(serial, int)
         assert project == normalize_name(project), project
-        data = {"serial": serial, "links": links,
-            "requires_python": requires_python}
+        self.key_projserial(project).set(serial)
         key = self.key_projsimplelinks(project)
         old = key.get()
-        if old != data:
-            threadlog.debug("saving changed simplelinks for %s: %s", project, data)
-            key.set(data)
+        if old != links:
+            threadlog.debug(
+                "saving changed simplelinks for %s: %s",
+                project, sorted(links))
+            key.set(links)
             # maintain list of currently cached project names to enable
             # deletion and offline mode
             self.add_project_name(project)
@@ -332,12 +337,13 @@ class PyPIStage(BaseStage):
     def _load_cache_links(self, project):
         is_expired, links_with_require_python, serial = True, None, -1
 
-        cache = self.key_projsimplelinks(project).get()
-        if cache:
+        serial_key = self.key_projserial(project)
+        if serial_key.exists():
             is_expired = self.cache_retrieve_times.is_expired(project, self.cache_expiry)
-            serial = cache["serial"]
-            links_with_require_python = join_requires(
-                cache["links"], cache.get("requires_python", []))
+            serial = serial_key.get()
+            if serial < 0:
+                is_expired = True
+            links_with_require_python = self.key_projsimplelinks(project).get()
             if self.offline and links_with_require_python:
                 links_with_require_python = ensure_deeply_readonly(list(
                     filter(self._is_file_cached, links_with_require_python)))
@@ -357,7 +363,7 @@ class PyPIStage(BaseStage):
         # we have to set to an empty dict instead of removing the key, so
         # replicas behave correctly
         self.cache_retrieve_times.expire(project)
-        self.key_projsimplelinks(project).set({})
+        self.key_projserial(project).set(-1)
         threadlog.debug("cleared cache for %s", project)
 
     def get_simplelinks_perstage(self, project):
@@ -450,15 +456,15 @@ class PyPIStage(BaseStage):
             maplink = partial(
                 self.filestore.maplink,
                 user=self.user.name, index=self.index, project=project)
-            entries = [maplink(link) for link in releaselinks]
-            links = [make_key_and_href(entry) for entry in entries]
-            requires_python = [link.requires_python for link in releaselinks]
-            self._save_cache_links(project, links, requires_python, serial)
+            links = set(
+                make_key_and_href(maplink(link), link.requires_python)
+                for link in releaselinks)
+            self._save_cache_links(project, links, serial)
             # make project appear in projects list even
             # before we next check up the full list with remote
             threadlog.info("setting projects cache for %r", project)
             self.cache_projectnames.get_inplace().add(project)
-            return join_requires(links, requires_python)
+            return links
 
         try:
             return map_and_dump()

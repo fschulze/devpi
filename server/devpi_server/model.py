@@ -11,25 +11,12 @@ from devpi_common.metadata import splitbasename, parse_version
 from devpi_common.url import URL
 from devpi_common.validation import validate_metadata, normalize_name
 from devpi_common.types import ensure_unicode, cached_property, parse_hash_spec
-try:
-    from itertools import zip_longest
-except ImportError:
-    from itertools import izip_longest as zip_longest
 from time import gmtime, strftime
 from .auth import hash_password, verify_and_update_password_hash
 from .config import hookimpl
 from .filestore import FileEntry
 from .log import threadlog, thread_current_log
 from .readonly import get_mutable_deepcopy
-
-
-def join_requires(links, requires_python):
-    # build list of (key, href, require_python) tuples
-    result = []
-    for link, require_python in zip_longest(links, requires_python, fillvalue=None):
-        key, href = link
-        result.append((key, href, require_python))
-    return result
 
 
 def apply_filter_iter(items, filter_iter):
@@ -1084,24 +1071,20 @@ class PrivateStage(BaseStage):
         return self.key_projversion(project, version).get(readonly=readonly)
 
     def get_simplelinks_perstage(self, project):
-        data = self.key_projsimplelinks(project).get()
-        links = data.get("links", [])
-        requires_python = data.get("requires_python", [])
-        return join_requires(links, requires_python)
+        return self.key_projsimplelinks(project).get()
 
     def _regen_simplelinks(self, project_input):
         project = normalize_name(project_input)
-        links = []
-        requires_python = []
+        links = set()
         for version in self.list_versions_perstage(project):
             linkstore = self.get_linkstore_perstage(project, version)
             releases = linkstore.get_links("releasefile")
-            links.extend(map(make_key_and_href, releases))
-            require_python = self.get_versiondata_perstage(project,
-                    version).get('requires_python')
-            requires_python.extend([require_python] * len(releases))
-        data_dict = {u"links":links, u"requires_python":requires_python}
-        self.key_projsimplelinks(project).set(data_dict)
+            require_python = self.get_versiondata_perstage(
+                project, version).get('requires_python')
+            links.update(
+                make_key_and_href(entry, require_python)
+                for entry in releases)
+        self.key_projsimplelinks(project).set(links)
 
     def list_projects_perstage(self):
         return self.key_projects.get()
@@ -1436,13 +1419,13 @@ class SimplelinkMeta(CompareMixin):
         return parse_version(self.version), normalize_name(self.name), self.ext
 
 
-def make_key_and_href(entry):
+def make_key_and_href(entry, requires_python):
     # entry is either an ELink or a filestore.FileEntry instance.
     # both provide a "relpath" attribute which points to a file entry.
     href = entry.relpath
     if entry.hash_spec:
         href += "#" + entry.hash_spec
-    return entry.basename, href
+    return (entry.basename, href, requires_python)
 
 
 def normalize_bases(model, bases):
@@ -1472,9 +1455,10 @@ def add_keys(xom, keyfs):
     # type mirror related data
     keyfs.add_key("PYPIFILE_NOMD5", "{user}/{index}/+e/{dirname}/{basename}", dict)
     keyfs.add_key("MIRRORNAMESINIT", "{user}/{index}/.mirrornameschange", int)
+    keyfs.add_key("PROJSERIAL", "{user}/{index}/{project}/.serial", int)
 
     # type "stage" related
-    keyfs.add_key("PROJSIMPLELINKS", "{user}/{index}/{project}/.simple", dict)
+    keyfs.add_key("PROJSIMPLELINKS", "{user}/{index}/{project}/.simple", set)
     keyfs.add_key("PROJVERSIONS", "{user}/{index}/{project}/.versions", set)
     keyfs.add_key("PROJVERSION", "{user}/{index}/{project}/{version}/.config", dict)
     keyfs.add_key("PROJECTS", "{user}/{index}/.projects", dict)
