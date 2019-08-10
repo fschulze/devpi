@@ -953,7 +953,7 @@ class PrivateStage(BaseStage):
     def __init__(self, xom, username, index, ixconfig, customizer_cls):
         super(PrivateStage, self).__init__(
             xom, username, index, ixconfig, customizer_cls)
-        self.key_projects = self.keyfs.PROJNAMES(user=username, index=index)
+        self.key_projects = self.keyfs.PROJECTS(user=username, index=index)
 
     def get_possible_indexconfig_keys(self):
         return tuple(dict(self.get_default_config_items())) + (
@@ -1023,15 +1023,15 @@ class PrivateStage(BaseStage):
         if version not in versions:
             versions.add(version)
             self.key_projversions(project).set(versions)
-        self.add_project_name(project)
+        self.add_project_name(project, title=metadata["name"])
 
-    def add_project_name(self, project):
+    def add_project_name(self, project, title=None):
         project = normalize_name(project)
         projects = self.key_projects.get(readonly=False)
         if project not in projects:
             if self.customizer.readonly:
                 raise ReadonlyIndex("index is marked read only")
-            projects.add(project)
+            projects[project] = title
             self.key_projects.set(projects)
 
     def del_project(self, project):
@@ -1040,7 +1040,7 @@ class PrivateStage(BaseStage):
             self.del_versiondata(project, version, cleanup=False)
         self._regen_simplelinks(project)
         with self.key_projects.update() as projects:
-            projects.remove(project)
+            projects.pop(project)
         threadlog.info("deleting project %s", project)
         self.key_projversions(project).delete()
 
@@ -1477,7 +1477,7 @@ def add_keys(xom, keyfs):
     keyfs.add_key("PROJSIMPLELINKS", "{user}/{index}/{project}/.simple", dict)
     keyfs.add_key("PROJVERSIONS", "{user}/{index}/{project}/.versions", set)
     keyfs.add_key("PROJVERSION", "{user}/{index}/{project}/{version}/.config", dict)
-    keyfs.add_key("PROJNAMES", "{user}/{index}/.projects", set)
+    keyfs.add_key("PROJECTS", "{user}/{index}/.projects", dict)
     keyfs.add_key("STAGEFILE",
                   "{user}/{index}/+f/{hashdir_a}/{hashdir_b}/{filename}", dict)
 

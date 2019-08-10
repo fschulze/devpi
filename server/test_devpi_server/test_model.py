@@ -179,11 +179,11 @@ class TestStage:
     def test_inheritance_simple(self, pypistage, stage):
         stage.modify(bases=("root/pypi",), mirror_whitelist=['someproject'])
         pypistage.mock_simple("someproject", "<a href='someproject-1.0.zip' /a>")
-        assert stage.list_projects_perstage() == set()
+        assert stage.list_projects_perstage() == {}
         links = stage.get_releaselinks("someproject")
         assert len(links) == 1
         stage.set_versiondata(udict(name="someproject", version="1.1"))
-        assert stage.list_projects_perstage() == set(["someproject"])
+        assert stage.list_projects_perstage() == {"someproject": "someproject"}
 
     def test_inheritance_twice(self, pypistage, stage, user):
         user.create_stage(index="dev2", bases=("root/pypi",))
@@ -199,8 +199,8 @@ class TestStage:
         assert links[0].basename == "someproject-1.2.tar.gz"
         assert links[1].basename == "someproject-1.1.tar.gz"
         assert links[2].basename == "someproject-1.0.zip"
-        assert stage.list_projects_perstage() == set()
-        assert stage_dev2.list_projects_perstage() == set(["someproject"])
+        assert stage.list_projects_perstage() == {}
+        assert stage_dev2.list_projects_perstage() == {"someproject": "someproject"}
 
     def test_inheritance_complex_issue_214(self, model):
         prov_user = model.create_user('provider', password="123")
@@ -276,7 +276,7 @@ class TestStage:
         assert links[0].basename == "some_project-1.2.tar.gz"
         assert links[1].basename == "some_project-1.0.zip"
         assert links[2].basename == "some_project-1.0.tar.gz"
-        assert stage.list_projects_perstage() == set(["some-project"])
+        assert stage.list_projects_perstage() == {"some-project": "some-project"}
 
     def test_inheritance_tolerance_on_different_names(self, stage, user):
         register_and_store(stage, "some_project-1.2.tar.gz",
@@ -332,7 +332,7 @@ class TestStage:
         entries = stage.get_releaselinks("some")
         assert len(entries) == 1
         assert entries[0].hash_spec == entry.hash_spec
-        assert stage.list_projects_perstage() == set(["some"])
+        assert stage.list_projects_perstage() == {"some": "some"}
         verdata = stage.get_versiondata("some", "1.0")
         links = verdata["+elinks"]
         assert len(links) == 1

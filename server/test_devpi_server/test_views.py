@@ -1382,7 +1382,7 @@ def test_delete_mirror(mapp, simpypi, testapp, xom):
     r = testapp.xget(200, link)
     with testapp.xom.keyfs.transaction():
         stage = testapp.xom.model.getstage(api.stagename)
-        assert stage.key_projects.get() == set([name])
+        assert stage.key_projects.get() == {name: None}
         assert getentry(testapp, path).file_exists()
     # remove
     mapp.delete_index(api.stagename)
@@ -1412,7 +1412,7 @@ def test_delete_mirror(mapp, simpypi, testapp, xom):
     assert getlinks(r.text) == []
     with testapp.xom.keyfs.transaction():
         stage = testapp.xom.model.getstage(api.stagename)
-        assert stage.key_projects.get() == set()
+        assert stage.key_projects.get() == {}
         assert not getentry(testapp, path).file_exists()
         key = testapp.xom.filestore.get_key_from_relpath(path.strip("/"))
         assert not key.exists()
@@ -1436,7 +1436,7 @@ def test_delete_from_mirror(mapp, pypistage, testapp):
     assert '2.5' in other_path
     assert '2.6' in path
     with testapp.xom.keyfs.transaction():
-        assert get_pypi_project_names(testapp) == set([name])
+        assert get_pypi_project_names(testapp) == {name: None}
         assert not getentry(testapp, path).file_exists()
     assert '/+e/' in link
     mapp.delete_project("pytest", code=403)
@@ -1446,7 +1446,7 @@ def test_delete_from_mirror(mapp, pypistage, testapp):
     mapp.delete_project("pytest", code=200)
     r = testapp.get(link)
     with testapp.xom.keyfs.transaction():
-        assert get_pypi_project_names(testapp) == set([name])
+        assert get_pypi_project_names(testapp) == {name: None}
         assert getentry(testapp, path).file_exists()
         assert not getentry(testapp, other_path).file_exists()
     r = testapp.get('/root/pypi/+simple/%s' % name)
@@ -1457,7 +1457,7 @@ def test_delete_from_mirror(mapp, pypistage, testapp):
     assert '2.6' in link
     mapp.delete_project("pytest", code=200)
     with testapp.xom.keyfs.transaction():
-        assert get_pypi_project_names(testapp) == set()
+        assert get_pypi_project_names(testapp) == {}
         assert not getentry(testapp, path).file_exists()
         key = testapp.xom.filestore.get_key_from_relpath(path.strip("/"))
         assert not key.exists()
@@ -1733,7 +1733,7 @@ def test_delete_package_from_mirror(mapp, pypistage, testapp):
     path1 = link1[1:]
     path2 = link2[1:]
     with testapp.xom.keyfs.transaction():
-        assert get_pypi_project_names(testapp) == set([name, other_name])
+        assert get_pypi_project_names(testapp) == {name: None, other_name: None}
         assert not getentry(testapp, path1).file_exists()
         assert not getentry(testapp, path2).file_exists()
         assert getentry(testapp, other_path).file_exists()
@@ -1746,7 +1746,7 @@ def test_delete_package_from_mirror(mapp, pypistage, testapp):
     testapp.get(link1)
     testapp.get(link2)
     with testapp.xom.keyfs.transaction():
-        assert get_pypi_project_names(testapp) == set([name, other_name])
+        assert get_pypi_project_names(testapp) == {name: None, other_name: None}
         assert getentry(testapp, path1).file_exists()
         assert getentry(testapp, path2).file_exists()
         assert getentry(testapp, other_path).file_exists()
@@ -1758,13 +1758,13 @@ def test_delete_package_from_mirror(mapp, pypistage, testapp):
     path2 = link2[1:]
     testapp.xdel(200, link1)
     with testapp.xom.keyfs.transaction():
-        assert get_pypi_project_names(testapp) == set([name, other_name])
+        assert get_pypi_project_names(testapp) == {name: None, other_name: None}
         assert not getentry(testapp, path1).file_exists()
         assert getentry(testapp, path2).file_exists()
         assert getentry(testapp, other_path).file_exists()
     testapp.xdel(200, link2)
     with testapp.xom.keyfs.transaction():
-        assert get_pypi_project_names(testapp) == set([other_name])
+        assert get_pypi_project_names(testapp) == {other_name: None}
         assert not getentry(testapp, path1).file_exists()
         assert not getentry(testapp, path2).file_exists()
         assert getentry(testapp, other_path).file_exists()

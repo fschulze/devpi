@@ -97,7 +97,7 @@ class PyPIStage(BaseStage):
         self.offline = self.xom.config.offline_mode
         self.timeout = xom.config.request_timeout
         # list of locally mirrored projects
-        self.key_projects = self.keyfs.PROJNAMES(user=username, index=index)
+        self.key_projects = self.keyfs.PROJECTS(user=username, index=index)
         # used to log about stale projects only once
         self._offline_logging = set()
 
@@ -156,11 +156,11 @@ class PyPIStage(BaseStage):
         self.key_projects.delete()
         BaseStage.delete(self)
 
-    def add_project_name(self, project):
+    def add_project_name(self, project, title=None):
         project = normalize_name(project)
         projects = self.key_projects.get(readonly=False)
         if project not in projects:
-            projects.add(project)
+            projects[project] = title
             self.key_projects.set(projects)
 
     def del_project(self, project):
@@ -175,7 +175,7 @@ class PyPIStage(BaseStage):
         self.key_projsimplelinks(project).delete()
         projects = self.key_projects.get(readonly=False)
         if project in projects:
-            projects.remove(project)
+            projects.pop(project)
             self.cache_retrieve_times.expire(project)
             self.key_projects.set(projects)
 
@@ -208,7 +208,7 @@ class PyPIStage(BaseStage):
         if not links and cleanup:
             projects = self.key_projects.get(readonly=False)
             if project in projects:
-                projects.remove(project)
+                projects.pop(project)
                 self.key_projects.set(projects)
 
     @property
