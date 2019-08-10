@@ -16,7 +16,7 @@ from .auth import hash_password, verify_and_update_password_hash
 from .config import hookimpl
 from .filestore import FileEntry
 from .log import threadlog, thread_current_log
-from .readonly import get_mutable_deepcopy
+from .readonly import ensure_deeply_readonly, get_mutable_deepcopy
 
 
 def apply_filter_iter(items, filter_iter):
@@ -1005,18 +1005,35 @@ class PrivateStage(BaseStage):
             user=self.username, index=self.index,
             project=normalize_name(project), version=version)
 
+    def key_versionfiles(self, project, version):
+        return self.keyfs.VERSIONFILES(
+            user=self.username, index=self.index,
+            project=normalize_name(project), version=version)
+
     def _set_versiondata(self, metadata):
+        # pop elinks for version data update
+        elinks = metadata.pop("+elinks", None)
         project = normalize_name(metadata["name"])
         version = metadata["version"]
         key_projversion = self.key_projversion(project, version)
-        versiondata = key_projversion.get(readonly=False)
-        versiondata.update(metadata)
-        key_projversion.set(versiondata)
+        with key_projversion.update() as versiondata:
+            versiondata.update(metadata)
         threadlog.info("set_metadata %s-%s", project, version)
-        versions = self.key_projversions(project).get(readonly=False)
-        if version not in versions:
-            versions.add(version)
-            self.key_projversions(project).set(versions)
+        with self.key_projversions(project).update() as versions:
+            if version not in versions:
+                versions.add(version)
+        if elinks:
+            with self.key_versionfiles(project, version).update() as links:
+                links.clear()
+                for elink in elinks:
+                    # make a copy
+                    elink = dict(elink)
+                    relpath = elink.pop("entrypath")
+                    assert relpath not in links
+                    links[relpath] = elink
+        if elinks is not None:
+            # put elinks back in
+            metadata["+elinks"] = elinks
         self.add_project_name(project, title=metadata["name"])
 
     def add_project_name(self, project, title=None):
@@ -1051,6 +1068,7 @@ class PrivateStage(BaseStage):
         linkstore.remove_links()
         versions.remove(version)
         self.key_projversion(project, version).delete()
+        self.key_versionfiles(project, version).delete()
         self.key_projversions(project).set(versions)
         if cleanup:
             if not versions:
@@ -1073,9 +1091,28 @@ class PrivateStage(BaseStage):
     def list_versions_perstage(self, project):
         return self.key_projversions(project).get()
 
+    def get_elinks(self, project, version):
+        elinks = []
+        files = self.key_versionfiles(project, version).get(readonly=False)
+        for relpath, data in sorted(files.items()):
+            # make a copy
+            data = dict(data)
+            data["entrypath"] = relpath
+            elinks.append(data)
+        return elinks
+
     def get_versiondata_perstage(self, project, version, readonly=True):
         project = normalize_name(project)
-        return self.key_projversion(project, version).get(readonly=readonly)
+        verdata = self.key_projversion(project, version).get(readonly=False)
+        assert "+elinks" not in verdata
+        elinks = self.get_elinks(project, version)
+        if elinks:
+            verdata["+elinks"] = elinks
+        if readonly:
+            verdata = ensure_deeply_readonly(verdata)
+        else:
+            verdata = get_mutable_deepcopy(verdata)
+        return verdata
 
     def get_simplelinks_perstage(self, project):
         return self.key_projsimplelinks(project).get()
@@ -1153,10 +1190,12 @@ class PrivateStage(BaseStage):
         linkstore = self.get_linkstore_perstage(project, version)
         links = linkstore.get_links(rel="doczip")
         if links:
-            if len(links) > 1:
-                threadlog.warn("Multiple documentation files for %s-%s, returning newest",
-                               project, version)
             link = links[-1]
+            if len(links) > 1:
+                # the order is not defined, but since devpi-server 2.4.0 it
+                # shouldn't be possible to get into this case anyway
+                threadlog.warn("Multiple documentation files for %s-%s, returning %s",
+                               project, version, link.entrypath)
             return link.entry
 
     def get_doczip(self, project, version):
@@ -1184,9 +1223,17 @@ class PrivateStage(BaseStage):
             if last_serial >= at_serial:
                 return last_serial
             for version in versions:
-                (version_serial, version) = tx.get_last_serial_and_value_at(
+                (version_serial, _) = tx.get_last_serial_and_value_at(
                     self.key_projversion(project, version), at_serial)
                 last_serial = max(last_serial, version_serial)
+                if last_serial >= at_serial:
+                    return last_serial
+                try:
+                    (versionfiles_serial, versionfiles) = tx.get_last_serial_and_value_at(
+                        self.key_versionfiles(project, version), at_serial)
+                except KeyError:
+                    continue
+                last_serial = max(last_serial, versionfiles_serial)
                 if last_serial >= at_serial:
                     return last_serial
         # no project uploaded yet
@@ -1340,12 +1387,14 @@ class LinkStore:
         return self._add_link_to_file_entry(rel, entry, for_entrypath=for_entrypath)
 
     def remove_links(self, rel=None, basename=None, for_entrypath=None):
-        linkdicts = self._get_inplace_linkdicts()
+        linkdicts = self.verdata.setdefault("+elinks", [])
         del_links = self.get_links(rel=rel, basename=basename, for_entrypath=for_entrypath)
         was_deleted = []
         for link in del_links:
             link.entry.delete()
             linkdicts.remove(link.linkdict)
+            with self.stage.key_versionfiles(self.project, self.version).update() as versionfiles:
+                del versionfiles[link.linkdict["entrypath"]]
             was_deleted.append(link.entrypath)
             threadlog.info("deleted %r link %s", link.rel, link.entrypath)
         if linkdicts:
@@ -1380,9 +1429,6 @@ class LinkStore:
     def _mark_dirty(self):
         self.stage._set_versiondata(self.verdata)
 
-    def _get_inplace_linkdicts(self):
-        return self.verdata.setdefault("+elinks", [])
-
     def _add_link_to_file_entry(self, rel, file_entry, for_entrypath=None):
         if isinstance(for_entrypath, ELink):
             for_entrypath = for_entrypath.entrypath
@@ -1390,7 +1436,7 @@ class LinkStore:
                         "hash_spec": file_entry.hash_spec, "_log": []}
         if for_entrypath:
             new_linkdict["for_entrypath"] = for_entrypath
-        linkdicts = self._get_inplace_linkdicts()
+        linkdicts = self.verdata.setdefault("+elinks", [])
         linkdicts.append(new_linkdict)
         threadlog.info("added %r link %s", rel, file_entry.relpath)
         self._mark_dirty()
@@ -1455,6 +1501,7 @@ def add_keys(xom, keyfs):
     keyfs.add_key("PROJVERSIONS", "{user}/{index}/{project}/.versions", set)
     keyfs.add_key("PROJVERSION", "{user}/{index}/{project}/{version}/.config", dict)
     keyfs.add_key("PROJECTS", "{user}/{index}/.projects", dict)
+    keyfs.add_key("VERSIONFILES", "{user}/{index}/{project}/{version}/.files", dict)
     keyfs.add_key("STAGEFILE",
                   "{user}/{index}/+f/{hashdir_a}/{hashdir_b}/{filename}", dict)
 
