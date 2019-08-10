@@ -26,8 +26,8 @@ def test_permissions_for_unknown_index(mapp, xom):
     # change index type to unknown
     with xom.keyfs.transaction(write=True):
         stage = xom.model.getstage(api.stagename)
-        with stage.user.key.update() as userconfig:
-            userconfig["indexes"][stage.index]['type'] = 'unknown'
+        with stage.key_index.update() as ixconfig:
+            ixconfig['type'] = 'unknown'
     assert mapp.getjson(api.index)['result']['type'] == 'unknown'
     # now check
     mapp.modify_index(api.stagename, indexconfig=dict(bases=[]), code=403)

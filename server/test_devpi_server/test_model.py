@@ -896,9 +896,8 @@ class TestStage:
         with xom.keyfs.transaction(write=True):
             stage = user.create_stage(**udict(
                 index="world", bases=(), type="stage", volatile=True))
-            with pytest.raises(KeyError) as e:
+            with pytest.raises(KeyError):
                 stage.get_last_change_serial_perstage()
-            assert 'not commited yet' in str(e.value)
         assert current_serial == xom.keyfs.get_current_serial() - 1
         current_serial = xom.keyfs.get_current_serial()
         with xom.keyfs.transaction(write=False):

@@ -906,8 +906,7 @@ class TestImportExport:
         (user, index) = api.stagename.split('/')
         with mapp1.xom.keyfs.transaction(write=True):
             stage = mapp1.xom.model.getstage(api.stagename)
-            with stage.user.key.update() as userconfig:
-                ixconfig = userconfig["indexes"][index]
+            with stage.key_index.update() as ixconfig:
                 ixconfig["uploadtrigger_jenkins"] = None
         with mapp1.xom.keyfs.transaction():
             stage = mapp1.xom.model.getstage(api.stagename)
@@ -928,8 +927,7 @@ class TestImportExport:
         (user, index) = api.stagename.split('/')
         with mapp1.xom.keyfs.transaction(write=True):
             stage = mapp1.xom.model.getstage(api.stagename)
-            with stage.user.key.update() as userconfig:
-                ixconfig = userconfig["indexes"][index]
+            with stage.key_index.update() as ixconfig:
                 ixconfig["uploadtrigger_jenkins"] = "foo"
         with mapp1.xom.keyfs.transaction():
             stage = mapp1.xom.model.getstage(api.stagename)
