@@ -496,6 +496,8 @@ class Transaction(object):
             # XXX we could avoid asking the database
             # if the relpath included the keyname
             # but that's yet another refactoring (tm).
+            # this is only used when serving a mirrored file,
+            # so not really worth the effort to refactor.
             keyname, serial = self.conn.db_read_typedkey(relpath)
         return self.keyfs.get_key_instance(keyname, relpath)
 
