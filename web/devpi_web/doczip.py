@@ -28,6 +28,8 @@ def unpack_docs(stage, name, version, entry):
     # unpack, maybe a bit uncarefully but in principle
     # we are not loosing the original zip file anyway
     unpack_path = get_unpack_path(stage, name, version)
+    if not entry.file_exists():
+        return unpack_path
     hash_path = unpack_path.join('.hash')
     if hash_path.exists():
         with hash_path.open() as f:
