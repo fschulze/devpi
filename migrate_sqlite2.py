@@ -159,7 +159,12 @@ def main():
         '--storage', 'sqlite2'])
     with xom_old.keyfs._storage.get_connection(write=False) as conn_old:
         with xom_new.keyfs._storage.get_connection(write=True) as conn_new:
+            # import cProfile
+            # cp = cProfile.Profile()
+            # cp.enable()
             migrate(conn_old, conn_new)
+            # cp.disable()
+            # cp.dump_stats('migrate.pstat')
 
 
 if __name__ == '__main__':
