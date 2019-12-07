@@ -23,7 +23,9 @@ class IStorageConnection(Interface):
 
 class IStorageConnection2(IStorageConnection):
     def get_relpath_at(relpath, serial):
-        """ Get data for given relpath at given serial. """
+        """ Get tuple of (last_serial, back_serial, value) for given relpath
+            at given serial.
+            Raises KeyError if not found. """
 
 
 # some adapters for legacy plugins
