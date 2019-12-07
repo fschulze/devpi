@@ -1,10 +1,13 @@
 from devpi_common.types import cached_property
 from .config import hookimpl
 from .fileutil import dumps, loads
+from .interfaces import IStorageConnection2
+from .keyfs import get_relpath_at
 from .log import threadlog, thread_push_log, thread_pop_log
 from .readonly import ReadonlyView
 from .readonly import ensure_deeply_readonly, get_mutable_deepcopy
 from repoze.lru import LRUCache
+from zope.interface import implementer
 import contextlib
 import os
 import py
@@ -12,6 +15,10 @@ import sqlite3
 import time
 
 
+notset = object()
+
+
+@implementer(IStorageConnection2)
 class BaseConnection:
     def __init__(self, sqlconn, basedir, storage):
         self._sqlconn = sqlconn
@@ -75,6 +82,17 @@ class BaseConnection:
             assert isinstance(changes, ReadonlyView)
             self._changelog_cache.put(serial, changes)
         return changes
+
+    def get_relpath_at(self, relpath, serial):
+        result = self._changelog_cache.get((serial, relpath), notset)
+        if result is notset:
+            changes = self._changelog_cache.get(serial, notset)
+            if changes is not notset and relpath in changes:
+                result = (serial, changes[relpath][2])
+        if result is notset:
+            result = get_relpath_at(self, relpath, serial)
+        self._changelog_cache.put((serial, relpath), result)
+        return result
 
 
 class Connection(BaseConnection):
