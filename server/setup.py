@@ -29,7 +29,7 @@ if __name__ == "__main__":
     install_requires = ["py>=1.4.23",
                         "appdirs",
                         "attrs",
-                        "devpi_common<4,>=3.3.0",
+                        "devpi_common<4,>=3.5.0",
                         "itsdangerous>=0.24",
                         "execnet>=1.2",
                         "pyramid>=1.8",
@@ -48,7 +48,7 @@ if __name__ == "__main__":
       keywords="pypi realtime cache server",
       long_description="\n\n".join([README, CHANGELOG]),
       url="http://doc.devpi.net",
-      version='5.5.0',
+      version='5.6.0',
       maintainer="Holger Krekel, Florian Schulze",
       maintainer_email="holger@merlinux.eu",
       packages=[

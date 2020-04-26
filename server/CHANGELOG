@@ -2,6 +2,15 @@
 
 .. towncrier release notes start
 
+5.6.0 (2020-09-19)
+==================
+
+Features
+--------
+
+- fix #792: support data-yanked attribute from PEP 592 for mirror indexes.
+
+
 5.5.0 (2020-05-04)
 ==================
 
