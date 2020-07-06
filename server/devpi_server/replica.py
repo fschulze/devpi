@@ -76,7 +76,7 @@ def devpiserver_get_credentials(request):
 @hookimpl(tryfirst=True)
 def devpiserver_auth_user(userdict, username, password):
     if username != REPLICA_USER_NAME:
-        return dict(status="unknown")
+        return None
     # no other plugin must be able to authenticate the special REPLICA_USER_NAME
     # so instead of returning status unknown, we will raise HTTPForbidden
     if not isinstance(password, ReplicaPassword):

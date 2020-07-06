@@ -38,29 +38,25 @@ class Auth:
             credentials, never by plugins.
         """
         user = self.model.get_user(authuser)
-        results = []
+        result = None
         is_root = authuser == 'root'
         if not is_root:
             userinfo = user.get() if user is not None else None
             try:
-                results = [
-                    x for x in self.hook(userdict=userinfo,
-                                         username=authuser,
-                                         password=authpassword)
-                    if x["status"] != "unknown"]
+                result = self.hook(
+                    userdict=userinfo, username=authuser, password=authpassword)
             except AuthException:
                 threadlog.exception("Error in authentication plugin.")
                 return dict(status="nouser")
-        if [x for x in results if x["status"] != "ok"]:
+        if result and result["status"] != "ok":
             # a plugin discovered invalid credentials or returned an invalid
             # status, so we abort
             return dict(status="reject")
-        userinfo_list = [x for x in results if x is not False]
-        if userinfo_list and not is_root:
+        if result and not is_root:
             # one of the plugins returned valid userinfo
             # return union of all groups which may be contained in that info
-            groups = (ui.get('groups', []) for ui in userinfo_list)
-            return dict(status="ok", groups=sorted(set(sum(groups, []))))
+            groups = result.get('groups', [])
+            return dict(status="ok", groups=sorted(set(groups)))
         if user is None:
             # we got no user model
             return dict(status="nouser")

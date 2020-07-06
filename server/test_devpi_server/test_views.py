@@ -1291,7 +1291,7 @@ class TestPluginPermissions:
             def devpiserver_auth_user(self, userdict, username, password):
                 if username == 'pluginuser':
                     return dict(status="ok", groups=self.groups)
-                return dict(status="unknown")
+                return None
         return Plugin()
 
     @pytest.fixture
@@ -2111,7 +2111,7 @@ class TestRestrictModify:
                     return dict(status="ok", groups=["regulars"])
                 if username == "admin" and password == "admin":
                     return dict(status="ok", groups=["admins"])
-                return dict(status="unknown")
+                return None
         return Plugin()
 
     @pytest.fixture

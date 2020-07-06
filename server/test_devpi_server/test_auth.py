@@ -90,13 +90,13 @@ class TestAuthPlugin:
         return Auth(model, "qweqwe")
 
     def test_auth_plugin_no_user(self, auth, plugin):
-        plugin.results = [dict(status="unknown")]
+        plugin.results = [None]
         username, password = "user", "world"
         assert auth.get_auth_status((username, password)) == ['nouser', 'user', []]
         assert plugin.results == []  # all results used
 
     def test_auth_plugin_no_user_pass_through(self, auth, model, plugin):
-        plugin.results = [dict(status="unknown")]
+        plugin.results = [None]
         username, password = "user", "world"
         model.create_user(username, password)
         assert auth.get_auth_status((username, password)) == ['ok', username, []]
@@ -161,35 +161,16 @@ class TestAuthPlugins:
         from devpi_server.views import Auth
         return Auth(model, "qweqwe")
 
-    def test_auth_plugins_groups_combined(self, auth, plugin1, plugin2):
-        plugin1.results = [dict(status="ok", groups=['group1', 'common'])]
-        plugin2.results = [dict(status="ok", groups=['group2', 'common'])]
-        username, password = "user", "world"
-        assert auth.get_auth_status((username, password)) == [
-            'ok', username, ['common', 'group1', 'group2']]
-        assert plugin1.results == []  # all results used
-        assert plugin2.results == []  # all results used
-
-    def test_auth_plugins_invalid_credentials(self, auth, plugin1, plugin2):
-        plugin1.results = [dict(status="ok", groups=['group1', 'common'])]
-        plugin2.results = [dict(status="reject")]
-        username, password = "user", "world"
-        # one failed authentication in any plugin is enough to stop
-        assert auth.get_auth_status((username, password)) == ['reject', username, []]
-        assert plugin1.results == []  # all results used
-        assert plugin2.results == []  # all results used
-        plugin1.results = [dict(status="reject")]
-        plugin2.results = [dict(status="ok", groups=['group1', 'common'])]
-        # one failed authentication in any plugin is enough to stop
-        assert auth.get_auth_status((username, password)) == ['reject', username, []]
-        assert plugin1.results == []  # all results used
-        assert plugin2.results == []  # all results used
-
     def test_auth_plugins_passthrough(self, auth, plugin1, plugin2):
-        plugin1.results = [dict(status="unknown")]
+        plugin1.results = [None]
         plugin2.results = [dict(status="ok", groups=['group2', 'common'])]
         username, password = "user", "world"
         assert auth.get_auth_status((username, password)) == [
             'ok', username, ['common', 'group2']]
-        assert plugin1.results == []  # all results used
         assert plugin2.results == []  # all results used
+        plugin1.results = [dict(status="ok", groups=['group2', 'common'])]
+        plugin2.results = [None]
+        username, password = "user", "world"
+        assert auth.get_auth_status((username, password)) == [
+            'ok', username, ['common', 'group2']]
+        assert plugin1.results == []  # all results used

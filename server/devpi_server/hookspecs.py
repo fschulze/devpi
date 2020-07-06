@@ -85,15 +85,16 @@ def devpiserver_get_credentials(request):
     """
 
 
-@hookspec
+@hookspec(firstresult=True)
 def devpiserver_auth_user(userdict, username, password):
-    """return dict containing authentication validation results.
+    """return authentication validation results.
 
-    A dict must be returned with a key "status" with one of the
+    If the user is unknown, return None, so other plugins can be tried.
+
+    Otherwise a dict must be returned with a key "status" with one of the
     following values:
 
         "ok" - authentication succeeded
-        "unknown" - no matching user, other plugins are tried
         "reject" - invalid password, authentication stops
 
     Optionally the plugin can return a list of group names the user is

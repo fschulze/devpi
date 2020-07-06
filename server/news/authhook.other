@@ -1,0 +1,1 @@
+Only the first result of ``devpiserver_auth_user`` is used and plugins must ``return None`` for unknown users to pass on to the next plugin.

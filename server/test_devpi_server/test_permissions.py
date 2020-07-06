@@ -38,7 +38,7 @@ def plugin():
                 return dict(
                     status='ok',
                     groups=['developer'])
-            return dict(status="unknown")
+            return None
     return Plugin()
 
 
