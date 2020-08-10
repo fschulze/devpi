@@ -289,7 +289,7 @@ test
     $ devpi test -h
     usage: devpi test [-h] [--debug] [-y] [-v] [--clientdir DIR] [-e ENVNAME]
                       [-c PATH] [--fallback-ini PATH] [--tox-args toxargs]
-                      [--detox] [--no-upload] [--index INDEX] [--select SELECTOR]
+                      [--no-upload] [--index INDEX] [--select SELECTOR]
                       [--list]
                       pkgspec [pkgspec ...]
     
@@ -309,9 +309,6 @@ test
                             none
       --tox-args toxargs    extra command line arguments for tox. e.g.
                             --toxargs="-c othertox.ini"
-      --detox, -d           (experimental) run tests concurrently in multiple
-                            processes using the detox tool (which must be
-                            installed)
       --no-upload           Skip upload of tox results
       --index INDEX         index to get package from, defaults to current index.
                             Either just the NAME, using the current user,
