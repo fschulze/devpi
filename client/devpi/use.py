@@ -1,4 +1,5 @@
 from copy import deepcopy
+import itertools
 import os
 import sys
 import py
@@ -41,6 +42,7 @@ class Current(object):
     simpleindex = currentproperty("simpleindex")
     pypisubmit = currentproperty("pypisubmit")
     login = currentproperty("login")
+    username = currentproperty("username")
     venvdir = currentproperty("venvdir")
     _auth = authproperty("auth")
     _basic_auth = authproperty("basic_auth")
@@ -95,25 +97,47 @@ class Current(object):
 
     def set_auth(self, user, password):
         auth = self._get_auth_dict()
-        auth[self.rooturl] = (user, password)
+        auth_users = dict(auth.get(self.rooturl, []))
+        auth_users.pop(user, None)
+        auth[self.rooturl] = list(itertools.chain(
+            [(user, password)], sorted(auth_users.items())))
+        self.username = user
         self.reconfigure(data=dict(_auth=auth))
 
     def del_auth(self):
+        user = self.get_auth_user()
         auth = self._get_auth_dict()
-        try:
-            del auth[self.rooturl]
-        except KeyError:
+        auth_users = dict(auth.get(self.rooturl, []))
+        if user not in auth:
             return False
+        del auth_users[user]
+        auth[self.rooturl] = list(sorted(auth_users.items()))
+        self.username = None
         self.reconfigure(data=dict(_auth=auth))
         return True
 
     def get_auth_user(self):
-        return self._get_auth_dict().get(self.rooturl, [None])[0]
+        username = os.environ.get("DEVPI_USER")
+        if username is None:
+            username = self.username
+        if username is None:
+            auth = self._value_from_dict_by_url(self._get_auth_dict(), self.root_url)
+            if auth:
+                username = auth[0][0]
+        auth = self.get_auth(username=username)
+        if auth is None:
+            return
+        return username
 
-    def get_auth(self, url=None):
+    def get_auth(self, url=None, username=None):
         url = url if url is not None else self.rooturl
+        username = username if username is not None else self.username
         auth = self._value_from_dict_by_url(self._get_auth_dict(), url)
-        return tuple(auth) if auth else None
+        if not auth:
+            return
+        auth = dict(auth)
+        auth = auth.get(username)
+        return (username, auth) if auth is not None else None
 
     def add_auth_to_url(self, url):
         url = URL(url)
