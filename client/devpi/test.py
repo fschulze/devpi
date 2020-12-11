@@ -85,8 +85,8 @@ class DevIndex:
         if self.current.simpleindex != self.current.simpleindex_auth:
             self.hub.info("Using existing basic auth for '%s'." %
                           self.current.simpleindex)
-            self.hub.warn("The password will be available unencrypted in the "
-                          "JSON report!")
+            self.hub.warn("With pip < 19.3 the password might be exposed "
+                          "in the JSON report!")
             simpleindex = self.current.simpleindex_auth
         else:
             simpleindex = self.hub.current.add_auth_to_url(
