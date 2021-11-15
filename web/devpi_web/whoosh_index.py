@@ -1,4 +1,3 @@
-from __future__ import unicode_literals
 from collections import defaultdict
 from devpi_common.validation import normalize_name
 from devpi_server.log import threadlog as log

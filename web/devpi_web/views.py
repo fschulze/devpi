@@ -1,5 +1,4 @@
 # coding: utf-8
-from __future__ import unicode_literals
 from defusedxml.xmlrpc import DefusedExpatParser
 from devpi_common.metadata import Version
 from devpi_common.metadata import get_pyversion_filetype
