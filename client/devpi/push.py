@@ -1,6 +1,7 @@
 import py
 from devpi_common.metadata import parse_requirement, splitbasename
 from . import pypirc
+import pypitoken
 import traceback
 
 
@@ -11,6 +12,14 @@ class PyPIPush:
         self.password = password
 
     def execute(self, hub, name, version):
+        password = self.password
+        try:
+            token = pypitoken.Token.load(password)
+            token.restrict(projects=[name])
+            password = token.dump()
+        except pypitoken.PyPITokenException:
+            # not a valid PyPI token
+            pass
         req = dict(name=name, version=str(version), posturl=self.posturl,
                    username=self.user, password=self.password)
         index = hub.current.index
