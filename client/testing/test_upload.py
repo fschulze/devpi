@@ -141,8 +141,7 @@ class TestCheckout:
         checkout = Checkout(uploadhub, uploadhub.args, subdir)
         wc = tmpdir.mkdir("wc")
         exported = checkout.export(wc)
-        with pytest.raises(SystemExit):
-            exported.check_setup()
+        assert not exported.rootpath.join("setup.py").check()
 
     def test_export_attributes(self, uploadhub, setupdir, tmpdir, monkeypatch):
         checkout = Checkout(uploadhub, uploadhub.args, setupdir)
@@ -266,13 +265,15 @@ def test_post_includes_auth_info(initproj, monkeypatch, uploadhub):
 
 
 class TestUploadFunctional:
-    @pytest.mark.parametrize("projname_version", [
-        "hello-1.0", "my-pkg-123-1.0"])
-    def test_all(self, initproj, devpi, out_devpi, projname_version):
-        initproj(projname_version.rsplit("-", 1), {"doc": {
+    @pytest.fixture(params=["hello-1.0", "my-pkg-123-1.0"])
+    def projname_version(self, request, initproj):
+        initproj(request.param.rsplit("-", 1), {"doc": {
             "conf.py": "#nothing",
             "contents.rst": "",
             "index.html": "<html/>"}})
+        return request.param
+
+    def test_plain_dry_run(self, devpi, out_devpi, projname_version):
         assert py.path.local("setup.py").check()
         out = out_devpi("upload", "--dry-run")
         assert out.ret == 0
@@ -280,6 +281,8 @@ class TestUploadFunctional:
             built:*
             skipped: file_upload of {projname_version}.*
             """.format(projname_version=projname_version))
+
+    def test_with_docs_dry_run(self, devpi, out_devpi, projname_version):
         out = out_devpi("upload", "--dry-run", "--with-docs")
         assert out.ret == 0
         out.stdout.fnmatch_lines("""
@@ -287,19 +290,35 @@ class TestUploadFunctional:
             skipped: file_upload of {projname_version}.*
             skipped: doc_upload of {projname_version}.doc.zip*
             """.format(projname_version=projname_version))
+
+    def test_only_docs_dry_run(self, devpi, out_devpi, projname_version):
         out = out_devpi("upload", "--dry-run", "--only-docs")
         assert out.ret == 0
         out.stdout.fnmatch_lines("""
             built:*
             skipped: doc_upload of {projname_version}.doc.zip*
             """.format(projname_version=projname_version))
-        out = out_devpi("upload", "--with-docs", code=[200, 200])
+
+    def test_plain_with_docs(self, devpi, out_devpi, projname_version):
+        out = out_devpi("upload", "--with-docs", code=[200, 200, 200])
         assert out.ret == 0
         out.stdout.fnmatch_lines("""
             built:*
             file_upload of {projname_version}.*
             doc_upload of {projname_version}.doc.zip*
             """.format(projname_version=projname_version))
+
+    def test_sdist_zip_with_docs(self, devpi, out_devpi, projname_version):
+        out = out_devpi(
+            "upload", "--formats", "sdist.zip", "--with-docs", code=[200, 200])
+        assert out.ret == 0
+        out.stdout.fnmatch_lines("""
+            built:*
+            file_upload of {projname_version}.zip*
+            doc_upload of {projname_version}.doc.zip*
+            """.format(projname_version=projname_version))
+
+    def test_sdist_zip(self, devpi, out_devpi, projname_version):
         out = out_devpi("upload", "--formats", "sdist.zip", code=[200])
         assert out.ret == 0
         out.stdout.fnmatch_lines("""
@@ -307,9 +326,76 @@ class TestUploadFunctional:
             file_upload of {projname_version}.zip*
             """.format(projname_version=projname_version))
 
-        print("*"*80)
-        out = out_devpi("upload", "--formats", "sdist.zip,bdist_wheel",
-                        code=[200, 200])
+    def test_sdist(self, devpi, out_devpi, projname_version):
+        out = out_devpi("upload", "--sdist", code=[200])
+        assert out.ret == 0
+        out.stdout.fnmatch_lines("""
+            built:*
+            file_upload of {projname_version}*
+            """.format(projname_version=projname_version))
+
+    def test_native_sdist(self, devpi, out_devpi, projname_version):
+        if sys.platform == "win32":
+            nativeformat = "zip"
+            nativeext = ".zip"
+        else:
+            nativeformat = "tgz"
+            nativeext = ".tar.gz"
+        out = out_devpi("upload", "--formats", "sdist.%s" % nativeformat, code=[200])
+        assert out.ret == 0
+        out.stdout.fnmatch_lines("""
+            The --formats option is deprecated, replace it with --sdist to only*
+            built:*
+            file_upload of {projname_version}{nativeext}*
+            """.format(projname_version=projname_version, nativeext=nativeext))
+
+    def test_bdist_wheel(self, devpi, out_devpi, projname_version):
+        out = out_devpi("upload", "--formats", "bdist_wheel", code=[200])
+        assert out.ret == 0
+        projname_version_norm = projname_version.replace("-", "*")
+        out.stdout.fnmatch_lines("""
+            The --formats option is deprecated, replace it with --wheel to only*
+            built:*
+            file_upload of {projname_version_norm}*.whl*
+            """.format(projname_version_norm=projname_version_norm))
+
+    def test_default_formats(self, devpi, out_devpi, projname_version):
+        if sys.platform == "win32":
+            nativeext = ".zip"
+        else:
+            nativeext = ".tar.gz"
+        out = out_devpi(
+            "upload", "--formats", "sdist,bdist_wheel", code=[200, 200])
+        assert out.ret == 0
+        projname_version_norm = projname_version.replace("-", "*")
+        out.stdout.fnmatch_lines_random("""
+            The --formats option is deprecated, you can remove it to get the*
+            built:*
+            file_upload of {projname_version_norm}*.whl*
+            file_upload of {projname_version}{nativeext}*
+            """.format(
+            projname_version=projname_version,
+            projname_version_norm=projname_version_norm,
+            nativeext=nativeext))
+
+    def test_deprecated_formats(self, devpi, out_devpi, projname_version):
+        out = out_devpi(
+            "upload", "--formats", "bdist_dumb,bdist_egg", code=[200, 200])
+        assert out.ret == 0
+        projname_version_norm = projname_version.replace("-", "*")
+        out.stdout.fnmatch_lines_random("""
+            The --formats option is deprecated, none of the specified formats 'bdist_dumb,bdist_egg'*
+            *Falling back to 'setup.py bdist_dumb' which*
+            *Falling back to 'setup.py bdist_egg' which*
+            built:*
+            file_upload of {projname_version}*.tar.gz*
+            file_upload of {projname_version_norm}*.egg*
+            """.format(
+            projname_version=projname_version,
+            projname_version_norm=projname_version_norm))
+
+    def test_plain(self, devpi, out_devpi, projname_version):
+        out = out_devpi("upload", code=[200, 200])
         out.stdout.fnmatch_lines_random("""
             file_upload of {projname_version}.*
             file_upload of {projname_version_norm}*.whl*
@@ -317,6 +403,7 @@ class TestUploadFunctional:
                        projname_version_norm=projname_version.replace("-", "*")
                        ))
 
+    def test_index_option(self, devpi, out_devpi, projname_version):
         # remember username
         out = out_devpi("use")
         user = re.search(r'\(logged in as (.+?)\)', out.stdout.str()).group(1)
@@ -332,9 +419,7 @@ class TestUploadFunctional:
         out = out_devpi("upload", "--index", "%s/dev" % user, "--dry-run")
         out.stdout.fnmatch_lines_random("skipped: file_upload*to*/%s/dev*" % user)
 
-        # go back
-        out = out_devpi("use", "%s/dev" % user)
-        out.stdout.fnmatch_lines_random("current devpi index*/%s/dev*" % user)
+    def test_logout(self, devpi, out_devpi, projname_version):
         # logoff then upload
         out = out_devpi("logoff")
         out.stdout.fnmatch_lines_random("login information deleted")
