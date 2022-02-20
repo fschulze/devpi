@@ -1,1 +1,1 @@
-Fix #867: AttributeError during devpi-import and maybe other commands.
+Fix #867: AttributeError during ``devpi-import`` and maybe other commands.
