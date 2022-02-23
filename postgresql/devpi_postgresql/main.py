@@ -13,22 +13,24 @@ from devpi_server.log import threadlog, thread_push_log, thread_pop_log
 from devpi_server.readonly import ReadonlyView
 from devpi_server.readonly import ensure_deeply_readonly, get_mutable_deepcopy
 from functools import partial
+from io import BytesIO
+from io import RawIOBase
 from pluggy import HookimplMarker
 from repoze.lru import LRUCache
+from tempfile import TemporaryFile
 from zope.interface import Interface
 from zope.interface import implementer
 import contextlib
 import os
 import pg8000.native
-import py
 import time
 from devpi_server.model import ensure_boolean
 import ssl
 
 
-for name in ('IStorageConnection2', 'IStorageConnection'):
-    IStorageConnection2 = getattr(ds_interfaces, name, Interface)
-    if IStorageConnection2 is not Interface:
+for name in ('IStorageConnection3', 'IStorageConnection2', 'IStorageConnection'):
+    IStorageConnection3 = getattr(ds_interfaces, name, Interface)
+    if IStorageConnection3 is not Interface:
         break
 
 
@@ -38,7 +40,123 @@ absent = object()
 devpiserver_hookimpl = HookimplMarker("devpiserver")
 
 
-@implementer(IStorageConnection2)
+SIGNATURE = b"PGCOPY\n\xff\r\n\x00"
+
+
+class FileIn(RawIOBase):
+    def __init__(self, target_f):
+        self.target_f = target_f
+        self._read_buffer = bytearray(65536)
+        self._set_state("signature", len(SIGNATURE))
+        self._data_size = -1
+
+    @property
+    def got_data(self):
+        return self._data_size != -1
+
+    def _set_state(self, state, to_read):
+        self._state = state
+        self._state_bytes_read = 0
+        self._to_read = to_read
+
+    def write(self, data):
+        data_bytes_read = 0
+        while True:
+            if self._state == "data":
+                to_read = min(
+                    self._data_size - self.target_f.tell(),
+                    len(data) - data_bytes_read)
+                if to_read > 0:
+                    chunk = data[data_bytes_read:]
+                    self.target_f.write(chunk)
+                    return len(chunk)
+                self._set_state("tuplecount", 2)
+                continue
+            to_read = min(
+                self._to_read,
+                len(self._read_buffer) - self._state_bytes_read)
+            if to_read <= 0:
+                # buffer size exceeded or something else wrong
+                raise RuntimeError("Can't read more data")
+            chunk = data[data_bytes_read:data_bytes_read + to_read]
+            self._read_buffer[
+                self._state_bytes_read:
+                self._state_bytes_read + to_read] = chunk
+            data_bytes_read += len(chunk)
+            self._state_bytes_read += len(chunk)
+            if self._state_bytes_read < self._to_read:
+                break
+            if self._state == "signature":
+                signature = bytes(self._read_buffer[:self._to_read])
+                if signature != SIGNATURE:
+                    raise RuntimeError(f"Invalid PGCOPY signature {signature!r}")
+                self._set_state("flags", 4)
+            elif self._state == "flags":
+                flags = int.from_bytes(self._read_buffer[:self._to_read], "big")
+                # ignore lower 16 bits
+                if (flags & ~0xffff) != 0:
+                    raise RuntimeError(f"Invalid PGCOPY flags {flags!r}")
+                self._set_state("headerextsize", 4)
+            elif self._state == "headerextsize":
+                headerextsize = int.from_bytes(self._read_buffer[:self._to_read], "big")
+                if headerextsize == 0:
+                    self._set_state("tuplecount", 2)
+                else:
+                    self._set_state("headerext", headerextsize)
+            elif self._state == "headerextsize":
+                self._set_state("tuplecount", 2)
+            elif self._state == "tuplecount":
+                tuplecount = int.from_bytes(self._read_buffer[:self._to_read], "big")
+                if tuplecount == 1:
+                    self._set_state("datasize", 4)
+                elif tuplecount == 65535:
+                    self._set_state("finished", 0)
+                    break
+                elif self._data_size != -1:
+                    raise RuntimeError("More than one tuple")
+                else:
+                    raise RuntimeError("Invalid tuple count {tuplecount!r}")
+            elif self._state == "datasize":
+                self._data_size = int.from_bytes(self._read_buffer[:self._to_read], "big")
+                self._set_state("data", 0)
+            else:
+                raise RuntimeError("Invalid state {state!r}")
+        return data_bytes_read
+
+
+class FileOut(RawIOBase):
+    def __init__(self, path, source_f):
+        self.source_f = source_f
+        size = source_f.seek(0, 2)
+        source_f.seek(0)
+        encoded_path = path.encode("utf-8")
+        self.header_f = BytesIO(
+            SIGNATURE
+            + b"\x00\x00\x00\x00"  # flags
+            b"\x00\x00\x00\x00"  # header extension
+            b"\x00\x03"  # num fields in tuple
+            + len(encoded_path).to_bytes(4, "big")
+            + encoded_path
+            + b"\x00\x00\x00\x04"  # size of INTEGER for "size" field
+            + size.to_bytes(4, "big")
+            + size.to_bytes(4, "big")  # size of binary file field
+        )
+        self.footer_f = BytesIO(b"\xff\xff")
+
+    def readinto(self, buffer):
+        count = self.header_f.readinto(buffer)
+        if count > 0:
+            return count
+        count = self.source_f.readinto(buffer)
+        if count > 0:
+            return count
+        count = self.footer_f.readinto(buffer)
+        if count > 0:
+            return count
+        return 0
+
+
+@implementer(IStorageConnection3)
 class Connection:
     def __init__(self, sqlconn, storage):
         self._sqlconn = sqlconn
@@ -152,27 +270,60 @@ class Connection:
         q = "SELECT path FROM files WHERE path = :path"
         return bool(self.fetchscalar(q, path=path))
 
-    def io_file_set(self, path, content):
+    def io_file_set(self, path, content_or_file):
         assert not os.path.isabs(path)
         assert not path.endswith("-tmp")
-        q = """
-            INSERT INTO files(path, size, data)
-                VALUES (:path, :size, :data)
-            ON CONFLICT (path) DO UPDATE
-                SET size = EXCLUDED.size, data = EXCLUDED.data;"""
-        self._sqlconn.run(
-            q, path=path, size=len(content), data=pg8000.Binary(content))
+        if not isinstance(content_or_file, bytes) and not content_or_file.seekable():
+            content_or_file = content_or_file.read()
+            if len(content_or_file) > 1048576:
+                threadlog.warn(
+                    "Read %.1f megabytes into memory in postgresql io_file_set for %s",
+                    len(content_or_file) / 1048576, path)
+        if isinstance(content_or_file, bytes):
+            q = """
+                INSERT INTO files(path, size, data)
+                    VALUES (:path, :size, :data)
+                ON CONFLICT (path) DO UPDATE
+                    SET size = EXCLUDED.size, data = EXCLUDED.data;"""
+            self._sqlconn.run(
+                q, path=path, size=len(content_or_file),
+                data=pg8000.Binary(content_or_file))
+        else:
+            self.io_file_delete(path)
+            q = """
+                COPY files (path, size, data) FROM STDIN WITH (FORMAT binary);"""
+            self._sqlconn.run(
+                q, stream=FileOut(path, content_or_file))
         self.dirty_files[path] = True
 
+    def io_file_new_open(self, path):
+        return TemporaryFile()
+
     def io_file_open(self, path):
-        return py.io.BytesIO(self.io_file_get(path))
+        f = TemporaryFile()
+        q = f"""
+            COPY (
+                SELECT data FROM files WHERE path = {pg8000.native.literal(path)})
+            TO STDOUT WITH (FORMAT binary);"""
+        stream = FileIn(f)
+        self._sqlconn.run(
+            q, stream=stream)
+        if stream.got_data:
+            f.seek(0)
+            return f
+        f.close()
+        raise IOError(f"File not found at '{path}'")
 
     def io_file_get(self, path):
         assert not os.path.isabs(path)
         q = "SELECT data FROM files WHERE path = :path"
         res = self.fetchscalar(q, path=path)
         if res is None:
-            raise IOError()
+            raise IOError(f"File not found at '{path}'")
+        if len(res) > 1048576:
+            threadlog.warn(
+                "Read %.1f megabytes into memory in postgresql io_file_get for %s",
+                len(res) / 1048576, path)
         return res
 
     def io_file_size(self, path):

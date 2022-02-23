@@ -1,0 +1,1 @@
+Support new storage interface from devpi-server 6.5.0 and stream data directly through database connection using ``COPY``.
