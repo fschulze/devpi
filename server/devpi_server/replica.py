@@ -487,6 +487,7 @@ class ReplicaThread:
                         serial = load(stream)
                         (changes, rel_renames) = load(stream)
                         self.xom.keyfs.import_changes(serial, changes)
+                        self.update_from_master_at = time.time()
                 except StopIteration:
                     pass
                 except EOFError:
@@ -495,6 +496,7 @@ class ReplicaThread:
             all_changes = loads(response.content)
             for serial, changes in all_changes:
                 self.xom.keyfs.import_changes(serial, changes)
+                self.update_from_master_at = time.time()
 
     def fetch_multi(self, serial):
         url = self.master_url.joinpath("+changelog", "%s-" % serial).url
