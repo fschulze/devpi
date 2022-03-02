@@ -738,8 +738,8 @@ class FileReplicationSharedData(object):
             handler(index_type, serial, key, keyname, value, back_serial)
         except Exception as e:
             threadlog.warn(
-                "Error during file replication: %s",
-                lazy_format_exception_only(e))
+                "Error during file replication for %s: %s",
+                key, lazy_format_exception_only(e))
             self.add_errored(index_type, serial, key, keyname, value, back_serial)
         finally:
             self.queue.task_done()
