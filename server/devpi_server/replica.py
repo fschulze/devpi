@@ -20,7 +20,7 @@ from webob.headers import EnvironHeaders, ResponseHeaders
 
 from . import mythread
 from .config import hookimpl
-from .exceptions import lazy_format_exception_only
+from .exceptions import lazy_format_exception
 from .filestore import FileEntry
 from .filestore import get_checksum_error
 from .filestore import get_file_hash
@@ -739,7 +739,7 @@ class FileReplicationSharedData(object):
         except Exception as e:
             threadlog.warn(
                 "Error during file replication for %s: %s",
-                key, lazy_format_exception_only(e))
+                key, lazy_format_exception(e))
             self.add_errored(index_type, serial, key, keyname, value, back_serial)
         finally:
             self.queue.task_done()
