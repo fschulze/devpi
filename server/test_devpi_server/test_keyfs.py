@@ -515,6 +515,80 @@ class TestTransactionIsolation:
         with keyfs.transaction() as tx:
             assert tx.conn.get_raw_changelog_entry(10000) is None
 
+    def test_cache_interference(self, storage, tmpdir):
+        keyfs1 = KeyFS(tmpdir.join("keyfs1"), storage)
+        pkey1 = keyfs1.add_key("NAME1", "hello1/{name}", dict)
+        pkey2 = keyfs1.add_key("NAME2", "hello2/{name}", dict)
+        D1 = pkey1(name="world1")
+        D2 = pkey2(name="world2")
+        for i in range(100):
+            if i == 10:
+                keyfs1._storage._changelog_cache.clear()
+                keyfs1._storage._relpath_cache.clear()
+            with keyfs1.transaction(write=True):
+                assert D1.get() == {}
+                D1.set({i: i})
+                assert D1.get() == {i: i}
+            if i == 20:
+                keyfs1._storage._changelog_cache.clear()
+                keyfs1._storage._relpath_cache.clear()
+            with keyfs1.transaction(write=True):
+                assert D2.get() == {}
+                D2.set({i: i})
+                assert D2.get() == {i: i}
+            if i == 30:
+                keyfs1._storage._changelog_cache.clear()
+                keyfs1._storage._relpath_cache.clear()
+            with keyfs1.transaction(write=True):
+                assert D1.get() == {i: i}
+                D1.set({i: i + 1})
+                assert D1.get() == {i: i + 1}
+            if i == 40:
+                keyfs1._storage._changelog_cache.clear()
+                keyfs1._storage._relpath_cache.clear()
+            with keyfs1.transaction(write=True):
+                assert D2.get() == {i: i}
+                D2.set({i: i + 1})
+                assert D2.get() == {i: i + 1}
+            if i == 50:
+                keyfs1._storage._changelog_cache.clear()
+                keyfs1._storage._relpath_cache.clear()
+            with keyfs1.transaction(write=True):
+                assert D1.get() == {i: i + 1}
+                D1.delete()
+                assert D1.get() == {}
+            if i == 60:
+                keyfs1._storage._changelog_cache.clear()
+                keyfs1._storage._relpath_cache.clear()
+            with keyfs1.transaction(write=True):
+                assert D2.get() == {i: i + 1}
+                D2.delete()
+                assert D2.get() == {}
+        # get all changes
+        serial1 = keyfs1.get_current_serial()
+        with keyfs1.get_connection() as conn1:
+            changes1 = [conn1.get_changes(i) for i in range(serial1 + 1)]
+        # create new keyfs
+        keyfs2 = KeyFS(tmpdir.join("newkeyfs"), storage)
+        pkey1 = keyfs2.add_key("NAME1", "hello1/{name}", dict)
+        pkey2 = keyfs2.add_key("NAME2", "hello2/{name}", dict)
+        D1 = pkey1(name="world1")
+        D2 = pkey2(name="world2")
+        # and import
+        changes2 = []
+        for i in range(serial1 + 1):
+            if i % 7 == 6:
+                keyfs2._storage._changelog_cache.clear()
+                keyfs2._storage._relpath_cache.clear()
+            keyfs2.import_changes(i, changes1[i])
+            # with keyfs2.get_connection() as conn2:
+            #     changes2.append(conn2.get_changes(i))
+            with keyfs2.transaction(write=False):
+                D1.get()
+                D2.get()
+        assert serial1 == keyfs2.get_current_serial()
+        # assert changes1 == changes2
+
 
 @notransaction
 class TestDeriveKey:
