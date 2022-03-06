@@ -169,13 +169,19 @@ class BaseConnection:
     def get_relpath_at(self, relpath, serial):
         key = (serial, relpath)
         result = self._relpath_cache.get(key, absent)
+        if relpath == 'devpi-travis/devpi_devpi_master/devpi-server/4.0.0/.config' and result == (288631, 288605, None):
+            import pdb; pdb.set_trace()
         if result is absent:
             result = self._changelog_cache.get(key, absent)
+            if relpath == 'devpi-travis/devpi_devpi_master/devpi-server/4.0.0/.config' and result == (288631, 288605, None):
+                import pdb; pdb.set_trace()
         if result is absent:
             changes = self._changelog_cache.get(serial, absent)
             if changes is not absent and relpath in changes:
                 (keyname, back_serial, value) = changes[relpath]
                 result = (serial, back_serial, value)
+                if relpath == 'devpi-travis/devpi_devpi_master/devpi-server/4.0.0/.config' and result == (288631, 288605, None):
+                    import pdb; pdb.set_trace()
         if result is absent:
             result = self._get_relpath_at(relpath, serial)
         if gettotalsizeof(result, maxlen=100000) is None:
