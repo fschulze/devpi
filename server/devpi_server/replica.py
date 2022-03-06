@@ -523,9 +523,10 @@ class ReplicaThread:
                         self.xom.keyfs.import_changes(serial, changes)
                         self.update_from_master_at = time.time()
                         with self.xom.keyfs.get_connection(write=False) as conn:
-                            changes2 = loads(conn.get_raw_changelog_entry(serial))
+                            (changes2, rel_renames2) = loads(conn.get_raw_changelog_entry(serial))
                             if changes != changes2:
                                 import pdb; pdb.set_trace()
+                                pass
                 except StopIteration:
                     pass
                 except EOFError:
