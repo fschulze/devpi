@@ -575,7 +575,7 @@ class TestTransactionIsolation:
         D1 = pkey1(name="world1")
         D2 = pkey2(name="world2")
         # and import
-        changes2 = []
+        # changes2 = []
         for i in range(serial1 + 1):
             if i % 7 == 6:
                 keyfs2._storage._changelog_cache.clear()
