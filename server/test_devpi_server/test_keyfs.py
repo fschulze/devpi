@@ -516,52 +516,38 @@ class TestTransactionIsolation:
             assert tx.conn.get_raw_changelog_entry(10000) is None
 
     def test_cache_interference(self, storage, tmpdir):
+        # because the transaction for the import subscriber was opened during
+        # the transaction of the import itself and keys were fetch and placed
+        # in the relpath cache, there was a failure in keyfs_sqlite2_fs when
+        # the __exit__ of the Writer was run
         keyfs1 = KeyFS(tmpdir.join("keyfs1"), storage)
         pkey1 = keyfs1.add_key("NAME1", "hello1/{name}", dict)
         pkey2 = keyfs1.add_key("NAME2", "hello2/{name}", dict)
         D1 = pkey1(name="world1")
         D2 = pkey2(name="world2")
-        for i in range(100):
-            if i == 10:
-                keyfs1._storage._changelog_cache.clear()
-                keyfs1._storage._relpath_cache.clear()
+        for i in range(2):
             with keyfs1.transaction(write=True):
                 assert D1.get() == {}
-                D1.set({i: i})
-                assert D1.get() == {i: i}
-            if i == 20:
-                keyfs1._storage._changelog_cache.clear()
-                keyfs1._storage._relpath_cache.clear()
+                D1.set({1: 1})
+                assert D1.get() == {1: 1}
             with keyfs1.transaction(write=True):
                 assert D2.get() == {}
-                D2.set({i: i})
-                assert D2.get() == {i: i}
-            if i == 30:
-                keyfs1._storage._changelog_cache.clear()
-                keyfs1._storage._relpath_cache.clear()
+                D2.set({1: 1})
+                assert D2.get() == {1: 1}
             with keyfs1.transaction(write=True):
-                assert D1.get() == {i: i}
-                D1.set({i: i + 1})
-                assert D1.get() == {i: i + 1}
-            if i == 40:
-                keyfs1._storage._changelog_cache.clear()
-                keyfs1._storage._relpath_cache.clear()
+                assert D1.get() == {1: 1}
+                D1.set({1: 1, 2: 2})
+                assert D1.get() == {1: 1, 2: 2}
             with keyfs1.transaction(write=True):
-                assert D2.get() == {i: i}
-                D2.set({i: i + 1})
-                assert D2.get() == {i: i + 1}
-            if i == 50:
-                keyfs1._storage._changelog_cache.clear()
-                keyfs1._storage._relpath_cache.clear()
+                assert D2.get() == {1: 1}
+                D2.set({1: 1, 2: 2})
+                assert D2.get() == {1: 1, 2: 2}
             with keyfs1.transaction(write=True):
-                assert D1.get() == {i: i + 1}
+                assert D1.get() == {1: 1, 2: 2}
                 D1.delete()
                 assert D1.get() == {}
-            if i == 60:
-                keyfs1._storage._changelog_cache.clear()
-                keyfs1._storage._relpath_cache.clear()
             with keyfs1.transaction(write=True):
-                assert D2.get() == {i: i + 1}
+                assert D2.get() == {1: 1, 2: 2}
                 D2.delete()
                 assert D2.get() == {}
         # get all changes
@@ -574,20 +560,42 @@ class TestTransactionIsolation:
         pkey2 = keyfs2.add_key("NAME2", "hello2/{name}", dict)
         D1 = pkey1(name="world1")
         D2 = pkey2(name="world2")
+
+        # add a subscriber to get into that branch in keyfs2.import_changes
+
+        def subscriber(serial, changes):
+            # fetch the keys
+            if serial % 6 == 0:
+                assert D1.get() == {1: 1}, serial
+                assert D2.get() == {}, serial
+            elif serial % 6 == 1:
+                assert D1.get() == {1: 1}, serial
+                assert D2.get() == {1: 1}, serial
+            elif serial % 6 == 2:
+                assert D1.get() == {1: 1, 2: 2}, serial
+                assert D2.get() == {1: 1}, serial
+            elif serial % 6 == 3:
+                assert D1.get() == {1: 1, 2: 2}, serial
+                assert D2.get() == {1: 1, 2: 2}, serial
+            elif serial % 6 == 4:
+                assert D1.get() == {}, serial
+                assert D2.get() == {1: 1, 2: 2}, serial
+            elif serial % 6 == 5:
+                assert D1.get() == {}, serial
+                assert D2.get() == {}, serial
+            else:
+                raise RuntimeError
+        keyfs2.subscribe_on_import(subscriber)
+
         # and import
-        # changes2 = []
         for i in range(serial1 + 1):
-            if i % 7 == 6:
-                keyfs2._storage._changelog_cache.clear()
-                keyfs2._storage._relpath_cache.clear()
             keyfs2.import_changes(i, changes1[i])
-            # with keyfs2.get_connection() as conn2:
-            #     changes2.append(conn2.get_changes(i))
-            with keyfs2.transaction(write=False):
-                D1.get()
-                D2.get()
+        changes2 = []
+        for i in range(serial1 + 1):
+            with keyfs2.get_connection() as conn2:
+                changes2.append(conn2.get_changes(i))
         assert serial1 == keyfs2.get_current_serial()
-        # assert changes1 == changes2
+        assert changes1 == changes2
 
 
 @notransaction
