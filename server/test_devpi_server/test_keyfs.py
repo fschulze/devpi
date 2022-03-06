@@ -496,21 +496,6 @@ class TestTransactionIsolation:
         assert serial == 0
         assert changes == {new_keyfs.NAME(name="world"): ({1: 1}, -1)}
 
-    def test_import_changes_subscriber_error(self, keyfs, storage, tmpdir):
-        pkey = keyfs.add_key("NAME", "hello/{name}", dict)
-        D = pkey(name="world")
-        with keyfs.transaction(write=True):
-            D.set({1:1})
-        new_keyfs = KeyFS(tmpdir.join("newkeyfs"), storage)
-        pkey = new_keyfs.add_key("NAME", "hello/{name}", dict)
-        new_keyfs.subscribe_on_import(lambda *args: 0/0)
-        serial = new_keyfs.get_current_serial()
-        with keyfs.transaction() as tx:
-            changes = tx.conn.get_changes(0)
-        with pytest.raises(ZeroDivisionError):
-            new_keyfs.import_changes(0, changes)
-        assert new_keyfs.get_current_serial() == serial
-
     def test_get_raw_changelog_entry_not_exist(self, keyfs):
         with keyfs.transaction() as tx:
             assert tx.conn.get_raw_changelog_entry(10000) is None

@@ -522,11 +522,6 @@ class ReplicaThread:
                         (changes, rel_renames) = load(stream)
                         self.xom.keyfs.import_changes(serial, changes)
                         self.update_from_master_at = time.time()
-                        with self.xom.keyfs.get_connection(write=False) as conn:
-                            (changes2, rel_renames2) = loads(conn.get_raw_changelog_entry(serial))
-                            if changes != changes2:
-                                import pdb; pdb.set_trace()
-                                pass
                 except StopIteration:
                     pass
                 except EOFError:
@@ -1035,10 +1030,9 @@ class FileReplicationThread:
             name = normalize_name(entry.project)
             try:
                 linkstore = stage.get_linkstore_perstage(name, entry.version)
-            except (stage.MissesRegistration, stage.UpstreamError) as e:
+            except (stage.MissesRegistration, stage.UpstreamError):
                 if index_type == IndexType(None) or index_type == IndexType("mirror"):
                     return
-                # import pdb; pdb.set_trace()
                 raise
             links = linkstore.get_links(basename=entry.basename)
             for link in links:
