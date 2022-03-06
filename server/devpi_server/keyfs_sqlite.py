@@ -154,11 +154,13 @@ class BaseConnection:
             return bytes(row[0])
         return None
 
+    def _get_changes_at(self, serial):
+        return loads(self.get_raw_changelog_entry(serial))[0]
+
     def get_changes(self, serial):
         changes = self._changelog_cache.get(serial, absent)
         if changes is absent:
-            data = self.get_raw_changelog_entry(serial)
-            changes, rel_renames = loads(data)
+            changes = self._get_changes_at(serial)
             # make values in changes read only so no calling site accidentally
             # modifies data
             changes = ensure_deeply_readonly(changes)

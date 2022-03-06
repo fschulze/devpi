@@ -188,16 +188,16 @@ class Connection(BaseConnection):
         self._relpath_id_cache[relpath] = c.lastrowid
         c.close()
 
-    def _write_changelog_entry(self, serial, entry, old_values):
+    def _write_changelog_entry(self, commit_serial, entry, old_values):
         (changes, renames) = entry
-        threadlog.debug("writing changelog for serial %s", serial)
+        threadlog.debug("writing changelog for serial %s", commit_serial)
         kvchangelog = []
         for relpath, (keyname, back_serial, value) in changes.items():
             tkey_type = self.storage.typed_keys[keyname].type
             relpath_id = self._relpath_id_cache[relpath]
             if value is None:
                 q = "INSERT INTO relpath_deleted_at (relpath_id, serial) VALUES (?, ?)"
-                self._sqlconn.execute(q, (relpath_id, serial))
+                self._sqlconn.execute(q, (relpath_id, commit_serial))
                 items = ((b'', None),)
             elif tkey_type in (dict, set):
                 old_value = old_values[relpath]
@@ -219,7 +219,8 @@ class Connection(BaseConnection):
             else:
                 items = ((b'', sqlite3.Binary(dumps(value))),)
             for key, data in items:
-                kvchangelog.append((relpath_id, serial, back_serial, key, data))
+                kvchangelog.append(
+                    (relpath_id, commit_serial, back_serial, key, data))
         q = """
             INSERT INTO kvchangelog (
                 relpath_id, serial, back_serial, key, value)
@@ -227,11 +228,10 @@ class Connection(BaseConnection):
         self._sqlconn.executemany(q, kvchangelog)
         self._sqlconn.execute(
             "INSERT INTO renames (serial, data) VALUES (?, ?)",
-            (serial, sqlite3.Binary(dumps(renames))))
+            (commit_serial, sqlite3.Binary(dumps(renames))))
 
     def write_changelog_entries(self, commit_serial, entry):
         changes = entry[0]
-        old_values = {}
         for relpath, (keyname, back_serial, value) in changes.items():
             if back_serial is None:
                 try:
@@ -240,14 +240,17 @@ class Connection(BaseConnection):
                     back_serial = -1
                 # update back_serial for _write_changelog_entry
                 changes[relpath] = (keyname, back_serial, value)
-            tkey = self.storage.typed_keys[keyname]
-            if tkey.type in (dict, set):
+        old_values = {}
+        for relpath, (keyname, back_serial, value) in changes.items():
+            tkey_type = self.storage.typed_keys[keyname].type
+            if tkey_type in (dict, set):
                 old_value = None
                 if back_serial > -1:
                     (_, _, old_value) = self.get_relpath_at(relpath, back_serial)
                 if old_value is None:
-                    old_value = tkey.type()
+                    old_value = tkey_type()
                 old_values[relpath] = old_value
+        for relpath, (keyname, back_serial, value) in changes.items():
             self._db_write_typedkey(relpath, keyname, commit_serial)
         self._write_changelog_entry(commit_serial, entry, old_values)
 
@@ -257,7 +260,9 @@ class Connection(BaseConnection):
         if row is None:
             return None
         renames = loads(row[0])
-        changes = self._get_changes_at(serial)
+        changes = self._changelog_cache.get(serial, absent)
+        if changes is absent:
+            changes = self._get_changes_at(serial)
         return dumps((changes, renames))
 
     def _iter_data_from_rows(self, rows_iter):
@@ -394,17 +399,6 @@ class Connection(BaseConnection):
         #     if (last_serial, tup) != (_last_serial, _tup):
         #         raise RuntimeError
         return result
-
-    def get_changes(self, serial):
-        changes = self._changelog_cache.get(serial, absent)
-        if changes is absent:
-            changes = self._get_changes_at(serial)
-            # make values in changes read only so no calling site accidentally
-            # modifies data
-            changes = ensure_deeply_readonly(changes)
-            assert isinstance(changes, ReadonlyView)
-            self._changelog_cache.put(serial, changes)
-        return changes
 
     def iter_relpaths_at(self, typedkeys, at_serial):
         q = """

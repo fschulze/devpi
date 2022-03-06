@@ -1038,7 +1038,7 @@ class FileReplicationThread:
             except (stage.MissesRegistration, stage.UpstreamError) as e:
                 if index_type == IndexType(None) or index_type == IndexType("mirror"):
                     return
-                import pdb; pdb.set_trace()
+                # import pdb; pdb.set_trace()
                 raise
             links = linkstore.get_links(basename=entry.basename)
             for link in links:

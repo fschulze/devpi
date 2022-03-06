@@ -333,8 +333,8 @@ class XOM:
         except Exception:
             threadlog.exception("Error while trying to initialize storage")
             fatal("Couldn't initialize storage")
-        # if not self.config.requests_only:
-        #     self.thread_pool.register(keyfs.notifier)
+        if not self.config.requests_only:
+            self.thread_pool.register(keyfs.notifier)
         return keyfs
 
     def new_http_session(self, component_name, max_retries=None):
