@@ -4,7 +4,6 @@ from .keyfs import RelpathInfo
 from .keyfs_sqlite_fs import Connection as BaseConnection
 from .keyfs_sqlite_fs import Storage as BaseStorage
 from .log import threadlog
-from .readonly import ReadonlyView
 from .readonly import ensure_deeply_readonly
 from .fileutil import dumps, loads
 from devpi_common.types import cached_property
