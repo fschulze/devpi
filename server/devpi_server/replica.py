@@ -936,6 +936,12 @@ class FileReplicationThread:
                 stagename = '/'.join(relpath.split('/')[:2])
                 with self.xom.keyfs.transaction(write=False, at_serial=serial):
                     stage = self.xom.model.getstage(stagename)
+                if stage is None:
+                    threadlog.info(
+                        "ignoring file from deleted mirror index '%s': %s",
+                        stagename, relpath)
+                    self.shared_data.errors.remove(entry)
+                    return
                 if stage.ixconfig['type'] == 'mirror':
                     threadlog.warn(
                         "ignoring file which couldn't be retrieved from mirror index '%s': %s",
@@ -1028,9 +1034,10 @@ class FileReplicationThread:
             name = normalize_name(entry.project)
             try:
                 linkstore = stage.get_linkstore_perstage(name, entry.version)
-            except (stage.MissesRegistration, stage.UpstreamError):
+            except (stage.MissesRegistration, stage.UpstreamError) as e:
                 if index_type == IndexType(None) or index_type == IndexType("mirror"):
                     return
+                import pdb; pdb.set_trace()
                 raise
             links = linkstore.get_links(basename=entry.basename)
             for link in links:
