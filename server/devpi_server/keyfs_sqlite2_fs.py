@@ -166,7 +166,7 @@ class Connection(BaseConnection):
     def _relpath_id_cache(self):
         return {}
 
-    def db_write_typedkey(self, relpath, name, next_serial):
+    def _db_write_typedkey(self, relpath, name, next_serial):
         q = """
             INSERT OR REPLACE INTO relpath_info (
                 ROWID, relpath, keyname, serial)
@@ -188,49 +188,32 @@ class Connection(BaseConnection):
         self._relpath_id_cache[relpath] = c.lastrowid
         c.close()
 
-    def write_changelog_entry(self, serial, entry):
+    def _write_changelog_entry(self, serial, entry, old_values):
         (changes, renames) = entry
         threadlog.debug("writing changelog for serial %s", serial)
         kvchangelog = []
         for relpath, (keyname, back_serial, value) in changes.items():
-            tkey = self.storage.typed_keys[keyname]
+            tkey_type = self.storage.typed_keys[keyname].type
             relpath_id = self._relpath_id_cache[relpath]
             if value is None:
                 q = "INSERT INTO relpath_deleted_at (relpath_id, serial) VALUES (?, ?)"
                 self._sqlconn.execute(q, (relpath_id, serial))
                 items = ((b'', None),)
-            elif tkey.type == dict:
-                old_value = None
-                if back_serial > -1:
-                    (_, _, old_value) = self.get_relpath_at(relpath, back_serial)
-                if old_value is None:
-                    old_value = dict()
+            elif tkey_type in (dict, set):
+                old_value = old_values[relpath]
                 items = []
                 all_keys = set(old_value).union(value)
                 for k in all_keys:
                     if k not in value:
                         items.append((sqlite3.Binary(dumps(k)), None))
-                    else:
+                    elif tkey_type == set and k not in old_value:
+                        items.append((sqlite3.Binary(dumps(k)), b''))
+                    elif tkey_type == dict:
                         v = value[k]
                         if k not in old_value or old_value[k] != v:
                             items.append((
                                 sqlite3.Binary(dumps(k)),
                                 sqlite3.Binary(dumps(v))))
-                if not items:
-                    items = ((b'', b''),)
-            elif tkey.type == set:
-                old_value = None
-                if back_serial > -1:
-                    (_, _, old_value) = self.get_relpath_at(relpath, back_serial)
-                if old_value is None:
-                    old_value = set()
-                items = []
-                all_keys = set(old_value).union(value)
-                for k in all_keys:
-                    if k not in value:
-                        items.append((sqlite3.Binary(dumps(k)), None))
-                    elif k not in old_value:
-                        items.append((sqlite3.Binary(dumps(k)), b''))
                 if not items:
                     items = ((b'', b''),)
             else:
@@ -245,6 +228,28 @@ class Connection(BaseConnection):
         self._sqlconn.execute(
             "INSERT INTO renames (serial, data) VALUES (?, ?)",
             (serial, sqlite3.Binary(dumps(renames))))
+
+    def write_changelog_entries(self, commit_serial, entry):
+        changes = entry[0]
+        old_values = {}
+        for relpath, (keyname, back_serial, value) in changes.items():
+            if back_serial is None:
+                try:
+                    (_, back_serial) = self.db_read_typedkey(relpath)
+                except KeyError:
+                    back_serial = -1
+                # update back_serial for _write_changelog_entry
+                changes[relpath] = (keyname, back_serial, value)
+            tkey = self.storage.typed_keys[keyname]
+            if tkey.type in (dict, set):
+                old_value = None
+                if back_serial > -1:
+                    (_, _, old_value) = self.get_relpath_at(relpath, back_serial)
+                if old_value is None:
+                    old_value = tkey.type()
+                old_values[relpath] = old_value
+            self._db_write_typedkey(relpath, keyname, commit_serial)
+        self._write_changelog_entry(commit_serial, entry, old_values)
 
     def get_raw_changelog_entry(self, serial):
         q = "SELECT data FROM renames WHERE serial = ?"

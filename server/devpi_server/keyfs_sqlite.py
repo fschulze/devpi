@@ -123,16 +123,29 @@ class BaseConnection:
             raise KeyError(relpath)
         return tuple(row[:2])
 
-    def db_write_typedkey(self, relpath, name, next_serial):
+    def _db_write_typedkey(self, relpath, name, commit_serial):
         q = "INSERT OR REPLACE INTO kv (key, keyname, serial) VALUES (?, ?, ?)"
-        self.fetchone(q, (relpath, name, next_serial))
+        self.fetchone(q, (relpath, name, commit_serial))
 
-    def write_changelog_entry(self, serial, entry):
-        threadlog.debug("writing changelog for serial %s", serial)
+    def _write_changelog_entry(self, commit_serial, entry):
+        threadlog.debug("writing changelog for serial %s", commit_serial)
         data = dumps(entry)
         self.fetchone(
             "INSERT INTO changelog (serial, data) VALUES (?, ?)",
-            (serial, sqlite3.Binary(data)))
+            (commit_serial, sqlite3.Binary(data)))
+
+    def write_changelog_entries(self, commit_serial, entry):
+        changes = entry[0]
+        for relpath, (keyname, back_serial, value) in changes.items():
+            if back_serial is None:
+                try:
+                    (_, back_serial) = self.db_read_typedkey(relpath)
+                except KeyError:
+                    back_serial = -1
+                # update back_serial for _write_changelog_entry
+                changes[relpath] = (keyname, back_serial, value)
+            self._db_write_typedkey(relpath, keyname, commit_serial)
+        self._write_changelog_entry(commit_serial, entry)
 
     def get_raw_changelog_entry(self, serial):
         q = "SELECT data FROM changelog WHERE serial = ?"
@@ -154,9 +167,10 @@ class BaseConnection:
         return changes
 
     def get_relpath_at(self, relpath, serial):
-        result = self._relpath_cache.get((serial, relpath), absent)
+        key = (serial, relpath)
+        result = self._relpath_cache.get(key, absent)
         if result is absent:
-            result = self._changelog_cache.get((serial, relpath), absent)
+            result = self._changelog_cache.get(key, absent)
         if result is absent:
             changes = self._changelog_cache.get(serial, absent)
             if changes is not absent and relpath in changes:
@@ -167,10 +181,10 @@ class BaseConnection:
         if gettotalsizeof(result, maxlen=100000) is None:
             # result is big, put it in the changelog cache,
             # which has fewer entries to preserve memory
-            self._changelog_cache.put((serial, relpath), result)
+            self._changelog_cache.put(key, result)
         else:
             # result is small
-            self._relpath_cache.put((serial, relpath), result)
+            self._relpath_cache.put(key, result)
         return result
 
     def iter_relpaths_at(self, typedkeys, at_serial):
@@ -569,12 +583,6 @@ class Writer:
     def record_set(self, typedkey, value=None, back_serial=None):
         """ record setting typedkey to value (None means it's deleted) """
         assert not isinstance(value, ReadonlyView), value
-        if back_serial is None:
-            try:
-                _, back_serial = self.conn.db_read_typedkey(typedkey.relpath)
-            except KeyError:
-                back_serial = -1
-        self.conn.db_write_typedkey(typedkey.relpath, typedkey.name, self.commit_serial)
         # at __exit__ time we write out changes to the _changelog_cache
         # so we protect here against the caller modifying the value later
         value = get_mutable_deepcopy(value)
@@ -600,7 +608,7 @@ class Writer:
     def commit(self, commit_serial):
         rel_renames = self.conn._get_rel_renames()
         entry = (self.changes, rel_renames)
-        self.conn.write_changelog_entry(commit_serial, entry)
+        self.conn.write_changelog_entries(commit_serial, entry)
         (files_commit, files_del) = self.conn._write_dirty_files(rel_renames)
         self.conn.commit()
         self.storage.last_commit_timestamp = time.time()
