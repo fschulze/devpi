@@ -76,7 +76,8 @@ jobs:
           set -xe -o nounset
           python -VV
           python -m site
-          python -m pip install --upgrade pip setuptools wheel tox
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install --pre tox 'pyparsing<3;python_version<"3.6"'
       - name: "Run tox targets for ${{ matrix.project }} (${{ matrix.tox-envs }}) with ${{ matrix.python-version }} on ${{ matrix.os }}"
         run: |
           set -xe -o nounset
@@ -115,7 +116,8 @@ jobs:
           set -xe -o nounset
           python -VV
           python -m site
-          python -m pip install --upgrade pip setuptools wheel tox
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install --pre tox 'pyparsing<3;python_version<"3.6"'
       - name: "Run tox targets for ${{ matrix.project }} (${{ matrix.tox-envs }}) with ${{ matrix.python-version }} on ${{ matrix.os }}"
         run: |
           set -xe -o nounset
@@ -159,7 +161,8 @@ jobs:
           set -xe -o nounset
           python -VV
           python -m site
-          python -m pip install --upgrade pip setuptools wheel tox
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install --pre tox 'pyparsing<3;python_version<"3.6"'
       - name: "Run tox targets for ${{ matrix.project }} (${{ matrix.tox-envs }}) with ${{ matrix.python-version }} on ${{ matrix.os }}"
         run: |
           set -xe -o nounset
@@ -204,7 +207,8 @@ jobs:
           set -xe -o nounset
           python -VV
           python -m site
-          python -m pip install --upgrade pip setuptools wheel tox
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install --pre tox 'pyparsing<3;python_version<"3.6"'
       - name: "Run tox targets for ${{ matrix.project }} (${{ matrix.tox-envs }}) with ${{ matrix.python-version }} on ${{ matrix.os }}"
         run: |
           set -xe -o nounset
@@ -249,7 +253,8 @@ jobs:
           set -xe -o nounset
           python -VV
           python -m site
-          python -m pip install --upgrade pip setuptools wheel tox
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install --pre tox 'pyparsing<3;python_version<"3.6"'
       - name: "Run tox targets for ${{ matrix.project }} (${{ matrix.tox-envs }}) with ${{ matrix.python-version }} on ${{ matrix.os }}"
         run: |
           set -xe -o nounset
@@ -298,7 +303,8 @@ jobs:
           set -xe -o nounset
           python -VV
           python -m site
-          python -m pip install --upgrade pip setuptools wheel tox
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install --pre tox 'pyparsing<3;python_version<"3.6"'
       - name: "Run tox targets for ${{ matrix.project }} (${{ matrix.tox-envs }}) with ${{ matrix.python-version }} on ${{ matrix.os }}"
         continue-on-error: true
         run: |
@@ -335,7 +341,8 @@ jobs:
           set -xe -o nounset
           python -VV
           python -m site
-          python -m pip install --upgrade pip setuptools wheel tox
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install --pre tox 'pyparsing<3;python_version<"3.6"'
       - name: "Run tox targets for ${{ matrix.project }} (${{ matrix.tox-envs }}) with ${{ matrix.python-version }} on ${{ matrix.os }}"
         run: |
           set -xe -o nounset
@@ -410,7 +417,8 @@ jobs:
           set -xe -o nounset
           python -VV
           python -m site
-          python -m pip install --upgrade pip setuptools wheel tox
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install --pre tox 'pyparsing<3;python_version<"3.6"'
       - name: "Run tox targets for ${{ matrix.project }} (${{ matrix.tox-envs }}) with ${{ matrix.python-version }} on ${{ matrix.os }}"
         run: |
           set -xe -o nounset
@@ -462,7 +470,8 @@ jobs:
           set -xe -o nounset
           python -VV
           python -m site
-          python -m pip install --upgrade pip setuptools wheel tox
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install --pre tox 'pyparsing<3;python_version<"3.6"'
       - name: "Run tox targets for ${{ matrix.project }} (${{ matrix.tox-envs }}) with ${{ matrix.python-version }} on ${{ matrix.os }}"
         run: |
           set -xe -o nounset
@@ -514,7 +523,8 @@ jobs:
           set -xe -o nounset
           python -VV
           python -m site
-          python -m pip install --upgrade pip setuptools wheel tox
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install --pre tox 'pyparsing<3;python_version<"3.6"'
       - name: "Run tox targets for ${{ matrix.project }} (${{ matrix.tox-envs }}) with ${{ matrix.python-version }} on ${{ matrix.os }}"
         run: |
           set -xe -o nounset
@@ -563,7 +573,8 @@ jobs:
           set -xe -o nounset
           python -VV
           python -m site
-          python -m pip install --upgrade pip setuptools wheel tox
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install --pre tox 'pyparsing<3;python_version<"3.6"'
       - name: "Run tox targets for ${{ matrix.project }} (${{ matrix.tox-envs }}) with ${{ matrix.python-version }} on ${{ matrix.os }}"
         continue-on-error: true
         run: |
