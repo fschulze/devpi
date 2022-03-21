@@ -285,6 +285,8 @@ jobs:
     env:
       PY_COLORS: 1
       PROJECT: "${{ matrix.project }}"
+      AIOHTTP_NO_EXTENSIONS: 1
+      YARL_NO_EXTENSIONS: 1
 
     runs-on: "${{ matrix.os }}"
 
@@ -550,6 +552,8 @@ jobs:
     env:
       PY_COLORS: 1
       PROJECT: "${{ matrix.project }}"
+      AIOHTTP_NO_EXTENSIONS: 1
+      YARL_NO_EXTENSIONS: 1
 
     runs-on: "${{ matrix.os }}"
 
