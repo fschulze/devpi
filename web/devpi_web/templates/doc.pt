@@ -29,13 +29,14 @@
                 iframe = $iframe[0],
                 $body = $('body'),
                 $header = $('.header');
+                $window = $(window);
             $iframe.on('load', {$body: $body, $header: $header}, onIFrameLoad);
-            $(window).on('resize', function() {
+            $window.on('resize', function() {
                 var $doc = $(iframe.contentWindow.document),
                     $docHtml = $doc.find('html');
                 updateHeaderMargins($header, $body, $doc, $docHtml)
             });
-            $(window).load(function () {
+            $window.on("load", function () {
                 // make keyboard actions affect the actual documentation
                 // in the iframe by default
                 iframe.contentWindow.focus();
