@@ -98,10 +98,6 @@ jobs:
             python-version: "2.7"
             os: "ubuntu-latest"
             tox-envs: "py27-server520"
-          - project: "web"
-            python-version: "3.5"
-            os: "ubuntu-latest"
-            tox-envs: "py35-server520"
 
     env:
       PY_COLORS: 1

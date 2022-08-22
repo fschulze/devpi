@@ -1,0 +1,1 @@
+Remove support for Python 3.4, 3.5 and 3.6. In the future EOL Python 3 versions aren't supported anymore.
