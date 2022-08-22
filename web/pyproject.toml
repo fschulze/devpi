@@ -1,3 +1,89 @@
+[build-system]
+requires = ["setuptools", "setuptools_changelog_shortener", "wheel"]
+build-backend = "setuptools.build_meta"
+
+
+[project]
+dynamic = ["version", "readme"]
+name = "devpi-web"
+description = "devpi-web: a web view for devpi-server"
+dependencies = [
+    "Whoosh<3",
+    "beautifulsoup4>=4.3.2,!=4.12.1",
+    "defusedxml",
+    "devpi-server>=5.2.0",
+    "devpi-common>=3.2.0",
+    "docutils>=0.11",
+    "py",
+    "pygments>=1.6",
+    "pyramid>=2",
+    "pyramid-chameleon",
+    "readme-renderer[md]>=23.0",
+]
+license = {file = "LICENSE"}
+maintainers = [
+    {name = "Florian Schulze", email = "mail@pyfidelity.com"}
+]
+requires-python = ">=3.9"
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Web Environment",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: Implementation :: PyPy",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Internet :: WWW/HTTP :: WSGI :: Application",
+]
+
+
+[project.urls]
+"Bug Tracker" = "https://github.com/devpi/devpi/issues"
+"Changelog" = "github.com/devpi/devpi/blob/main/web/CHANGELOG"
+"Documentation" = "https://doc.devpi.net"
+"Homepage" = "https://devpi.net"
+"Source Code" = "https://github.com/devpi/devpi"
+
+
+[tool.setuptools]
+packages = [
+    "devpi_web",
+]
+
+
+[project.scripts]
+devpi-clear-search-index = "devpi_web.clear_index:clear_index"
+
+
+[project.entry-points.devpi_server]
+devpi-web = "devpi_web.main"
+devpi-web-whoosh = "devpi_web.whoosh_index"
+
+
+[project.entry-points.devpi_web]
+devpi-web-null = "devpi_web.null_index"
+devpi-web-whoosh = "devpi_web.whoosh_index"
+
+
+[tool.setuptools.dynamic]
+version = {attr = "devpi_web.__version__"}
+readme = {file = ["README.rst", "CHANGELOG.short.rst"]}
+
+
+[tool.setuptools_changelog_shortener]
+read_from = "CHANGELOG"
+write_to = "CHANGELOG.short.rst"
+count = 5
+delimiter = "^==+"
+title = "=========\nChangelog\n========="
+
+
 [tool.towncrier]
 package = "devpi_web"
 filename = "CHANGELOG"
