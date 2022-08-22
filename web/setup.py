@@ -34,7 +34,7 @@ setup(
         'Documentation': 'https://doc.devpi.net',
         'Source Code': 'https://github.com/devpi/devpi'
     },
-    version='4.2.2',
+    version='5.0.0.dev0',
     maintainer="Florian Schulze",
     maintainer_email="mail@pyfidelity.com",
     license="MIT",
@@ -49,7 +49,7 @@ setup(
         "Programming Language :: Python :: Implementation :: PyPy",
         "Topic :: Internet :: WWW/HTTP :: WSGI :: Application"] + [
             "Programming Language :: Python :: %s" % x
-            for x in "3.4 3.5 3.6 3.7 3.8 3.9 3.10 3.11 3.12".split()],
+            for x in "3.8 3.9 3.10 3.11 3.12".split()],
     entry_points={
         'console_scripts': [
             "devpi-clear-search-index = devpi_web.clear_index:clear_index"],
@@ -71,6 +71,6 @@ setup(
         'pyramid-chameleon',
         'readme-renderer[md]>=23.0'],
     include_package_data=True,
-    python_requires='>=3.4',
+    python_requires='>=3.8',
     zip_safe=False,
     packages=['devpi_web'])
