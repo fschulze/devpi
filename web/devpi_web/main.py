@@ -60,9 +60,18 @@ def macros(request):
     return result
 
 
+def add_href_css(request, href, rel="stylesheet", type="text/css"):
+    css = request.environ.setdefault('devpiweb.head_css', [])
+    css.append(dict(href=href, rel=rel, type=type))
+
+
 def add_src_script(request, src):
     scripts = request.environ.setdefault('devpiweb.head_scripts', [])
     scripts.append(dict(src=src))
+
+
+def add_static_css(request, href):
+    return request.add_href_css(request.static_url(href))
 
 
 def add_static_script(request, src):
@@ -198,11 +207,17 @@ def includeme(config):
         "/{user}/",
         "/{user:[^+/]+}/")
     config.add_tween("devpi_web.views.tween_trailing_slash_redirect")
+    config.add_request_method(add_href_css)
     config.add_request_method(add_src_script)
+    config.add_request_method(add_static_css)
     config.add_request_method(add_static_script)
     config.add_request_method(macros, reify=True)
     config.add_request_method(navigation_info, reify=True)
     config.scan()
+    config.registry["macros"].set_group("html_head", [
+        "favicon",
+        "html_head_css",
+        "html_head_scripts"])
     config.registry["macros"].set_group("main_footer", [
         "footer_versions"])
 

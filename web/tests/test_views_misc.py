@@ -257,6 +257,7 @@ class TestStatusView:
         pyramidconfig.scan('devpi_web.macros')
         pyramidconfig.scan('devpi_web.views', ignore=lambda n: 'statusview' not in n)
         dummyrequest.macros = macros(dummyrequest)
+        dummyrequest.add_static_css = lambda x: None
         dummyrequest.add_static_script = lambda x: None
         view = self._getViewCallable(
             pyramidconfig,
