@@ -69,3 +69,15 @@ def query_doc(request):
 @macro_config(template='templates/status_badge.pt')
 def status_badge(request):
     return dict(status_info=status_info(request))
+
+
+@macro_config(template='templates/user_index_list.pt')
+def user_index_list(request):
+    return dict()
+
+
+@macro_config(template='templates/user_index_list_item.pt')
+def user_index_list_item(request, user, show_user_link=True):
+    return dict(
+        user,
+        show_user_link=show_user_link)

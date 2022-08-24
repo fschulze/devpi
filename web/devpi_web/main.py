@@ -224,6 +224,10 @@ def includeme(config):
     config.registry["macros"].set_group("main_navigation", [
         "header_breadcrumbs",
         "status_badge"])
+    config.registry["macros"].set_group("root", [
+        "user_index_list"])
+    config.registry["macros"].set_group("user", [
+        "user_index_list"])
 
 
 def get_indexer_from_config(config):
