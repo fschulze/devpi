@@ -304,9 +304,7 @@ class TestStatusView:
 
     def test_status_macros_nothing(self, dummyrequest, plugin, statusview):
         from bs4 import BeautifulSoup
-        from devpi_web.main import status_info
         plugin.results = [[]]
-        dummyrequest.status_info = status_info(dummyrequest)
         result = statusview(None, dummyrequest)
         html = BeautifulSoup(result.body, 'html.parser')
         assert html.select('.statusbadge')[0].text.strip() == 'ok'
@@ -315,9 +313,7 @@ class TestStatusView:
 
     def test_status_macros_warn(self, dummyrequest, plugin, statusview):
         from bs4 import BeautifulSoup
-        from devpi_web.main import status_info
         plugin.results = [[dict(status="warn", msg="Foo")]]
-        dummyrequest.status_info = status_info(dummyrequest)
         result = statusview(None, dummyrequest)
         html = BeautifulSoup(result.body, 'html.parser')
         assert html.select('.statusbadge')[0].text.strip() == 'degraded'
@@ -326,9 +322,7 @@ class TestStatusView:
 
     def test_status_macros_fatal(self, dummyrequest, plugin, statusview):
         from bs4 import BeautifulSoup
-        from devpi_web.main import status_info
         plugin.results = [[dict(status="fatal", msg="Foo")]]
-        dummyrequest.status_info = status_info(dummyrequest)
         result = statusview(None, dummyrequest)
         html = BeautifulSoup(result.body, 'html.parser')
         assert html.select('.statusbadge')[0].text.strip() == 'fatal'
@@ -340,9 +334,7 @@ class TestStatusView:
         [dict(status="fatal", msg="Foo"), dict(status="warn", msg="Bar")]])
     def test_status_macros_mixed(self, dummyrequest, plugin, statusview, msgs):
         from bs4 import BeautifulSoup
-        from devpi_web.main import status_info
         plugin.results = [[dict(status="fatal", msg="Foo")]]
-        dummyrequest.status_info = status_info(dummyrequest)
         result = statusview(None, dummyrequest)
         html = BeautifulSoup(result.body, 'html.parser')
         assert html.select('.statusbadge')[0].text.strip() == 'fatal'
