@@ -2,6 +2,11 @@ from .macroregistry import macro_config
 from .main import status_info
 
 
+@macro_config('favicon', template='templates/favicon.pt')
+def favicon(request):
+    return dict()
+
+
 @macro_config(template='templates/footer_versions.pt')
 def footer_versions(request):
     return dict(
