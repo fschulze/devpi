@@ -17,7 +17,3 @@
         <metal:macros use-macro="macros.render_group('main_footer')" />
     </footer>
 </metal:footer>
-<metal:rootaboveuserindexlist define-macro="rootaboveuserindexlist">
-</metal:rootaboveuserindexlist>
-<metal:rootbelowuserindexlist define-macro="rootbelowuserindexlist">
-</metal:rootbelowuserindexlist>
