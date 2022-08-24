@@ -17,7 +17,3 @@
         <metal:macros tal:repeat="name request.registry['macros'].get_group('main_footer')" use-macro="macros[name]" />
     </footer>
 </metal:footer>
-<metal:rootaboveuserindexlist define-macro="rootaboveuserindexlist">
-</metal:rootaboveuserindexlist>
-<metal:rootbelowuserindexlist define-macro="rootbelowuserindexlist">
-</metal:rootbelowuserindexlist>
