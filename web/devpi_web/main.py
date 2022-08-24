@@ -182,6 +182,8 @@ def includeme(config):
     config.add_request_method(status_info, reify=True)
     config.add_request_method(query_docs_html, reify=True)
     config.scan()
+    config.registry["macros"].set_group("main_footer", [
+        "footer_versions"])
 
 
 def get_indexer_from_config(config):
