@@ -9,6 +9,9 @@
             <metal:macros tal:repeat="name request.registry['macros'].get_group('main_header_top')" use-macro="macros[name]" />
             <div id="navigation">
                 <metal:macros tal:repeat="name request.registry['macros'].get_group('main_navigation')" use-macro="macros[name]" />
+                <div class="subnav">
+                    <metal:macros tal:repeat="name request.registry['macros'].get_group('main_subnavigation')" use-macro="macros[name]" />
+                </div>
             </div>
             <metal:macros tal:repeat="name request.registry['macros'].get_group('main_header')" use-macro="macros[name]" />
             <metal:endofheader define-slot="endofheader"></metal:endofheader>

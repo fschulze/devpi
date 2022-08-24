@@ -204,11 +204,14 @@ def includeme(config):
     config.registry["macros"].set_group("main_header", [
         "header_status"])
     config.registry["macros"].set_group("main_navigation", [
-        "header_breadcrumbs",
+        "header_breadcrumbs"])
+    config.registry["macros"].set_group("main_subnavigation", [
+        "header_logged_in_user",
         "status_badge"])
     config.registry["macros"].set_group("root", [
         "user_index_list"])
     config.registry["macros"].set_group("user", [
+        "logout_form",
         "user_index_list"])
 
 

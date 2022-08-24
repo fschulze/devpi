@@ -20,6 +20,25 @@ def header_breadcrumbs(request):
     return dict(path=navigation_info(request)['path'])
 
 
+@macro_config(template='templates/header_logged_in_user.pt')
+def header_logged_in_user(request):
+    result = dict(
+        _user=None)
+    if request.authenticated_userid is None:
+        return result
+    user = request.context.model.get_user(request.authenticated_userid)
+    if not user:
+        return result
+    info = user.get()
+    result['_user'] = user
+    result['name'] = user.name
+    result['title'] = info.get('title', None)
+    result['description'] = info.get('description', None)
+    result['email'] = info.get('email', None)
+    result['url'] = request.route_url("/{user}", user=user.name)
+    return result
+
+
 @macro_config(template='templates/header_search.pt')
 def header_search(request):
     return dict()
@@ -55,6 +74,16 @@ def html_head_scripts(request):
 @macro_config(template='templates/logo.pt')
 def logo(request):
     return dict()
+
+
+@macro_config(template='templates/logout_form.pt')
+def logout_form(request):
+    url = None
+    if request.authenticated_userid:
+        introspector = request.registry.introspector
+        if introspector.get('routes', 'logout') is not None:
+            url = request.route_url("logout")
+    return dict(url=url)
 
 
 @macro_config(template='templates/query_docs.pt')

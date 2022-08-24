@@ -1,0 +1,1 @@
+<a class="authenticated-user" tal:condition="_user" href="${url}" tal:omit-tag="not url" tal:attributes="title description">${title or name}</a>

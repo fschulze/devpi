@@ -35,6 +35,13 @@ form, #content, #navigation, .searchresults {
     padding: 1em 0 0 0;
 }
 
+.subnav {
+    position: absolute;
+    right: 0;
+    display: inline-block;
+    text-align: right;
+}
+
 #navigation {
     border-bottom: 1px solid #ccc;
     padding: 0.25em 0 0.5em 0;
@@ -92,8 +99,6 @@ ul.footer-versions li {
 }
 
 a.statusbadge {
-    position: absolute;
-    right: 1px;
     display: inline-block;
     color: white;
     font-size: 12px;

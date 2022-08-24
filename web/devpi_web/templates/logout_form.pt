@@ -1,0 +1,6 @@
+<tal:logout tal:condition="url">
+    <p></p>
+    <form name="logout" method="post" action="${url}">
+        <button name="submit">Logout</button>
+    </form>
+</tal:logout>
