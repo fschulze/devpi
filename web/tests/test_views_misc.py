@@ -248,16 +248,16 @@ class TestStatusView:
 
     @pytest.fixture
     def statusview(self, dummyrequest, pyramidconfig):
-        from devpi_web.main import macros
         pyramidconfig.include('pyramid_chameleon')
         pyramidconfig.include('devpi_web.macroregistry')
         pyramidconfig.add_static_view('+static', 'devpi_web:static')
         pyramidconfig.add_route("/+status", "/+status")
         pyramidconfig.scan('devpi_web.macros')
         pyramidconfig.scan('devpi_web.views', ignore=lambda n: 'statusview' not in n)
-        dummyrequest.macros = macros(dummyrequest)
         dummyrequest.add_static_css = lambda x: None
         dummyrequest.add_static_script = lambda x: None
+        dummyrequest.registry["macros"].set_group(
+            "main_header", ["header_status"])
         dummyrequest.registry["macros"].set_group(
             "main_navigation", ["status_badge"])
         view = self._getViewCallable(

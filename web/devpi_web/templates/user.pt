@@ -1,14 +1,5 @@
-<!doctype html>
-<html>
-    <head>
-        <title>devpi</title>
-        <metal:head use-macro="request.macros['head']" />
-    </head>
-    <body>
-        <metal:search use-macro="request.macros['navigation']" />
-        <div id="content">
-            <metal:macros tal:repeat="name request.registry['macros'].get_group('user')" use-macro="macros[name]" />
-        </div>
-        <metal:footer use-macro="request.macros['footer']" />
-    </body>
-</html>
+<metal:block use-macro="main_template" tal:define="main_class 'user'">
+    <metal:content fill-slot="content">
+        <metal:macros tal:repeat="name request.registry['macros'].get_group('user')" use-macro="macros[name]" />
+    </metal:content>
+</metal:block>

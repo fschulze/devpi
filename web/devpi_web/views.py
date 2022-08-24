@@ -180,6 +180,7 @@ def doc_serve(context, request):
         if doc_info['etag'] in if_none_match.etags:
             return HTTPNotModified()
     context = ContextWrapper(context)
+    request.add_static_script('devpi_web:static/docview.js')
     doc_info = get_doc_info(context, request)
     if doc_info['doc_path'] is None:
         relpath = request.matchdict['relpath']
@@ -203,6 +204,7 @@ def doc_serve(context, request):
 def doc_show(context, request):
     """ Shows the documentation wrapped in an iframe """
     context = ContextWrapper(context)
+    request.add_static_script('devpi_web:static/docview.js')
     stage = context.stage
     name, version = context.project, context.version
     doc_info = get_doc_info(context, request)

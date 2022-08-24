@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title><metal:title define-slot="title">devpi</metal:title></title>
+        <metal:macros tal:repeat="name request.registry['macros'].get_group('html_head')" use-macro="macros[name]" />
+    </head>
+    <body>
+        <div class="header">
+            <metal:macros tal:repeat="name request.registry['macros'].get_group('main_header_top')" use-macro="macros[name]" />
+            <div id="navigation">
+                <metal:macros tal:repeat="name request.registry['macros'].get_group('main_navigation')" use-macro="macros[name]" />
+            </div>
+            <metal:macros tal:repeat="name request.registry['macros'].get_group('main_header')" use-macro="macros[name]" />
+            <metal:endofheader define-slot="endofheader"></metal:endofheader>
+        </div>
+        <metal:content define-slot="content-wrapper">
+            <div id="content" tal:attributes="class main_class | None">
+                <metal:content define-slot="content"></metal:content>
+            </div>
+        </metal:content>
+        <footer>
+            <metal:footerstart define-slot="footerstart" />
+            <metal:macros tal:repeat="name request.registry['macros'].get_group('main_footer')" use-macro="macros[name]" />
+            <metal:footerend define-slot="footerend" />
+        </footer>
+    </body>
+</html>
