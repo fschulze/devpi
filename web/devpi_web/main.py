@@ -1,4 +1,5 @@
 from chameleon.config import AUTO_RELOAD
+from chameleon.config import DEBUG_MODE
 from devpi_common.metadata import get_latest_version
 from devpi_web.config import add_indexer_backend_option
 from devpi_web.config import get_pluginmanager
@@ -118,6 +119,7 @@ def query_docs_html(request):
 
 class ThemeChameleonRendererLookup(ChameleonRendererLookup):
     auto_reload = AUTO_RELOAD
+    debug = DEBUG_MODE
 
     def __call__(self, info):
         # if the template exists in the theme, we will use it instead of the
