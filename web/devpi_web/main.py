@@ -198,14 +198,15 @@ def includeme(config):
         "html_head_css",
         "html_head_scripts"])
     config.registry["macros"].set_group("main_footer", [
+        "footer_about",
         "footer_versions"])
-    config.registry["macros"].set_group("main_header_top", [
-        "header_search"])
     config.registry["macros"].set_group("main_header", [
         "header_status"])
+    config.registry["macros"].set_group("main_header_top", [
+        "logo",
+        "header_search"])
     config.registry["macros"].set_group("main_navigation", [
-        "header_breadcrumbs"])
-    config.registry["macros"].set_group("main_subnavigation", [
+        "header_breadcrumbs",
         "header_logged_in_user",
         "status_badge"])
     config.registry["macros"].set_group("root", [

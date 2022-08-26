@@ -61,6 +61,7 @@ setup(
             "devpi-web-whoosh = devpi_web.whoosh_index"]},
     install_requires=[
         'Whoosh<3',
+        'attrs>=21.3.0',
         'beautifulsoup4>=4.3.2',
         'defusedxml',
         'devpi-server>=5.2.0',

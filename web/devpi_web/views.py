@@ -1,4 +1,5 @@
 from .main import status_info
+from attrs import define
 from defusedxml.xmlrpc import DefusedExpatParser
 from devpi_common.metadata import Version
 from devpi_common.metadata import get_latest_version
@@ -21,7 +22,6 @@ from devpi_web.main import navigation_version
 from email.utils import parsedate
 from io import TextIOWrapper
 from operator import attrgetter, itemgetter
-from py.xml import html
 from pyramid.decorator import reify
 from pyramid.httpexceptions import HTTPBadGateway, HTTPError
 from pyramid.httpexceptions import HTTPFound, HTTPNotFound
@@ -31,11 +31,11 @@ from pyramid.interfaces import IRoutesMapper
 from pyramid.response import FileResponse, Response
 from pyramid.view import notfound_view_config, view_config
 from time import gmtime
+from typing import Any
 from xmlrpc.client import Fault, Unmarshaller, dumps
 import functools
 import json
 import mimetypes
-import py
 
 seq_types = (list, tuple, SeqViewReadonly)
 
@@ -344,8 +344,6 @@ def get_files_info(request, linkstore, show_toxresults=False):
     for link in sorted(filedata, key=attrgetter('basename')):
         url = url_for_entrypath(request, link.entrypath)
         entry = link.entry
-        if entry.hash_spec:
-            url += "#" + entry.hash_spec
         py_version, file_type = get_pyversion_filetype(link.basename)
         if py_version == 'source':
             py_version = ''
@@ -364,6 +362,8 @@ def get_files_info(request, linkstore, show_toxresults=False):
             url=url,
             basename=link.basename,
             hash_spec=entry.hash_spec,
+            hash_type=entry.hash_type,
+            hash_value=entry.hash_value,
             dist_type=dist_file_types.get(file_type, ''),
             py_version=py_version,
             last_modified=last_modified,
@@ -722,6 +722,14 @@ def project_get(context, request):
         versions=versions)
 
 
+@define
+class MetadataItem:
+    name: str
+    value: Any
+    is_list: bool
+    count: int
+
+
 @view_config(
     route_name="/{user}/{index}/{project}/{version}",
     accept="text/html", request_method="GET",
@@ -737,7 +745,7 @@ def version_get(context, request):
     except stage.UpstreamError as e:
         log.error(e.msg)
         raise HTTPBadGateway(e.msg)
-    infos = []
+    metadata = []
     skipped_keys = frozenset(
         ("description", "home_page", "name", "summary", "version"))
     for key, value in sorted(verdata.items()):
@@ -746,12 +754,14 @@ def version_get(context, request):
         if isinstance(value, seq_types):
             if not len(value):
                 continue
-            value = html.ul([html.li(x) for x in value]).unicode()
+            value = list(value)
+            metadata.append(MetadataItem(
+                name=key, value=value, is_list=True, count=len(value)))
         else:
             if not value:
                 continue
-            value = py.xml.escape(value)
-        infos.append((py.xml.escape(key), value))
+            metadata.append(MetadataItem(
+                name=key, value=value, is_list=False, count=1))
     show_toxresults = (stage.ixconfig['type'] != 'mirror')
     linkstore = stage.get_linkstore_perstage(name, version)
     files = get_files_info(request, linkstore, show_toxresults)
@@ -798,10 +808,7 @@ def version_get(context, request):
         summary=verdata.get("summary"),
         resolved_version=version,
         nav_links=nav_links,
-        infos=infos,
-        metadata_list_fields=frozenset(
-            py.xml.escape(x)
-            for x in getattr(stage, 'metadata_list_fields', ())),
+        metadata=metadata,
         files=files,
         blocked_by_mirror_whitelist=whitelist_info['blocked_by_mirror_whitelist'],
         show_toxresults=show_toxresults,

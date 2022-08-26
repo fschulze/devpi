@@ -9,19 +9,19 @@
         </div>
     </metal:endofheader>
     <metal:content fill-slot="content-wrapper">
-        <div class="iframe">
+        <main class="iframe">
             <iframe
                 id="devpi-doc"
                 src="${url}" data-base_url="${base_url}" data-baseview_url="${baseview_url}"
                 width="100%" height="100%" scrolling="yes">
             </iframe>
-        </div>
+        </main>
         <script type="text/javascript">
         //<![CDATA[
             var $iframe = $('iframe#devpi-doc'),
                 iframe = $iframe[0],
                 $body = $('body'),
-                $header = $('.header');
+                $header = $('body > header'),
                 $window = $(window);
             $iframe.on('load', {$body: $body, $header: $header}, onIFrameLoad);
             $window.on('resize', function() {

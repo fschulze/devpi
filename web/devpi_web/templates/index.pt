@@ -5,13 +5,14 @@
             ${index_name} <span tal:condition="index_title">${index_title}</span> index
         </h1>
 
-        <ul>
-            <li><a href="${simple_index_url}">simple index</a></li>
-        </ul>
+        <p class="projectnavigation" tal:condition="simple_index_url">
+            <a href="${simple_index_url}">Simple index</a>
+        </p>
 
         <tal:packages condition="packages">
         <h2>in-stage latest packages, at least as recent as bases</h2>
-        <table class="packages">
+        <table class="main packages">
+            <caption>Packages</caption>
             <thead>
                 <tr>
                     <th>Name</th>
@@ -29,17 +30,18 @@
                 <td class="${'prerelease' if version_info.is_pre_release else 'stable'}">
                     <a href="${version_info.url}">${version_info.version}</a>
                 </td>
-                <td>
-                    <tal:files condition="version_info.files" repeat="file version_info.files">
+                <td class="releases">
+                    <table class="inlinetoxresults" tal:condition="version_info.files">
+                        <tr tal:repeat="file version_info.files">
                         <tal:file define="toxresults file.get('toxresults', []);
                                           toxresults_state file.get('toxresults_state', None)">
-                            <a href="${file.url}">${file.title}</a>
-                            <tal:tests condition="toxresults_state is not None">
-                                <a href="${version_info.make_toxresults_url(basename=file.basename)}" class="${toxresults_state}">Tests ${toxresults_state}</a>
-                            </tal:tests>
-                            <br tal:condition="not repeat.file.end" />
+                            <td><a href="${file.url}">${file.title}</a></td>
+                            <td class="status">
+                                <a tal:condition="toxresults_state is not None" href="${version_info.make_toxresults_url(basename=file.basename)}" class="${toxresults_state}">Tests ${toxresults_state}</a>
+                            </td>
                         </tal:file>
-                    </tal:files>
+                        </tr>
+                    </table>
                 </td>
                 <td>
                     <a tal:condition="version_info.docs" href="${version_info.docs.url}">${version_info.docs.name} ${version_info.docs.version}</a>

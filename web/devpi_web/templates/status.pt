@@ -15,6 +15,7 @@
         </tal:msgs>
         <h2>Info</h2>
         <table class="status">
+            <caption>Server Status</caption>
             <tr>
                 <th>UUID</th>
                 <td>${info.uuid}</td>

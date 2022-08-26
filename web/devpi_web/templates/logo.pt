@@ -1,1 +1,1 @@
-<h1><a href="${request.route_url('root')}">devpi</a></h1>
+<a class="logo" href="${request.route_url('root')}"><img src="${request.static_url('devpi_web:static/logo-d.svg')}" title="devpi" height="60" /></a>

@@ -9,6 +9,11 @@ def favicon(request):
     return dict()
 
 
+@macro_config(template='templates/footer_about.pt')
+def footer_about(request):
+    return dict()
+
+
 @macro_config(template='templates/footer_versions.pt')
 def footer_versions(request):
     return dict(
