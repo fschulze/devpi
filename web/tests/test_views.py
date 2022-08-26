@@ -20,6 +20,13 @@ def compareable_text(text):
     return re.sub(r'\s+', ' ', text.strip())
 
 
+def test_macros(dummyrequest, pyramidconfig):
+    pyramidconfig.include('pyramid_chameleon')
+    pyramidconfig.include('devpi_web.macroregistry')
+    macros = dummyrequest.registry["macros"]
+    assert sorted(macros._groups) == []
+
+
 def test_root_view(testapp):
     r = testapp.get('/', headers=dict(accept="text/html"))
     assert r.status_code == 200
