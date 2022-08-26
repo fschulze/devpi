@@ -290,6 +290,7 @@ class TestStatusView:
     def statusview(self, dummyrequest, pyramidconfig):
         from devpi_web.main import macros
         pyramidconfig.include('pyramid_chameleon')
+        pyramidconfig.include('devpi_web.macroregistry')
         pyramidconfig.add_static_view('+static', 'devpi_web:static')
         pyramidconfig.add_route("/+status", "/+status")
         pyramidconfig.scan('devpi_web.views', ignore=lambda n: 'statusview' not in n)
@@ -424,6 +425,7 @@ class TestReplicaStatusView:
     def statusview(self, dummyrequest, pyramidconfig):
         from devpi_web.main import macros
         pyramidconfig.include('pyramid_chameleon')
+        pyramidconfig.include('devpi_web.macroregistry')
         pyramidconfig.add_static_view('+static', 'devpi_web:static')
         pyramidconfig.add_route("/+status", "/+status")
         pyramidconfig.scan('devpi_web.views', ignore=lambda n: 'statusview' not in n)
