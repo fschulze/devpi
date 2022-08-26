@@ -13,6 +13,7 @@ from pyramid.renderers import get_renderer
 from pyramid_chameleon.renderer import ChameleonRendererLookup
 import os
 import sys
+import warnings
 
 
 hookimpl = HookimplMarker("devpiweb")
@@ -26,6 +27,9 @@ def theme_static_url(request, path):
 
 def macros(request):
     # returns macros which may partially be overwritten in a theme
+    warnings.warn(
+        "Using request.macros is deprecated, use macros instead.",
+        DeprecationWarning, stacklevel=5)
     result = {}
     paths = [
         "devpi_web:templates/macros.pt",
@@ -137,6 +141,7 @@ def includeme(config):
     from pyramid_chameleon.interfaces import IChameleonLookup
     from pyramid_chameleon.zpt import ZPTTemplateRenderer
     config.include('pyramid_chameleon')
+    config.include('devpi_web.macroregistry')
     # we overwrite the template lookup to allow theming
     lookup = ThemeChameleonRendererLookup(ZPTTemplateRenderer, config.registry)
     config.registry.registerUtility(lookup, IChameleonLookup, name='.pt')
@@ -231,6 +236,7 @@ def devpiserver_pyramid_configure(config, pyramid_config):
                 "The theme path '%s' is not a directory." % theme_path)
             sys.exit(1)
     pyramid_config.registry['theme_path'] = theme_path
+    pyramid_config.registry['debug_macros'] = config.args.debug_macros
     # by using include, the package name doesn't need to be set explicitly
     # for registrations of static views etc
     pyramid_config.include('devpi_web.main')
@@ -258,6 +264,9 @@ def devpiserver_add_parser_options(parser):
     theme.addoption(
         "--theme", action="store",
         help="folder with template and resource overwrites for the web interface")
+    theme.addoption(
+        "--debug-macros", action="store_true",
+        help="add html comments at start and end of macros")
     doczip = parser.addgroup("devpi-web doczip options")
     doczip.addoption(
         "--documentation-path", action="store",
