@@ -32,12 +32,27 @@ def xom(xom, themedir):
     </metal:mycss>
 </metal:head>
     """})
-def test_macro_overwrite(testapp):
+def test_macro_overwrite_reuse(testapp):
     from devpi_web import __version__
     r = testapp.get('/')
     styles = [x.attrs.get('href') for x in r.html.find_all('link')]
     assert 'http://localhost/+static-%s/style.css' % __version__ in styles
     assert 'http://localhost/+theme-static-%s/style.css' % __version__ in styles
+
+
+@pytest.mark.usefixtures("themedir")
+@pytest.mark.theme_files({
+    ('templates', 'macros.pt'): """
+        <metal:mymacro define-macro="mymacro">
+            MyMacro
+        </metal:mymacro>
+    """,
+    ('templates', 'root.pt'): """
+        <metal:macro use-macro="request.macros['mymacro']" />
+    """})
+def test_new_macro(testapp):
+    r = testapp.get('/')
+    assert 'MyMacro' in r.text
 
 
 @pytest.mark.usefixtures("themedir")
