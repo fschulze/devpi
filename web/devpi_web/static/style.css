@@ -460,37 +460,47 @@ table.projectinfos .opened .value:after {
     content: "-";
 }
 
-a.passed:after,
 .toxresult.passed h2:before {
     content: "✔";
     color: green;
     font-weight: bold;
 }
 
-a.failed:after,
 .toxresult.failed h2:before {
     content: "!";
     color: red;
     font-weight: bold;
 }
 
-a.unknown:after,
 .toxresult.unknown h2:before {
     content: "⚠︎";
     color: #fde2b2;
     font-weight: bold;
 }
 
-a.passed:after {
-    content: " ✔";
+a.passed,
+a.failed,
+a.unknown {
+    display: inline-block;
+    color: white;
+    font-size: 12px;
+    padding: 3px 5px;
+    margin: 0 0 0 5px;
+    border-radius: 3px;
+    text-shadow: 1px 1px 1px #555555;
+    line-height: 1em;
 }
 
-a.failed:after {
-    content: " !";
+a.passed {
+    background-color: #45bf17;
 }
 
-a.unknown:after {
-    content: " ⚠︎";
+a.failed {
+    background-color: #bf4545;
+}
+
+a.unknown {
+    background-color: #bfa047;
 }
 
 .toxresult .command.passed h3:first-child:before {

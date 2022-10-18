@@ -24,7 +24,7 @@
                                   toxresults_state file.get('toxresults_state', None)">
                     <a href="${file.url}">${file.title}</a>
                     <tal:tests condition="toxresults_state is not None">
-                        (<a href="${version_info.make_toxresults_url(basename=file.basename)}" class="${toxresults_state}">tests</a>)
+                        <a href="${version_info.make_toxresults_url(basename=file.basename)}" class="${toxresults_state}">Tests ${toxresults_state}</a>
                     </tal:tests>
                     <br tal:condition="not repeat.file.end" />
                 </tal:file>

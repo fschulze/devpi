@@ -25,7 +25,7 @@ def test_testdata(mapp, testapp, tox_result_data):
     r = testapp.post(path, json.dumps({"testenvs": {"py27": {}}}))
     r = testapp.xget(200, api.index, headers=dict(accept="text/html"))
     passed, = r.html.select('.passed')
-    assert passed.text == 'tests'
+    assert passed.text == 'Tests passed'
     assert passed.attrs['href'].endswith(
         '/user1/dev/pkg1/2.6/+toxresults/pkg1-2.6.tgz')
     r = testapp.xget(200, api.index + '/pkg1/2.6', headers=dict(accept="text/html"))
