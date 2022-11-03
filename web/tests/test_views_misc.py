@@ -244,7 +244,6 @@ class TestStatusView:
         dummyrequest.registry['xom'] = xom
         dummyrequest.accept = 'text/html'
         dummyrequest.route_url = lambda r, **kw: "#"
-        dummyrequest.navigation_info = {'path': ''}
         return dummyrequest
 
     @pytest.fixture
@@ -259,6 +258,8 @@ class TestStatusView:
         dummyrequest.macros = macros(dummyrequest)
         dummyrequest.add_static_css = lambda x: None
         dummyrequest.add_static_script = lambda x: None
+        dummyrequest.registry["macros"].set_group(
+            "main_navigation", ["status_badge"])
         view = self._getViewCallable(
             pyramidconfig,
             request_iface=self._getRouteRequestIface(pyramidconfig, "/+status"))
