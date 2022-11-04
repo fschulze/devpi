@@ -1,6 +1,6 @@
-<aside class="index_packages" tal:condition="packages">
+<aside class="index_packages">
     <h2>in-stage latest packages, at least as recent as bases</h2>
-    <table class="main packages">
+    <table class="main packages" tal:condition="packages">
         <caption>Packages</caption>
         <thead>
             <tr>
@@ -39,4 +39,5 @@
         </tal:packages>
         </tbody>
     </table>
+    <p tal:condition="not packages">No packages uploaded.</p>
 </aside>

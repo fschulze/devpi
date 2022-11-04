@@ -453,7 +453,7 @@ def test_version_view(mapp, testapp, monkeypatch):
     assert sorted(info.keys()) == ['author', 'classifiers']
     assert info['author'] == 'Foo Bear'
     assert info['classifiers'] == 'Intended Audience :: Developers License :: OSI Approved :: MIT License'
-    description = r.html.select('#description')
+    description = r.html.select('.description')
     assert len(description) == 1
     description = description[0]
     assert description.decode_contents().strip() == '<p>föö</p>'
@@ -495,7 +495,7 @@ def test_markdown_description_without_content_type(mapp, testapp, monkeypatch):
         waithooks=True)
     r = testapp.get(api.index + '/pkg1/2.6', headers=dict(accept="text/html"))
 
-    description = r.html.select('#description')
+    description = r.html.select('.description')
     assert len(description) == 1
     assert '#' in description[0].decode_contents()
 
@@ -515,7 +515,7 @@ def test_markdown_description_with_content_type(mapp, testapp, monkeypatch):
         waithooks=True)
     r = testapp.get(api.index + '/pkg1/2.6', headers=dict(accept="text/html"))
 
-    description = r.html.select('#description')
+    description = r.html.select('.description')
     assert len(description) == 1
     assert description[0].decode_contents().strip() == '<h1>Description</h1>'
 
@@ -538,12 +538,12 @@ def test_description_updated(mapp, testapp):
     mapp.set_versiondata({
         "name": "pkg-hello", "version": "1.0", "description": "foo"})
     r = testapp.xget(200, api.index + "/pkg-hello/1.0", headers=dict(accept="text/html"))
-    description, = r.html.select('#description')
+    description, = r.html.select('.description')
     assert description.decode_contents().strip() == '<p>foo</p>'
     mapp.set_versiondata({
         "name": "pkg-hello", "version": "1.0", "description": "bar"})
     r = testapp.xget(200, api.index + "/pkg-hello/1.0", headers=dict(accept="text/html"))
-    description, = r.html.select('#description')
+    description, = r.html.select('.description')
     assert description.decode_contents().strip() == '<p>bar</p>'
 
 
@@ -553,7 +553,7 @@ def test_description_empty(mapp, testapp):
     mapp.set_versiondata({
         "name": "pkg-hello", "version": "1.0"})
     r = testapp.xget(200, api.index + "/pkg-hello/1.0", headers=dict(accept="text/html"))
-    description, = r.html.select('#description')
+    description, = r.html.select('.description')
     assert description.decode_contents().strip() == '<p>No description in metadata</p>'
 
 
@@ -634,7 +634,7 @@ def test_version_view_description_errors(mapp, testapp):
         "description": description.encode('utf-8')},
         waithooks=True)
     r = testapp.get(api.index + '/pkg1/2.6', headers=dict(accept="text/html"))
-    (description,) = r.html.select('#description')
+    (description,) = r.html.select('.description')
     assert "Unexpected section title" in description.text
 
 
