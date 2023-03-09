@@ -445,7 +445,7 @@ def main(hub, args=None):
                 hub, current.index, hub.local_current_path)
             # now store existing data in new location
             current.reconfigure({}, force_write=True)
-    current = hub.current
+    current = hub.get_current(args.url)
 
     if args.delete:
         if not hub.current.exists():
