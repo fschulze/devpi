@@ -685,13 +685,25 @@ class Writer:
         value = get_mutable_deepcopy(value)
         self.changes[typedkey.relpath] = (typedkey.name, back_serial, value)
 
-    def _db_write_typedkey(self, relpath, name, serial):
+    def _db_insert_typedkey(self, relpath, name, serial):
         q = """
             INSERT INTO kv(key, keyname, serial)
-                VALUES (:relpath, :name, :serial)
-            ON CONFLICT (key) DO UPDATE
-                SET keyname = EXCLUDED.keyname, serial = EXCLUDED.serial;"""
+                VALUES (:relpath, :name, :serial);"""
         self.conn._sqlconn.run(q, relpath=relpath, name=name, serial=serial)
+
+    def _db_update_typedkey(self, relpath, name, serial, back_serial):
+        q = """
+            UPDATE kv SET serial = :serial
+            WHERE
+                key = :relpath
+                AND keyname = :name
+                AND serial = :back_serial;"""
+        self.conn._sqlconn.run(
+            q,
+            relpath=relpath,
+            name=name,
+            serial=serial,
+            back_serial=back_serial)
 
     def __enter__(self):
         self.conn.begin()
@@ -716,7 +728,10 @@ class Writer:
                             back_serial = -1
                         # update back_serial for write_changelog_entry
                         self.changes[relpath] = (keyname, back_serial, value)
-                    self._db_write_typedkey(relpath, keyname, commit_serial)
+                    if back_serial == -1:
+                        self._db_insert_typedkey(relpath, keyname, commit_serial)
+                    else:
+                        self._db_update_typedkey(relpath, keyname, commit_serial, back_serial)
                 entry = (self.changes, [])
                 self.conn.write_changelog_entry(commit_serial, entry)
                 self.conn.commit()
