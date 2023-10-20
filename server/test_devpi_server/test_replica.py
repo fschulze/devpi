@@ -6,6 +6,7 @@ from devpi_server.fileutil import loads
 from devpi_server.keyfs import MissingFileException
 from devpi_server.log import threadlog, thread_push_log
 from devpi_server.replica import H_EXPECTED_MASTER_ID, H_MASTER_UUID
+from devpi_server.replica import H_EXPECTED_PRIMARY_ID, H_PRIMARY_UUID
 from devpi_server.replica import H_REPLICA_UUID, H_REPLICA_OUTSIDE_URL
 from devpi_server.replica import MasterChangelogRequest
 from devpi_server.replica import proxy_view_to_primary
@@ -36,6 +37,7 @@ def testapp(testapp):
     primary_uuid = testapp.xom.config.get_primary_uuid()
     assert primary_uuid
     testapp.set_header_default(H_EXPECTED_MASTER_ID, primary_uuid)
+    testapp.set_header_default(H_EXPECTED_PRIMARY_ID, master_uuid)
     return testapp
 
 
@@ -90,7 +92,7 @@ class TestChangelog:
         mapp.create_user("this", password="p")
         req = blank_request()
         req.registry = {"xom": xom}
-        mcr = MasterChangelogRequest(req)
+        mcr = PrimaryChangelogRequest(req)
         with xom.keyfs.read_transaction():
             with pytest.raises(HTTPNotFound):
                 mcr._wait_for_serial(xom.keyfs.get_current_serial() + 10)
@@ -102,13 +104,17 @@ class TestChangelog:
         testapp.xget(400, "/+changelog/0", headers={
             H_REPLICA_UUID: self.replica_uuid,
             H_EXPECTED_MASTER_ID: "123",
+            H_EXPECTED_PRIMARY_ID: "123",
             'Authorization': 'Bearer %s' % token})
         r = testapp.xget(200, "/+changelog/0", headers={
             H_REPLICA_UUID: self.replica_uuid,
             H_EXPECTED_MASTER_ID: '',
+            H_EXPECTED_PRIMARY_ID: '',
             'Authorization': 'Bearer %s' % token})
         assert r.headers[H_MASTER_UUID]
+        assert r.headers[H_PRIMARY_UUID]
         del testapp.headers[H_EXPECTED_MASTER_ID]
+        del testapp.headers[H_EXPECTED_PRIMARY_ID]
         testapp.xget(400, "/+changelog/0")
 
 
@@ -181,6 +187,7 @@ class TestReplicaThread:
             headers = dict((k.lower(), v) for k, v in headers.items())
             if uuid is not None:
                 headers.setdefault(H_MASTER_UUID.lower(), "123")
+                headers.setdefault(H_PRIMARY_UUID.lower(), "123")
             headers.setdefault("x-devpi-serial", str(2))
             if headers["x-devpi-serial"] is None:
                 del headers["x-devpi-serial"]

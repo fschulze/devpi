@@ -57,6 +57,7 @@ server_version = devpi_server.__version__
 
 
 H_MASTER_UUID = "X-DEVPI-MASTER-UUID"
+H_PRIMARY_UUID = "X-DEVPI-PRIMARY-UUID"
 SIMPLE_API_V1_JSON = "application/vnd.pypi.simple.v1+json"
 
 
@@ -198,6 +199,7 @@ def tween_request_logging(handler, registry):
             uuid, primary_uuid = make_uuid_headers(nodeinfo)
             rheaders["X-DEVPI-UUID"] = uuid
             rheaders[H_MASTER_UUID] = primary_uuid
+            rheaders[H_PRIMARY_UUID] = primary_uuid
 
             log.debug("%s %.3fs serial=%s length=%s type=%s",
                       response.status,

@@ -89,7 +89,7 @@ def add_master_url_option(parser, pluginmanager):
     add_primary_url_option(parser, pluginmanager)
 
 
-def add_primary_url_option(parser, pluginmanager):
+def add_primary_url_option(parser, pluginmanager):  # noqa: ARG001
     parser.addoption(
         "--primary-url", action="store", dest="primary_url",
         help="run as a replica of the specified primary server",
@@ -213,7 +213,7 @@ def add_replica_options(parser, pluginmanager):
     parser.addoption(
         "--replica-file-search-path", metavar="PATH",
         help="path to existing files to try before downloading "
-             "from master. These could be from a previous "
+             "from primary. These could be from a previous "
              "replication attempt or downloaded separately. "
              "Expects the structure from previous state or +files.")
 
@@ -230,13 +230,13 @@ def add_replica_options(parser, pluginmanager):
     parser.addoption(
         "--file-replication-threads", type=int, metavar="NUM",
         default=DEFAULT_FILE_REPLICATION_THREADS,
-        help="number of threads for file download from master")
+        help="number of threads for file download from primary")
 
     parser.addoption(
         "--proxy-timeout", type=int, metavar="NUM",
         default=DEFAULT_PROXY_TIMEOUT,
         help="Number of seconds to wait before proxied requests from "
-             "the replica to the master time out (login, uploads etc).")
+             "the replica to the primary time out (login, uploads etc).")
 
     parser.addoption(
         "--no-replica-streaming", dest="replica_streaming",
@@ -341,7 +341,7 @@ def add_deploy_options(parser, pluginmanager):
              "This is *not* for the user password hashes. "
              "There should be no need to touch this setting, "
              "except you really know what this is about! "
-             "Replicas need to use the same parameters as the master.")
+             "Replicas need to use the same parameters as the primary.")
 
     parser.addoption(
         "--argon2-parallelism", type=int, default=DEFAULT_ARGON2_PARALLELISM,
@@ -349,7 +349,7 @@ def add_deploy_options(parser, pluginmanager):
              "This is *not* for the user password hashes. "
              "There should be no need to touch this setting, "
              "except you really know what this is about! "
-             "Replicas need to use the same parameters as the master.")
+             "Replicas need to use the same parameters as the primary.")
 
     parser.addoption(
         "--argon2-time-cost", type=int, default=DEFAULT_ARGON2_TIME_COST,
@@ -357,7 +357,7 @@ def add_deploy_options(parser, pluginmanager):
              "This is *not* for the user password hashes. "
              "There should be no need to touch this setting, "
              "except you really know what this is about! "
-             "Replicas need to use the same parameters as the master.")
+             "Replicas need to use the same parameters as the primary.")
 
     parser.addoption(
         "--requests-only", action="store_true",
@@ -729,7 +729,7 @@ class Config(object):
 
     def set_primary_uuid(self, uuid):
         assert self.role == "replica", "can only set primary uuid on replica"
-        existing = self.nodeinfo.get("primary-uuid")
+        existing = self.get_primary_uuid()
         if existing and existing != uuid:
             raise ValueError("already have primary id %r, got %r" % (
                              existing, uuid))

@@ -667,11 +667,10 @@ class XOM:
             "is_master is deprecated, use is_primary instead.",
             DeprecationWarning,
             stacklevel=2)
-        import pdb; pdb.set_trace()
         return self.is_primary
 
     def is_primary(self):
-        return self.config.role in "primary"
+        return self.config.role in ("master", "primary")
 
     def is_replica(self):
         return self.config.role == "replica"

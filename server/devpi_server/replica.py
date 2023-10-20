@@ -30,7 +30,8 @@ from .fileutil import dumps, load, loads
 from .log import thread_push_log, threadlog
 from .main import fatal
 from .views import FileStreamer
-from .views import H_MASTER_UUID, make_uuid_headers
+from .views import H_PRIMARY_UUID
+from .views import make_uuid_headers
 from .model import UpstreamError
 
 
@@ -41,6 +42,7 @@ H_REPLICA_UUID = "X-DEVPI-REPLICA-UUID"
 H_REPLICA_OUTSIDE_URL = "X-DEVPI-REPLICA-OUTSIDE-URL"
 H_REPLICA_FILEREPL = "X-DEVPI-REPLICA-FILEREPL"
 H_EXPECTED_MASTER_ID = "X-DEVPI-EXPECTED-MASTER-ID"
+H_EXPECTED_PRIMARY_ID = "X-DEVPI-EXPECTED-PRIMARY-ID"
 
 MAX_REPLICA_BLOCK_TIME = 30.0
 REPLICA_USER_NAME = "+replica"
@@ -162,7 +164,7 @@ class ReadableIterabel(io.RawIOBase):
         return to_copy
 
 
-class MasterChangelogRequest:
+class PrimaryChangelogRequest:
     MAX_REPLICA_BLOCK_TIME = MAX_REPLICA_BLOCK_TIME
     MAX_REPLICA_CHANGES_SIZE = MAX_REPLICA_CHANGES_SIZE
     REPLICA_MULTIPLE_TIMEOUT = REPLICA_MULTIPLE_TIMEOUT
@@ -198,12 +200,14 @@ class MasterChangelogRequest:
     def verify_primary(self):
         if not self.xom.is_primary():
             raise HTTPForbidden("Replication protocol disabled")
-        expected_uuid = self.request.headers.get(H_EXPECTED_MASTER_ID, None)
+        expected_uuid = self.request.headers.get(
+            H_EXPECTED_PRIMARY_ID,
+            self.request.headers.get(H_EXPECTED_MASTER_ID))
         primary_uuid = self.xom.config.get_primary_uuid()
         # we require the header but it is allowed to be empty
         # (during initialization)
         if expected_uuid is None:
-            msg = "replica sent no %s header" % H_EXPECTED_MASTER_ID
+            msg = "replica sent no %s header" % H_EXPECTED_PRIMARY_ID
             threadlog.error(msg)
             raise HTTPBadRequest(msg)
 
@@ -380,12 +384,18 @@ class ReplicaThread:
             stacklevel=2)
         return self.get_primary_serial()
 
+    def get_primary_serial(self):
+        return self._primary_serial
+
     def get_master_serial_timestamp(self):
         warnings.warn(
             "get_master_serial_timestamp is deprecated, use get_primary_serial_timestamp instead",
             DeprecationWarning,
             stacklevel=2)
         return self.get_primary_serial_timestamp()
+
+    def get_primary_serial_timestamp(self):
+        return self._primary_serial_timestamp
 
     @property
     def _master_serial(self):
@@ -478,6 +488,7 @@ class ReplicaThread:
             headers = {
                 H_REPLICA_UUID: uuid,
                 H_EXPECTED_MASTER_ID: primary_uuid,
+                H_EXPECTED_PRIMARY_ID: primary_uuid,
                 H_REPLICA_OUTSIDE_URL: config.args.outside_url,
                 'Authorization': 'Bearer %s' % token}
             if self.use_streaming:
@@ -508,14 +519,16 @@ class ReplicaThread:
             # we check that the remote instance
             # has the same UUID we saw last time
             primary_uuid = config.get_primary_uuid()
-            remote_primary_uuid = r.headers.get(H_MASTER_UUID)
+            remote_primary_uuid = r.headers.get(
+                H_PRIMARY_UUID,
+                r.headers.get(H_MASTER_UUID))
             if not remote_primary_uuid:
                 # we don't fatally leave the process because
                 # it might just be a temporary misconfiguration
                 # for example of a nginx frontend
                 log.error("remote provides no %r header, running "
                           "<devpi-server-2.1?"
-                          " headers were: %s", H_MASTER_UUID, r.headers)
+                          " headers were: %s", H_PRIMARY_UUID, r.headers)
                 self.thread.sleep(self.ERROR_SLEEP)
                 return True
             if primary_uuid and remote_primary_uuid != primary_uuid:
@@ -997,8 +1010,8 @@ class FileReplicationThread:
             self.shared_data.errors.remove(entry)
             return
         if r.status_code == 410:
-            r.close()
             # primary indicates Gone for files which were later deleted
+            r.close()
             threadlog.info(
                 "ignoring because of later deletion: %s",
                 relpath)

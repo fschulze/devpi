@@ -503,7 +503,7 @@ devpi command reference (server)
 
     $ devpi-server -h
     usage: devpi-server [-h] [-c CONFIGFILE]
-                        [--role {master,replica,standalone,auto}] [--version]
+                        [--role {master,primary,replica,standalone,auto}] [--version]
                         [--passwd USER] [--debug] [--logger-cfg LOGGER_CFG]
                         [--host HOST] [--port PORT] [--listen LISTEN]
                         [--unix-socket UNIX_SOCKET]
@@ -514,7 +514,7 @@ devpi command reference (server)
                         [--max-request-body-size MAX_REQUEST_BODY_SIZE]
                         [--outside-url URL] [--absolute-urls]
                         [--profile-requests NUM] [--mirror-cache-expiry SECS]
-                        [--master-url MASTER_URL] [--replica-max-retries NUM]
+                        [--primary-url PRIMARY_URL] [--replica-max-retries NUM]
                         [--replica-file-search-path PATH] [--hard-links]
                         [--replica-cert pem_file] [--file-replication-threads NUM]
                         [--proxy-timeout NUM] [--no-replica-streaming]
@@ -537,9 +537,9 @@ devpi command reference (server)
       -h, --help            Show this help message and exit.
       -c CONFIGFILE, --configfile CONFIGFILE
                             Config file to use. [None]
-      --role {master,replica,standalone,auto}
+      --role {master,primary,replica,standalone,auto}
                             set role of this instance. The default 'auto' sets
-                            'standalone' by default and 'replica' if the --master-
+                            'standalone' by default and 'replica' if the --primary-
                             url option is used. To enable the replication protocol
                             you have to explicitly set the 'master' role. [auto]
       --version             show devpi_version (6.9.2) [False]
@@ -598,14 +598,14 @@ devpi command reference (server)
                             indexes are checked for new releases. [1800]
 
     replica options:
-      --master-url MASTER_URL
-                            run as a replica of the specified master server [None]
+      --primary-url PRIMARY_URL
+                            run as a replica of the specified primary server [None]
       --replica-max-retries NUM
                             Number of retry attempts for replica connection
                             failures (such as aborted connections to pypi). [0]
       --replica-file-search-path PATH
                             path to existing files to try before downloading from
-                            master. These could be from a previous replication
+                            primary. These could be from a previous replication
                             attempt or downloaded separately. Expects the
                             structure from previous state or +files. [None]
       --hard-links          use hard links during export, import or with
@@ -617,9 +617,9 @@ devpi command reference (server)
                             the SSL client certificate to authenticate to the
                             server (EXPERIMENTAL) [None]
       --file-replication-threads NUM
-                            number of threads for file download from master [5]
+                            number of threads for file download from primary [5]
       --proxy-timeout NUM   Number of seconds to wait before proxied requests from
-                            the replica to the master time out (login, uploads
+                            the replica to the primary time out (login, uploads
                             etc). [30]
       --no-replica-streaming
                             use separate requests instead of replica streaming
@@ -653,19 +653,19 @@ devpi command reference (server)
                             is *not* for the user password hashes. There should be
                             no need to touch this setting, except you really know
                             what this is about! Replicas need to use the same
-                            parameters as the master. [524288]
+                            parameters as the primary. [524288]
       --argon2-parallelism ARGON2_PARALLELISM
                             Argon2 parallelism parameter for key derivation. This
                             is *not* for the user password hashes. There should be
                             no need to touch this setting, except you really know
                             what this is about! Replicas need to use the same
-                            parameters as the master. [8]
+                            parameters as the primary. [8]
       --argon2-time-cost ARGON2_TIME_COST
                             Argon2 time cost parameter for key derivation. This is
                             *not* for the user password hashes. There should be no
                             need to touch this setting, except you really know
                             what this is about! Replicas need to use the same
-                            parameters as the master. [16]
+                            parameters as the primary. [16]
       --requests-only       only start as a worker which handles read/write web
                             requests but does not run an event processing or
                             replication thread. [False]
@@ -787,8 +787,8 @@ devpi command reference (server)
 
     $ devpi-init -h
     usage: devpi-init [-h] [-c CONFIGFILE]
-                      [--role {master,replica,standalone,auto}]
-                      [--master-url MASTER_URL] [--serverdir DIR] [--storage NAME]
+                      [--role {master,primary,replica,standalone,auto}]
+                      [--primary-url PRIMARY_URL] [--serverdir DIR] [--storage NAME]
                       [--keyfs-cache-size NUM] [--no-root-pypi]
                       [--root-passwd ROOT_PASSWD]
                       [--root-passwd-hash ROOT_PASSWD_HASH]
@@ -799,13 +799,13 @@ devpi command reference (server)
       -h, --help            Show this help message and exit.
       -c CONFIGFILE, --configfile CONFIGFILE
                             Config file to use. [None]
-      --role {master,replica,standalone,auto}
+      --role {master,primary,replica,standalone,auto}
                             set role of this instance. The default 'auto' sets
-                            'standalone' by default and 'replica' if the --master-
+                            'standalone' by default and 'replica' if the --primary-
                             url option is used. To enable the replication protocol
-                            you have to explicitly set the 'master' role. [auto]
-      --master-url MASTER_URL
-                            run as a replica of the specified master server [None]
+                            you have to explicitly set the 'primary' role. [auto]
+      --primary-url PRIMARY_URL
+                            run as a replica of the specified primary server [None]
       --serverdir DIR       directory for server data. [~/.devpi/server]
       --storage NAME        the storage backend to use. "pg8000": Postgresql
                             backend, "sqlite": SQLite backend with files on the
