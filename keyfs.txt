@@ -1,0 +1,239 @@
+key_type            db_type
+
+ULID                int
+bool                boolean
+datetime            timestamp
+list                table
+str                 string
+
+
+name                key_type    secret
+
+USER_ID             ULID
+USER_NAME           str
+USER_CREATED        datetime
+USER_EMAIL          str
+USER_MODIFIED       datetime
+USER_PWHASH         str         yes
+
+TOKEN_NAME          str
+TOKEN_USER_ID       ULID
+TOKEN_KEY           str         yes
+TOKEN_RESTRICTIONS  list
+
+INDEX_ID            ULID
+INDEX_USER_ID       ULID
+INDEX_NAME          str
+INDEX_ACL_NAME      list
+
+{user_id}/{index_id}/{project_id}/{version_id}/{stagefile_id}
+
+
+user_id
+{
+    "created": "1970-01-01T00:00:00Z",
+    "email": "florian.schulze@gmx.net",
+    "modified": "2023-06-24T10:21:55Z",
+    "pwhash": "$argon2id$v=19$m=65536,t=3,p=4$$",
+    "tokens": {
+        "afZhPHbL": {
+            "key": "LR0Caa5rgB8lJzzkrN5rlLBgiRj74Pk729b3-M9p9dU",
+            "restrictions": [
+                "expires=1719224580"
+            ]
+        }
+    },
+    "username": "fschulze"
+}
+
+
+
+index
+"dev": {
+    "acl_toxresult_upload": [
+        ":ANONYMOUS:"
+    ],
+    "acl_upload": [
+        "fschulze"
+    ],
+    "bases": [
+        "root/pypi"
+    ],
+    "mirror_whitelist": [
+        "*"
+    ],
+    "mirror_whitelist_inheritance": "intersection",
+    "type": "stage",
+    "volatile": true
+},
+
+mirror_index
+"pypi": {
+    "mirror_url": "https://pypi.org/simple/",
+    "mirror_web_url_fmt": "https://pypi.org/project/{name}/",
+    "title": "PyPI",
+    "type": "mirror",
+    "volatile": false
+}
+
+base
+{
+    "ulid": 198798327,
+    "name": "root/pypi",
+    "allow_all_upstream_projects": True,
+    "block_swapped_base": True,
+}
+
+project
+{
+    "allow_all_upstream_versions": True,
+    "name",
+}
+
+version
+{
+    "allow_upstream": False,
+    "metadata": {},
+}
+
+fschulze/dev/ploy-ansible/2.0.0b4/.config PROJVERSION
+{
+    "+elinks": [
+        {
+            "_log": [
+                {
+                    "dst": "fschulze/dev",
+                    "what": "upload",
+                    "when": [
+                        2018,
+                        2,
+                        11,
+                        14,
+                        59,
+                        39
+                    ],
+                    "who": "fschulze"
+                }
+            ],
+            "entrypath": "fschulze/dev/+f/db2/e9c7fb978ca0c/ploy_ansible-2.0.0b4.tar.gz",
+            "hash_spec": "sha256=db2e9c7fb978ca0c427633fa1a561c52d15143ae0925c02a385d0a0054d4038e",
+            "rel": "releasefile"
+        },
+        {
+            "_log": [
+                {
+                    "dst": "fschulze/dev",
+                    "what": "upload",
+                    "when": [
+                        2018,
+                        2,
+                        11,
+                        14,
+                        59,
+                        41
+                    ],
+                    "who": "fschulze"
+                }
+            ],
+            "entrypath": "fschulze/dev/+f/d64/05effeff76d5f/ploy_ansible-2.0.0b4-py2.py3-none-any.whl",
+            "hash_spec": "sha256=d6405effeff76d5f11612ff96083fa880253791e5f909da1c453a5789c99e448",
+            "rel": "releasefile"
+        },
+        {
+            "_log": [
+                {
+                    "dst": "fschulze/dev",
+                    "what": "upload",
+                    "when": [
+                        2018,
+                        2,
+                        11,
+                        15,
+                        2,
+                        2
+                    ],
+                    "who": "fschulze"
+                }
+            ],
+            "entrypath": "fschulze/dev/+f/db2/e9c7fb978ca0c/ploy_ansible-2.0.0b4.tar.gz.toxresult0",
+            "for_entrypath": "fschulze/dev/+f/db2/e9c7fb978ca0c/ploy_ansible-2.0.0b4.tar.gz",
+            "hash_spec": "sha256=db2e9c7fb978ca0c427633fa1a561c52d15143ae0925c02a385d0a0054d4038e",
+            "hash_spec": "sha256=1dddeb44da3205d9c3eb26c1afe18e1e768f44dacbc53f973d63d4bc3f87cbfa",
+            "rel": "toxresult"
+        },
+        {
+            "_log": [
+                {
+                    "dst": "fschulze/dev",
+                    "what": "upload",
+                    "when": [
+                        2018,
+                        2,
+                        11,
+                        15,
+                        4,
+                        0
+                    ],
+                    "who": "fschulze"
+                }
+            ],
+            "entrypath": "fschulze/dev/+f/d64/05effeff76d5f/ploy_ansible-2.0.0b4-py2.py3-none-any.whl.toxresult0",
+            "for_entrypath": "fschulze/dev/+f/d64/05effeff76d5f/ploy_ansible-2.0.0b4-py2.py3-none-any.whl",
+            "hash_spec": "sha256=d6405effeff76d5f11612ff96083fa880253791e5f909da1c453a5789c99e448",
+            "hash_spec": "sha256=da75dad5ca5f01cd1b03bae6fe95385f40e6be58c44e7adfb7de8e66bbf2d023",
+            "rel": "toxresult"
+        }
+    ],
+    "author": "Florian Schulze",
+    "author_email": "florian.schulze@gmx.net",
+    "classifiers": [
+        "Environment :: Console",
+        "Intended Audience :: System Administrators",
+        "Programming Language :: Python :: 2.7",
+        "Programming Language :: Python :: 2 :: Only",
+        "Topic :: System :: Installation/Setup",
+        "Topic :: System :: Systems Administration"
+    ],
+    "description": "Overview\n========\n\nThe ploy_ansible plugin provides integration of `Ansible`_ with `ploy`_.\nIt automatically builds an `inventory`_ and provides a custom connection plugin.\n\n.. _Ansible: http://docs.ansible.com\n.. _ploy: https://github.com/ployground\n.. _inventory: http://docs.ansible.com/intro_inventory.html\n\n\nInstallation\n============\n\nploy_ansible is best installed with easy_install, pip or with zc.recipe.egg in a buildout.\n\n\nCommands\n========\n\nThe plugin adds the following commands to ploy.\n\n``configure``\n  Configures an instance.\n  There are three ways to specify how to configure an instance.\n  Applying the roles given by the ``roles`` option of an instance, a playbook set by the ``playbook`` option or a playbook with the unique name of the instance found in the ``playbooks-directory``.\n  Using ``roles`` or a playbook is mutually exclusive.\n  If you specify a playbook and there is also a playbook in the default location, you will get a warning.\n\n``inventory``\n  Lists all known groups and their associated hosts, including regular default groups, such as ``all`` but also implicit, ``ploy_ansible`` groups such as instances of a particular ``master`` (i.e. all ``ez-instances`` of an ``ez-master``) \n\n``ansible``\n  Runs an Ansible command.\n  This basically reflects the ``ansible`` script of Ansible.\n\n``playbook``\n  Applies a playbook.\n  This basically reflects the ``ansible-playbook`` script of Ansible.\n\n``vault``\n  Manages file encryption.\n  This basically reflects the ``ansible-vault`` script of Ansible, but handles the encryption key source via ``ploy.conf``.\n\n``vault-key``\n  Manages the vault key.\n\n\nOptions\n=======\n\nGlobal\n------\n\nplaybooks-directory\n~~~~~~~~~~~~~~~~~~~\n\nThe ``playbooks-directory`` option of the ``ansible`` section allows you to specify the directory where playbooks, roles, host_vars etc are looked up.\nIf you specify a relative path, then it's always relative to the ``ploy.conf`` directory.\nIf you have a structure like this::\n\n    project\n    |-- deployment\n    | |-- roles\n    | |-- host_vars\n    |\n    |-- etc\n      |-- ploy.conf\n\nThen you would put the following into your ``ploy.conf``::\n\n    [ansible]\n    playbooks-directory = ../deployment\n\nBy default it is set to the parent directory of the directory the ``ploy.conf`` is located at like this::\n\n    project\n    |-- roles\n    |-- host_vars\n    |-- etc\n      |-- ploy.conf\n\n\nvault-password-source\n~~~~~~~~~~~~~~~~~~~~~\n\nUsing the `keyring <https://pypi.python.org/pypi/keyring/4.0/>`_ library, you can store the encryption key for the Ansible vault in your keychain.\n\nThe ``vault-password-source`` option is the id used in your keychain.\nThe id must be unique among all people who have to use the feature, as it is used as an identifier in their keychain.\nIf in doubt, use a speaking prefix and add a guid by running ``python -c \"import uuid; print(uuid.uuid4().hex)\"``.\n\nIf you want to rekey your files, you have to put the old id into the ``vault-password-old-source`` option and set a new id in ``vault-password-source``.\nJust incrementing a number or appending a new guid is best.\n\nExample:\n\n.. code-block:: ini\n\n    [ansible]\n    vault-password-old-source = my-domain-deployment-0da2c8296f744c90a236721486dbd258\n    vault-password-source = my-domain-deployment-042a98b666ec4e4e8e06de7d42688f3b\n\nYou can manage your key with the ``vault-key`` command.\nFor easy exchange with other developers, you can also export and import the key via gpg using the ``vault-key export`` and ``vault-key import`` commands.\n\nPer instance\n------------\n\n``groups``\n  Whitespace separated list of Ansible group names this instance should be added to in addition to the default ones.\n\n``roles``\n  Used by the ``configure`` command.\n  This allows you to configure an instance by applying the whitespace separated roles.\n  This is like creating a playbook which only specifies a host and a list of roles names.\n  If the ``sudo`` option is set, it's also set for the generated playbook.\n\n``playbook``\n  Allows you to explicitly specify a playbook to use for this instance.\n  If you need ``sudo``, then you have to add it yourself in that playbook.\n\nAny option starting with ``ansible_`` is passed through to Ansible as is. This can be used for settings like ``ansible_python_interpreter``.\n\nAny option starting with ``ansible-`` is stripped of the ``ansible-`` prefix and then passed through to Ansible.\nThis is the main way to set Ansible variables for use in playbooks and roles.\n\nAll other options are prefixed with ``ploy_`` and made available to Ansible.\n\n\nAnsible inventory\n=================\n\nAll instances in ``ploy.conf`` are available to Ansible via their **unique id**.\n\nThe variables for each instance are gathered from ``group_vars``, ``host_vars`` and the ``ploy.conf``.\n\n\nAnsible lookup plugins\n======================\n\nThe ``ploy_crypted`` lookup plugin can be used in playbooks to read the content of encrypted files.\nThis is another way to access encrypted data where you don't have to move that data into yml files.\nAn added benefit is, that the file is only decrypted when it is actually accessed.\nIf you run tasks filtered by tags and those tasks don't access the encrypted data, then it's not decrypted at all.\n\n.. warning::\n  This lookup plugin only works with files that are plain ascii or utf-8.\n  It's a limitation caused by the way ansible handles variable substitution.\n\n\nAPI usage\n=========\n\nOn the Python side, each ploy instance gains the following methods:\n\n``apply_playbook(self, playbook, *args, **kwargs)``\n  Applies the ``playbook`` to the instance.\n\n``has_playbook``\n  Return ``True`` if the instance has either of the ``roles`` or a playbook option set.\n\n``get_playbook(*args, **kwargs)``\n  Returns an instance of the Ansible internal ``PlayBook`` class.\n  This is either from a file (from ``playbook`` option or the playbook kwarg), or dynamically generated from the ``roles`` option.\n\n``configure(*args, **kwargs)``\n  Configures the instance with the same semantics as the ``configure`` command.\n\n``get_ansible_variables``\n  Returns the Ansible variables from the inventory.\n  This does not include *facts*, as it doesn't connect to the instance.\n  This is particularly useful in Fabric scripts.\n\n``get_vault_lib``\n  Returns a readily usable Ansible VaultLib class.\n  Use the ``encrypt`` and ``decrypt`` methods do encrypt/decrypt strings.\n\n\nChangelog\n=========\n\n2.0.0b4 - 2018-02-11\n--------------------\n\n* Fix become/sudo support for ``execnet_connection``.\n  [fschulze]\n\n* Fix playbook discovery.\n  [fschulze]\n\n\n2.0.0b3 - 2018-02-10\n--------------------\n\n* Fix ``ploy_crypted`` lookup plugin.\n  [fschulze]\n\n\n2.0.0b2 - 2018-02-07\n--------------------\n\n* Readded ``execnet_connection`` as plugin.\n  [fschulze]\n\n\n2.0.0b1 - 2018-02-07\n--------------------\n\n* Support ansible >= 2.4.0 and drop support for previous versions.\n  [fschulze]\n\n* Support for ploy 2.0.0.\n  [fschulze]\n\n\n1.4.1 - 2018-02-11\n------------------\n\n* Return with proper exit code on failure of ``configure`` command.\n  [fschulze]\n\n* Fix playbook discovery.\n  [fschulze]\n\n\n1.4.0 - 2017-12-17\n------------------\n\n* Look for ``[instance-name].yml`` in addition to ``[master-name]-[instance-name].yml``.\n  This allows using the same playbook for the same instance on multiple masters.\n  [fschulze]\n\n\n1.3.2 - 2016-06-02\n------------------\n\n* Don't add empty search path when no additional role or library paths are\n  defined. This prevents the current working directory from being searched.\n  [fschulze]\n\n\n1.3.1 - 2015-09-03\n------------------\n\n* Update Ansible requirement to < 2.dev0. The upcoming 2.0.0 has way too many\n  internal changes to be supported.\n  [fschulze]\n\n* Add hosts only once in Inventory.\n  [fschulze]\n\n\n1.3.0 - 2015-04-10\n------------------\n\n* Added handling of ``groups`` option of instances to allow definition of\n  additional Ansible groups.\n  [fschulze]\n\n* Get host variables on demand instead of at startup. If you have many hosts\n  with encrypted yml files, this speeds things up considerably in most cases.\n  [fschulze]\n\n* Fixes for changes in ansible 1.9.\n  [fschulze]\n\n* Added ``inventory`` command to list all known groups and their\n  associated hosts.\n  [fschulze]\n\n\n1.2.4 - 2015-02-28\n------------------\n\n* Pass on the ``sudo`` setting if the ``roles`` option is used.\n  [fschulze]\n\n\n1.2.3 - 2015-02-28\n------------------\n\n* Fix sudo support for ansible > 1.6.\n  [fschulze]\n\n* Print warning when using an untested version of ansible.\n  [fschulze]\n\n* If ansible isn't installed, then require >= 1.8 as that doesn't violate\n  the sandbox of buildout anymore.\n  [fschulze]\n\n\n1.2.2 - 2015-02-18\n------------------\n\n* Test and fixes for changes in ansible 1.8.\n  [fschulze]\n\n\n1.2.1 - 2015-01-06\n------------------\n\n* Limit Ansible to pre 1.8, as > 1.8 breaks stuff.\n  [fschulze]\n\n\n1.2.0 - 2014-10-27\n------------------\n\n* Always set ``ansible_ssh_user`` in inventory.\n  [fschulze]\n\n* Clear host and pattern cache after calling original Inventory.__init__ method.\n  [fschulze]\n\n* Add ``--extra-vars`` option to ``configure`` command.\n  [witsch (Andreas Zeidler)]\n\n* Provide ploy_crypted lookup plugin to load encrypted files into Ansible\n  variables. Only ascii and utf8 encoded files will work.\n  [fschulze]\n\n* Expand Ansible variables in get_ansible_variables method.\n  [fschulze]\n\n* Support Ansible vault with safe key storage via keyring library, so you don't\n  have to type it in or have it in an unprotected file.\n  [fschulze]\n\n\n1.1.0 - 2014-08-13\n------------------\n\n* Test and fixes for changes in ansible 1.7.\n  [fschulze]\n\n* Add verbosity argument to ``configure`` command.\n  [fschulze]\n\n\n1.0.0 - 2014-07-19\n------------------\n\n* Added documentation.\n  [fschulze]\n\n\n1.0b8 - 2014-07-15\n------------------\n\n* Add ansible as dependency if it can't be imported already.\n  [fschulze]\n\n\n1.0b7 - 2014-07-08\n------------------\n\n* Packaging and test fixes.\n  [fschulze]\n\n\n1.0b6 - 2014-07-04\n------------------\n\n* Use unique instance id to avoid issues.\n  [fschulze]\n\n* Renamed mr.awsome to ploy and mr.awsome.ansible to ploy_ansible.\n  [fschulze]\n\n\n1.0b5 - 2014-06-16\n------------------\n\n* Set user in playbook to the one from the config if it's not set already.\n  [fschulze]\n\n* Change default playbook directory from the aws.conf directory to it's parent.\n  [fschulze]\n\n\n1.0b4 - 2014-06-11\n------------------\n\n* Added ``playbook`` and ``roles`` config options for instances.\n  [fschulze]\n\n* Added ``has_playbook`` and ``configure`` methods to instances.\n  [fschulze]\n\n* Added before/after_ansible_configure hooks.\n  [fschulze]\n\n\n1.0b3 - 2014-06-09\n------------------\n\n* Use execnet for connections. There is only one ssh connection per host and\n  it's reused for all commands.\n  [fschulze]\n\n* Make sure the playbook directory is always absolute.\n  [fschulze]\n\n* Prevent use of persistent ssh connections, as that easily results in\n  connections to wrong jails because of the proxying. This makes ansible a lot\n  slower at the moment.\n  [fschulze]\n\n* Add support for su and vault (ansible 1.5) as well as ``--force-handlers``\n  (ansible 1.6).\n  [fschulze]\n\n* Removed ``ansible`` from install requirements. It won't install in a buildout\n  so it needs to be installed in a virtualenv or via a system package.\n  [fschulze]\n\n\n1.0b2 - 2014-05-15\n------------------\n\n* Add ``configure`` command which is a stripped down variant of the\n  ``playbook`` command with assumptions about the location of the yml file.\n  [fschulze]\n\n* Warn if a playbook is requested for a host that is not configured in the\n  playbook hosts list.\n  [fschulze]\n\n* Allow mr.awsome plugins to add ansible variables.\n  [fschulze]\n\n* Inject the ansible paths sooner as they may not apply in some cases otherwise.\n  [fschulze]\n\n* Moved setuptools-git from setup.py to .travis.yml, it's only needed for\n  releases and testing.\n  [fschulze]\n\n\n1.0b1 - 2014-03-24\n------------------\n\n* Initial release\n  [fschulze]\n",
+    "download_url": "",
+    "home_page": "http://github.com/ployground/ploy_ansible",
+    "keywords": "",
+    "license": "GPLv3",
+    "name": "ploy_ansible",
+    "platform": [
+        "UNKNOWN"
+    ],
+    "summary": "Plugin to integrate Ansible with ploy.",
+    "version": "2.0.0b4"
+}
+
+FILE {sha256}/{filename}
+
+TOXRESULT {sha256}/{toxresult_id}
+ploy_ansible-2.0.0b4-py2.py3-none-any.whl.toxresult0
+{
+    "hash_spec": "sha256=da75dad5ca5f01cd1b03bae6fe95385f40e6be58c44e7adfb7de8e66bbf2d023",
+    "last_modified": "Sun, 14 May 2023 08:43:17 GMT",
+    "project": "ploy-ansible",
+    "version": "2.0.0b4"
+}
+
+
+pytest-2.3.2.zip
+{
+    "hash_spec": "sha256=ff1efd507224cdd768d3827272c87e0cf99571f242c8a5bb634b9d35469fd61d",
+    "last_modified": "Mon, 16 Oct 2023 07:49:01 GMT",
+    "project": "pytest",
+    "url": "https://files.pythonhosted.org/packages/e4/47/22ad2c97e477c0b5f33d5235e3620c17d28b983d955631468d27b4786119/pytest-2.3.2.zip",
+    "version": "2.3.2"
+}
+PROJSIMPLELINKS/{links}
+[
+    "pytest-2.3.2.zip",
+    "root/pypi/+f/ff1/efd507224cdd7/pytest-2.3.2.zip#sha256=ff1efd507224cdd768d3827272c87e0cf99571f242c8a5bb634b9d35469fd61d"
+],
+PROJSIMPLELINKS/{requires_python}
+PROJSIMPLELINKS/{upstream_serial}
+PROJSIMPLELINKS/{yanked}
+{stagefile_id}/hash_sha256
+{stagefile_id}/url
