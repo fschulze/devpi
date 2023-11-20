@@ -801,10 +801,24 @@ class BaseStage(object):
                 yanked=link_meta.yanked),
             project, link_meta.version)
 
-    def get_linkstore_perstage(self, name, version, readonly=True):
+    def get_linkstore_perstage(self, name, version, readonly=None):
+        if readonly is None:
+            readonly = True
+        else:
+            warnings.warn(
+                "The 'readonly' argument is deprecated. "
+                "Use 'get_mutable_linkstore_perstage' instead.",
+                stacklevel=2)
         if self.customizer.readonly and not readonly:
             threadlog.warn("index is marked read only")
-        return LinkStore(self, name, version, readonly=readonly)
+        if readonly:
+            return LinkStore(self, name, version)
+        return MutableLinkStore(self, name, version)
+
+    def get_mutable_linkstore_perstage(self, name, version):
+        if self.customizer.readonly:
+            threadlog.warn("index is marked read only")
+        return MutableLinkStore(self, name, version)
 
     def get_link_from_entrypath(self, entrypath):
         entry = self.xom.filestore.get_file_entry(entrypath)
@@ -820,7 +834,7 @@ class BaseStage(object):
                         *, filename=None, hashes=None, last_modified=None):
         if self.customizer.readonly:
             raise ReadonlyIndex("index is marked read only")
-        linkstore = self.get_linkstore_perstage(link.project, link.version, readonly=False)
+        linkstore = self.get_mutable_linkstore_perstage(link.project, link.version)
         if isinstance(toxresultdata, dict):
             warnings.warn(
                 "The 'store_toxresult' method will only accept binary "
@@ -1327,7 +1341,7 @@ class PrivateStage(BaseStage):
         if version not in versions:
             raise self.NotFound("version %r of project %r not found on stage %r" %
                                 (version, project, self.name))
-        linkstore = self.get_linkstore_perstage(project, version, readonly=False)
+        linkstore = self.get_mutable_linkstore_perstage(project, version)
         linkstore.remove_links()
         versions.remove(version)
         self.key_projversion(project, version).delete()
@@ -1341,8 +1355,7 @@ class PrivateStage(BaseStage):
         # we need to store project and version for use in cleanup part below
         project = entry.project
         version = entry.version
-        linkstore = self.get_linkstore_perstage(
-            project, version, readonly=False)
+        linkstore = self.get_mutable_linkstore_perstage(project, version)
         linkstore.remove_links(basename=entry.basename)
         entry.delete()
         if cleanup:
@@ -1400,7 +1413,7 @@ class PrivateStage(BaseStage):
                     raise MissesRegistration("%s-%s", project, version)
             else:
                 raise MissesRegistration("%s-%s", project, version)
-        linkstore = self.get_linkstore_perstage(project, version, readonly=False)
+        linkstore = self.get_mutable_linkstore_perstage(project, version)
         link = linkstore.create_linked_entry(
             rel="releasefile",
             basename=filename,
@@ -1428,7 +1441,7 @@ class PrivateStage(BaseStage):
             project, version, readonly=False)
         if not verdata:
             self.set_versiondata({'name': project, 'version': version})
-        linkstore = self.get_linkstore_perstage(project, version, readonly=False)
+        linkstore = self.get_mutable_linkstore_perstage(project, version)
         return linkstore.create_linked_entry(
             rel="doczip",
             basename=basename,
@@ -1638,12 +1651,12 @@ class ELink:
 
 
 class LinkStore:
-    def __init__(self, stage, project, version, readonly=True):
+    def __init__(self, stage, project, version):
         self.stage = stage
         self.filestore = stage.filestore
         self.project = normalize_name(project)
         self.version = version
-        self.verdata = stage.get_versiondata_perstage(self.project, version, readonly=readonly)
+        self.verdata = stage.get_versiondata_perstage(self.project, version)
         if not self.verdata:
             raise MissesRegistration(
                 "%s-%s on stage %s at %s",
@@ -1761,6 +1774,12 @@ class LinkStore:
         self._mark_dirty()
         return ELink(self.filestore, new_linkdict, self.project,
                      self.version)
+
+
+class MutableLinkStore(LinkStore):
+    def __init__(self, stage, project, version):
+        super().__init__(stage, project, version)
+        self.verdata = get_mutable_deepcopy(self.verdata)
 
 
 @total_ordering
