@@ -1,8 +1,17 @@
+from __future__ import annotations
 from attrs import define
 from typing import Any
 import contextlib
 import re
 import warnings
+
+
+@define
+class Record:
+    key: PTypedKey | TypedKey
+    value: Any
+    back_serial: int
+    old_value: Any
 
 
 @define
