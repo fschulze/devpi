@@ -1,8 +1,23 @@
+from __future__ import annotations
+
 from attrs import define
-from typing import Any
+from attrs import frozen
+from typing import TYPE_CHECKING
 import contextlib
 import re
 import warnings
+
+
+if TYPE_CHECKING:
+    from typing import Any
+
+
+@frozen
+class Record:
+    key: PTypedKey | TypedKey
+    value: Any
+    back_serial: int
+    old_value: Any
 
 
 @define
