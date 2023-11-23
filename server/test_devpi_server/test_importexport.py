@@ -949,7 +949,7 @@ class TestImportExport:
         assert impexp.exportdir.join(
           'dataindex.json').stat().nlink == 1
         assert impexp.exportdir.join(
-          'user1', 'dev', 'he_llo-1.0.doc.zip').stat().nlink == 2
+          'user1', 'dev', 'he-llo-1.0.doc.zip').stat().nlink == 2
         assert impexp.exportdir.join(
           'user1', 'dev', 'he-llo', '1.0', 'he-llo-1.0.tar.gz').stat().nlink == 2
 
@@ -987,7 +987,7 @@ class TestImportExport:
         assert impexp.exportdir.join(
             'dataindex.json').stat().nlink == 1
         assert impexp.exportdir.join(
-            'user1', 'dev', 'he_llo-1.0.doc.zip').stat().nlink == 1
+            'user1', 'dev', 'he-llo-1.0.doc.zip').stat().nlink == 1
         assert impexp.exportdir.join(
             'user1', 'dev', 'he-llo', '1.0', 'he-llo-1.0.tar.gz').stat().nlink == 1
 
@@ -1002,6 +1002,7 @@ class TestImportExport:
             (link,) = stage.get_releaselinks("he_llo")
             assert link.entry.file_get_content() == b'content'
             # assert os.stat(link.entry.file_os_path()).st_nlink == 2
+            assert os.stat(link.entry.file_os_path()).st_nlink == 2
             doczip = stage.get_doczip("he_llo", "1.0")
             archive = Archive(BytesIO(doczip))
             assert 'index.html' in archive.namelist()
@@ -1011,7 +1012,7 @@ class TestImportExport:
         assert impexp.exportdir.join(
             'dataindex.json').stat().nlink == 1
         assert impexp.exportdir.join(
-            'user1', 'dev', 'he_llo-1.0.doc.zip').stat().nlink == 2
+            'user1', 'dev', 'he-llo-1.0.doc.zip').stat().nlink == 2
         assert impexp.exportdir.join(
             'user1', 'dev', 'he-llo', '1.0', 'he-llo-1.0.tar.gz').stat().nlink == 2
 
