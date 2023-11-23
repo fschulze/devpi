@@ -965,8 +965,12 @@ class TestImportExport:
         # check the number of links of the files in the exported data
         assert impexp.exportdir.joinpath(
             'dataindex.json').stat().st_nlink == 1
-        assert impexp.exportdir.joinpath(
-            'user1', 'dev', 'he_llo-1.0.doc.zip').stat().st_nlink == 2
+        assert (
+            impexp.exportdir.joinpath("user1", "dev", "he-llo-1.0.doc.zip")
+            .stat()
+            .st_nlink
+            == 2
+        )
         assert impexp.exportdir.joinpath(
             'user1', 'dev', 'he-llo', '1.0', 'he-llo-1.0.tar.gz').stat().st_nlink == 2
 
@@ -1003,8 +1007,12 @@ class TestImportExport:
         # check the number of links of the files in the exported data
         assert impexp.exportdir.joinpath(
             'dataindex.json').stat().st_nlink == 1
-        assert impexp.exportdir.joinpath(
-            'user1', 'dev', 'he_llo-1.0.doc.zip').stat().st_nlink == 1
+        assert (
+            impexp.exportdir.joinpath("user1", "dev", "he-llo-1.0.doc.zip")
+            .stat()
+            .st_nlink
+            == 1
+        )
         assert impexp.exportdir.joinpath(
             'user1', 'dev', 'he-llo', '1.0', 'he-llo-1.0.tar.gz').stat().st_nlink == 1
 
@@ -1027,8 +1035,12 @@ class TestImportExport:
         # and the exported files should now have additional links
         assert impexp.exportdir.joinpath(
             'dataindex.json').stat().st_nlink == 1
-        assert impexp.exportdir.joinpath(
-            'user1', 'dev', 'he_llo-1.0.doc.zip').stat().st_nlink == 2
+        assert (
+            impexp.exportdir.joinpath("user1", "dev", "he-llo-1.0.doc.zip")
+            .stat()
+            .st_nlink
+            == 2
+        )
         assert impexp.exportdir.joinpath(
             'user1', 'dev', 'he-llo', '1.0', 'he-llo-1.0.tar.gz').stat().st_nlink == 2
 
