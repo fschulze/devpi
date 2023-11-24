@@ -27,7 +27,7 @@ def test_original_project_name(pypistage):
 
 
 def test_inheritance(xom):
-    with xom.keyfs.transaction(write=True):
+    with xom.keyfs.write_transaction():
         user = xom.model.create_user("one", "one")
         prod = user.create_stage("prod")
         prod.set_versiondata({"name": "proj", "version": "1.0"})
