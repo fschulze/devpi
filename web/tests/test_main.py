@@ -31,7 +31,7 @@ def test_devpi_mirror_initialnames(caplog, pypistage):
     pypistage.mock_simple(
         "pytest", pypiserial=10,
         pkgver="pytest-1.0.zip#egg=pytest-dev1")
-    with pypistage.keyfs.transaction():
+    with pypistage.keyfs.read_transaction():
         devpiserver_mirror_initialnames(pypistage, pypistage.list_projects_perstage())
     logs = [x for x in caplog.messages if 'after exception' in x]
     assert len(logs) == 0
@@ -55,7 +55,7 @@ def test_devpi_mirror_initialnames_original_name(caplog, pypistage):
         pkgver="django-1.0.zip")
     indexer = get_indexer(pypistage.xom)
     pypistage.xom.thread_pool.start_one(indexer.indexer_thread)
-    with pypistage.keyfs.transaction():
+    with pypistage.keyfs.read_transaction():
         devpiserver_mirror_initialnames(pypistage, pypistage.list_projects_perstage())
     indexer.indexer_thread.wait()
     for project in projects:
@@ -73,7 +73,7 @@ def test_devpi_stage_created(monkeypatch, pypistage, mock):
     list_projects_perstage.return_value = []
     monkeypatch.setattr(
         pypistage.__class__, "list_projects_perstage", list_projects_perstage)
-    with pypistage.keyfs.transaction():
+    with pypistage.keyfs.read_transaction():
         devpiserver_stage_created(pypistage)
     assert list_projects_perstage.called
 

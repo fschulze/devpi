@@ -18,7 +18,7 @@ def test_original_project_name(pypistage):
     xom = pypistage.xom
     projects = set(["Django", "pytest", "ploy_ansible"])
     result = set()
-    with xom.keyfs.transaction(write=False):
+    with xom.keyfs.read_transaction():
         pypistage.mock_simple_projects(projects)
         for project in iter_projects(xom):
             data = preprocess_project(project)
@@ -34,7 +34,7 @@ def test_inheritance(xom):
         dev = user.create_stage("dev", bases=(prod.name,))
         dev.set_versiondata({"name": "proj", "version": "1.1"})
 
-    with xom.keyfs.transaction():
+    with xom.keyfs.read_transaction():
         stage = xom.model.getstage(dev.name)
         preprocess_project(ProjectIndexingInfo(stage=stage, name="proj"))
 
@@ -49,7 +49,7 @@ def test_doc_unpack_cleanup(mapp, testapp):
     mapp.set_versiondata({"name": "pkg1", "version": "2.6"})
     mapp.upload_doc("pkg1.zip", content, "pkg1", "2.6", code=200,
                     waithooks=True)
-    with mapp.xom.keyfs.transaction(write=False):
+    with mapp.xom.keyfs.read_transaction():
         stage = mapp.xom.model.getstage(api.stagename)
         path = get_unpack_path(stage, 'pkg1', '2.6')
     testapp.xget(200, api.index + '/pkg1/2.6/+doc/foo.html')
@@ -58,7 +58,7 @@ def test_doc_unpack_cleanup(mapp, testapp):
         "index.html": "<html><body>2.6</body></html>"})
     mapp.upload_doc("pkg1.zip", content, "pkg1", "2.6", code=200,
                     waithooks=True)
-    with mapp.xom.keyfs.transaction(write=False):
+    with mapp.xom.keyfs.read_transaction():
         stage = mapp.xom.model.getstage(api.stagename)
         path = get_unpack_path(stage, 'pkg1', '2.6')
     testapp.xget(404, api.index + '/pkg1/2.6/+doc/foo.html')
@@ -76,7 +76,7 @@ def test_empty_doczip(mapp, testapp):
     mapp.upload_doc("pkg1.zip", empty_doczip, "pkg1", "2.6", code=200,
                     waithooks=True)
     (name, version) = ('pkg1', '2.6')
-    with mapp.xom.keyfs.transaction(write=False):
+    with mapp.xom.keyfs.read_transaction():
         stage = mapp.xom.model.getstage(api.stagename)
         linkstore = stage.get_linkstore_perstage(name, version)
         (link,) = linkstore.get_links(rel='doczip')
@@ -84,10 +84,10 @@ def test_empty_doczip(mapp, testapp):
     assert not path.exists()
     assert path.new(ext="hash").exists()
     assert path.new(ext="hash").read() == 'sha256=8739c76e681f900923b900c9df0ef75cf421d39cabb54650c4b9ad19b6a76d85'
-    with mapp.xom.keyfs.transaction(write=False):
+    with mapp.xom.keyfs.read_transaction():
         stage = mapp.xom.model.getstage(api.stagename)
         assert list(Docs(stage, name, version).items()) == []
-    with mapp.xom.keyfs.transaction(write=False):
+    with mapp.xom.keyfs.read_transaction():
         stage = mapp.xom.model.getstage(api.stagename)
         remove_docs(stage, name, version)
     # the hash file should be removed

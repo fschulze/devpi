@@ -400,7 +400,7 @@ class IndexerThread(object):
         writer = project_ix.writer()
         searcher = project_ix.searcher()
         try:
-            with self.xom.keyfs.transaction(write=False) as tx:
+            with self.xom.keyfs.read_transaction() as tx:
                 stage = self.xom.model.getstage(indexname)
                 if stage is not None:
                     for name in names:
@@ -470,7 +470,7 @@ class InitialQueueThread(object):
 
     def thread_run(self):
         thread_push_log("[IDXQ]")
-        with self.xom.keyfs.transaction(write=False) as tx:
+        with self.xom.keyfs.read_transaction() as tx:
             indexer = get_indexer(self.xom)
             searcher = indexer.get_project_ix().searcher()
             self.shared_data.queue_projects(

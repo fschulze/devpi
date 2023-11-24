@@ -150,7 +150,7 @@ def test_search_root_pypi(mapp, testapp, pypistage):
     pypistage.mock_simple("pkg1", '<a href="/pkg1-2.6.zip" /a>')
     pypistage.mock_simple("pkg2", '')
     indexer = get_indexer(mapp.xom)
-    with mapp.xom.keyfs.transaction(write=False):
+    with mapp.xom.keyfs.read_transaction():
         stage = mapp.xom.model.getstage(pypistage.name)
         indexer.update_projects([
             ProjectIndexingInfo(stage=stage, name=u'pkg1'),
@@ -287,7 +287,7 @@ def test_pip_search(mapp, pypistage, testapp):
     # now we can access the indexer directly without causing locking issues
     indexer = get_indexer(mapp.xom)
     indexer.indexer_thread.wait()
-    with mapp.xom.keyfs.transaction(write=False):
+    with mapp.xom.keyfs.read_transaction():
         stage = mapp.xom.model.getstage(pypistage.name)
         indexer.update_projects([
             ProjectIndexingInfo(stage=stage, name=u'pkg1'),
