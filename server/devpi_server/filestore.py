@@ -521,28 +521,28 @@ class BaseFileEntry:
         raise NotImplementedError
 
     def file_exists(self):
-        return self.tx.conn.io_file_exists(self._storepath)
+        return self.tx.io_file.exists(self._storepath)
 
     def file_delete(self):
-        return self.tx.conn.io_file_delete(self._storepath)
+        return self.tx.io_file.delete(self._storepath)
 
     def file_size(self):
-        return self.tx.conn.io_file_size(self._storepath)
+        return self.tx.io_file.size(self._storepath)
 
     def __repr__(self):
         return f"<{self.__class__.__name__} {self.key!r}>"
 
     def file_new_open(self):
-        return self.tx.conn.io_file_new_open(self._storepath)
+        return self.tx.io_file.new_open(self._storepath)
 
     def file_open_read(self):
-        return self.tx.conn.io_file_open(self._storepath)
+        return self.tx.io_file.open_read(self._storepath)
 
     def file_get_content(self):
-        return self.tx.conn.io_file_get(self._storepath)
+        return self.tx.io_file.get_content(self._storepath)
 
     def file_os_path(self):
-        return self.tx.conn.io_file_os_path(self._storepath)
+        return self.tx.io_file.os_path(self._storepath)
 
     def file_set_content(self, content_or_file, *, last_modified=None, hash_spec=None, hashes=None):
         if last_modified != -1:
@@ -558,7 +558,7 @@ class BaseFileEntry:
         if not hash_spec:
             hash_spec = hashes.get_default_spec()
         self.hash_spec = hash_spec
-        self.tx.conn.io_file_set(self._storepath, content_or_file)
+        self.tx.io_file.set_content(self._storepath, content_or_file)
         # we make sure we always refresh the meta information
         # when we set the file content. Otherwise we might
         # end up only committing file content without any keys
@@ -566,7 +566,7 @@ class BaseFileEntry:
         self.key.set(self.meta)
 
     def file_set_content_no_meta(self, content_or_file, *, hashes=None):  # noqa: ARG002
-        self.tx.conn.io_file_set(self._storepath, content_or_file)
+        self.tx.io_file.set_content(self._storepath, content_or_file)
 
     def gethttpheaders(self):
         assert self.file_exists()
