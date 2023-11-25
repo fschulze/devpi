@@ -633,6 +633,20 @@ class ConfigurationError(Exception):
     """ incorrect configuration or environment settings. """
 
 
+def get_io_file_factory(storage_info):
+    from .filestore_db import DBIOFile
+    from .interfaces import IIOFile
+    from zope.interface.verify import verifyObject
+    _io_file_factory = DBIOFile
+
+    def io_file_factory(conn):
+        result = IIOFile(_io_file_factory(conn))
+        verifyObject(IIOFile, result)
+        return result
+
+    return io_file_factory
+
+
 class Config(object):
     def __init__(self, args, pluginmanager):
         self.args = args
@@ -978,6 +992,10 @@ class Config(object):
         name = self.storage_info["name"]
         settings = self.storage_info["settings"]
         return self._storage_info_from_name(name, settings)
+
+    @property
+    def io_file_factory(self):
+        return get_io_file_factory(self._storage_info())
 
     @property
     def storage(self):
