@@ -1,6 +1,9 @@
 import posixpath
 import re
+from itertools import dropwhile
+from operator import not_
 from packaging.requirements import Requirement as BaseRequirement
+from packaging_legacy.version import LegacyVersion
 from packaging_legacy.version import parse as parse_version
 from .types import CompareMixin
 from .types import cached_property
@@ -129,9 +132,74 @@ def splitext_archive(basename):
     return base, ext
 
 
+def encode_int(value):
+    if value < 0:
+        return f"-{encode_int(-value)}"
+    s = f"{value}"
+    l = len(s)
+    if l < 27:
+        return f"{chr(l + 64)}{s}"
+    if l < 53:
+        return f"{chr(l + 70)}{s}"
+    raise ValueError("Integer too large for encoding")
+
+
+def encode_iterable(value):
+    # wrapped in '!' (-Infinity), so versions sort correctly when the beginning
+    # is the same as local version
+    # for example 1.0.1 > 1.0+foo.1 == 'A0!A1A0A1!~!~!' > 'A0!A1!~!~!@fooA1!'
+    # without it wouldn't work
+    # for example 1.0.1 > 1.0+foo.1 != 'A0A1A0A1~!~!' > 'A0A1~!~@fooA1'
+    # because 'A0A1A' < 'A0A1~'
+    return "!" + "".join(encode_value(x) for x in value) + "!"
+
+
+_local_version_separators = re.compile(r"[\._-]")
+
+
+def encode_local(value):
+    return encode_iterable(
+        part.lower() if not part.isdigit() else int(part)
+        for part in _local_version_separators.split(value)
+    )
+
+
+def encode_release(value):
+    # drop trailing zeroes
+    return encode_iterable(reversed(list(dropwhile(not_, reversed(value)))))
+
+
+def encode_value(value):
+    if isinstance(value, int):
+        return encode_int(value)
+    if isinstance(value, str):
+        return f"@{value}"
+    if isinstance(value, tuple):
+        return encode_iterable(value)
+    msg = f"Don't know how to encode type {type(value)!r}"
+    raise ValueError(msg)
+
+
+def version_sort_string(version):
+    if isinstance(version, LegacyVersion):
+        return encode_iterable(version._key)
+    result = (
+        encode_int(version.epoch),
+        encode_release(version.release),
+        encode_iterable(version.pre) if version.pre else "~",  # Infinity
+        encode_iterable(version.post) if version.post else "!",  # -Infinity
+        encode_iterable(version.dev) if version.dev else "~",  # Infinity
+        encode_local(version.local) if version.local else "!")  # -Infinity
+    return "".join(result)
+
+
 class Version(CompareMixin):
     def __init__(self, versionstring):
         self.string = versionstring
+
+    @cached_property
+    def cmpstr(self):
+        return version_sort_string(self.cmpval)
 
     @cached_property
     def cmpval(self):
