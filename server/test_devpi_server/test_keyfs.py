@@ -10,8 +10,8 @@ notransaction = pytest.mark.notransaction
 
 
 @pytest.fixture
-def keyfs(gen_path, pool, storage):
-    keyfs = KeyFS(gen_path(), storage)
+def keyfs(gen_path, pool, storage, storage_io_file_factory):
+    keyfs = KeyFS(gen_path(), storage, io_file_factory=storage_io_file_factory)
     pool.register(keyfs.notifier)
     yield keyfs
 
@@ -36,8 +36,8 @@ class TestKeyFS:
         pytest.raises(KeyError, lambda: keyfs.tx.get_value_at(key, 0))
 
     @notransaction
-    def test_keyfs_readonly(self, storage, tmpdir):
-        keyfs = KeyFS(tmpdir, storage, readonly=True)
+    def test_keyfs_readonly(self, storage, storage_io_file_factory, tmpdir):
+        keyfs = KeyFS(tmpdir, storage, io_file_factory=storage_io_file_factory, readonly=True)
         with pytest.raises(keyfs.ReadOnly):
             with keyfs.write_transaction():
                 pass
@@ -516,13 +516,13 @@ class TestTransactionIsolation:
         assert serial == 0
         assert changes == {new_keyfs.NAME(name="world"): ({1: 1}, -1)}
 
-    def test_import_changes_subscriber_error(self, keyfs, storage, tmpdir):
+    def test_import_changes_subscriber_error(self, keyfs, storage, storage_io_file_factory, tmpdir):
         pkey = keyfs.add_key("NAME", "hello/{name}", dict)
         D = pkey(name="world")
         with keyfs.write_transaction():
             D.set({1: 1})
         keyfs_serial = keyfs.get_current_serial()
-        new_keyfs = KeyFS(tmpdir.join("newkeyfs"), storage)
+        new_keyfs = KeyFS(tmpdir.join("newkeyfs"), storage, io_file_factory=storage_io_file_factory)
         pkey = new_keyfs.add_key("NAME", "hello/{name}", dict)
         new_keyfs.subscribe_on_import(lambda *args: 0 / 0)
         serial = new_keyfs.get_current_serial()
@@ -539,13 +539,13 @@ class TestTransactionIsolation:
         with keyfs.read_transaction() as tx:
             assert tx.conn.get_raw_changelog_entry(10000) is None
 
-    def test_cache_interference(self, storage, tmpdir):
+    def test_cache_interference(self, storage, storage_io_file_factory, tmpdir):
         # because the transaction for the import subscriber was opened during
         # the transaction of the import itself and keys were fetched and placed
         # in the relpath cache, there was a value mismatch when a key from
         # the currently being written serial was places in the cache during
         # the import subscriber run
-        keyfs1 = KeyFS(tmpdir.join("keyfs1"), storage)
+        keyfs1 = KeyFS(tmpdir.join("keyfs1"), storage, io_file_factory=storage_io_file_factory)
         pkey1 = keyfs1.add_key("NAME1", "hello1/{name}", dict)
         pkey2 = keyfs1.add_key("NAME2", "hello2/{name}", dict)
         D1 = pkey1(name="world1")
@@ -719,10 +719,10 @@ class TestSubscriber:
         assert event.typedkey == key1
 
     @pytest.mark.xfail(reason="test monkeypatching wrong thing after refactoring")
-    def test_persistent(self, tmpdir, queue, monkeypatch, storage):
+    def test_persistent(self, tmpdir, queue, monkeypatch, storage, storage_io_file_factory):
         @contextlib.contextmanager
         def make_keyfs():
-            keyfs = KeyFS(tmpdir, storage)
+            keyfs = KeyFS(tmpdir, storage, io_file_factory=storage_io_file_factory)
             key1 = keyfs.add_key("NAME1", "hello", int)
             keyfs.notifier.on_key_change(key1, queue.put)
             pool = ThreadPool()
@@ -908,29 +908,33 @@ def test_crash_recovery(keyfs, storage_info):
 
 def test_keyfs_sqlite(gen_path):
     from devpi_server import keyfs_sqlite
+    from devpi_server.filestore_db import DBIOFile
     tmp = gen_path()
-    keyfs = KeyFS(tmp, keyfs_sqlite.Storage)
+    storage = keyfs_sqlite.Storage
+    keyfs = KeyFS(tmp, storage, io_file_factory=DBIOFile)
     with keyfs.write_transaction() as tx:
-        assert tx.conn.io_file_os_path('foo') is None
-        tx.conn.io_file_set('foo', b'bar')
+        assert tx.io_file.os_path('foo') is None
+        tx.io_file.set_content('foo', b'bar')
         tx.conn._sqlconn.commit()
     with keyfs.read_transaction() as tx:
-        assert tx.conn.io_file_os_path('foo') is None
-        assert tx.conn.io_file_get('foo') == b'bar'
+        assert tx.io_file.os_path('foo') is None
+        assert tx.io_file.get_content('foo') == b'bar'
     assert [x.name for x in tmp.iterdir()] == ['.sqlite_db']
 
 
 def test_keyfs_sqlite_fs(gen_path):
     from devpi_server import keyfs_sqlite_fs
+    from devpi_server.filestore_db import DBIOFile
     tmp = gen_path()
-    keyfs = KeyFS(tmp, keyfs_sqlite_fs.Storage)
+    storage = keyfs_sqlite_fs.Storage
+    keyfs = KeyFS(tmp, storage, io_file_factory=DBIOFile)
     with keyfs.write_transaction() as tx:
-        assert tx.conn.io_file_os_path('foo') == str(tmp / 'foo')
-        tx.conn.io_file_set('foo', b'bar')
+        assert tx.io_file.os_path('foo') == str(tmp / 'foo')
+        tx.io_file.set_content('foo', b'bar')
         tx.conn._sqlconn.commit()
     with keyfs.read_transaction() as tx:
-        assert tx.conn.io_file_get('foo') == b'bar'
-        with open(tx.conn.io_file_os_path('foo'), 'rb') as f:
+        assert tx.io_file.get_content('foo') == b'bar'
+        with open(tx.io_file.os_path('foo'), 'rb') as f:
             assert f.read() == b'bar'
     assert sorted(x.name for x in tmp.iterdir()) == ['.sqlite', 'foo']
 
