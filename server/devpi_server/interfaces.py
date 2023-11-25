@@ -24,6 +24,76 @@ if TYPE_CHECKING:
     from typing import Union
 
 
+class IDBIOFileConnection(Interface):
+    def commit_files_without_increasing_serial() -> None:
+        """ Writes any files which have been changed without
+            increasing the serial. """
+
+    def io_file_delete(path: str) -> None:
+        """ Deletes the file at path. """
+
+    def io_file_exists(path: str) -> bool:
+        """ Returns True if file at path exists. """
+
+    def io_file_get(path: str) -> bytes:
+        """ Returns binary content of the file at path. """
+
+    def io_file_new_open(path: str) -> IO[bytes]:
+        """ Returns a new open file like object for binary writing. """
+
+    def io_file_open(path: str) -> IO[bytes]:
+        """ Returns an open file like object for binary reading. """
+
+    def io_file_os_path(path: str) -> Optional[str]:
+        """ Returns the real path to the file if the storage is filesystem
+            based, otherwise None. """
+
+    def io_file_set(path: str, content_or_file: Union[bytes, IO[bytes]]) -> None:
+        """ Set the binary content of the file at path. """
+
+    def io_file_size(path: str) -> Optional[int]:
+        """ Returns the size of the file at path. """
+
+
+class IIOFile(Interface):
+    def commit() -> None:
+        """ Commit changed files to storage. """
+
+    def delete(path: str) -> None:
+        """ Deletes the file at path. """
+
+    def exists(path: str) -> bool:
+        """ Returns True if file at path exists. """
+
+    def get_content(path: str) -> bytes:
+        """ Returns binary content of the file at path. """
+
+    def is_dirty() -> bool:
+        """ Indicate whether there are any file changes pending. """
+
+    def new_open(path: str) -> IO[bytes]:
+        """ Returns a new open file like object for binary writing. """
+
+    def open_read(path: str) -> IO[bytes]:
+        """ Returns an open file like object for binary reading. """
+
+    def os_path(path: str) -> Optional[str]:
+        """ Returns the real path to the file if the storage is filesystem
+            based, otherwise None. """
+
+    def perform_crash_recovery() -> None:
+        """ Perform recovery from crash during two phase commit. """
+
+    def rollback() -> None:
+        """ Rollback changes to files. """
+
+    def set_content(path: str, content_or_file: Union[bytes, IO[bytes]]) -> None:
+        """ Set the binary content of the file at path. """
+
+    def size(path: str) -> Optional[int]:
+        """ Returns the size of the file at path. """
+
+
 class IStorageConnection(Interface):
     last_changelog_serial = Attribute("""
         Like db_read_last_changelog_serial, but cached on the class. """)
@@ -118,6 +188,9 @@ class IWriter2(Interface):
     def records_set(records: Iterable[Record]) -> None:
         pass
 
+    def set_rel_renames(rel_renames: list[str]) -> None:
+        pass
+
 
 # some adapters for legacy plugins
 
@@ -148,6 +221,19 @@ def _register_adapter(func: Callable) -> None:
         msg = f"Adapter for {iface.getName()!r} already registered."
         raise RuntimeError(msg)
     _adapters[iface] = func
+
+
+@_register_adapter
+def adapt_idbiofileconnection(iface: IDBIOFileConnection, obj: Any) -> Any:
+    # any storage connection which needs to be adapted to this interface
+    # is a legacy one and we can get IStorageConnection3 for it
+    obj = IStorageConnection3(obj)
+    _obj = unwrap_connection_obj(obj)
+    cls = get_connection_class(_obj)
+    classImplements(cls, iface)  # type: ignore[misc]
+    # make sure the object now actually provides this interface
+    verifyObject(iface, _obj)
+    return obj
 
 
 @_register_adapter
@@ -264,6 +350,11 @@ def adapt_iwriter2(iface: IWriter2, obj: Any) -> Any:
             self.record_set(record.key, record.value, record.back_serial)
 
     cls.records_set = _records_set
+
+    def _set_rel_renames(self: Any, rel_renames: list[str]) -> None:  # noqa: ARG001
+        pass
+
+    cls.set_rel_renames = _set_rel_renames
     # and add the interface
     classImplements(cls, iface)  # type: ignore[misc]
     # make sure the object now actually provides this interface
