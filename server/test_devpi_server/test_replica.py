@@ -927,12 +927,12 @@ class TestFileReplication:
                    "X-DEVPI-SERIAL": str(xom.keyfs.get_current_serial())}
         replica_xom.httpget.mockresponse(primary_file_url, code=200, content=content1, headers=headers)
         with replica_xom.keyfs.read_transaction() as tx:
-            assert not tx.conn.io_file_exists(file_relpath)
+            assert not tx.io_file.exists(file_relpath)
         r = r_app.get(path)
         assert r.status_code == 200
         assert r.body == content1
         with replica_xom.keyfs.read_transaction() as tx:
-            assert tx.conn.io_file_exists(file_relpath)
+            assert tx.io_file.exists(file_relpath)
         replication_errors = replica_xom.replica_thread.shared_data.errors
         assert list(replication_errors.errors.keys()) == []
 
