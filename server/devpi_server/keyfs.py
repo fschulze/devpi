@@ -237,7 +237,7 @@ class KeyFS(object):
     class ReadOnly(Exception):
         """ attempt to open write transaction while in readonly mode. """
 
-    def __init__(self, basedir, storage, readonly=False, cache_size=10000):
+    def __init__(self, basedir, storage, *, io_file_factory=None, readonly=False, cache_size=10000):
         self.basedir = py.path.local(basedir).ensure(dir=1)
         self._keys = {}
         self._threadlocal = mythread.threading.local()
@@ -248,6 +248,7 @@ class KeyFS(object):
             self.basedir,
             notify_on_commit=self._notify_on_commit,
             cache_size=cache_size)
+        self.io_file_factory = io_file_factory
         self._readonly = readonly
 
     def __repr__(self):
@@ -266,7 +267,9 @@ class KeyFS(object):
         return conn
 
     def finalize_init(self):
-        self._storage.perform_crash_recovery()
+        with self.get_connection() as conn:
+            io_file = self.io_file_factory(conn)
+            io_file.perform_crash_recovery()
 
     def import_changes(self, serial, changes):
         with contextlib.ExitStack() as cstack:
@@ -615,6 +618,10 @@ class FileStoreTransaction:
     def conn(self):
         return self.keyfs.get_connection(write=True, closing=False)
 
+    @cached_property
+    def io_file(self):
+        return self.keyfs.io_file_factory(self.conn)
+
     def _close(self):
         if self.closed:
             # We can reach this when the transaction is restarted and there
@@ -627,10 +634,11 @@ class FileStoreTransaction:
         self.closed = True
 
     def commit(self):
-        self.conn.commit_files_without_increasing_serial()
+        self.io_file.commit()
         self._close()
 
     def rollback(self):
+        self.io_file.rollback()
         if hasattr(self.conn, 'rollback'):
             self.conn.rollback()
         threadlog.debug("filestore transaction rollback")
@@ -664,6 +672,10 @@ class Transaction(object):
     def conn(self):
         return self.keyfs.get_connection(
             write=self.write, closing=False)
+
+    @cached_property
+    def io_file(self):
+        return self.keyfs.io_file_factory(self.conn)
 
     def get_model(self, xom):
         if self._model is absent:
@@ -814,15 +826,17 @@ class Transaction(object):
             if val is deleted:
                 val = None
             records.append(Record(typedkey, val, back_serial, old_val))
-        if not records and not self.conn.dirty_files:
+        if not records and not self.io_file.is_dirty():
             threadlog.debug("nothing to commit, just closing tx")
             result = self._close()
             self._run_listeners(self._finished_listeners)
             return result
         with contextlib.ExitStack() as cstack:
             cstack.callback(self._close)
+            cstack.enter_context(self.io_file)
             fswriter = IWriter2(
                 cstack.enter_context(self.conn.write_transaction()))
+            fswriter.set_rel_renames(self.io_file.get_rel_renames())
             fswriter.records_set(records)
             commit_serial = getattr(fswriter, "commit_serial", absent)
             if commit_serial is absent:
