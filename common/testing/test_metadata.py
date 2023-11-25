@@ -6,6 +6,7 @@ from devpi_common.metadata import get_sorted_versions
 from devpi_common.metadata import parse_requirement
 from devpi_common.metadata import splitbasename
 from devpi_common.metadata import splitext_archive
+from devpi_common.metadata import version_sort_string
 import pytest
 
 
@@ -136,6 +137,17 @@ def test_get_sorted_versions_legacy(versions, expected):
 ])
 def test_get_sorted_versions_legacy_stable(versions, expected):
     assert get_sorted_versions(versions, stable=True, reverse=False) == expected
+
+
+def test_version_sort_string():
+    versions = [
+        "3.1.4-ec6", "1.0beta5prerelease2", "1.0alpha1",
+        "2.0-pre1", "2.0pre0", "2.0rc2",
+        "1.0+foo.10", "1.0+foo.1", "1.0+foo.3", "1.0+foo.4.ham", "1.0+foo.4.bar"]
+    expected = get_sorted_versions(versions, reverse=False)
+    result = sorted((version_sort_string(x.cmpval), x.cmpval, x.string) for x in map(Version, versions))
+    result_strings = [x[-1] for x in result]
+    assert expected == result_strings
 
 
 def test_version():
