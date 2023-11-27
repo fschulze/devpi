@@ -6,6 +6,8 @@ from devpi_server.mythread import ThreadPool
 from devpi_server.keyfs import KeyFS, Transaction
 from devpi_server.keyfs_types import FilePathInfo
 from devpi_server.readonly import is_deeply_readonly
+from functools import partial
+
 
 notransaction = pytest.mark.notransaction
 
@@ -884,20 +886,22 @@ def test_keyfs_sqlite(gentmp):
 
 def test_keyfs_sqlite_fs(gentmp):
     from devpi_server import keyfs_sqlite_fs
-    from devpi_server.filestore_db import DBIOFile
+    from devpi_server.filestore_fs import FSIOFile
     tmp = gentmp()
     storage = keyfs_sqlite_fs.Storage
-    keyfs = KeyFS(tmp, storage, io_file_factory=DBIOFile)
+    io_file_factory = partial(FSIOFile, settings={})
+    keyfs = KeyFS(tmp, storage, io_file_factory=io_file_factory)
     file_path_info = FilePathInfo('foo')
     with keyfs.write_transaction() as tx:
-        assert tx.io_file.os_path(file_path_info) == tmp.join('foo').strpath
+        assert tx.io_file.os_path(file_path_info) == tmp.join('+files', 'foo').strpath
         tx.io_file.set_content(file_path_info, b'bar')
         tx.conn._sqlconn.commit()
     with keyfs.read_transaction() as tx:
         assert tx.io_file.get_content(file_path_info) == b'bar'
         with open(tx.io_file.os_path(file_path_info), 'rb') as f:
             assert f.read() == b'bar'
-    assert sorted(x.basename for x in tmp.listdir()) == ['.sqlite', 'foo']
+    assert sorted(x.basename for x in tmp.listdir()) == ['+files', '.sqlite']
+    assert sorted(x.basename for x in tmp.join('+files').listdir()) == ['foo']
 
 
 @notransaction
