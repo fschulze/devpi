@@ -9,7 +9,7 @@ independent from any future changes.
 import contextlib
 import py
 from . import mythread
-from .interfaces import IStorageConnection3
+from .interfaces import IStorageConnection4
 from .interfaces import IWriter2
 from .keyfs_types import PTypedKey
 from .keyfs_types import Record
@@ -277,7 +277,7 @@ class KeyFS(object):
         except TypeError:
             conn = self._storage.get_connection(
                 closing=False, write=write)
-        conn = IStorageConnection3(conn)
+        conn = IStorageConnection4(conn)
         if closing:
             return contextlib.closing(conn)
         return conn
@@ -893,6 +893,7 @@ class Transaction(object):
     def rollback(self):
         if hasattr(self.conn, 'rollback'):
             self.conn.rollback()
+        self.io_file.rollback()
         threadlog.debug("transaction rollback at %s" % (self.at_serial))
         result = self._close()
         self._run_listeners(self._finished_listeners)

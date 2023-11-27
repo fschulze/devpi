@@ -634,10 +634,17 @@ class ConfigurationError(Exception):
 
 
 def get_io_file_factory(storage_info):
-    from .filestore_db import DBIOFile
     from .interfaces import IIOFile
     from zope.interface.verify import verifyObject
-    _io_file_factory = DBIOFile
+    db_filestore = storage_info.setdefault('db_filestore', True)
+    if db_filestore:
+        from .filestore_db import DBIOFile
+        _io_file_factory = DBIOFile
+    else:
+        from .filestore_fs import FSIOFile
+        settings = storage_info.get("settings", {})
+        storage_info.setdefault("_test_markers", []).append("storage_with_filesystem")
+        _io_file_factory = partial(FSIOFile, settings=settings)
 
     def io_file_factory(conn):
         result = IIOFile(_io_file_factory(conn))
