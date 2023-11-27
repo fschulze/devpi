@@ -356,7 +356,8 @@ class TestConfig:
                 return dict(
                     storage=keyfs_sqlite_fs.Storage,
                     name="foo",
-                    description="Foo backend")
+                    description="Foo backend",
+                    db_filestore=False)
         options = ("--storage", "foo:bar=ham")
         config = make_config(("devpi-server",) + options)
         assert config.args.storage == "foo:bar=ham"
@@ -481,7 +482,8 @@ class TestConfigFile:
                 return dict(
                     storage=keyfs_sqlite_fs.Storage,
                     name="foo",
-                    description="Foo backend")
+                    description="Foo backend",
+                    db_filestore=False)
         yaml_path = make_yaml_config(textwrap.dedent("""\
             devpi-server:
               storage:
