@@ -66,7 +66,7 @@ class TestRenameFileLogic:
         with pytest.raises(RuntimeError):
             with keyfs.read_transaction() as tx:
                 tx.io_file.set_content(FilePathInfo('foo'), b'foo')
-                tmppath = tx.io_file._dirty_files[keyfs.basedir.join('foo').strpath].tmppath
+                tmppath = tx.io_file._dirty_files[keyfs.basedir.join('+files', 'foo').strpath].tmppath
                 assert os.path.exists(tmppath)
                 # abort transaction
                 raise RuntimeError
