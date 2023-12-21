@@ -5,6 +5,7 @@ for all indexes.
 """
 import hashlib
 import mimetypes
+from .keyfs_types import FilePathInfo
 from .readonly import get_mutable_deepcopy
 from wsgiref.handlers import format_date_time
 import re
@@ -403,7 +404,7 @@ class BadGateway(Exception):
 
 
 class BaseFileEntry:
-    __slots__ = ('_meta', '_storepath', 'basename', 'key', 'relpath')
+    __slots__ = ('_meta', 'basename', 'key', 'relpath')
 
     BadGateway = BadGateway
     _hash_spec = metaprop("hash_spec")  # e.g. "md5=120938012"
@@ -416,10 +417,13 @@ class BaseFileEntry:
         self.key = key
         self.relpath = key.relpath
         self.basename = self.relpath.split("/")[-1]
-        self._storepath = "/".join(("+files", str(self.relpath)))
         self._meta = _nodefault
         if meta is not _nodefault:
             self._meta = meta or {}
+
+    @property
+    def file_path_info(self):
+        return FilePathInfo(f"+files/{self.relpath}")
 
     @property
     def index(self):
@@ -521,28 +525,31 @@ class BaseFileEntry:
         raise NotImplementedError
 
     def file_exists(self):
-        return self.tx.io_file.exists(self._storepath)
+        return self.tx.io_file.exists(self.file_path_info)
 
     def file_delete(self):
-        return self.tx.io_file.delete(self._storepath)
+        return self.tx.io_file.delete(self.file_path_info)
 
     def file_size(self):
-        return self.tx.io_file.size(self._storepath)
+        return self.tx.io_file.size(self.file_path_info)
 
     def __repr__(self):
         return f"<{self.__class__.__name__} {self.key!r}>"
 
     def file_new_open(self):
-        return self.tx.io_file.new_open(self._storepath)
+        return self.tx.io_file.new_open(self.file_path_info)
 
     def file_open_read(self):
-        return self.tx.io_file.open_read(self._storepath)
+        return self.tx.io_file.open_read(self.file_path_info)
 
     def file_get_content(self):
-        return self.tx.io_file.get_content(self._storepath)
+        return self.tx.io_file.get_content(self.file_path_info)
 
-    def file_os_path(self):
-        return self.tx.io_file.os_path(self._storepath)
+    def file_os_path(self, *, _raises=True):
+        path = self.tx.io_file.os_path(self.file_path_info)
+        if _raises and self.tx.io_file.is_path_dirty(path):
+            raise RuntimeError("Can't access file %s directly during transaction" % path)
+        return path
 
     def file_set_content(self, content_or_file, *, last_modified=None, hash_spec=None, hashes=None):
         if last_modified != -1:
@@ -558,7 +565,7 @@ class BaseFileEntry:
         if not hash_spec:
             hash_spec = hashes.get_default_spec()
         self.hash_spec = hash_spec
-        self.tx.io_file.set_content(self._storepath, content_or_file)
+        self.tx.io_file.set_content(self.file_path_info, content_or_file)
         # we make sure we always refresh the meta information
         # when we set the file content. Otherwise we might
         # end up only committing file content without any keys
@@ -566,7 +573,7 @@ class BaseFileEntry:
         self.key.set(self.meta)
 
     def file_set_content_no_meta(self, content_or_file, *, hashes=None):  # noqa: ARG002
-        self.tx.io_file.set_content(self._storepath, content_or_file)
+        self.tx.io_file.set_content(self.file_path_info, content_or_file)
 
     def gethttpheaders(self):
         assert self.file_exists()
