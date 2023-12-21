@@ -5,6 +5,7 @@ from devpi_server.log import thread_pop_log
 from devpi_server.filestore import get_hashes
 from devpi_server.fileutil import loads
 from devpi_server.keyfs import MissingFileException
+from devpi_server.keyfs_types import FilePathInfo
 from devpi_server.log import threadlog, thread_push_log
 from devpi_server.replica import H_EXPECTED_MASTER_ID, H_MASTER_UUID
 from devpi_server.replica import H_EXPECTED_PRIMARY_ID, H_PRIMARY_UUID
@@ -722,7 +723,6 @@ class TestFileReplication:
             'root/pypi/+f/5d4/1402abc4b2a76/pytest-1.8.zip']
         with replica_xom.keyfs.read_transaction():
             assert not r_entry.file_exists()
-            assert not replica_xom.config.server_path.joinpath(r_entry._storepath).exists()
 
         # then we try to return the correct thing
         with xom.keyfs.write_transaction():
@@ -763,7 +763,8 @@ class TestFileReplication:
         with xom.keyfs.write_transaction():
             entry.file_delete()
             entry.delete()
-        assert not xom.config.server_path.joinpath(entry._storepath).exists()
+        with xom.keyfs.read_transaction():
+            assert not entry.file_exists()
 
         # and simulate what the primary will respond
         xom.httpget.mockresponse(primary_file_path, status_code=410)
@@ -909,7 +910,7 @@ class TestFileReplication:
         # first we try to return something wrong
         primary_url = replica_xom.config.primary_url
         (path,) = mapp.get_release_paths('hello')
-        file_relpath = '+files' + path
+        file_path_info = FilePathInfo(f"+files{path}")
         primary_file_url = primary_url.joinpath(path).url
         frt_reqmock.mockresponse(primary_file_url, code=200, data=b'13')
         replay(xom, replica_xom, events=False)
@@ -927,12 +928,12 @@ class TestFileReplication:
                    "X-DEVPI-SERIAL": str(xom.keyfs.get_current_serial())}
         replica_xom.httpget.mockresponse(primary_file_url, code=200, content=content1, headers=headers)
         with replica_xom.keyfs.read_transaction() as tx:
-            assert not tx.io_file.exists(file_relpath)
+            assert not tx.io_file.exists(file_path_info)
         r = r_app.get(path)
         assert r.status_code == 200
         assert r.body == content1
         with replica_xom.keyfs.read_transaction() as tx:
-            assert tx.io_file.exists(file_relpath)
+            assert tx.io_file.exists(file_path_info)
         replication_errors = replica_xom.replica_thread.shared_data.errors
         assert list(replication_errors.errors.keys()) == []
 
