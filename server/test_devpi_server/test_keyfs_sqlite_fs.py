@@ -1,6 +1,7 @@
 from devpi_server.filestore_fs import check_pending_renames
 from devpi_server.filestore_fs import commit_renames
 from devpi_server.filestore_fs import make_rel_renames
+from devpi_server.keyfs_types import FilePathInfo
 import os
 import pytest
 
@@ -64,7 +65,7 @@ class TestRenameFileLogic:
     def test_dirty_files_removed_on_rollback(self, keyfs):
         with pytest.raises(RuntimeError):
             with keyfs.read_transaction() as tx:
-                tx.io_file.set_content('foo', b'foo')
+                tx.io_file.set_content(FilePathInfo('foo'), b'foo')
                 tmppath = tx.io_file._dirty_files[keyfs.basedir.join('foo').strpath].tmppath
                 assert os.path.exists(tmppath)
                 # abort transaction
