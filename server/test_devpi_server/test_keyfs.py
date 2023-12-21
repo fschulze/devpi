@@ -4,6 +4,7 @@ import pytest
 from devpi_server.mythread import ThreadPool
 
 from devpi_server.keyfs import KeyFS, Transaction
+from devpi_server.keyfs_types import FilePathInfo
 from devpi_server.readonly import is_deeply_readonly
 
 notransaction = pytest.mark.notransaction
@@ -870,13 +871,14 @@ def test_keyfs_sqlite(gentmp):
     tmp = gentmp()
     storage = keyfs_sqlite.Storage
     keyfs = KeyFS(tmp, storage, io_file_factory=DBIOFile)
+    file_path_info = FilePathInfo('foo')
     with keyfs.write_transaction() as tx:
-        assert tx.io_file.os_path('foo') is None
-        tx.io_file.set_content('foo', b'bar')
+        assert tx.io_file.os_path(file_path_info) is None
+        tx.io_file.set_content(file_path_info, b'bar')
         tx.conn._sqlconn.commit()
     with keyfs.read_transaction() as tx:
-        assert tx.io_file.os_path('foo') is None
-        assert tx.io_file.get_content('foo') == b'bar'
+        assert tx.io_file.os_path(file_path_info) is None
+        assert tx.io_file.get_content(file_path_info) == b'bar'
     assert [x.basename for x in tmp.listdir()] == ['.sqlite_db']
 
 
@@ -886,13 +888,14 @@ def test_keyfs_sqlite_fs(gentmp):
     tmp = gentmp()
     storage = keyfs_sqlite_fs.Storage
     keyfs = KeyFS(tmp, storage, io_file_factory=DBIOFile)
+    file_path_info = FilePathInfo('foo')
     with keyfs.write_transaction() as tx:
-        assert tx.io_file.os_path('foo') == tmp.join('foo').strpath
-        tx.io_file.set_content('foo', b'bar')
+        assert tx.io_file.os_path(file_path_info) == tmp.join('foo').strpath
+        tx.io_file.set_content(file_path_info, b'bar')
         tx.conn._sqlconn.commit()
     with keyfs.read_transaction() as tx:
-        assert tx.io_file.get_content('foo') == b'bar'
-        with open(tx.io_file.os_path('foo'), 'rb') as f:
+        assert tx.io_file.get_content(file_path_info) == b'bar'
+        with open(tx.io_file.os_path(file_path_info), 'rb') as f:
             assert f.read() == b'bar'
     assert sorted(x.basename for x in tmp.listdir()) == ['.sqlite', 'foo']
 
