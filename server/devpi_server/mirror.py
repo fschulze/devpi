@@ -195,29 +195,64 @@ class MirrorStage(BaseStage):
         self.key_projects = self.keyfs.PROJNAMES(user=username, index=index)
         # used to log about stale projects only once
         self._offline_logging = set()
+        self.auth_candidates = []
 
     def _get_extra_headers(self, extra_headers):
+        if extra_headers is None:
+            extra_headers = {}
         if self.xom.is_replica():
-            if extra_headers is None:
-                extra_headers = {}
             (uuid, master_uuid) = make_uuid_headers(self.xom.config.nodeinfo)
             rt = self.xom.replica_thread
             token = rt.auth_serializer.dumps(uuid)
             extra_headers[rt.H_REPLICA_UUID] = uuid
             extra_headers['Authorization'] = 'Bearer %s' % token
+        else:
+            auth = self.mirror_url_authorization_header
+            if auth:
+                extra_headers["Authorization"] = auth
         return extra_headers
 
     async def async_httpget(self, url, allow_redirects, timeout=None, extra_headers=None):
         extra_headers = self._get_extra_headers(extra_headers)
-        return await self.xom.async_httpget(
+        response, text = await self.xom.async_httpget(
             url=URL(url).url, allow_redirects=allow_redirects, timeout=timeout,
             extra_headers=extra_headers)
+        # if we get an auth problem, see if we can try an alternative credential
+        # to access the resource
+        if response.status_code in (401, 403):
+            self._update_auth_candidates(
+                response.headers.get("WWW-Authenticate", ""))
+            if self.auth_candidates:
+                return await self.async_httpget(
+                    url, allow_redirects, timeout, extra_headers)
+        return response, text
 
     def httpget(self, url, allow_redirects, timeout=None, extra_headers=None):
         extra_headers = self._get_extra_headers(extra_headers)
-        return self.xom.httpget(
+        response = self.xom.httpget(
             url=URL(url).url, allow_redirects=allow_redirects, timeout=timeout,
             extra_headers=extra_headers)
+        # if we get an auth problem, see if we can try an alternative credential
+        # to access the resource
+        if response.status_code in (401, 403):
+            self._update_auth_candidates(
+                response.headers.get("WWW-Authenticate", ""))
+            if self.auth_candidates:
+                return self.httpget(
+                    url, allow_redirects, timeout, extra_headers)
+        return response
+
+    def _update_auth_candidates(self, auth_header):
+        # if we have any auth candidates, the first one has just failed, so
+        # discard it, allowing any others in the list to be tried
+        # if we didn't have any auth candidates, try and obtain some
+        if self.auth_candidates:
+            self.auth_candidates.pop(0)
+        else:
+            hook = self.xom.config.hook
+            self.auth_candidates = hook.devpiserver_get_mirror_auth(
+                mirror_url=self.mirror_url,
+                www_authenticate_header=auth_header)
 
     @property
     def cache_expiry(self):
@@ -243,6 +278,10 @@ class MirrorStage(BaseStage):
 
     @property
     def mirror_url_authorization_header(self):
+        # prefer plugin generated credentials as they will only get generated
+        # if the url embedded auth has previously failed
+        if self.auth_candidates:
+            return self.auth_candidates[0]
         url = self.mirror_url
         if url.username or url.password:
             auth = f"{url.username or ''}:{url.password or ''}".encode()
@@ -391,9 +430,6 @@ class MirrorStage(BaseStage):
             timeout = max(self.timeout, 60)
         else:
             timeout = max(self.timeout, 30)
-        auth = self.mirror_url_authorization_header
-        if auth:
-            headers["Authorization"] = auth
         response = self.httpget(
             self.mirror_url_without_auth, allow_redirects=True,
             extra_headers=headers, timeout=timeout)
@@ -545,9 +581,6 @@ class MirrorStage(BaseStage):
         get_url = self.mirror_url_without_auth.joinpath(project).asdir()
         threadlog.debug("reading index %r", url)
         headers = {"Accept": SIMPLE_API_ACCEPT}
-        auth = self.mirror_url_authorization_header
-        if auth:
-            headers["Authorization"] = auth
         etag = self.cache_retrieve_times.get_etag(project)
         if etag is not None:
             headers["If-None-Match"] = etag
