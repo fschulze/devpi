@@ -246,13 +246,15 @@ class MirrorStage(BaseStage):
         # if we have any auth candidates, the first one has just failed, so
         # discard it, allowing any others in the list to be tried
         # if we didn't have any auth candidates, try and obtain some
-        if self.auth_candidates:
-            self.auth_candidates.pop(0)
+        auth_candidates = self.xom.setdefault_singleton(
+            self.name, "auth_candidates", factory=list)
+        if auth_candidates:
+            auth_candidates.pop(0)
         else:
             hook = self.xom.config.hook
-            self.auth_candidates = hook.devpiserver_get_mirror_auth(
+            auth_candidates.extend(hook.devpiserver_get_mirror_auth(
                 mirror_url=self.mirror_url,
-                www_authenticate_header=auth_header)
+                www_authenticate_header=auth_header))
 
     @property
     def cache_expiry(self):
@@ -280,8 +282,10 @@ class MirrorStage(BaseStage):
     def mirror_url_authorization_header(self):
         # prefer plugin generated credentials as they will only get generated
         # if the url embedded auth has previously failed
-        if self.auth_candidates:
-            return self.auth_candidates[0]
+        auth_candidates = self.xom.setdefault_singleton(
+            self.name, "auth_candidates", factory=list)
+        if auth_candidates:
+            return auth_candidates[0]
         url = self.mirror_url
         if url.username or url.password:
             auth = f"{url.username or ''}:{url.password or ''}".encode()
