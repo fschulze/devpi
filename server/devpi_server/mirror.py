@@ -195,7 +195,6 @@ class MirrorStage(BaseStage):
         self.key_projects = self.keyfs.PROJNAMES(user=username, index=index)
         # used to log about stale projects only once
         self._offline_logging = set()
-        self.auth_candidates = []
 
     def _get_extra_headers(self, extra_headers):
         if extra_headers is None:
@@ -219,12 +218,11 @@ class MirrorStage(BaseStage):
             extra_headers=extra_headers)
         # if we get an auth problem, see if we can try an alternative credential
         # to access the resource
-        if response.status_code in (401, 403):
-            self._update_auth_candidates(
-                response.headers.get("WWW-Authenticate", ""))
-            if self.auth_candidates:
-                return await self.async_httpget(
-                    url, allow_redirects, timeout, extra_headers)
+        if response.status_code in (401, 403) and self._update_auth_candidates(
+            response.headers.get("WWW-Authenticate", ""),
+        ):
+            return await self.async_httpget(
+                url, allow_redirects, timeout, extra_headers)
         return response, text
 
     def httpget(self, url, allow_redirects, timeout=None, extra_headers=None):
@@ -234,12 +232,11 @@ class MirrorStage(BaseStage):
             extra_headers=extra_headers)
         # if we get an auth problem, see if we can try an alternative credential
         # to access the resource
-        if response.status_code in (401, 403):
-            self._update_auth_candidates(
-                response.headers.get("WWW-Authenticate", ""))
-            if self.auth_candidates:
-                return self.httpget(
-                    url, allow_redirects, timeout, extra_headers)
+        if response.status_code in (401, 403) and self._update_auth_candidates(
+            response.headers.get("WWW-Authenticate", ""),
+        ):
+            return self.httpget(
+                url, allow_redirects, timeout, extra_headers)
         return response
 
     def _update_auth_candidates(self, auth_header):
@@ -255,6 +252,8 @@ class MirrorStage(BaseStage):
             auth_candidates.extend(hook.devpiserver_get_mirror_auth(
                 mirror_url=self.mirror_url,
                 www_authenticate_header=auth_header))
+        # return True if we have any new credentials to try
+        return len(auth_candidates) > 0
 
     @property
     def cache_expiry(self):
