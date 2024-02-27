@@ -199,6 +199,8 @@ class MirrorStage(BaseStage):
     def _get_extra_headers(self, extra_headers):
         if extra_headers is None:
             extra_headers = {}
+        else:
+            extra_headers = dict(extra_headers)  # make a copy
         if self.xom.is_replica():
             (uuid, master_uuid) = make_uuid_headers(self.xom.config.nodeinfo)
             rt = self.xom.replica_thread

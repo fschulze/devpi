@@ -180,9 +180,10 @@ class TestFileStore:
         entry = filestore.maplink(link, "root", "pypi", "pytest")
         assert not entry.hash_spec
         headers = ResponseHeaders({})
-        httpget.url2response[link.url] = dict(status_code=200,
-                headers=headers, raw = BytesIO(b"123"))
-        for part in iter_cache_remote_file(xom, entry, entry.url):
+        httpget.url2response[link.url] = dict(
+            status_code=200, headers=headers, raw=BytesIO(b"123"))
+        stage = xom.model.getstage('root/pypi')
+        for _ in iter_cache_remote_file(stage, entry, entry.url):
             pass
         rheaders = entry.gethttpheaders()
         assert rheaders["content-length"] == "3"
@@ -194,9 +195,10 @@ class TestFileStore:
         entry = filestore.maplink(link, "root", "pypi", "pytest")
         assert not entry.hash_spec
         headers = ResponseHeaders({"Content-Type": ""})
-        httpget.url2response[link.url] = dict(status_code=200,
-                headers=headers, raw = BytesIO(b"123"))
-        for part in iter_cache_remote_file(xom, entry, entry.url):
+        httpget.url2response[link.url] = dict(
+            status_code=200, headers=headers, raw=BytesIO(b"123"))
+        stage = xom.model.getstage('root/pypi')
+        for _ in iter_cache_remote_file(stage, entry, entry.url):
             pass
         rheaders = entry.gethttpheaders()
         assert rheaders["content-length"] == "3"
@@ -211,10 +213,11 @@ class TestFileStore:
             "content-length": "3",
             "last-modified": "Thu, 25 Nov 2010 20:00:27 GMT",
             "content-type": "application/zip"})
-        httpget.url2response[link.url] = dict(status_code=200,
-                headers=headers, raw = BytesIO(b"1"))
-        with pytest.raises(ValueError):
-            for part in iter_cache_remote_file(xom, entry, entry.url):
+        stage = xom.model.getstage('root/pypi')
+        httpget.url2response[link.url] = dict(
+            status_code=200, headers=headers, raw=BytesIO(b"1"))
+        with pytest.raises(ValueError, match="got 1 bytes of.*from remote, expected 3"):  # noqa: PT012
+            for _ in iter_cache_remote_file(stage, entry, entry.url):
                 pass
 
     def test_iterfile_remote_nosize(self, filestore, httpget, gen, xom):
@@ -225,9 +228,10 @@ class TestFileStore:
             "last-modified": "Thu, 25 Nov 2010 20:00:27 GMT",
             "content-length": None})
         assert entry.file_size() is None
-        httpget.url2response[link.url] = dict(status_code=200,
-                headers=headers, raw=BytesIO(b"1"))
-        for part in iter_cache_remote_file(xom, entry, entry.url):
+        httpget.url2response[link.url] = dict(
+            status_code=200, headers=headers, raw=BytesIO(b"1"))
+        stage = xom.model.getstage('root/pypi')
+        for _ in iter_cache_remote_file(stage, entry, entry.url):
             pass
         assert entry.file_get_content() == b"1"
         entry2 = filestore.get_file_entry(entry.relpath)
@@ -239,15 +243,17 @@ class TestFileStore:
     def test_iterfile_remote_error_md5(self, filestore, httpget, gen, xom):
         link = gen.pypi_package_link("pytest-3.0.zip")
         entry = filestore.maplink(link, "root", "pypi", "pytest")
-        assert entry.hash_spec and entry.hash_spec == link.hash_spec
+        assert entry.hash_spec
+        assert entry.hash_spec == link.hash_spec
         headers = ResponseHeaders({
             "content-length": "3",
             "last-modified": "Thu, 25 Nov 2010 20:00:27 GMT",
             "content-type": "application/zip"})
-        httpget.url2response[link.url_nofrag] = dict(status_code=200,
-                headers=headers, raw=BytesIO(b"123"))
-        with pytest.raises(ValueError, match=link.md5):
-            for part in iter_cache_remote_file(xom, entry, entry.url):
+        httpget.url2response[link.url_nofrag] = dict(
+            status_code=200, headers=headers, raw=BytesIO(b"123"))
+        stage = xom.model.getstage('root/pypi')
+        with pytest.raises(ValueError, match=link.md5):  # noqa: PT012
+            for _ in iter_cache_remote_file(stage, entry, entry.url):
                 pass
         assert not entry.file_exists()
 
@@ -257,7 +263,8 @@ def test_cache_remote_file(filestore, httpget, gen, xom):
     with filestore.keyfs.write_transaction():
         link = gen.pypi_package_link("pytest-1.8.zip", md5=False)
         entry = filestore.maplink(link, "root", "pypi", "pytest")
-        assert not entry.hash_spec and not entry.file_exists()
+        assert not entry.hash_spec
+        assert not entry.file_exists()
         headers = ResponseHeaders({
             "content-length": "3",
             "last-modified": "Thu, 25 Nov 2010 20:00:27 GMT"})
@@ -265,20 +272,21 @@ def test_cache_remote_file(filestore, httpget, gen, xom):
             status_code=200,
             headers=headers,
             raw=BytesIO(b"123"))
-        for part in iter_cache_remote_file(xom, entry, entry.url):
+        stage = xom.model.getstage('root/pypi')
+        for _ in iter_cache_remote_file(stage, entry, entry.url):
             pass
         rheaders = entry.gethttpheaders()
         assert rheaders["content-length"] == "3"
         assert rheaders["content-type"] in zip_types
         assert rheaders["last-modified"] == headers["last-modified"]
-        bytes = entry.file_get_content()
-        assert bytes == b"123"
+        content = entry.file_get_content()
+        assert content == b"123"
 
     # reget entry and check about content
     with filestore.keyfs.read_transaction():
         entry = filestore.get_file_entry(entry.relpath)
         assert entry.file_exists()
-        assert entry.hash_value == getdigest(bytes, entry.hash_type)
+        assert entry.hash_value == getdigest(content, entry.hash_type)
         assert entry.file_size() == 3
         rheaders = entry.gethttpheaders()
         assert entry.file_get_content() == b"123"
