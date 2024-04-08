@@ -66,12 +66,14 @@ def fsck():
                     continue
                 if not args.checksum:
                     continue
-                checksum = entry.file_get_checksum(entry.hash_type)
-                if entry.hash_value != checksum:
+                errors = entry.file_get_hash_errors()
+                if errors:
                     got_errors = True
-                    log.error(
-                        "%s - %s mismatch, got %s, expected %s"
-                        % (entry.relpath, entry.hash_type, checksum, entry.hash_value))
+                    # get one error
+                    error_msg = errors.get(
+                        entry.best_available_hash_type, next(iter(errors)))['msg']
+                    msg = f"{entry.relpath} - {error_msg}"
+                    log.error(msg)
             log.info(
                 "Finished with a total of %s files."
                 % processed)
