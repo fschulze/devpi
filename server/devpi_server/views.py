@@ -42,7 +42,6 @@ from .config import hookimpl
 from .exceptions import lazy_format_exception_only
 from .filestore import BadGateway
 from .filestore import RunningHashes
-from .filestore import get_checksum_error
 from .filestore import get_hashes
 from .filestore import get_seekable_content_or_file
 from .fileutil import buffered_iterator
@@ -1672,9 +1671,9 @@ def _headers_from_response(r):
 
 class FileStreamer:
     def __init__(self, f, entry, response):
-        self.hash_spec = entry.hash_spec
-        self.hash_type = entry.hash_type
+        self.hash_type = entry.best_available_hash_type
         self.hash_types = entry.default_hash_types
+        self._hashes = entry.hashes
         self.relpath = entry.relpath
         self.response = response
         self.error = None
@@ -1704,9 +1703,8 @@ class FileStreamer:
             raise ValueError(
                 "%s: got %s bytes of %r from remote, expected %s" % (
                     self.relpath, filesize, self.response.url, content_size))
-        if self.hash_type:
-            running_hash = running_hashes.get_running_hash(self.hash_type)
-            err = get_checksum_error(running_hash, self.relpath, self.hash_spec)
+        if self._hashes:
+            err = self.hashes.exception_for(self._hashes, self.relpath)
             if err is not None:
                 raise err
 
