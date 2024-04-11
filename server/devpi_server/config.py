@@ -751,7 +751,6 @@ class Config(object):
                 "master-uuid in nodeinfo is deprecated, use primary-uuid instead",
                 DeprecationWarning,
                 stacklevel=2)
-            import pdb; pdb.set_trace()
             return self.nodeinfo["master-uuid"]
         return self.nodeinfo.get("primary-uuid")
 
@@ -789,8 +788,8 @@ class Config(object):
     @property
     def primary_auth(self):
         # trigger setting of _primary_auth
-        self.primary_url
-        return self._primary_auth
+        if self.primary_url:
+            return self._primary_auth
 
     @property
     def primary_url(self):

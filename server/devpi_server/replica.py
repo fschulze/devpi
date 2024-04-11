@@ -517,6 +517,12 @@ class ReplicaThread:
             remote_primary_uuid = r.headers.get(
                 H_PRIMARY_UUID,
                 r.headers.get(H_MASTER_UUID))
+            if H_MASTER_UUID in r.headers and r.headers.get(H_MASTER_UUID, remote_primary_uuid) != remote_primary_uuid:
+                log.error(
+                    "remote has differing values for %r and %r headers: %s",
+                    H_PRIMARY_UUID, H_MASTER_UUID, r.headers)
+                self.thread.sleep(self.ERROR_SLEEP)
+                return True
             if not remote_primary_uuid:
                 # we don't fatally leave the process because
                 # it might just be a temporary misconfiguration

@@ -8,7 +8,7 @@ from devpi_server.log import threadlog, thread_push_log
 from devpi_server.replica import H_EXPECTED_MASTER_ID, H_MASTER_UUID
 from devpi_server.replica import H_EXPECTED_PRIMARY_ID, H_PRIMARY_UUID
 from devpi_server.replica import H_REPLICA_UUID, H_REPLICA_OUTSIDE_URL
-from devpi_server.replica import MasterChangelogRequest
+from devpi_server.replica import PrimaryChangelogRequest
 from devpi_server.replica import proxy_view_to_primary
 from devpi_server.views import iter_remote_file_replica
 from pyramid.httpexceptions import HTTPNotFound
@@ -37,7 +37,7 @@ def testapp(testapp):
     primary_uuid = testapp.xom.config.get_primary_uuid()
     assert primary_uuid
     testapp.set_header_default(H_EXPECTED_MASTER_ID, primary_uuid)
-    testapp.set_header_default(H_EXPECTED_PRIMARY_ID, master_uuid)
+    testapp.set_header_default(H_EXPECTED_PRIMARY_ID, primary_uuid)
     return testapp
 
 
@@ -83,7 +83,7 @@ class TestChangelog:
     def test_wait_entry_fails(self, testapp, mapp, monkeypatch, reqchangelog):
         mapp.create_user("this", password="p")
         latest_serial = self.get_latest_serial(testapp)
-        monkeypatch.setattr(MasterChangelogRequest, "MAX_REPLICA_BLOCK_TIME", 0.01)
+        monkeypatch.setattr(PrimaryChangelogRequest, "MAX_REPLICA_BLOCK_TIME", 0.01)
         r = reqchangelog(latest_serial + 1)
         assert r.status_code == 202
         assert int(r.headers["X-DEVPI-SERIAL"]) == latest_serial
@@ -154,7 +154,7 @@ class TestMultiChangelog:
 
     @pytest.mark.usefixtures("noiter")
     def test_size_limit(self, mapp, monkeypatch, reqchangelogs, testapp):
-        monkeypatch.setattr(MasterChangelogRequest, "MAX_REPLICA_CHANGES_SIZE", 1024)
+        monkeypatch.setattr(PrimaryChangelogRequest, "MAX_REPLICA_CHANGES_SIZE", 1024)
         mapp.create_and_login_user("this", password="p")
         for i in range(10):
             mapp.create_index("this/dev%s" % i)
@@ -186,8 +186,8 @@ class TestReplicaThread:
                 headers = {}
             headers = dict((k.lower(), v) for k, v in headers.items())
             if uuid is not None:
-                headers.setdefault(H_MASTER_UUID.lower(), "123")
-                headers.setdefault(H_PRIMARY_UUID.lower(), "123")
+                headers.setdefault(H_MASTER_UUID.lower(), uuid)
+                headers.setdefault(H_PRIMARY_UUID.lower(), uuid)
             headers.setdefault("x-devpi-serial", str(2))
             if headers["x-devpi-serial"] is None:
                 del headers["x-devpi-serial"]
@@ -259,8 +259,43 @@ class TestReplicaThread:
         rt.thread.sleep = lambda *x: 0/0
         data = get_raw_changelog_entry(xom, 0)
         mockchangelog(0, code=200, data=data)
-        mockchangelog(1, code=200, data=data,
-                      headers={"x-devpi-master-uuid": "001"})
+        mockchangelog(1, code=200, data=data, uuid="001")
+        with pytest.raises(ZeroDivisionError):
+            rt.thread_run()
+        assert caplog.getrecords("primary UUID.*001.*does not match")
+
+    def test_thread_run_ok_uuid_change_master(self, rt, mockchangelog, caplog, xom, monkeypatch):
+        monkeypatch.setattr("os._exit", lambda n: 0/0)
+        rt.thread.sleep = lambda *x: 0/0
+        data = get_raw_changelog_entry(xom, 0)
+        mockchangelog(0, code=200, data=data)
+        mockchangelog(
+            1, code=200, data=data, uuid=None,
+            headers={"x-devpi-master-uuid": "001"})
+        with pytest.raises(ZeroDivisionError):
+            rt.thread_run()
+        assert caplog.getrecords("primary UUID.*001.*does not match")
+
+    def test_thread_run_ok_uuid_change_master_differs(self, rt, mockchangelog, caplog, xom, monkeypatch):
+        monkeypatch.setattr("os._exit", lambda n: 0/0)
+        rt.thread.sleep = lambda *x: 0/0
+        data = get_raw_changelog_entry(xom, 0)
+        mockchangelog(0, code=200, data=data)
+        mockchangelog(
+            1, code=200, data=data,
+            headers={"x-devpi-master-uuid": "001"})
+        with pytest.raises(ZeroDivisionError):
+            rt.thread_run()
+        assert caplog.getrecords("remote has differing values for.*UUID.*001.*")
+
+    def test_thread_run_ok_uuid_change_primary(self, rt, mockchangelog, caplog, xom, monkeypatch):
+        monkeypatch.setattr("os._exit", lambda n: 0/0)
+        rt.thread.sleep = lambda *x: 0/0
+        data = get_raw_changelog_entry(xom, 0)
+        mockchangelog(0, code=200, data=data)
+        mockchangelog(
+            1, code=200, data=data, uuid=None,
+            headers={"x-devpi-primary-uuid": "001"})
         with pytest.raises(ZeroDivisionError):
             rt.thread_run()
         assert caplog.getrecords("primary UUID.*001.*does not match")

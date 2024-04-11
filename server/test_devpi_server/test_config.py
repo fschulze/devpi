@@ -244,6 +244,15 @@ class TestConfig:
         with pytest.deprecated_call():
             config.get_master_uuid()
 
+    def test_get_primary_uuid_master_uuid(self, caplog, tmpdir):
+        config = make_config([
+            "devpi-server", "--primary-url=xyz", "--role=replica",
+            "--serverdir", str(tmpdir)])
+        config.init_nodeinfo()
+        config.nodeinfo['master-uuid'] = 'foo'
+        with pytest.deprecated_call():
+            assert config.get_primary_uuid() == 'foo'
+
     def test_master_url(self, caplog, tmpdir):
         import logging
         config = make_config([
