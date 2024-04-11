@@ -161,6 +161,14 @@ class TestConfig:
         config = make_config(["devpi-server"])
         assert config.serverdir == tmpdir
 
+    def test_role_master(self, tmpdir):
+        config = make_config([
+            "devpi-server", "--role=master",
+            "--serverdir", str(tmpdir)])
+        config.init_nodeinfo()
+        with pytest.deprecated_call():
+            assert config.role == "primary"
+
     def test_role_permanence_standalone(self, tmpdir):
         config = make_config(["devpi-server", "--serverdir", str(tmpdir)])
         config.init_nodeinfo()
@@ -176,17 +184,20 @@ class TestConfig:
         config.init_nodeinfo()
         assert config.role == "standalone"
 
-    def test_role_permanence_master(self, tmpdir):
+    def test_role_permanence_primary(self, tmpdir):
         config = make_config(["devpi-server", "--serverdir", str(tmpdir)])
         config.init_nodeinfo()
         assert config.role == "standalone"
-        config = make_config(["devpi-server", "--role=master",
-                               "--serverdir", str(tmpdir)])
+        config = make_config([
+            "devpi-server", "--role=primary",
+            "--serverdir", str(tmpdir)])
         config.init_nodeinfo()
-        assert config.role == "master"
-        with pytest.raises(Fatal):
-            make_config(["devpi-server", "--role=replica",
-                          "--serverdir", str(tmpdir)]).init_nodeinfo()
+        assert config.role == "primary"
+        config = make_config([
+            "devpi-server", "--role=replica",
+            "--serverdir", str(tmpdir)])
+        with pytest.raises(Fatal, match="cannot run as replica, was previously run as primary"):
+            config.init_nodeinfo()
         config = make_config(["devpi-server", "--serverdir", str(tmpdir)])
         config.init_nodeinfo()
         assert config.role == "standalone"
@@ -204,7 +215,12 @@ class TestConfig:
         config = make_config(["devpi-server", "--serverdir", str(tmpdir),
                                "--role=master"])
         config.init_nodeinfo()
-        assert config.role == "master"
+        with pytest.deprecated_call():
+            assert config.role == "primary"
+        config = make_config(["devpi-server", "--serverdir", str(tmpdir),
+                               "--role=primary"])
+        config.init_nodeinfo()
+        assert config.role == "primary"
         with pytest.raises(Fatal, match="set in nodeinfo, but role isn't set to replica"):
             make_config([
                 "devpi-server", "--primary-url=xyz",

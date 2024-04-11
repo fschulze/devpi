@@ -72,11 +72,12 @@ def add_configfile_option(parser, pluginmanager):
 def add_role_option(parser, pluginmanager):
     parser.addoption(
         "--role", action="store", dest="role", default="auto",
-        choices=["master", "replica", "standalone", "auto"],
+        choices=["master", "primary", "replica", "standalone", "auto"],
         help="set role of this instance. The default 'auto' sets "
-             "'standalone' by default and 'replica' if the --master-url "
+             "'standalone' by default and 'replica' if the --primary-url "
              "option is used. To enable the replication protocol you have "
-             "to explicitly set the 'master' role.")
+             "to explicitly set the 'primary' role. The 'master' role is "
+             "the deprecated variant of 'primary'.")
 
 
 def add_master_url_option(parser, pluginmanager):
@@ -712,20 +713,27 @@ class Config(object):
 
     @property
     def role(self):
-        return self.nodeinfo["role"]
+        role = self.nodeinfo["role"]
+        if role == "master":
+            warnings.warn(
+                "role==master is deprecated, use primary instead.",
+                DeprecationWarning,
+                stacklevel=2)
+            return "primary"
+        return role
 
     def set_uuid(self, uuid):
         # called when importing state
         self.nodeinfo["uuid"] = uuid
         self.write_nodeinfo()
 
-    def set_master_uuid(self, uuid):
-        assert self.role == "replica", "can only set master uuid on replica"
-        existing = self.nodeinfo.get("master-uuid")
+    def set_primary_uuid(self, uuid):
+        assert self.role == "replica", "can only set primary uuid on replica"
+        existing = self.nodeinfo.get("primary-uuid")
         if existing and existing != uuid:
-            raise ValueError("already have master id %r, got %r" % (
+            raise ValueError("already have primary id %r, got %r" % (
                              existing, uuid))
-        self.nodeinfo["master-uuid"] = uuid
+        self.nodeinfo["primary-uuid"] = uuid
         self.write_nodeinfo()
 
     def get_master_uuid(self):
@@ -738,7 +746,14 @@ class Config(object):
     def get_primary_uuid(self):
         if self.role != "replica":
             return self.nodeinfo["uuid"]
-        return self.nodeinfo.get("master-uuid")
+        if "master-uuid" in self.nodeinfo:
+            warnings.warn(
+                "master-uuid in nodeinfo is deprecated, use primary-uuid instead",
+                DeprecationWarning,
+                stacklevel=2)
+            import pdb; pdb.set_trace()
+            return self.nodeinfo["master-uuid"]
+        return self.nodeinfo.get("primary-uuid")
 
     @cached_property
     def nodeinfo(self):
@@ -906,8 +921,8 @@ class Config(object):
                 "isn't set to replica")
         if role != "replica":
             self.primary_url = None
-        if role == "master":
-            # we only allow explicit master role
+        if role in ("master", "primary"):
+            # we only allow explicit primary role
             self.nodeinfo["role"] = "standalone"
 
     def _change_role(self, old_role, new_role):

@@ -8,7 +8,7 @@ from devpi_server.log import threadlog, thread_push_log
 from devpi_server.replica import H_EXPECTED_MASTER_ID, H_MASTER_UUID
 from devpi_server.replica import H_REPLICA_UUID, H_REPLICA_OUTSIDE_URL
 from devpi_server.replica import MasterChangelogRequest
-from devpi_server.replica import proxy_view_to_master
+from devpi_server.replica import proxy_view_to_primary
 from devpi_server.views import iter_remote_file_replica
 from pyramid.httpexceptions import HTTPNotFound
 
@@ -31,11 +31,11 @@ def replica_pypistage(devpiserver_makepypistage, replica_xom):
 
 @pytest.fixture
 def testapp(testapp):
-    testapp.xom.config.nodeinfo["role"] = "master"
-    assert testapp.xom.config.role == "master"
-    master_uuid = testapp.xom.config.get_master_uuid()
-    assert master_uuid
-    testapp.set_header_default(H_EXPECTED_MASTER_ID, master_uuid)
+    testapp.xom.config.nodeinfo["role"] = "primary"
+    assert testapp.xom.config.role == "primary"
+    primary_uuid = testapp.xom.config.get_primary_uuid()
+    assert primary_uuid
+    testapp.set_header_default(H_EXPECTED_MASTER_ID, primary_uuid)
     return testapp
 
 
@@ -97,7 +97,7 @@ class TestChangelog:
             serial = mcr._wait_for_serial(xom.keyfs.get_current_serial())
         assert serial == 1
 
-    def test_master_id_mismatch(self, auth_serializer, testapp):
+    def test_primary_id_mismatch(self, auth_serializer, testapp):
         token = auth_serializer.dumps(self.replica_uuid)
         testapp.xget(400, "/+changelog/0", headers={
             H_REPLICA_UUID: self.replica_uuid,
@@ -169,7 +169,7 @@ def get_raw_changelog_entry(xom, serial):
 class TestReplicaThread:
     @pytest.fixture
     def rt(self, makexom):
-        xom = makexom(["--master=http://localhost"])
+        xom = makexom(["--primary-url=http://localhost"])
         return xom.replica_thread
 
     @pytest.fixture
@@ -256,7 +256,7 @@ class TestReplicaThread:
                       headers={"x-devpi-master-uuid": "001"})
         with pytest.raises(ZeroDivisionError):
             rt.thread_run()
-        assert caplog.getrecords("master UUID.*001.*does not match")
+        assert caplog.getrecords("primary UUID.*001.*does not match")
 
     def test_thread_run_serial_mismatch(self, rt, mockchangelog, caplog, xom, monkeypatch):
         monkeypatch.setattr("os._exit", lambda n: 0/0)
@@ -273,8 +273,8 @@ class TestReplicaThread:
                       headers={"x-devpi-serial": "0"})
         with pytest.raises(ZeroDivisionError):
             rt.thread_run()
-        assert caplog.getrecords("Got serial 0 from master which is smaller than last "
-                    "recorded serial")
+        assert caplog.getrecords(
+            "Got serial 0 from primary which is smaller than last recorded serial")
 
     def test_thread_run_invalid_serial(self, rt, mockchangelog, caplog, xom, monkeypatch):
         monkeypatch.setattr("os._exit", lambda n: 0/0)
@@ -342,7 +342,7 @@ def test_clean_response_headers(mock):
 
 class TestProxyViewToMaster:
     def test_write_proxies(self, makexom, blank_request, reqmock, monkeypatch):
-        xom = makexom(["--master", "http://localhost"])
+        xom = makexom(["--primary-url", "http://localhost"])
         reqmock.mock("http://localhost/blankpath",
                      code=200, headers={"X-DEVPI-SERIAL": "10"})
         l = []
@@ -350,14 +350,14 @@ class TestProxyViewToMaster:
                             lambda x: l.append(x))
         request = blank_request(method="PUT")
         request.registry = dict(xom=xom)
-        response = proxy_view_to_master(None, request)
+        response = proxy_view_to_primary(None, request)
         # exhaust app_iter to close the proxied response
         list(response.app_iter)
         assert response.headers.get("X-DEVPI-SERIAL") == "10"
         assert l == [10]
 
     def test_preserve_reason(self, makexom, blank_request, reqmock, monkeypatch):
-        xom = makexom(["--master", "http://localhost"])
+        xom = makexom(["--primary-url", "http://localhost"])
         reqmock.mock("http://localhost/blankpath",
                      code=200, reason="GOOD", headers={"X-DEVPI-SERIAL": "10"})
         l = []
@@ -365,13 +365,13 @@ class TestProxyViewToMaster:
                             lambda x: l.append(x))
         request = blank_request(method="PUT")
         request.registry = dict(xom=xom)
-        response = proxy_view_to_master(None, request)
+        response = proxy_view_to_primary(None, request)
         # exhaust app_iter to close the proxied response
         list(response.app_iter)
         assert response.status == "200 GOOD"
 
     def test_write_proxies_redirect(self, makexom, blank_request, reqmock, monkeypatch):
-        xom = makexom(["--master", "http://localhost",
+        xom = makexom(["--primary-url", "http://localhost",
                        "--outside-url=http://my.domain"])
         reqmock.mock("http://localhost/blankpath",
                      code=302, headers={"X-DEVPI-SERIAL": "10",
@@ -383,7 +383,7 @@ class TestProxyViewToMaster:
         # not the case here, we have to set the host explicitly
         request = blank_request(method="PUT", headers=dict(host='my.domain'))
         request.registry = dict(xom=xom)
-        response = proxy_view_to_master(None, request)
+        response = proxy_view_to_primary(None, request)
         # exhaust app_iter to close the proxied response
         list(response.app_iter)
         assert response.headers.get("X-DEVPI-SERIAL") == "10"
@@ -391,7 +391,7 @@ class TestProxyViewToMaster:
         assert l == [10]
 
     def test_hop_headers(self, makexom, blank_request, reqmock, monkeypatch):
-        xom = makexom(["--master", "http://localhost"])
+        xom = makexom(["--primary-url", "http://localhost"])
         reqmock.mock(
             "http://localhost/blankpath",
             code=200, headers={
@@ -403,7 +403,7 @@ class TestProxyViewToMaster:
                             lambda x: x)
         request = blank_request(method="PUT")
         request.registry = dict(xom=xom)
-        response = proxy_view_to_master(None, request)
+        response = proxy_view_to_primary(None, request)
         # exhaust app_iter to close the proxied response
         list(response.app_iter)
         assert 'connection' not in response.headers
@@ -444,7 +444,7 @@ def replay(xom, replica_xom, events=True):
 def make_replica_xom(makexom, secretfile):
     def make_replica_xom(options=()):
         replica_xom = makexom([
-            "--master", "http://localhost",
+            "--primary-url", "http://localhost",
             "--file-replication-threads", "1",
             "--secretfile", secretfile.strpath] + list(options))
         # shorten error delay for tests
@@ -467,7 +467,7 @@ class TestUseExistingFiles:
     def test_use_existing_files(self, additional_path, caplog, make_replica_xom, mapp, tmpdir, xom):
         # this will be the folder to find existing files in the replica
         existing_base = tmpdir.join('existing').ensure_dir()
-        # prepare data on master
+        # prepare data on primary
         mapp.create_and_use()
         content1 = mapp.makepkg("hello-1.0.zip", b"content1", "hello", "1.0")
         mapp.upload_file_pypi("hello-1.0.zip", content1, "hello", "1.0")
@@ -493,7 +493,7 @@ class TestUseExistingFiles:
     def test_use_existing_files_export_layout(self, caplog, make_replica_xom, mapp, tmpdir, xom):
         # this will be the folder to find existing files in the replica
         existing_base = tmpdir.join('existing').ensure_dir()
-        # prepare data on master
+        # prepare data on primary
         mapp.create_and_use()
         content1 = mapp.makepkg("hello-1.0.zip", b"content1", "hello", "1.0")
         mapp.upload_file_pypi("hello-1.0.zip", content1, "hello", "1.0")
@@ -519,7 +519,7 @@ class TestUseExistingFiles:
     def test_hardlink(self, caplog, make_replica_xom, mapp, tmpdir, xom):
         # this will be the folder to find existing files in the replica
         existing_base = tmpdir.join('existing').ensure_dir()
-        # prepare data on master
+        # prepare data on primary
         mapp.create_and_use()
         content1 = mapp.makepkg("hello-1.0.zip", b"content1", "hello", "1.0")
         mapp.upload_file_pypi("hello-1.0.zip", content1, "hello", "1.0")
@@ -545,7 +545,7 @@ class TestUseExistingFiles:
     def test_use_existing_files_bad_data(self, caplog, make_replica_xom, mapp, patch_reqsessionmock, tmpdir, xom):
         # this will be the folder to find existing files in the replica
         existing_base = tmpdir.join('existing').ensure_dir()
-        # prepare data on master
+        # prepare data on primary
         mapp.create_and_use()
         content1 = mapp.makepkg("hello-1.0.zip", b"content1", "hello", "1.0")
         mapp.upload_file_pypi("hello-1.0.zip", content1, "hello", "1.0")
@@ -578,7 +578,7 @@ class TestUseExistingFiles:
     def test_hardlink_bad_data(self, caplog, make_replica_xom, mapp, patch_reqsessionmock, tmpdir, xom):
         # this will be the folder to find existing files in the replica
         existing_base = tmpdir.join('existing').ensure_dir()
-        # prepare data on master
+        # prepare data on primary
         mapp.create_and_use()
         content1 = mapp.makepkg("hello-1.0.zip", b"content1", "hello", "1.0")
         mapp.upload_file_pypi("hello-1.0.zip", content1, "hello", "1.0")
@@ -659,9 +659,9 @@ class TestFileReplication:
             assert entry.last_modified is not None
 
         # first we try to return something wrong
-        master_url = replica_xom.config.master_url
-        master_file_path = master_url.joinpath(entry.relpath).url
-        reqmock.mockresponse(master_file_path, code=200, data=b'13')
+        primary_url = replica_xom.config.primary_url
+        primary_file_path = primary_url.joinpath(entry.relpath).url
+        reqmock.mockresponse(primary_file_path, code=200, data=b'13')
         replay(xom, replica_xom, events=False)
         replica_xom.replica_thread.wait(error_queue=True)
         replication_errors = replica_xom.replica_thread.shared_data.errors
@@ -675,7 +675,7 @@ class TestFileReplication:
         with xom.keyfs.write_transaction():
             # trigger a change
             entry.last_modified = 'Fri, 09 Aug 2019 13:15:02 GMT'
-        reqmock.mockresponse(master_file_path, code=200, data=content1)
+        reqmock.mockresponse(primary_file_path, code=200, data=content1)
         replay(xom, replica_xom)
         assert replication_errors.errors == {}
         with replica_xom.keyfs.read_transaction():
@@ -699,8 +699,8 @@ class TestFileReplication:
             entry = xom.filestore.maplink(link, "root", "pypi", "pytest")
             assert not entry.file_exists()
 
-        master_url = replica_xom.config.master_url
-        master_file_path = master_url.joinpath(entry.relpath).url
+        primary_url = replica_xom.config.primary_url
+        primary_file_path = primary_url.joinpath(entry.relpath).url
 
         # first we create
         with xom.keyfs.write_transaction():
@@ -712,8 +712,8 @@ class TestFileReplication:
             entry.delete()
         assert not xom.config.serverdir.join(entry._storepath).exists()
 
-        # and simulate what the master will respond
-        xom.httpget.mockresponse(master_file_path, status_code=410)
+        # and simulate what the primary will respond
+        xom.httpget.mockresponse(primary_file_path, status_code=410)
 
         # and then we try to see if we can replicate the create and del changes
         replay(xom, replica_xom)
@@ -745,11 +745,11 @@ class TestFileReplication:
         with xom.keyfs.write_transaction():
             entry.file_set_content(content1)
 
-        master_url = replica_xom.config.master_url
-        master_file_path = master_url.joinpath(entry.relpath).url
-        # simulate some 500 master server error
+        primary_url = replica_xom.config.primary_url
+        primary_file_path = primary_url.joinpath(entry.relpath).url
+        # simulate some 500 primary server error
         frt_reqmock.mockresponse(
-            master_file_path, code=500, data=b'')
+            primary_file_path, code=500, data=b'')
         with pytest.raises(MissingFileException) as e:
             # the event handling will stop with an exception
             replay(xom, replica_xom)
@@ -764,7 +764,7 @@ class TestFileReplication:
 
         # now get the real thing
         frt_reqmock.mockresponse(
-            master_file_path, code=200, data=content1)
+            primary_file_path, code=200, data=content1)
         # wait for the error queue to clear
         replica_xom.replica_thread.wait(error_queue=True)
         # there should be no errors anymore
@@ -793,12 +793,12 @@ class TestFileReplication:
         replay(xom, replica_xom)
         with replica_xom.keyfs.read_transaction():
             entry = replica_xom.filestore.get_file_entry(entry.relpath)
-            url = replica_xom.config.master_url.joinpath(entry.relpath).url
+            url = replica_xom.config.primary_url.joinpath(entry.relpath).url
             pypistage.xom.httpget.mockresponse(url, status_code=500)
             stage = replica_xom.model.getstage('root/pypi')
             with pytest.raises(BadGateway) as e:
                 list(iter_remote_file_replica(stage, entry, entry.url))
-            e.match('received 500 from master')
+            e.match('received 500 from primary')
             e.match('pypi.org/package/some/pytest-1.8.zip: received 404')
 
     @pytest.mark.usefixtures("reqmock")
@@ -822,7 +822,7 @@ class TestFileReplication:
                 "last-modified": "Thu, 25 Nov 2010 20:00:27 GMT",
                 "content-type": ("application/zip", None)}
             entry = replica_xom.filestore.get_file_entry(entry.relpath)
-            url = replica_xom.config.master_url.joinpath(entry.relpath).url
+            url = replica_xom.config.primary_url.joinpath(entry.relpath).url
             pypistage.xom.httpget.mockresponse(url, status_code=500)
             pypistage.xom.httpget.mockresponse(
                 entry.url, headers=headers, content=b'123')
@@ -854,24 +854,24 @@ class TestFileReplication:
         mapp.upload_file_pypi("hello-1.0.zip", content1, "hello", "1.0")
         r_app = maketestapp(replica_xom)
         # first we try to return something wrong
-        master_url = replica_xom.config.master_url
+        primary_url = replica_xom.config.primary_url
         (path,) = mapp.get_release_paths('hello')
         file_relpath = '+files' + path
-        master_file_url = master_url.joinpath(path).url
-        frt_reqmock.mockresponse(master_file_url, code=200, data=b'13')
+        primary_file_url = primary_url.joinpath(path).url
+        frt_reqmock.mockresponse(primary_file_url, code=200, data=b'13')
         replay(xom, replica_xom, events=False)
         replica_xom.replica_thread.wait()
         assert xom.keyfs.get_current_serial() == replica_xom.keyfs.get_current_serial()
         replication_errors = replica_xom.replica_thread.shared_data.errors
         assert list(replication_errors.errors.keys()) == [
             '%s/+f/d0b/425e00e15a0d3/hello-1.0.zip' % api.stagename]
-        # the master and replica are in sync, so getting the file on the
+        # the primary and replica are in sync, so getting the file on the
         # replica needs to fetch it again
         headers = {"content-length": "8",
                    "last-modified": "Thu, 25 Nov 2010 20:00:27 GMT",
                    "content-type": "application/zip",
                    "X-DEVPI-SERIAL": str(xom.keyfs.get_current_serial())}
-        replica_xom.httpget.mockresponse(master_file_url, code=200, content=content1, headers=headers)
+        replica_xom.httpget.mockresponse(primary_file_url, code=200, content=content1, headers=headers)
         with replica_xom.keyfs.read_transaction() as tx:
             assert not tx.conn.io_file_exists(file_relpath)
         r = r_app.get(path)
@@ -890,7 +890,7 @@ def test_get_simplelinks_perstage(monkeypatch, pypistage, replica_pypistage,
 
     orig_simple = pypiurls.simple
 
-    # prepare the data on master
+    # prepare the data on primary
     pypistage.mock_simple("pytest", pkgver="pytest-1.0.zip")
     with xom.keyfs.write_transaction():
         pypistage.get_releaselinks("pytest")
@@ -980,15 +980,15 @@ def test_replicate_deleted_user(mapp, replica_xom):
     replay(mapp.xom, replica_xom)
 
 
-def test_auth_status_master_down(maketestapp, replica_xom, mock):
+def test_auth_status_primary_down(maketestapp, replica_xom, mock):
     from devpi_server.model import UpstreamError
     testapp = maketestapp(replica_xom)
     calls = []
-    with mock.patch('devpi_server.replica.proxy_request_to_master') as prtm:
-        def proxy_request_to_master(*args, **kwargs):
+    with mock.patch('devpi_server.replica.proxy_request_to_primary') as prtm:
+        def proxy_request_to_primary(*args, **kwargs):
             calls.append((args, kwargs))
             raise UpstreamError("foo")
-        prtm.side_effect = proxy_request_to_master
+        prtm.side_effect = proxy_request_to_primary
         r = testapp.get('/+api')
     assert len(calls) == 0
     assert r.json['result']['authstatus'] == ['noauth', '', []]
@@ -1211,7 +1211,7 @@ class TestFileReplicationSharedData:
             "tx", Transaction(), raising=False)
 
         shared_data.on_import_file(None, 1, key, None, -1)
-        # it should still be queued to check master and get a 410 for sure
+        # it should still be queued to check primary and get a 410 for sure
         assert shared_data.queue.qsize() == 1
         shared_data.process_next(handler)
         ((index_type, serial, key, keyname, value, back_serial),) = result

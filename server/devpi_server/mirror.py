@@ -263,7 +263,7 @@ class MirrorStage(BaseStage):
     @property
     def mirror_url(self):
         if self.xom.is_replica():
-            url = self.xom.config.master_url.joinpath(self.name, "+simple")
+            url = self.xom.config.primary_url.joinpath(self.name, "+simple")
         else:
             url = URL(self.ixconfig['mirror_url'])
         return url.asdir()
