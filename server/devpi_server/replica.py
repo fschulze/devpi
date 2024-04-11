@@ -30,6 +30,7 @@ from .fileutil import dumps, load, loads
 from .log import thread_push_log, threadlog
 from .main import fatal
 from .views import FileStreamer
+from .views import H_MASTER_UUID
 from .views import H_PRIMARY_UUID
 from .views import make_uuid_headers
 from .model import UpstreamError
@@ -207,7 +208,7 @@ class PrimaryChangelogRequest:
         # we require the header but it is allowed to be empty
         # (during initialization)
         if expected_uuid is None:
-            msg = "replica sent no %s header" % H_EXPECTED_PRIMARY_ID
+            msg = f"replica sent no {H_EXPECTED_PRIMARY_ID} or {H_EXPECTED_MASTER_ID} header"
             threadlog.error(msg)
             raise HTTPBadRequest(msg)
 
@@ -384,18 +385,12 @@ class ReplicaThread:
             stacklevel=2)
         return self.get_primary_serial()
 
-    def get_primary_serial(self):
-        return self._primary_serial
-
     def get_master_serial_timestamp(self):
         warnings.warn(
             "get_master_serial_timestamp is deprecated, use get_primary_serial_timestamp instead",
             DeprecationWarning,
             stacklevel=2)
         return self.get_primary_serial_timestamp()
-
-    def get_primary_serial_timestamp(self):
-        return self._primary_serial_timestamp
 
     @property
     def _master_serial(self):
@@ -526,9 +521,10 @@ class ReplicaThread:
                 # we don't fatally leave the process because
                 # it might just be a temporary misconfiguration
                 # for example of a nginx frontend
-                log.error("remote provides no %r header, running "
+                log.error("remote provides no %r or %r header, running "
                           "<devpi-server-2.1?"
-                          " headers were: %s", H_PRIMARY_UUID, r.headers)
+                          " headers were: %s",
+                          H_PRIMARY_UUID, H_MASTER_UUID, r.headers)
                 self.thread.sleep(self.ERROR_SLEEP)
                 return True
             if primary_uuid and remote_primary_uuid != primary_uuid:

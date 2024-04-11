@@ -670,7 +670,7 @@ class XOM:
         return self.is_primary
 
     def is_primary(self):
-        return self.config.role in ("master", "primary")
+        return self.config.role == "primary"
 
     def is_replica(self):
         return self.config.role == "replica"
