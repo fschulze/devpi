@@ -796,6 +796,7 @@ class Config(object):
     def primary_url(self):
         if hasattr(self, '_primary_url'):
             return self._primary_url
+        primary_url = None
         if getattr(self.args, 'deprecated_master_url', None):
             if getattr(self.args, 'primary_url', None):
                 from .main import fatal
@@ -808,8 +809,8 @@ class Config(object):
             threadlog.warning(
                 "The --master-url option is deprecated, "
                 "use --primary-url instead.")
-        primary_url = None
-        if getattr(self.args, 'primary_url', None):
+            primary_url = URL(self.args.deprecated_master_url)
+        elif getattr(self.args, 'primary_url', None):
             primary_url = URL(self.args.primary_url)
         elif self.nodeinfo.get("masterurl"):
             primary_url = URL(self.nodeinfo["masterurl"])

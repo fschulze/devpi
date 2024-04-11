@@ -230,7 +230,7 @@ class TestConfig:
                 "devpi-server", "--role=replica",
                 "--serverdir", str(tmpdir)]).init_nodeinfo()
 
-    def test_replica_role_missing_master_url(self, tmpdir):
+    def test_replica_role_missing_primary_url(self, tmpdir):
         config = make_config(["devpi-server", "--role=replica",
                              "--serverdir", str(tmpdir)])
         with pytest.raises(Fatal, match="need to specify --primary-url"):
@@ -251,18 +251,18 @@ class TestConfig:
             "--serverdir", str(tmpdir)])
         with pytest.deprecated_call():
             # triggered by the use of --master-url
-            config.primary_url
+            assert config.primary_url.url == "xyz"
         (record,) = caplog.getrecords('--master-url')
         assert "--master-url option is deprecated" in record.message
         assert record.levelno == logging.WARNING
         caplog.clear()
         config = make_config([
-            "devpi-server", "--primary-url=xyz", "--role=replica",
+            "devpi-server", "--primary-url=http://foo:pass@localhost", "--role=replica",
             "--serverdir", str(tmpdir)])
         with pytest.deprecated_call():
-            config.master_auth
+            assert config.master_auth == ('foo', 'pass')
         with pytest.deprecated_call():
-            config.master_url
+            assert config.master_url.url == "http://localhost"
         assert caplog.getrecords('--master-url') == []
 
     def test_uuid(self, tmpdir):
