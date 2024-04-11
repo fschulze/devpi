@@ -272,7 +272,7 @@ def makexom(request, gentmp, httpget, monkeypatch, storage_info, storage_plugin)
         else:
             fullopts = ["devpi-server", "--serverdir", serverdir] + list(opts)
         if request.node.get_closest_marker("with_replica_thread"):
-            fullopts.append("--master=http://localhost")
+            fullopts.append("--primary-url=http://localhost")
         if not request.node.get_closest_marker("no_storage_option"):
             if storage_info["name"] != "sqlite":
                 fullopts.append("--storage=%s" % storage_info["name"])
@@ -298,7 +298,7 @@ def makexom(request, gentmp, httpget, monkeypatch, storage_info, storage_plugin)
             verify_connection_interface(conn)
         # initialize default indexes
         from devpi_server.main import init_default_indexes
-        if not xom.config.args.master_url:
+        if not xom.config.primary_url:
             init_default_indexes(xom)
         if xom.is_replica() and request.node.get_closest_marker("with_replica_thread"):
             xom.thread_pool.start_one(xom.replica_thread)
@@ -319,7 +319,7 @@ def makexom(request, gentmp, httpget, monkeypatch, storage_info, storage_plugin)
 def replica_xom(request, makexom, secretfile):
     from devpi_server.replica import register_key_subscribers
     master_url = "http://localhost:3111"
-    xom = makexom(["--master", master_url, "--secretfile", secretfile.strpath])
+    xom = makexom(["--primary-url", master_url, "--secretfile", secretfile.strpath])
     register_key_subscribers(xom)
     return xom
 
@@ -1194,7 +1194,7 @@ def replica_host_port(request, call_devpi_in_dir, master_host_port, replica_serv
         subprocess.check_call([
             "devpi-init",
             "--role", "replica",
-            "--master-url", "http://%s:%s" % master_host_port] + storage_args)
+            "--primary-url", "http://%s:%s" % master_host_port] + storage_args)
     p = subprocess.Popen(args + storage_args)
     try:
         wait_for_port(host, port)
