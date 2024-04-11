@@ -17,6 +17,8 @@ from . import hookspecs
 import json
 import devpi_server
 from devpi_common.url import URL
+import warnings
+
 
 log = threadlog
 
@@ -78,9 +80,22 @@ def add_role_option(parser, pluginmanager):
 
 
 def add_master_url_option(parser, pluginmanager):
+    warnings.warn(
+        "The add_master_url_option function is deprecated, "
+        "use add_primary_url_option instead",
+        DeprecationWarning,
+        stacklevel=2)
+    add_primary_url_option(parser, pluginmanager)
+
+
+def add_primary_url_option(parser, pluginmanager):
     parser.addoption(
-        "--master-url", action="store", dest="master_url",
-        help="run as a replica of the specified master server",
+        "--primary-url", action="store", dest="primary_url",
+        help="run as a replica of the specified primary server",
+        default=None)
+    parser.addoption(
+        "--master-url", action="store", dest="deprecated_master_url",
+        help="DEPRECATED, use --primary-url instead",
         default=None)
 
 
@@ -186,7 +201,7 @@ def add_mirror_options(parser, pluginmanager):
 
 
 def add_replica_options(parser, pluginmanager):
-    add_master_url_option(parser, pluginmanager)
+    add_primary_url_option(parser, pluginmanager)
 
     parser.addoption(
         "--replica-max-retries", type=int, metavar="NUM",
@@ -597,7 +612,15 @@ class MyArgumentParser(argparse.ArgumentParser):
         add_init_options(self, self.pluginmanager)
 
     def add_master_url_option(self):
-        add_master_url_option(self, self.pluginmanager)
+        warnings.warn(
+            "The add_master_url_option method is deprecated, "
+            "use add_primary_url_option instead",
+            DeprecationWarning,
+            stacklevel=2)
+        add_primary_url_option(self, self.pluginmanager)
+
+    def add_primary_url_option(self):
+        add_primary_url_option(self, self.pluginmanager)
 
     def add_role_option(self):
         add_role_option(self, self.pluginmanager)
@@ -706,6 +729,13 @@ class Config(object):
         self.write_nodeinfo()
 
     def get_master_uuid(self):
+        warnings.warn(
+            "get_master_uuid is deprecated, use get_primary_uuid instead",
+            DeprecationWarning,
+            stacklevel=2)
+        return self.get_primary_uuid()
+
+    def get_primary_uuid(self):
         if self.role != "replica":
             return self.nodeinfo["uuid"]
         return self.nodeinfo.get("master-uuid")
@@ -726,19 +756,53 @@ class Config(object):
         threadlog.info("wrote nodeinfo to: %s", self.path_nodeinfo)
 
     @property
-    def master_url(self):
-        if hasattr(self, '_master_url'):
-            return self._master_url
-        master_url = None
-        if getattr(self.args, 'master_url', None):
-            master_url = URL(self.args.master_url)
-        elif self.nodeinfo.get("masterurl"):
-            master_url = URL(self.nodeinfo["masterurl"])
-        self.master_url = master_url
-        return self.master_url
+    def master_auth(self):
+        warnings.warn(
+            "master_auth is deprecated, use primary_auth instead",
+            DeprecationWarning,
+            stacklevel=2)
+        return self.primary_auth
 
-    @master_url.setter
-    def master_url(self, value):
+    @property
+    def master_url(self):
+        warnings.warn(
+            "master_url is deprecated, use primary_url instead",
+            DeprecationWarning,
+            stacklevel=2)
+        return self.primary_url
+
+    @property
+    def primary_auth(self):
+        # trigger setting of _primary_auth
+        self.primary_url
+        return self._primary_auth
+
+    @property
+    def primary_url(self):
+        if hasattr(self, '_primary_url'):
+            return self._primary_url
+        if getattr(self.args, 'deprecated_master_url', None):
+            if getattr(self.args, 'primary_url', None):
+                from .main import fatal
+                fatal("Can't use both --master-url and --primary-url")
+            warnings.warn(
+                "The --master-url option is deprecated, "
+                "use --primary-url instead.",
+                DeprecationWarning,
+                stacklevel=2)
+            threadlog.warning(
+                "The --master-url option is deprecated, "
+                "use --primary-url instead.")
+        primary_url = None
+        if getattr(self.args, 'primary_url', None):
+            primary_url = URL(self.args.primary_url)
+        elif self.nodeinfo.get("masterurl"):
+            primary_url = URL(self.nodeinfo["masterurl"])
+        self.primary_url = primary_url
+        return self.primary_url
+
+    @primary_url.setter
+    def primary_url(self, value):
         auth = (None, None)
         if value is not None:
             auth = (value.username, value.password)
@@ -748,8 +812,8 @@ class Config(object):
             value = value.replace(netloc=netloc)
         if auth == (None, None):
             auth = None
-        self.master_auth = auth
-        self._master_url = value
+        self._primary_auth = auth
+        self._primary_url = value
 
     @property
     def include_mirrored_files(self):
@@ -825,23 +889,23 @@ class Config(object):
         return getattr(self.args, 'wait_for_events', False)
 
     def _init_role(self):
-        if self.master_url:
+        if self.primary_url:
             self.nodeinfo["role"] = "replica"
         else:
             self.nodeinfo["role"] = "standalone"
 
     def _automatic_role(self, role):
         from .main import Fatal
-        if role == "replica" and not self.master_url:
+        if role == "replica" and not self.primary_url:
             raise Fatal(
-                "configuration error, masterurl isn't set in nodeinfo, but "
+                "configuration error, primary URL isn't set in nodeinfo, but "
                 "role is set to replica")
-        if role != "replica" and self.master_url:
+        if role != "replica" and self.primary_url:
             raise Fatal(
-                "configuration error, masterurl set in nodeinfo, but role "
+                "configuration error, primary URL set in nodeinfo, but role "
                 "isn't set to replica")
         if role != "replica":
-            self.master_url = None
+            self.primary_url = None
         if role == "master":
             # we only allow explicit master role
             self.nodeinfo["role"] = "standalone"
@@ -852,10 +916,10 @@ class Config(object):
             if old_role and old_role != "replica":
                 msg = f"cannot run as replica, was previously run as {old_role}"
                 raise Fatal(msg)
-            if not self.master_url:
-                raise Fatal("need to specify --master-url to run as replica")
+            if not self.primary_url:
+                raise Fatal("need to specify --primary-url to run as replica")
         else:
-            self.master_url = None
+            self.primary_url = None
         self.nodeinfo["role"] = new_role
 
     def _determine_role(self):
@@ -869,9 +933,9 @@ class Config(object):
             self._change_role(old_role, role)
         assert self.nodeinfo["role"]
         if self.nodeinfo["role"] == "replica":
-            assert self.master_url
-        if self.master_url:
-            self.nodeinfo["masterurl"] = self.master_url.url
+            assert self.primary_url
+        if self.primary_url:
+            self.nodeinfo["masterurl"] = self.primary_url.url
         else:
             self.nodeinfo.pop("masterurl", None)
 

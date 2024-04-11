@@ -273,7 +273,7 @@ def makexom(request, gentmp, httpget, monkeypatch, storage_info, storage_plugin)
         else:
             fullopts = ["devpi-server", "--serverdir", serverdir] + list(opts)
         if request.node.get_closest_marker("with_replica_thread"):
-            fullopts.append("--master=http://localhost")
+            fullopts.append("--primary-url=http://localhost")
         if not request.node.get_closest_marker("no_storage_option"):
             if storage_info["name"] != "sqlite":
                 fullopts.append("--storage=%s" % storage_info["name"])
@@ -299,7 +299,7 @@ def makexom(request, gentmp, httpget, monkeypatch, storage_info, storage_plugin)
             verify_connection_interface(conn)
         # initialize default indexes
         from devpi_server.main import init_default_indexes
-        if not xom.config.args.master_url:
+        if not xom.config.primary_url:
             init_default_indexes(xom)
         if xom.is_replica() and request.node.get_closest_marker("with_replica_thread"):
             xom.thread_pool.start_one(xom.replica_thread)

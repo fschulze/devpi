@@ -6,6 +6,7 @@ import secrets
 import threading
 import time
 import traceback
+import warnings
 from functools import partial
 from pluggy import HookimplMarker
 from pyramid.httpexceptions import HTTPNotFound, HTTPAccepted, HTTPBadRequest
@@ -353,8 +354,8 @@ class ReplicaThread:
             xom.thread_pool.register(frt)
         self.initial_queue_thread = InitialQueueThread(xom, self.shared_data)
         xom.thread_pool.register(self.initial_queue_thread)
-        self.master_auth = xom.config.master_auth
-        self.master_url = xom.config.master_url
+        self.primary_auth = xom.config.primary_auth
+        self.primary_url = xom.config.primary_url
         self.use_streaming = xom.config.replica_streaming
         self._master_serial = None
         self._master_serial_timestamp = None
@@ -377,6 +378,20 @@ class ReplicaThread:
 
     def get_master_serial_timestamp(self):
         return self._master_serial_timestamp
+
+    def master_auth(self):
+        warnings.warn(
+            "master_auth is deprecated, use primary_auth instead",
+            DeprecationWarning,
+            stacklevel=2)
+        return self.primary_auth
+
+    def master_url(self):
+        warnings.warn(
+            "master_url is deprecated, use primary_url instead",
+            DeprecationWarning,
+            stacklevel=2)
+        return self.primary_url
 
     def update_master_serial(self, serial, update_sync=True):
         now = time.time()
