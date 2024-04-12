@@ -23,7 +23,9 @@ from devpi_common.request import new_requests_session
 from .config import MyArgumentParser
 from .config import parseoptions, get_pluginmanager
 from .exceptions import lazy_format_exception_only
-from .log import configure_logging, threadlog
+from .log import configure_cli_logging
+from .log import configure_logging
+from .log import threadlog
 from .log import thread_push_log
 from .model import BaseStage
 from .model import RootModel
@@ -59,6 +61,9 @@ class CommandRunner:
             self.return_code = 1
             return True
         return False
+
+    def configure_logging(self, args):
+        configure_cli_logging(args)
 
     def create_parser(self, *, add_help, description):
         return MyArgumentParser(
