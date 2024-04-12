@@ -910,7 +910,8 @@ jobs:
         shell: "bash"
         run: |
           set -xe -o nounset
-          ruff check --output-format=github .
+          ruff check --output-format=github --extend-exclude server .
+          ruff check --output-format=github --target-version py39 server
 
   plugins-tests:
     if: ${{ true && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'actions')) }}
