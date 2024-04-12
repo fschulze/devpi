@@ -10,38 +10,36 @@ import sys
 threadlocal = threading.local()
 
 
-def configure_logging(config_args):
-    # clear handlers so that a second call to configure_logging
-    # reconfigures properly
-    logging.getLogger('').handlers = []
-
-    if config_args.debug:
-        loglevel = logging.DEBUG
-    else:
-        loglevel = logging.INFO
+def _configure_logging(config_args):
     logging.basicConfig(
-        level=loglevel,
+        level=(
+            logging.DEBUG
+            if getattr(config_args, "debug", False) else
+            logging.INFO),
         format='%(asctime)s %(levelname)-5.5s %(message)s',
         stream=sys.stdout)
     requests_log = logging.getLogger("requests.packages.urllib3")
     requests_log.setLevel(logging.ERROR)
 
-    if config_args.logger_cfg:
-        with open(config_args.logger_cfg, 'rt') as f:
-            if config_args.logger_cfg.endswith(".json"):
+    logger_cfg_fn = getattr(config_args, "logger_cfg", None)
+    if logger_cfg_fn:
+        with open(logger_cfg_fn, 'rt') as f:
+            if logger_cfg_fn.endswith(".json"):
                 logger_cfg = json.loads(f.read())
             else:
                 logger_cfg = yaml.YAML(typ='safe', pure=True).load(f.read())
         logging.config.dictConfig(logger_cfg)
 
 
+def configure_logging(config_args):
+    # clear handlers so that a second call to configure_logging
+    # reconfigures properly
+    logging.getLogger('').handlers.clear()
+    _configure_logging(config_args)
+
+
 def configure_cli_logging(config_args):
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(levelname)-5.5s %(message)s',
-        stream=sys.stderr)
-    requests_log = logging.getLogger("requests.packages.urllib3")
-    requests_log.setLevel(logging.ERROR)
+    _configure_logging(config_args)
 
 
 class TagLogger:
