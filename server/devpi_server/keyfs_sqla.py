@@ -321,7 +321,7 @@ class Connection:
                 sa.func.max(relpath_ulid_table.c.serial).label('serial'))
             .where(
                 relpath_ulid_table.c.relpath.in_(
-                    {x[0].relpath for x in records}))
+                    {x.key.relpath for x in records}))
             .group_by(
                 relpath_ulid_table.c.relpath))
         latest_serial_sq = latest_serial_stmt.subquery('latest_serial_sq')
@@ -336,30 +336,30 @@ class Connection:
                     relpath_ulid_table.c.serial == latest_serial_sq.c.serial)))
         relpath_ulid_map = dict(execute(stmt).all())
         append = kvchangelog.append
-        for typedkey, value, back_serial, _old_value in records:
-            tkeytype = typedkey.type
-            if typedkey.relpath not in relpath_ulid_map:
+        for record in records:
+            tkeytype = record.key.type
+            if record.key.relpath not in relpath_ulid_map:
                 raise RuntimeError
-            ulid = relpath_ulid_map[typedkey.relpath]
-            if value is None:
-                append((ulid, serial, back_serial, b'', None))
+            ulid = relpath_ulid_map[record.key.relpath]
+            if record.value is None:
+                append((ulid, serial, record.back_serial, b'', None))
             elif tkeytype in (dict, set):
-                old_value = tkeytype() if _old_value is absent else _old_value
-                all_keys = set(old_value).union(value)
+                old_value = tkeytype() if record.old_value is absent else record.old_value
+                all_keys = set(old_value).union(record.value)
                 for k in all_keys:
-                    if k not in value:
-                        append((ulid, serial, back_serial, dumps(k), None))
+                    if k not in record.value:
+                        append((ulid, serial, record.back_serial, dumps(k), None))
                     elif tkeytype == dict:
-                        v = value[k]
+                        v = record.value[k]
                         if k not in old_value or old_value[k] != v:
-                            append((ulid, serial, back_serial, dumps(k), dumps(v)))
+                            append((ulid, serial, record.back_serial, dumps(k), dumps(v)))
                     elif tkeytype == set and k not in old_value:
-                        append((ulid, serial, back_serial, dumps(k), b''))
+                        append((ulid, serial, record.back_serial, dumps(k), b''))
                 if not all_keys:
                     # new empty value
-                    append((ulid, serial, back_serial, b'', b''))
+                    append((ulid, serial, record.back_serial, b'', b''))
             else:
-                append((ulid, serial, back_serial, b'', dumps(value)))
+                append((ulid, serial, record.back_serial, b'', dumps(record.value)))
         if kvchangelog:
             execute(
                 sa.insert(kvchangelog_table)
@@ -376,7 +376,7 @@ class LazyRecordsFormatter:
     def __init__(self, records, files_commit, files_del):
         self.files_commit = files_commit
         self.files_del = files_del
-        self.keys = {x[0].relpath for x in records}
+        self.keys = {x.key.relpath for x in records}
 
     def __str__(self):
         msg = []
@@ -427,26 +427,26 @@ class Writer:
         new_ulids = []
         new_typedkeys = []
         updated_typedkeys = []
-        for typedkey, value, back_serial, _ in records:
-            if back_serial is None:
+        for record in records:
+            if record.back_serial is None:
                 raise RuntimeError
-            assert not isinstance(value, ReadonlyView), value
-            if back_serial == -1:
+            assert not isinstance(record.value, ReadonlyView), record.value
+            if record.back_serial == -1:
                 ulid = make_ulid()
                 new_ulids.append(dict(
                     ulid=ulid,
                     serial=commit_serial))
                 new_typedkeys.append(dict(
-                    relpath=typedkey.relpath,
+                    relpath=record.key.relpath,
                     ulid=ulid,
-                    keytype=typedkey.name,
+                    keytype=record.key.name,
                     serial=commit_serial))
             else:
                 updated_typedkeys.append(dict(
-                    b_relpath=typedkey.relpath,
-                    b_keytype=typedkey.name,
+                    b_relpath=record.key.relpath,
+                    b_keytype=record.key.name,
                     b_serial=commit_serial,
-                    b_back_serial=back_serial))
+                    b_back_serial=record.back_serial))
         self.conn._db_write_typedkeys(new_ulids, new_typedkeys, updated_typedkeys)
         del new_ulids, new_typedkeys, updated_typedkeys
         rel_renames = self.io_file.get_rel_renames() if self.io_file else []
@@ -469,6 +469,9 @@ class Writer:
         if self.io_file:
             self.io_file.drop_dirty_files()
         self.conn.rollback()
+
+    def set_rel_renames(self, rel_renames):
+        pass
 
 
 class Storage:
