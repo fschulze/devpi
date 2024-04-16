@@ -4,6 +4,7 @@ import pytest
 from devpi_server.log import thread_pop_log
 from devpi_server.filestore import get_default_hash_type
 from devpi_server.filestore import get_default_hash_value
+from devpi_server.filestore import get_hashes
 from devpi_server.fileutil import loads
 from devpi_server.keyfs import MissingFileException
 from devpi_server.keyfs_types import FilePathInfo
@@ -707,7 +708,7 @@ class TestFileReplication:
             assert r_entry.meta
 
         with xom.keyfs.write_transaction():
-            entry.file_set_content(content1)
+            entry.file_set_content(content1, hashes=get_hashes(content1))
             assert entry.file_exists()
             assert entry.last_modified is not None
 
@@ -756,7 +757,7 @@ class TestFileReplication:
 
         # first we create
         with xom.keyfs.write_transaction():
-            entry.file_set_content(content1)
+            entry.file_set_content(content1, hashes=get_hashes(content1))
 
         # then we delete
         with xom.keyfs.write_transaction():
@@ -796,7 +797,7 @@ class TestFileReplication:
             assert not r_entry.hash_spec
 
         with xom.keyfs.write_transaction():
-            entry.file_set_content(content1)
+            entry.file_set_content(content1, hashes=get_hashes(content1))
 
         primary_url = replica_xom.config.primary_url
         primary_file_path = primary_url.joinpath(entry.relpath).url

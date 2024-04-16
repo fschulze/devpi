@@ -595,21 +595,13 @@ class Importer:
                     yanked.append(is_yanked)
                 stage._save_cache_links(
                     project, links, requires_python, yanked, serial, None)
-            errors = entry.file_get_hash_errors(hashes)
-            if errors:
-                # get one error
-                error_hash_type = next(iter(errors))
-                error_info = errors[error_hash_type]
-                digest = error_info['got']
-                expected = error_info['expected']
-                msg = f"File {p} has bad checksum {digest}, expected {expected}."
-                raise Fatal(msg)
         elif filedesc["type"] == "doczip":
             version = filedesc["version"]
             # docs didn't always have entrymapping in export dump
             last_modified = mapping.get("last_modified")
             link = stage.store_doczip(
                 project, version, f, hashes=hashes, last_modified=last_modified)
+            entry = link.entry
         elif filedesc["type"] == "toxresult":
             linkstore = stage.get_linkstore_perstage(
                 filedesc["projectname"], filedesc["version"])
@@ -622,8 +614,12 @@ class Importer:
             link = stage.store_toxresult(
                 link, f, filename=posixpath.basename(filedesc["relpath"]),
                 hashes=hashes, last_modified=last_modified)
+            entry = link.entry
         else:
             msg = f"unknown file type: {type}"
+            raise Fatal(msg)
+        if (msg := entry.validate(f)) is not None:
+            msg = f"{p}: {msg}"
             raise Fatal(msg)
         if link is not None:
             history_log = filedesc.get('log')
