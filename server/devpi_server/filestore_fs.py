@@ -16,7 +16,7 @@ import sys
 import threading
 
 
-class IStorageFile(Interface):
+class ITempStorageFile(Interface):
     """ Marker interface. """
 
 
@@ -127,7 +127,7 @@ class FSIOFile:
         path = str(self.basedir / path.relpath)
         assert not path.endswith("-tmp")
         f = get_write_file_ensure_dir(DirtyFile(path).tmppath)
-        alsoProvides(f, IStorageFile)
+        alsoProvides(f, ITempStorageFile)
         return f
 
     def open_read(self, path):
@@ -148,7 +148,7 @@ class FSIOFile:
         assert isinstance(path, FilePathInfo)
         path = str(self.basedir / path.relpath)
         assert not path.endswith("-tmp")
-        if IStorageFile.providedBy(content_or_file):
+        if ITempStorageFile.providedBy(content_or_file):
             self._dirty_files[path] = DirtyFile(path)
         else:
             self._dirty_files[path] = DirtyFile.from_content(path, content_or_file)
