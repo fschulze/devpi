@@ -391,7 +391,11 @@ class BaseStorage(object):
             self.sqlpath.strpath, timeout=60, isolation_level=None)
 
     def _execute_conn_pragmas(self, sqlconn):
-        pass
+        c = sqlconn.cursor()
+        c.execute("PRAGMA journal_mode = WAL")
+        c.execute("PRAGMA synchronous = NORMAL")
+        c.execute("PRAGMA cache_size = 200000")
+        c.close()
 
     def _get_sqlconn(self, uri):
         # we will try different connection methods and overwrite _get_sqlconn

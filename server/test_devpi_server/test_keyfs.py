@@ -911,7 +911,7 @@ def test_crash_recovery(file_digest, keyfs, storage_info):
         keyfs.finalize_init()
 
 
-def test_keyfs_sqlite(gen_path, file_digest):
+def test_keyfs_sqlite(gen_path, file_digest, sorted_serverdir):
     from devpi_server import keyfs_sqlite
     from devpi_server.filestore_db import DBIOFile
     tmp = gen_path()
@@ -926,10 +926,10 @@ def test_keyfs_sqlite(gen_path, file_digest):
     with keyfs.read_transaction() as tx:
         assert tx.io_file.os_path(file_path_info) is None
         assert tx.io_file.get_content(file_path_info) == content
-    assert [x.name for x in tmp.iterdir()] == ['.sqlite_db']
+    assert sorted_serverdir(tmp) == ['.sqlite_db']
 
 
-def test_keyfs_sqlite_fs(gen_path, file_digest):
+def test_keyfs_sqlite_fs(gen_path, file_digest, sorted_serverdir):
     from devpi_server import keyfs_sqlite_fs
     from devpi_server.filestore_fs import FSIOFile
     tmp = gen_path()
@@ -946,7 +946,7 @@ def test_keyfs_sqlite_fs(gen_path, file_digest):
         assert tx.io_file.get_content(file_path_info) == content
         with open(tx.io_file.os_path(file_path_info), 'rb') as f:
             assert f.read() == content
-    assert sorted(x.name for x in tmp.iterdir()) == ['.sqlite', 'foo']
+    assert sorted_serverdir(tmp) == ['.sqlite', 'foo']
 
 
 @notransaction
