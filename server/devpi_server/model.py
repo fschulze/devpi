@@ -8,7 +8,7 @@ from devpi_common.metadata import get_latest_version
 from devpi_common.metadata import splitbasename, parse_version
 from devpi_common.url import URL
 from devpi_common.validation import validate_metadata, normalize_name
-from devpi_common.types import ensure_unicode, cached_property, parse_hash_spec
+from devpi_common.types import ensure_unicode, cached_property
 from functools import total_ordering
 from itertools import zip_longest
 from pyramid.authorization import Allow, Authenticated, Everyone
@@ -17,7 +17,6 @@ from .auth import hash_password, verify_and_update_password_hash
 from .config import hookimpl
 from .filestore import Digests
 from .filestore import FileEntry
-from .filestore import get_hash_spec
 from .log import threadlog
 from .readonly import get_mutable_deepcopy
 from operator import iconcat
@@ -1624,12 +1623,10 @@ class ELink:
             stacklevel=2)
         return self.hashes.best_available_type
 
-    def matches_checksum(self, content_or_file):
-        hash_algo, hash_value = parse_hash_spec(self.best_available_hash_spec)
-        if not hash_algo:
+    def matches_hashes(self, hashes):
+        if not (hash_type := self.best_available_hash_type):
             return True
-        return get_hash_spec(
-            content_or_file, hash_algo().name) == self.best_available_hash_spec
+        return hashes[hash_type] == self.best_available_hash_value
 
     def __repr__(self):
         return "<ELink rel=%r entrypath=%r>" % (self.rel, self.entrypath)
