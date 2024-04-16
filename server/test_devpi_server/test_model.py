@@ -381,11 +381,11 @@ class TestStage:
         content = b"123"
         link = register_and_store(stage, "some-1.0.zip", content)
         entry = link.entry
-        assert entry.hash_spec
+        assert entry.hashes
         assert entry.last_modified is not None
         entries = stage.get_releaselinks("some")
         assert len(entries) == 1
-        assert entries[0].hash_spec == entry.hash_spec
+        assert entries[0].hashes == entry.hashes
         assert stage.list_projects_perstage() == set(["some"])
         verdata = stage.get_versiondata("some", "1.0")
         links = verdata["+elinks"]
@@ -1397,15 +1397,15 @@ class TestLinkStore:
 
         tox_content1 = b'tox123'
         hash_spec1 = get_default_hash_spec(tox_content1)
-        linkstore.new_reflink(rel="toxresult", content_or_file=tox_content1, for_entrypath=link1, hashes=get_hashes(tox_content1))
+        linkstore.new_reflink(rel="toxresult", content_or_file=tox_content1, for_link=link1, hashes=get_hashes(tox_content1))
         tox_content2 = b'tox456'
         hash_spec2 = get_default_hash_spec(tox_content2)
-        linkstore.new_reflink(rel="toxresult", content_or_file=tox_content2, for_entrypath=link2, hashes=get_hashes(tox_content2))
+        linkstore.new_reflink(rel="toxresult", content_or_file=tox_content2, for_link=link2, hashes=get_hashes(tox_content2))
         rlink, = linkstore.get_links(rel="toxresult", for_entrypath=link1)
-        assert rlink.hash_spec == hash_spec1
+        assert rlink.best_available_hash_spec == hash_spec1
         assert rlink.for_entrypath == link1.entrypath
         rlink, = linkstore.get_links(rel="toxresult", for_entrypath=link2)
-        assert rlink.hash_spec == hash_spec2
+        assert rlink.best_available_hash_spec == hash_spec2
         assert rlink.for_entrypath == link2.entrypath
 
         link1_entry = link1.entry  # queried below

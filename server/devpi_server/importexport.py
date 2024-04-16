@@ -145,7 +145,7 @@ def import_(pluginmanager=None, argv=None):
 
 
 class Exporter:
-    DUMPVERSION = "2"
+    DUMPVERSION = "3"
 
     def __init__(self, tw, xom):
         self.tw = tw
@@ -287,11 +287,11 @@ class IndexDump:
     def dump_toxresults(self, linkstore):
         for tox_link in linkstore.get_links(rel="toxresult"):
             reflink = linkstore.stage.get_link_from_entrypath(tox_link.for_entrypath)
-            relpath = self.exporter.copy_file(
-                tox_link.entry,
-                self.basedir.join(linkstore.project, reflink.hash_spec,
-                                  tox_link.basename)
-            )
+            path = self.basedir.join(
+                self.exporter.basepath,
+                reflink.best_available_hash_spec,
+                tox_link.basename)
+            relpath = self.exporter.copy_file(tox_link.entry, path)
             self.add_filedesc(type="toxresult",
                               project=linkstore.project,
                               relpath=relpath,
@@ -395,7 +395,7 @@ class Importer:
         json_path = path.join("dataindex.json")
         self.import_data = self.read_json(json_path)
         self.dumpversion = self.import_data["dumpversion"]
-        if self.dumpversion not in ("1", "2"):
+        if self.dumpversion not in ("1", "2", "3"):
             msg = f"incompatible dumpversion: {self.dumpversion!r}"
             raise Fatal(msg)
         self.import_users = self.import_data["users"]
@@ -576,7 +576,7 @@ class Importer:
                     hashes=hashes,
                     last_modified=mapping["last_modified"])
                 entry = link.entry
-            else:
+            else:  # mirrors
                 link = None
                 url = URL(mapping['url']).replace(fragment=hashes.best_available_spec)
                 entry = self.xom.filestore.maplink(
@@ -618,7 +618,7 @@ class Importer:
         else:
             msg = f"unknown file type: {type}"
             raise Fatal(msg)
-        errors = entry.file_get_hash_errors(hashes)
+        errors = entry.file_get_hash_errors()
         if errors:
             # get one error
             error_hash_type = next(iter(errors))
@@ -626,6 +626,8 @@ class Importer:
             digest = error_info['got']
             expected = error_info['expected']
             msg = f"File {p} has bad checksum {digest}, expected {expected}."
+            raise Fatal(msg)
+        if (msg := entry.validate(f)) is not None:
             raise Fatal(msg)
         if link is not None:
             history_log = filedesc.get('log')

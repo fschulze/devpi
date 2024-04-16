@@ -795,7 +795,7 @@ class BaseStage(object):
         return ELink(
             self.filestore, dict(
                 entrypath=link_meta.path,
-                hash_spec=link_meta.hash_spec,
+                hashes=link_meta.hashes,
                 require_python=link_meta.require_python,
                 yanked=link_meta.yanked),
             project, link_meta.version)
@@ -838,7 +838,7 @@ class BaseStage(object):
         return linkstore.new_reflink(
             rel="toxresult",
             content_or_file=content_or_file,
-            for_entrypath=link,
+            for_link=link,
             filename=filename,
             hashes=hashes,
             last_modified=last_modified)
@@ -1557,13 +1557,14 @@ class ELink(object):
     _log = linkdictprop("_log")
     entrypath = linkdictprop("entrypath")
     for_entrypath = linkdictprop("for_entrypath", default=None)
-    _hash_spec = linkdictprop("hash_spec", default="")
+    _hashes = linkdictprop("hashes", default=None)
     rel = linkdictprop("rel", default=None)
     relpath = linkdictprop("entrypath")
     require_python = linkdictprop("require_python")
     yanked = linkdictprop("yanked")
 
     def __init__(self, filestore, linkdict, project, version):
+        assert "hash_spec" not in linkdict
         self._entry = notset
         self.filestore = filestore
         self.linkdict = linkdict
@@ -1593,34 +1594,7 @@ class ELink(object):
 
     @property
     def hashes(self):
-        return Digests.from_spec(self._hash_spec)
-
-    @property
-    def hash_spec(self):
-        warnings.warn(
-            "The hash_spec property is deprecated, "
-            "use best_available_hash_spec instead",
-            DeprecationWarning,
-            stacklevel=2)
-        return self._hash_spec
-
-    @property
-    def hash_value(self):
-        warnings.warn(
-            "The hash_value property is deprecated, "
-            "use best_available_hash_value instead",
-            DeprecationWarning,
-            stacklevel=2)
-        return self._hash_spec.split("=")[1]
-
-    @property
-    def hash_type(self):
-        warnings.warn(
-            "The hash_type property is deprecated, "
-            "use best_available_hash_type instead",
-            DeprecationWarning,
-            stacklevel=2)
-        return self._hash_spec.split("=")[0]
+        return Digests() if self._hashes is None else Digests(self._hashes)
 
     def matches_hashes(self, hashes):
         if not (hash_type := self.best_available_hash_type):
@@ -1694,26 +1668,25 @@ class LinkStore:
             link.add_log('overwrite', None, count=overwrite + 1)
         return link
 
-    def new_reflink(self, rel, content_or_file, for_entrypath,
+    def new_reflink(self, rel, content_or_file, for_link,
                     *, filename=None, hashes, last_modified=None):
-        if isinstance(for_entrypath, ELink):
-            for_entrypath = for_entrypath.entrypath
-        links = self.get_links(entrypath=for_entrypath)
+        links = self.get_links(entrypath=for_link.entrypath)
         assert len(links) == 1, f"need exactly one reference, got {links}"
-        base_entry = links[0].entry
+        assert for_link.entrypath == links[0].entrypath
+        base_entry = for_link.entry
         if filename is None:
-            other_reflinks = self.get_links(rel=rel, for_entrypath=for_entrypath)
+            other_reflinks = self.get_links(rel=rel, for_entrypath=for_link.entrypath)
             timestamp = strftime("%Y%m%d%H%M%S", gmtime())
             filename = "%s.%s-%s-%d" % (
                 base_entry.basename, rel, timestamp, len(other_reflinks))
         entry = self._create_file_entry(
             filename, content_or_file,
             hashes=hashes,
-            ref_hash_spec=base_entry.hash_spec)
+            ref_hash_spec=base_entry.ref_hash_spec)
         if last_modified is not None:
             entry.last_modified = last_modified
         return self._add_link_to_file_entry(
-            rel, entry, for_entrypath=for_entrypath)
+            rel, entry, for_link=for_link)
 
     def remove_links(self, rel=None, basename=None, for_entrypath=None):
         linkdicts = self._get_inplace_linkdicts()
@@ -1760,19 +1733,19 @@ class LinkStore:
     def _get_inplace_linkdicts(self):
         return self.verdata.setdefault("+elinks", [])
 
-    def _add_link_to_file_entry(self, rel, file_entry, for_entrypath=None):
-        if isinstance(for_entrypath, ELink):
-            for_entrypath = for_entrypath.entrypath
-        new_linkdict = {"rel": rel, "entrypath": file_entry.relpath,
-                        "hash_spec": file_entry.hash_spec, "_log": []}
-        if for_entrypath:
-            new_linkdict["for_entrypath"] = for_entrypath
+    def _add_link_to_file_entry(self, rel, file_entry, for_link=None):
+        new_linkdict = {
+            "rel": rel, "entrypath": file_entry.relpath,
+            "hashes": file_entry.hashes, "_log": []}
+        if for_link:
+            assert isinstance(for_link, ELink)
+            new_linkdict["for_entrypath"] = for_link.entrypath
         linkdicts = self._get_inplace_linkdicts()
         linkdicts.append(new_linkdict)
         threadlog.info("added %r link %s", rel, file_entry.relpath)
         self._mark_dirty()
-        return ELink(self.filestore, new_linkdict, self.project,
-                     self.version)
+        return ELink(
+            self.filestore, new_linkdict, self.project, self.version)
 
 
 class MutableLinkStore(LinkStore):
@@ -1786,7 +1759,7 @@ class SimplelinkMeta:
     """ helper class to provide information for items from get_simplelinks() """
 
     __slots__ = (
-        '__basename', '__cmpval', '__ext', '__hash_spec',
+        '__basename', '__cmpval', '__ext', '__hashes',
         '__name', '__path', '__url', '__version',
         'key', 'href', 'require_python', 'yanked')
 
@@ -1794,7 +1767,7 @@ class SimplelinkMeta:
         self.__basename = notset
         self.__cmpval = notset
         self.__ext = notset
-        self.__hash_spec = notset
+        self.__hashes = notset
         self.__name = notset
         self.__path = notset
         self.__url = notset
@@ -1834,7 +1807,9 @@ class SimplelinkMeta:
     def __parse_url(self):
         url = URL(self.href)
         self.__basename = url.basename
-        self.__hash_spec = url.hash_spec
+        self.__hashes = {}
+        if (hash_type := url.hash_type):
+            self.__hashes[hash_type] = url.hash_value
         self.__path = url.path
 
     @property
@@ -1844,10 +1819,10 @@ class SimplelinkMeta:
         return self.__basename
 
     @property
-    def hash_spec(self):
-        if self.__hash_spec is notset:
+    def hashes(self):
+        if self.__hashes is notset:
             self.__parse_url()
-        return self.__hash_spec
+        return self.__hashes
 
     @property
     def path(self):
@@ -1896,8 +1871,8 @@ def make_key_and_href(entry):
     # entry is either an ELink or a filestore.FileEntry instance.
     # both provide a "relpath" attribute which points to a file entry.
     href = entry.relpath
-    if entry.hash_spec:
-        href += "#" + entry.hash_spec
+    if (hash_spec := entry.best_available_hash_spec):
+        href += "#" + hash_spec
     return entry.basename, href
 
 
@@ -1936,6 +1911,9 @@ def add_keys(xom, keyfs):
     keyfs.add_key("PROJNAMES", "{user}/{index}/.projects", set)
     keyfs.add_key("STAGEFILE",
                   "{user}/{index}/+f/{hashdir_a}/{hashdir_b}/{filename}", dict)
+
+    # files related
+    keyfs.add_key("DIGESTPATHS", "{digest}", set)
 
     sub = EventSubscribers(xom)
     keyfs.PROJVERSION.on_key_change(sub.on_changed_version_config)

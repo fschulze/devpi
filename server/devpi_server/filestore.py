@@ -373,6 +373,9 @@ class FileStore:
             hashdir_a=hashdir_a, hashdir_b=hashdir_b, filename=basename)
         entry = MutableFileEntry(key)
         entry.file_set_content(content_or_file, hashes=hashes)
+        digest_key = entry.get_digest_key()
+        with digest_key.update() as digest_paths:
+            digest_paths.add(entry.relpath)
         return entry
 
 
@@ -416,7 +419,7 @@ class BaseFileEntry:
 
     @property
     def file_path_info(self):
-        return FilePathInfo(self.relpath)
+        return FilePathInfo(self.relpath, self.hashes.get_default_value(None))
 
     @property
     def index(self):
@@ -466,22 +469,8 @@ class BaseFileEntry:
         return self.best_available_hash_value
 
     @property
-    def hash_type(self):
-        warnings.warn(
-            "The hash_type property is deprecated, "
-            "use best_available_hash_type instead",
-            DeprecationWarning,
-            stacklevel=2)
-        return self.best_available_hash_type
-
-    def file_get_checksum(self, hash_type):
-        warnings.warn(
-            "The file_get_checksum method is deprecated, "
-            "use file_get_hash_errors instead",
-            DeprecationWarning,
-            stacklevel=2)
-        with self.file_open_read() as f:
-            return get_file_hash(f, hash_type)
+    def ref_hash_spec(self):
+        return self.hashes.get_default_spec()
 
     def file_get_hash_errors(self, hashes=None):
         if hashes is None:
@@ -503,7 +492,7 @@ class BaseFileEntry:
         return self.tx.io_file.exists(self.file_path_info)
 
     def file_delete(self):
-        return self.tx.io_file.delete(self.file_path_info)
+        self.tx.io_file.delete(self.file_path_info)
 
     def file_size(self):
         return self.tx.io_file.size(self.file_path_info)
@@ -531,6 +520,8 @@ class BaseFileEntry:
             if last_modified is None:
                 last_modified = unicode_if_bytes(format_date_time(None))
             self.last_modified = last_modified
+        else:
+            raise RuntimeError(f"{last_modified=}")
         hashes = Digests(hashes)
         missing_hash_types = hashes.get_missing_hash_types()
         if missing_hash_types:
@@ -545,11 +536,9 @@ class BaseFileEntry:
         self.key.set(self.meta)
 
     def file_set_content_no_meta(self, content_or_file, *, hashes):
-        missing_hash_types = hashes.get_missing_hash_types()
-        if missing_hash_types:
-            msg = f"Missing hash types: {missing_hash_types!r}"
-            raise RuntimeError(msg)
-        self.tx.io_file.set_content(self.file_path_info, content_or_file)
+        file_path_info = self.file_path_info
+        file_path_info.sha256_digest = hashes[DEFAULT_HASH_TYPE]
+        self.tx.io_file.set_content(file_path_info, content_or_file)
 
     def gethttpheaders(self):
         assert self.file_exists()
@@ -573,13 +562,35 @@ class BaseFileEntry:
     def __hash__(self):
         return hash(self.relpath)
 
-    def delete(self, **kw):
+    def delete(self):
+        digest_key = self.get_digest_key()
+        with digest_key.update() as digest_paths:
+            digest_paths.discard(self.relpath)
+        if not digest_paths:
+            digest_key.delete()
+            self.file_delete()
         self.key.delete()
         self._meta = {}
-        self.file_delete()
+
+    def get_digest_key(self):
+        return self.tx.keyfs.DIGESTPATHS(digest=self.hashes[DEFAULT_HASH_TYPE])
 
     def has_existing_metadata(self):
         return bool(self.hashes and self.last_modified)
+
+    def validate(self, content_or_file=None):
+        if content_or_file is None:
+            with self.file_open_read() as f:
+                hash_values = get_hashes(f, self.hashes.keys())
+        else:
+            hash_values = get_hashes(content_or_file, self.hashes.keys())
+        for hash_type, hash_value in hash_values.items():
+            expected_hash_value = self.hashes[hash_type]
+            if hash_value != expected_hash_value:
+                return (
+                    f"{hash_type} mismatch, "
+                    f"got {hash_value}, expected {expected_hash_value}")
+        return None
 
 
 class FileEntry(BaseFileEntry):
@@ -613,7 +624,7 @@ def get_checksum_error(content_or_hash, relpath, hash_spec):
         DeprecationWarning,
         stacklevel=2)
     if not hash_spec:
-        return
+        return None
     hash_algo, hash_value = parse_hash_spec(hash_spec)
     hash_type = hash_spec.split("=")[0]
     hexdigest = getattr(content_or_hash, "hexdigest", None)
@@ -624,8 +635,9 @@ def get_checksum_error(content_or_hash, relpath, hash_spec):
                 f"{relpath}: hash type mismatch, "
                 f"got {content_or_hash.name}, expected {hash_type}")
     else:
-        hexdigest = hash_algo(content_or_hash).hexdigest()
+        hexdigest = get_hash_value(content_or_hash, hash_type)
     if hexdigest != hash_value:
         return ChecksumError(
             f"{relpath}: {hash_type} mismatch, "
             f"got {hexdigest}, expected {hash_value}")
+    return None

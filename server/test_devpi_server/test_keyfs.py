@@ -867,61 +867,68 @@ def test_devpiserver_22_event_serial():
         pytest.fail("change event_serial disk representation wrt -1/+1 hack")
 
 
-def test_keyfs_sqlite(gentmp):
+def test_keyfs_sqlite(gentmp, file_digest):
     from devpi_server import keyfs_sqlite
     from devpi_server.filestore_db import DBIOFile
     tmp = gentmp()
     storage = keyfs_sqlite.Storage
     keyfs = KeyFS(tmp, storage, io_file_factory=DBIOFile)
-    file_path_info = FilePathInfo('foo')
+    content = b'bar'
+    file_path_info = FilePathInfo('foo', file_digest(content))
     with keyfs.write_transaction() as tx:
         assert tx.io_file.os_path(file_path_info) is None
-        tx.io_file.set_content(file_path_info, b'bar')
+        tx.io_file.set_content(file_path_info, content)
         tx.conn._sqlconn.commit()
     with keyfs.read_transaction() as tx:
         assert tx.io_file.os_path(file_path_info) is None
-        assert tx.io_file.get_content(file_path_info) == b'bar'
+        assert tx.io_file.get_content(file_path_info) == content
     assert [x.basename for x in tmp.listdir()] == ['.sqlite_db']
 
 
-def test_keyfs_sqlite_fs(gentmp):
+def test_keyfs_sqlite_fs(gentmp, file_digest):
     from devpi_server import keyfs_sqlite_fs
     from devpi_server.filestore_fs import FSIOFile
     tmp = gentmp()
     storage = keyfs_sqlite_fs.Storage
     io_file_factory = partial(FSIOFile, settings={})
     keyfs = KeyFS(tmp, storage, io_file_factory=io_file_factory)
-    file_path_info = FilePathInfo('foo')
+    content = b'bar'
+    content_hash = file_digest(content)
+    file_path_info = FilePathInfo('foo', content_hash)
     with keyfs.write_transaction() as tx:
-        assert tx.io_file.os_path(file_path_info) == tmp.join('+files', 'foo').strpath
-        tx.io_file.set_content(file_path_info, b'bar')
+        assert tx.io_file.os_path(file_path_info) == tmp.join('+files', content_hash[:3], content_hash[3:])
+        tx.io_file.set_content(file_path_info, content)
         tx.conn._sqlconn.commit()
     with keyfs.read_transaction() as tx:
-        assert tx.io_file.get_content(file_path_info) == b'bar'
+        assert tx.io_file.get_content(file_path_info) == content
         with open(tx.io_file.os_path(file_path_info), 'rb') as f:
-            assert f.read() == b'bar'
+            assert f.read() == content
     assert sorted(x.basename for x in tmp.listdir()) == ['+files', '.sqlite']
-    assert sorted(x.basename for x in tmp.join('+files').listdir()) == ['foo']
+    assert sorted(x.basename for x in tmp.join('+files').listdir()) == [content_hash[:3]]
+    assert sorted(x.basename for x in tmp.join('+files', content_hash[:3]).listdir()) == [content_hash[3:]]
 
 
-def test_keyfs_sqlite2_fs(gentmp):
+def test_keyfs_sqlite2_fs(gentmp, file_digest):
     from devpi_server import keyfs_sqlite2_fs
     from devpi_server.filestore_fs import FSIOFile
     tmp = gentmp()
     storage = keyfs_sqlite2_fs.Storage
     io_file_factory = partial(FSIOFile, settings={})
     keyfs = KeyFS(tmp, storage, io_file_factory=io_file_factory)
-    file_path_info = FilePathInfo('foo')
+    content = b'bar'
+    content_hash = file_digest(content)
+    file_path_info = FilePathInfo('foo', content_hash)
     with keyfs.write_transaction() as tx:
-        assert tx.io_file.os_path(file_path_info) == tmp.join('+files', 'foo').strpath
-        tx.io_file.set_content(file_path_info, b'bar')
+        assert tx.io_file.os_path(file_path_info) == tmp.join('+files', content_hash[:3], content_hash[3:])
+        tx.io_file.set_content(file_path_info, content)
         tx.conn._sqlconn.commit()
     with keyfs.read_transaction() as tx:
-        assert tx.io_file.get_content(file_path_info) == b'bar'
+        assert tx.io_file.get_content(file_path_info) == content
         with open(tx.io_file.os_path(file_path_info), 'rb') as f:
-            assert f.read() == b'bar'
+            assert f.read() == content
     assert sorted(x.basename for x in tmp.listdir()) == ['+files', '.sqlite2']
-    assert sorted(x.basename for x in tmp.join('+files').listdir()) == ['foo']
+    assert sorted(x.basename for x in tmp.join('+files').listdir()) == [content_hash[:3]]
+    assert sorted(x.basename for x in tmp.join('+files', content_hash[:3]).listdir()) == [content_hash[3:]]
 
 
 @notransaction

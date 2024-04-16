@@ -2,6 +2,7 @@ from devpi_server.filestore_fs import check_pending_renames
 from devpi_server.filestore_fs import commit_renames
 from devpi_server.filestore_fs import make_rel_renames
 from devpi_server.keyfs_types import FilePathInfo
+from pathlib import Path
 import os
 import pytest
 
@@ -12,7 +13,7 @@ class TestRenameFileLogic:
         file1_tmp = file1 + "-tmp"
         file1.write("hello")
         file1_tmp.write("this")
-        pending_renames = [(str(file1_tmp), str(file1))]
+        pending_renames = [(Path(str(file1_tmp)), Path(str(file1)))]
         rel_renames = make_rel_renames(str(tmpdir), pending_renames)
         commit_renames(str(tmpdir), rel_renames)
         assert file1.check()
@@ -28,7 +29,7 @@ class TestRenameFileLogic:
         file1_tmp = file1 + "-tmp"
         file1.write("hello")
         file1_tmp.write("this")
-        pending_renames = [(str(file1_tmp), str(file1))]
+        pending_renames = [(Path(str(file1_tmp)), Path(str(file1)))]
         rel_renames = make_rel_renames(str(tmpdir), pending_renames)
         # we don't call perform_pending_renames, simulating a crash
         assert file1.read() == "hello"
@@ -42,7 +43,7 @@ class TestRenameFileLogic:
     def test_remove_nocrash(self, tmpdir):
         file1 = tmpdir.join("file1")
         file1.write("hello")
-        pending_renames = [(None, str(file1))]
+        pending_renames = [(None, Path(str(file1)))]
         rel_renames = make_rel_renames(str(tmpdir), pending_renames)
         commit_renames(str(tmpdir), rel_renames)
         assert not file1.exists()
@@ -52,7 +53,7 @@ class TestRenameFileLogic:
     def test_remove_crash(self, tmpdir, caplog):
         file1 = tmpdir.join("file1")
         file1.write("hello")
-        pending_renames = [(None, str(file1))]
+        pending_renames = [(None, Path(str(file1)))]
         rel_renames = make_rel_renames(str(tmpdir), pending_renames)
         # we don't call perform_pending_renames, simulating a crash
         assert file1.exists()
@@ -62,12 +63,13 @@ class TestRenameFileLogic:
 
     @pytest.mark.storage_with_filesystem
     @pytest.mark.notransaction
-    def test_dirty_files_removed_on_rollback(self, keyfs):
-        with pytest.raises(RuntimeError):
-            with keyfs.read_transaction() as tx:
-                tx.io_file.set_content(FilePathInfo('foo'), b'foo')
-                tmppath = tx.io_file._dirty_files[keyfs.basedir.join('+files', 'foo').strpath].tmppath
-                assert os.path.exists(tmppath)
-                # abort transaction
-                raise RuntimeError
+    def test_dirty_files_removed_on_rollback(self, file_digest, keyfs):
+        content = b'foo'
+        content_hash = file_digest(content)
+        with pytest.raises(RuntimeError), keyfs.read_transaction() as tx:  # noqa: PT012
+            tx.io_file.set_content(FilePathInfo('foo', content_hash), content)
+            tmppath = tx.io_file._dirty_files[Path(keyfs.basedir.join('+files', content_hash[:3], content_hash[3:]).strpath)].tmppath
+            assert os.path.exists(tmppath)
+            # abort transaction
+            raise RuntimeError
         assert not os.path.exists(tmppath)

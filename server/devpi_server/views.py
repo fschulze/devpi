@@ -41,6 +41,7 @@ from devpi_common.validation import normalize_name, is_valid_archive_name
 from .config import hookimpl
 from .exceptions import lazy_format_exception_only
 from .filestore import BadGateway
+from .filestore import DEFAULT_HASH_TYPE
 from .filestore import RunningHashes
 from .filestore import get_hashes
 from .filestore import get_seekable_content_or_file
@@ -1442,8 +1443,7 @@ class PyPIView:
         mirror_url_auth = getattr(stage, "mirror_url_auth", {})
         url = URL(entry.url).replace(**mirror_url_auth)
 
-        file_exists = entry.file_exists()
-        if entry.last_modified is None or not file_exists:
+        if entry.last_modified is None or not (file_exists := entry.file_exists()):
             # We check whether we should serve the file directly
             # or redirect to the external URL
             if stage.use_external_url:
@@ -1649,7 +1649,7 @@ class PyPIView:
 
 
 def should_fetch_remote_file(entry, headers):
-    should_fetch = not entry.file_exists()
+    should_fetch = entry.last_modified is None or not entry.file_exists()
     return should_fetch
 
 
@@ -1732,7 +1732,10 @@ def iter_cache_remote_file(stage, entry, url):
             threadlog.error(str(err))
             raise
 
-        if not entry.has_existing_metadata():
+        requires_write_tx = (
+            not entry.has_existing_metadata()
+            or DEFAULT_HASH_TYPE not in entry.hashes)
+        if requires_write_tx:
             with xom.keyfs.write_transaction(allow_restart=True):
                 if entry.readonly:
                     entry = xom.filestore.get_file_entry_from_key(entry.key)
@@ -1740,6 +1743,9 @@ def iter_cache_remote_file(stage, entry, url):
                     f,
                     last_modified=r.headers.get("last-modified", None),
                     hashes=file_streamer.hashes)
+                digest_key = entry.get_digest_key()
+                with digest_key.update() as digest_paths:
+                    digest_paths.add(entry.relpath)
                 if entry.project:
                     stage = xom.model.getstage(entry.user, entry.index)
                     # for mirror indexes this makes sure the project is in the database

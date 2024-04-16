@@ -955,16 +955,25 @@ class FileReplicationThread:
         threadlog.debug("FileReplicationThread.importer for %s, %s", key, val)
         keyfs = self.xom.keyfs
         relpath = key.relpath
-        entry = self.xom.filestore.get_file_entry_from_key(key, meta=val)
         if val is None:
             if back_serial >= 0:
-                with keyfs.filestore_transaction():
-                    # file was deleted, still might never have been replicated
-                    if entry.file_exists():
+                # check for existence with metadata from old serial
+                with keyfs.read_transaction(at_serial=back_serial):
+                    entry = self.xom.filestore.get_file_entry(relpath)
+                    file_exists = entry.file_exists()
+                if file_exists:
+                    # check if there is no remaining reference at current serial
+                    with keyfs.read_transaction():
+                        digest_key = entry.get_digest_key()
+                        should_delete = not digest_key.get()
+                if file_exists and should_delete:
+                    # delete directly in file store
+                    with keyfs.filestore_transaction():
                         threadlog.info("mark for deletion: %s", relpath)
                         entry.file_delete()
                 self.shared_data.errors.remove(entry)
                 return
+        entry = self.xom.filestore.get_file_entry_from_key(key, meta=val)
         if entry.last_modified is None:
             # there is no remote file
             self.shared_data.errors.remove(entry)

@@ -69,9 +69,11 @@ def server_version():
     return parse_version(__version__)
 
 
-def make_file_url(basename, content, stagename=None, baseurl="http://localhost/", add_hash=True):
-    from devpi_server.filestore import get_default_hash_spec, make_splitdir
-    hash_spec = get_default_hash_spec(content)
+def make_file_url(basename, content, *, stagename=None, baseurl="http://localhost/", add_hash=True):
+    from devpi_server.filestore import DEFAULT_HASH_TYPE
+    from devpi_server.filestore import get_hash_value, make_splitdir
+    hash_value = get_hash_value(content, DEFAULT_HASH_TYPE)
+    hash_spec = f"{DEFAULT_HASH_TYPE}={hash_value}"
     hashdir = "/".join(make_splitdir(hash_spec))
     if add_hash:
         s = "%s{stage}/+f/%s/%s#%s" % (baseurl, hashdir, basename, hash_spec)
@@ -1357,12 +1359,16 @@ def gen():
 
 
 class Gen:
-    def pypi_package_link(self, pkgname, *, md5=True):
+    def pypi_package_link(self, pkgname, *, md5=True, sha256=False):
         link = "https://pypi.org/package/some/%s" % pkgname
         if md5 is True:
             md5 = hashlib.md5(link.encode()).hexdigest()  # noqa: S324
         if md5:
             link += "#md5=%s" % md5
+        if sha256 is True:
+            sha256 = hashlib.sha256(link.encode()).hexdigest()
+        if sha256:
+            link += "#sha256=%s" % sha256
         return URL(link)
 
 
@@ -1390,6 +1396,16 @@ def blank_request():
         return Request.blank("/blankpath", *args, **kwargs)
 
     return blank_request
+
+
+@pytest.fixture(scope="session")
+def file_digest():
+    _sha256 = hashlib.sha256
+
+    def file_digest(content):
+        return _sha256(content).hexdigest()
+
+    return file_digest
 
 
 @pytest.fixture(params=[None, "tox38"])

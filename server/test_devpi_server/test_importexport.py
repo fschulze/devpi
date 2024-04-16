@@ -4,6 +4,8 @@ import pytest
 import json
 from devpi_server.config import hookimpl
 from devpi_server.filestore import get_default_hash_spec
+from devpi_server.filestore import get_default_hash_type
+from devpi_server.filestore import get_default_hash_value
 from devpi_server.filestore import get_hashes
 from devpi_server.filestore import make_splitdir
 from devpi_server.filestore import relpath_prefix
@@ -263,8 +265,7 @@ class TestImportExport:
         impexp.export()
         data = json.loads(impexp.exportdir.join('dataindex.json').read_binary())
         (filedata,) = data['indexes'][api1.stagename]['files']
-        assert 'hash_spec' not in filedata['entrymapping']
-        filedata['entrymapping'].pop('hashes')
+        filedata['entrymapping'].pop('hash_spec')
         filedata['entrymapping']['md5'] = 'foo'
         impexp.exportdir.join('dataindex.json').write_text(json.dumps(data), 'utf8')
         with pytest.raises(Fatal, match="has bad checksum 7e55db001d319a94b0b713529a756623, expected foo"):
@@ -510,7 +511,10 @@ class TestImportExport:
                 ('package-2.0.zip', f'root/pypi/+f/{hashdir3}/package-2.0.zip', '>=3.5', None)]
 
     def test_mirrordata(self, impexp):
-        hash_spec = get_default_hash_spec(b"content")
+        content = b"content"
+        hash_spec = get_default_hash_spec(content)
+        hash_type = get_default_hash_type()
+        hash_value = get_default_hash_value(content)
         hashdir = "/".join(make_splitdir(hash_spec))
         mapp = impexp.import_testdata('mirrordata')
         with mapp.xom.keyfs.read_transaction():
@@ -521,7 +525,7 @@ class TestImportExport:
             assert link.project == "dddttt"
             assert link.version == "0.1.dev1"
             assert link.relpath == f'root/pypi/+f/{hashdir}/dddttt-0.1.dev1.tar.gz'
-            assert link.entry.hash_spec == hash_spec
+            assert link.entry.hashes[hash_type] == hash_value
 
     def test_modifiedpypi(self, impexp):
         mapp = impexp.import_testdata('modifiedpypi')
@@ -580,7 +584,6 @@ class TestImportExport:
 
     @pytest.mark.slow
     def test_upload_releasefile_with_toxresult(self, impexp, tox_result_data):
-        from devpi_server.filestore import get_hashes
         from time import sleep
         mapp1 = impexp.mapp1
         api = mapp1.create_and_use()
@@ -588,19 +591,19 @@ class TestImportExport:
         mapp1.upload_file_pypi("hello-1.0.tar.gz", content, "hello", "1.0")
         path, = mapp1.get_release_paths("hello")
         path = path.strip("/")
-        toxresult_dump = json.dumps(tox_result_data)
-        toxresult_hashes = get_hashes(toxresult_dump.encode())
+        toxresult_dump = json.dumps(tox_result_data).encode()
+        hashes = get_hashes(toxresult_dump)
         r = mapp1.upload_toxresult("/%s" % path, toxresult_dump)
         toxresult_link = mapp1.getjson(f'/{r.json["result"]}')["result"]
         last_modified = toxresult_link["last_modified"]
-        assert toxresult_link["hashes"] == toxresult_hashes
+        assert toxresult_link["hashes"] == hashes
         sleep(1.5)
         impexp.export()
         mapp2 = impexp.new_import()
         with mapp2.xom.keyfs.read_transaction():
             stage = mapp2.xom.model.getstage(api.stagename)
             (link,) = stage.get_releaselinks("hello")
-            assert link.entry.file_get_content() == b"content"
+            assert link.entry.file_get_content() == content
             link = stage.get_link_from_entrypath(link.entrypath)
             (history_log,) = link.get_logs()
             assert history_log['what'] == 'upload'
@@ -610,8 +613,8 @@ class TestImportExport:
             assert result == tox_result_data
             linkstore = stage.get_linkstore_perstage(
                 link.project, link.version)
-            tox_link, = linkstore.get_links(rel="toxresult", for_entrypath=link)
-            assert tox_link.best_available_hash_value == toxresult_hashes[tox_link.best_available_hash_type]
+            (tox_link,) = linkstore.get_links(rel="toxresult", for_entrypath=link)
+            assert tox_link.hashes == hashes
             assert tox_link.entry.last_modified == last_modified
             (history_log,) = tox_link.get_logs()
             assert history_log['what'] == 'upload'
@@ -769,7 +772,7 @@ class TestImportExport:
             stage = mapp1.xom.model.getstage(api.stagename)
             doccontent = zip_dict({"index.html": "<html><body>Hello"})
             link1 = stage.store_doczip(
-                name, "1.0", content_or_file=doccontent, hashes=get_hashes(doccontent))
+                name, "1.0", doccontent, hashes=get_hashes(doccontent))
 
         impexp.export()
 

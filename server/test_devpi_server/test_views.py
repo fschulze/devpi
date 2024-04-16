@@ -11,6 +11,7 @@ from devpi_common.viewhelp import ViewLinkStore
 
 import devpi_server.views
 from devpi_server.config import hookimpl
+from devpi_server.filestore import DEFAULT_HASH_TYPE
 from devpi_server.filestore import FileEntry
 from devpi_server.filestore import get_default_hash_spec
 from devpi_server.filestore import get_default_hash_type
@@ -246,15 +247,17 @@ def test_index_get_json_patch_json_roundtrip(mapp, testapp):
 @pytest.mark.parametrize("outside_url", ['', 'http://localhost/devpi'])
 def test_simple_project_outside_url_subpath(mapp, outside_url, pypistage, testapp):
     api = mapp.create_and_use(indexconfig=dict(bases=["root/pypi"]))
+    content = b'123'
     mapp.upload_file_pypi(
-        "qpwoei-1.0.tar.gz", b'123', "qpwoei", "1.0", indexname=api.stagename)
+        "qpwoei-1.0.tar.gz", content, "qpwoei", "1.0", indexname=api.stagename)
     pypistage.mock_simple("qpwoei", text='<a href="/qpwoei-1.0.zip"/>')
     headers = {'X-outside-url': str(outside_url)}
     r = testapp.get("/%s/+simple/qpwoei/" % api.stagename, headers=headers)
     assert r.status_code == 200
     links = sorted(x["href"] for x in getlinks(r.text))
     assert len(links) == 2
-    hash_spec = get_default_hash_spec(b'123')
+    hashes = get_hashes(content)
+    hash_spec = f"{DEFAULT_HASH_TYPE}={hashes[DEFAULT_HASH_TYPE]}"
     hashdir = "/".join(make_splitdir(hash_spec))
     assert links == [
         '../../+f/%s/qpwoei-1.0.tar.gz#%s' % (hashdir, hash_spec),
@@ -268,15 +271,17 @@ def test_simple_project_outside_url_subpath(mapp, outside_url, pypistage, testap
 
 def test_simple_project_absolute_url(mapp, pypistage, testapp):
     api = mapp.create_and_use(indexconfig=dict(bases=["root/pypi"]))
+    content = b'123'
     mapp.upload_file_pypi(
-        "qpwoei-1.0.tar.gz", b'123', "qpwoei", "1.0", indexname=api.stagename)
+        "qpwoei-1.0.tar.gz", content, "qpwoei", "1.0", indexname=api.stagename)
     pypistage.mock_simple("qpwoei", text='<a href="/qpwoei-1.0.zip"/>')
     headers = {'X-devpi-absolute-urls': ""}
     r = testapp.get("/%s/+simple/qpwoei/" % api.stagename, headers=headers)
     assert r.status_code == 200
     links = sorted(x["href"] for x in getlinks(r.text))
     assert len(links) == 2
-    hash_spec = get_default_hash_spec(b'123')
+    hashes = get_hashes(content)
+    hash_spec = f"{DEFAULT_HASH_TYPE}={hashes[DEFAULT_HASH_TYPE]}"
     hashdir = "/".join(make_splitdir(hash_spec))
     assert links == [
         'http://localhost/root/pypi/+e/https_pypi.org/qpwoei-1.0.zip',
@@ -289,8 +294,6 @@ def test_simple_project_absolute_url(mapp, pypistage, testapp):
     assert r.status_code == 200
     links = sorted(x["href"] for x in getlinks(r.text))
     assert len(links) == 2
-    hash_spec = get_default_hash_spec(b'123')
-    hashdir = "/".join(make_splitdir(hash_spec))
     assert links == [
         'http://localhost/devpi/root/pypi/+e/https_pypi.org/qpwoei-1.0.zip',
         'http://localhost/devpi/user1/dev/+f/%s/qpwoei-1.0.tar.gz#%s' % (hashdir, hash_spec)]
@@ -1650,7 +1653,8 @@ def test_upload_and_access_releasefile_meta(mapp, testapp, proj):
     pkgmeta = mapp.getjson(link.href)
     assert pkgmeta["type"] == "releasefilemeta"
     hashes = pkgmeta["result"]["hashes"]
-    assert hashes == get_hashes(content)
+    (hash_type,) = hashes
+    assert get_hashes(content, (hash_type,)) == hashes
 
 
 def test_upload_and_delete_project_version(mapp):

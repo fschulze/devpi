@@ -52,7 +52,7 @@ class TestMirrorIndexThings(BaseTestMirrorIndexThings):
 @pytest.mark.nomocking
 @pytest.mark.storage_with_filesystem
 def test_replicating_deleted_pypi_release(
-        caplog, makemapp, makefunctionaltestapp,
+        file_digest, makemapp, makefunctionaltestapp,
         master_host_port, master_serverdir,
         replica_mapp, simpypi):
     # this was the behavior of devpi-server 4.3.1:
@@ -63,10 +63,10 @@ def test_replicating_deleted_pypi_release(
     #   mentioned in the changelog
     # - the master tries to download it from pypi and gets a 404
     # - the master replies with a 502 and the replica stops at this point
-    from devpi_common.url import URL
     import time
     mapp = makemapp(makefunctionaltestapp(master_host_port))
     content = b'13'
+    content_hash = file_digest(content)
     simpypi.add_release('pkg', pkgver='pkg-1.0.zip')
     simpypi.add_file('/pkg/pkg-1.0.zip', content)
     mapp.create_and_login_user('mirror')
@@ -81,8 +81,7 @@ def test_replicating_deleted_pypi_release(
     r = mapp.downloadrelease(200, result[0])
     assert r == content
     # remove files
-    relpath = URL(result[0]).path[1:]
-    path = master_serverdir.join('+files').join(relpath)
+    path = master_serverdir.join('+files', content_hash[:3], content_hash[3:])
     tries = 0
     while not path.exists() and tries < 10:
         time.sleep(.1)

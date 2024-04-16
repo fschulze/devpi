@@ -4,7 +4,6 @@ from .interfaces import IIOFile
 from .keyfs_types import FilePathInfo
 from .log import threadlog
 from contextlib import suppress
-from hashlib import sha256
 from pathlib import Path
 from zope.interface import Interface
 from zope.interface import alsoProvides
@@ -12,8 +11,10 @@ from zope.interface import implementer
 import os
 import re
 import shutil
-import sys
-import threading
+
+
+def split_digest(digest):
+    return (digest[:3], digest[3:])
 
 
 class ITempStorageFile(Interface):
@@ -21,23 +22,26 @@ class ITempStorageFile(Interface):
 
 
 class DirtyFile:
-    def __init__(self, path):
-        self.path = path
-        # use hash of path, pid and thread id to prevent conflicts
-        key = f"{path}{os.getpid()}{threading.current_thread().ident}"
-        digest = sha256(key.encode('utf-8')).hexdigest()
-        if sys.platform == 'win32':
-            # on windows we have to shorten the digest, otherwise we reach
-            # the 260 chars file path limit too quickly
-            digest = digest[:8]
-        self.tmppath = f"{path}-{digest}-tmp"
+    def __init__(self, basedir, path):
+        self.path = basedir.joinpath(*split_digest(path.sha256_digest))
+        self.tmppath = self.path.with_name(f"{self.path.name}-tmp")
 
     def __repr__(self):
         return f"<{self.__class__.__name__} {self.path}>"
 
     @classmethod
-    def from_content(cls, path, content_or_file):
-        self = DirtyFile(path)
+    def from_content(cls, basedir, path, content_or_file):
+        if path.sha256_digest is None:
+            msg = f"No hash digest set for {path!r}"
+            raise RuntimeError(msg)
+        self = DirtyFile(basedir, path)
+        if self.path.exists():
+            # we already have this stored
+            return None
+            # raise RuntimeError
+        # if ITempStorageFile.providedBy(content_or_file):
+        #     import pdb; pdb.set_trace()
+        #     # raise RuntimeError(f"ITempStorageFile {path}")
         if hasattr(content_or_file, "devpi_srcpath"):
             dirname = os.path.dirname(self.tmppath)
             if not os.path.exists(dirname):
@@ -63,7 +67,7 @@ class FSIOFile:
     def __init__(self, conn, settings):
         self.conn = conn
         self.settings = settings
-        self.basedir = Path(self.conn.storage.basedir)
+        self.basedir = Path(self.conn.storage.basedir) / "+files"
         self._dirty_files = {}
 
     def __enter__(self):
@@ -83,7 +87,8 @@ class FSIOFile:
 
     def delete(self, path):
         assert isinstance(path, FilePathInfo)
-        path = str(self.basedir / "+files" / path.relpath)
+        assert path.sha256_digest is not None
+        path = self.basedir.joinpath(*split_digest(path.sha256_digest))
         old = self._dirty_files.get(path)
         if old is not None:
             os.remove(old.tmppath)
@@ -91,7 +96,9 @@ class FSIOFile:
 
     def exists(self, path):
         assert isinstance(path, FilePathInfo)
-        path = str(self.basedir / "+files" / path.relpath)
+        if path.sha256_digest is None:
+            return False
+        path = self.basedir.joinpath(*split_digest(path.sha256_digest))
         if path in self._dirty_files:
             dirty_file = self._dirty_files[path]
             if dirty_file is None:
@@ -101,7 +108,8 @@ class FSIOFile:
 
     def get_content(self, path):
         assert isinstance(path, FilePathInfo)
-        path = str(self.basedir / "+files" / path.relpath)
+        assert path.sha256_digest is not None
+        path = self.basedir.joinpath(*split_digest(path.sha256_digest))
         if path in self._dirty_files:
             dirty_file = self._dirty_files[path]
             if dirty_file is None:
@@ -132,7 +140,8 @@ class FSIOFile:
 
     def open_read(self, path):
         assert isinstance(path, FilePathInfo)
-        path = str(self.basedir / "+files" / path.relpath)
+        assert path.sha256_digest is not None
+        path = self.basedir.joinpath(*split_digest(path.sha256_digest))
         if path in self._dirty_files:
             dirty_file = self._dirty_files[path]
             if dirty_file is None:
@@ -140,22 +149,26 @@ class FSIOFile:
             path = dirty_file.tmppath
         return open(path, "rb")  # noqa: SIM115
 
-    def os_path(self, path):
+    def os_path(self, path, *, _raises=True):
         assert isinstance(path, FilePathInfo)
-        return str(self.basedir / "+files" / path.relpath)
+        assert path.sha256_digest is not None
+        return self.basedir.joinpath(*split_digest(path.sha256_digest))
 
     def set_content(self, path, content_or_file):
         assert isinstance(path, FilePathInfo)
-        path = str(self.basedir / "+files" / path.relpath)
-        assert not path.endswith("-tmp")
-        if ITempStorageFile.providedBy(content_or_file):
-            self._dirty_files[path] = DirtyFile(path)
-        else:
-            self._dirty_files[path] = DirtyFile.from_content(path, content_or_file)
+        assert not path.relpath.endswith("-tmp")
+        assert path.sha256_digest is not None
+        dirty_file = DirtyFile.from_content(self.basedir, path, content_or_file)
+        if dirty_file is None:
+            # already have the file
+            return
+        self._dirty_files[dirty_file.path] = dirty_file
 
     def size(self, path):
         assert isinstance(path, FilePathInfo)
-        path = str(self.basedir / "+files" / path.relpath)
+        if path.sha256_digest is None:
+            return None
+        path = self.basedir.joinpath(*split_digest(path.sha256_digest))
         if path in self._dirty_files:
             dirty_file = self._dirty_files[path]
             if dirty_file is None:
@@ -267,12 +280,11 @@ def make_rel_renames(basedir, pending_renames):
     # - if they don't have "-tmp" they should be removed
     for source, dest in pending_renames:
         if source is not None:
-            assert source.startswith(dest)
-            assert source.endswith("-tmp")
-            yield source[len(basedir) + 1:]
+            assert source.parent == dest.parent
+            assert source.name == f"{dest.name}-tmp"
+            yield str(source.relative_to(basedir))
         else:
-            assert dest.startswith(basedir)
-            yield dest[len(basedir) + 1:]
+            yield str(dest.relative_to(basedir))
 
 
 tmp_file_matcher = re.compile(r"(.*?)(-[0-9a-fA-F]{8,64})?(-tmp)$")

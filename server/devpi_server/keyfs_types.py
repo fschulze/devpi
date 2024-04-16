@@ -26,6 +26,7 @@ class RelpathInfo:
 @define
 class FilePathInfo:
     relpath: str
+    sha256_digest: str | None
 
 
 class PTypedKey:
