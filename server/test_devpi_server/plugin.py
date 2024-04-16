@@ -201,7 +201,9 @@ def _speed_up_sqlite(cls):
 
     def _execute_conn_pragmas(self, conn, old=old):
         old(self, conn)
-        conn.execute("PRAGMA synchronous=OFF")
+        c = conn.cursor()
+        c.execute("PRAGMA synchronous=OFF")
+        c.close()
 
     cls._execute_conn_pragmas = _execute_conn_pragmas
     return old
@@ -1424,3 +1426,14 @@ def _default_hash_type():
             assert ht not in filestore.DEFAULT_HASH_TYPES
             filestore.DEFAULT_HASH_TYPES += (ht,)
         warnings.warn(f"ADDITIONAL_HASH_TYPES {hash_types!r}", stacklevel=1)
+
+
+@pytest.fixture
+def sorted_serverdir():
+    def sorted_serverdir(path):
+        return sorted(
+            name
+            for x in Path(path).iterdir()
+            if not (name := x.name).endswith(('-shm', '-wal')))
+
+    return sorted_serverdir
