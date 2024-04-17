@@ -1709,7 +1709,7 @@ class LinkStore:
         entry = self._create_file_entry(
             filename, content_or_file,
             hashes=hashes,
-            ref_hash_spec=base_entry.best_available_hash_spec)
+            ref_hash_spec=base_entry.ref_hash_spec)
         if last_modified is not None:
             entry.last_modified = last_modified
         return self._add_link_to_file_entry(
@@ -1748,7 +1748,7 @@ class LinkStore:
             user=self.stage.username, index=self.stage.index,
             basename=basename,
             content_or_file=content_or_file,
-            dir_hash_spec=ref_hash_spec,
+            ref_hash_spec=ref_hash_spec,
             hashes=hashes)
         entry.project = self.project
         entry.version = self.version
