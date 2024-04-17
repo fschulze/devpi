@@ -1537,14 +1537,14 @@ def linkdictprop(name, default=notset):
     return property(fget)
 
 
-class ELink(object):
+class ELink:
     """ model Link using entrypathes for referencing. """
     __slots__ = ('_entry', 'basename', 'filestore', 'linkdict', 'project', 'version')
 
     _log = linkdictprop("_log")
     entrypath = linkdictprop("entrypath")
     for_entrypath = linkdictprop("for_entrypath", default=None)
-    hash_spec = linkdictprop("hash_spec", default="")
+    _hash_spec = linkdictprop("hash_spec", default="")
     rel = linkdictprop("rel", default=None)
     relpath = linkdictprop("entrypath")
     require_python = linkdictprop("require_python")
@@ -1567,16 +1567,47 @@ class ELink(object):
         return self.entry.user
 
     @property
+    def best_available_hash_type(self):
+        return self.hashes.best_available_type
+
+    @property
+    def best_available_hash_spec(self):
+        return self.hashes.best_available_spec
+
+    @property
+    def best_available_hash_value(self):
+        return self.hashes.best_available_value
+
+    @property
     def hashes(self):
-        return Digests.from_spec(self.hash_spec)
+        return Digests.from_spec(self._hash_spec)
+
+    @property
+    def hash_spec(self):
+        warnings.warn(
+            "The hash_spec property is deprecated, "
+            "use best_available_hash_spec instead",
+            DeprecationWarning,
+            stacklevel=2)
+        return self._hash_spec
 
     @property
     def hash_value(self):
-        return self.hash_spec.split("=")[1]
+        warnings.warn(
+            "The hash_value property is deprecated, "
+            "use best_available_hash_value instead",
+            DeprecationWarning,
+            stacklevel=2)
+        return self._hash_spec.split("=")[1]
 
     @property
     def hash_type(self):
-        return self.hash_spec.split("=")[0]
+        warnings.warn(
+            "The hash_type property is deprecated, "
+            "use best_available_hash_type instead",
+            DeprecationWarning,
+            stacklevel=2)
+        return self._hash_spec.split("=")[0]
 
     def matches_checksum(self, content_or_file):
         hash_algo, hash_value = parse_hash_spec(self.hash_spec)
