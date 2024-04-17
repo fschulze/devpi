@@ -475,6 +475,10 @@ class BaseFileEntry:
             stacklevel=2)
         return self.best_available_hash_type
 
+    @property
+    def ref_hash_spec(self):
+        return self.hashes.get_default_spec()
+
     def file_get_checksum(self, hash_type):
         warnings.warn(
             "The file_get_checksum method is deprecated, "

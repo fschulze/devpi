@@ -1710,7 +1710,7 @@ class LinkStore:
         entry = self._create_file_entry(
             filename, content_or_file,
             hashes=hashes,
-            ref_hash_spec=base_entry.best_available_hash_spec)
+            ref_hash_spec=base_entry.ref_hash_spec)
         if last_modified is not None:
             entry.last_modified = last_modified
         return self._add_link_to_file_entry(
