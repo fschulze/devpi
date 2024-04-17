@@ -131,7 +131,7 @@ class TestFileStore:
         link1 = gen.pypi_package_link("pytest-1.2.zip", md5=False, sha256=sha256_1)
         # write a wrong file outside the transaction
         entry1 = filestore.maplink(link1, "root", "pypi", "pytest")
-        entry1.hashes = get_hashes(content1)
+        entry1._hashes = get_hashes(content1)
         filepath = py.path.local(entry1.file_os_path())
         del entry1
         filepath.dirpath().ensure(dir=1)
@@ -163,8 +163,7 @@ class TestFileStore:
         entry = filestore.maplink(link, "root", "pypi", "pytest")
         assert entry.url == link.url
         assert not entry.file_exists()
-        hashes = get_hashes(b"")
-        entry.hash_spec = hash_spec = hashes.get_default_spec()
+        entry._hashes = hashes = get_hashes(b"")
         assert not entry.file_exists()
         content = b""
         entry.file_set_content(content, hashes=hashes)

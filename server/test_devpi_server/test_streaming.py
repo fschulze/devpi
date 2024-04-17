@@ -85,8 +85,7 @@ class TestStreaming(object):
             for part in stream:
                 data = data + part
             assert data == content
-        pkg_file = files_directory.join(
-            'root', 'mirror', '+f', digest[:3], digest[3:16], pkgzip)
+        pkg_file = files_directory.join(digest[:3], digest[3:])
         # this is sometimes delayed a bit, so we check for a while
         for i in range(50):
             if pkg_file.exists():

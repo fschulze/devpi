@@ -5,6 +5,7 @@ from .keyfs_types import FilePathInfo
 from .log import threadlog
 from contextlib import suppress
 from pathlib import Path
+from tempfile import SpooledTemporaryFile
 from zope.interface import Interface
 from zope.interface import alsoProvides
 from zope.interface import implementer
@@ -15,6 +16,28 @@ import shutil
 
 def split_digest(digest):
     return (digest[:3], digest[3:])
+
+
+# before Python 3.11 some methods were missing
+if not hasattr(SpooledTemporaryFile, 'readable'):
+    def readable(self):
+        return self._file.readable()
+    SpooledTemporaryFile.readable = readable  # type: ignore[assignment]
+
+if not hasattr(SpooledTemporaryFile, 'readinto'):
+    def readinto(self, buffer):
+        return self._file.readinto(buffer)
+    SpooledTemporaryFile.readinto = readinto  # type: ignore # noqa: PGH003
+
+if not hasattr(SpooledTemporaryFile, 'seekable'):
+    def seekable(self):
+        return self._file.seekable()
+    SpooledTemporaryFile.seekable = seekable  # type: ignore[assignment]
+
+if not hasattr(SpooledTemporaryFile, 'writable'):
+    def writable(self):
+        return self._file.writable()
+    SpooledTemporaryFile.writable = writable  # type: ignore[assignment]
 
 
 class ITempStorageFile(Interface):
@@ -131,10 +154,13 @@ class FSIOFile:
 
     def new_open(self, path):
         assert isinstance(path, FilePathInfo)
-        assert not self.exists(path)
-        path = str(self.basedir / "+files" / path.relpath)
-        assert not path.endswith("-tmp")
-        f = get_write_file_ensure_dir(DirtyFile(path).tmppath)
+        # if path.sha256_digest is None:
+        #     f = SpooledTemporaryFile(dir=str(self.basedir), max_size=1048576)
+        # else:
+        #     assert not self.exists(path)
+        #     assert not path.relpath.endswith("-tmp")
+        #     f = get_write_file_ensure_dir(DirtyFile(self.basedir, path).tmppath)
+        f = SpooledTemporaryFile(dir=str(self.basedir), max_size=1048576)
         alsoProvides(f, ITempStorageFile)
         return f
 

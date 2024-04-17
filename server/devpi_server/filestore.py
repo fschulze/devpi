@@ -520,14 +520,12 @@ class BaseFileEntry:
             if last_modified is None:
                 last_modified = unicode_if_bytes(format_date_time(None))
             self.last_modified = last_modified
-        else:
-            raise RuntimeError(f"{last_modified=}")
         hashes = Digests(hashes)
         missing_hash_types = hashes.get_missing_hash_types()
         if missing_hash_types:
             msg = f"Missing hash types: {missing_hash_types!r}"
             raise RuntimeError(msg)
-        self._hashes = hashes
+        self._hashes = self.hashes | hashes
         self.tx.io_file.set_content(self.file_path_info, content_or_file)
         # we make sure we always refresh the meta information
         # when we set the file content. Otherwise we might
