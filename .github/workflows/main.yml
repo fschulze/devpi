@@ -47,7 +47,7 @@ jobs:
       - uses: "actions/checkout@v4"
       - uses: "actions/setup-python@v5"
         with:
-          python-version: "3.8"
+          python-version: "3.9"
       - name: "Install dependencies"
         run: |
           set -xe -o nounset
@@ -216,13 +216,13 @@ jobs:
       matrix:
         include:
           - project: "server"
-            python-version: "3.7"
+            python-version: "3.9"
             os: "ubuntu-latest"
-            tox-envs: "py37"
+            tox-envs: "py39"
           - project: "server"
-            python-version: "3.7"
+            python-version: "3.9"
             os: "ubuntu-latest"
-            tox-envs: "py37-keyfs_sqlite"
+            tox-envs: "py39-keyfs_sqlite"
           - project: "server"
             python-version: "3.12"
             os: "ubuntu-latest"
@@ -261,13 +261,13 @@ jobs:
       matrix:
         include:
           - project: "web"
-            python-version: "3.7"
+            python-version: "3.9"
             os: "ubuntu-latest"
-            tox-envs: "py37"
+            tox-envs: "py39"
           - project: "web"
-            python-version: "3.7"
+            python-version: "3.9"
             os: "ubuntu-latest"
-            tox-envs: "py37-keyfs"
+            tox-envs: "py39-keyfs"
           - project: "web"
             python-version: "3.12"
             os: "ubuntu-latest"
@@ -447,13 +447,13 @@ jobs:
       matrix:
         include:
           - project: "server"
-            python-version: "3.7"
+            python-version: "3.9"
             os: "ubuntu-latest"
-            tox-envs: "py37"
+            tox-envs: "py39"
           - project: "web"
-            python-version: "3.7"
+            python-version: "3.9"
             os: "ubuntu-latest"
-            tox-envs: "py37"
+            tox-envs: "py39"
 
     env:
       PY_COLORS: 1
@@ -495,21 +495,21 @@ jobs:
       matrix:
         include:
           # - project: "postgresql"
-          #   python-version: "3.7"
+          #   python-version: "3.9"
           #   os: "ubuntu-latest"
-          #   tox-envs: "py37-postgresql"
+          #   tox-envs: "py39-postgresql"
           - project: "postgresql"
-            python-version: "3.7"
+            python-version: "3.9"
             os: "ubuntu-latest"
-            tox-envs: "py37-server"
+            tox-envs: "py39-server"
           # - project: "postgresql"
-          #   python-version: "3.7"
+          #   python-version: "3.9"
           #   os: "ubuntu-latest"
-          #   tox-envs: "py37-server_postgresql_ssl"
+          #   tox-envs: "py39-server_postgresql_ssl"
           - project: "postgresql"
-            python-version: "3.7"
+            python-version: "3.9"
             os: "ubuntu-latest"
-            tox-envs: "py37-dont_use_copy-server"
+            tox-envs: "py39-dont_use_copy-server"
           # - project: "postgresql"
           #   python-version: "3.12"
           #   os: "ubuntu-latest"
@@ -571,9 +571,9 @@ jobs:
       matrix:
         include:
           - project: "postgresql"
-            python-version: "3.7"
+            python-version: "3.9"
             os: "ubuntu-latest"
-            tox-envs: "py37-web"
+            tox-envs: "py39-web"
           - project: "postgresql"
             python-version: "3.12"
             os: "ubuntu-latest"
@@ -583,9 +583,9 @@ jobs:
             os: "ubuntu-latest"
             tox-envs: "pypy3-web"
           - project: "postgresql"
-            python-version: "3.7"
+            python-version: "3.9"
             os: "ubuntu-latest"
-            tox-envs: "py37-dont_use_copy-web"
+            tox-envs: "py39-dont_use_copy-web"
 
     env:
       PY_COLORS: 1
@@ -731,14 +731,14 @@ jobs:
             tox-envs: "py37"
             pytest-options: "--timeout 300"
           - project: "server"
-            python-version: "3.7"
+            python-version: "3.9"
             os: "windows-latest"
-            tox-envs: "py37"
+            tox-envs: "py39"
             pytest-options: ""
           - project: "web"
-            python-version: "3.7"
+            python-version: "3.9"
             os: "windows-latest"
-            tox-envs: "py37"
+            tox-envs: "py39"
             pytest-options: ""
 
     env:
@@ -786,15 +786,15 @@ jobs:
             # os-version: "13"
             tox-envs: "py38"
           - project: "server"
-            python-version: "3.8"
+            python-version: "3.9"
             os: "macos-latest"
             # os-version: "13"
-            tox-envs: "py38"
+            tox-envs: "py39"
           - project: "web"
-            python-version: "3.8"
+            python-version: "3.9"
             os: "macos-latest"
             # os-version: "13"
-            tox-envs: "py38"
+            tox-envs: "py39"
 
     env:
       PY_COLORS: 1
@@ -838,7 +838,7 @@ jobs:
       - uses: "actions/checkout@v4"
       - uses: "actions/setup-python@v5"
         with:
-          python-version: "3.7"
+          python-version: "3.9"
       - name: "Install dependencies"
         shell: "bash"
         run: |
