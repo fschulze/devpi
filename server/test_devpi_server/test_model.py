@@ -1396,10 +1396,10 @@ class TestLinkStore:
 
         tox_content1 = b'tox123'
         hash_spec1 = get_hashes(tox_content1).get_default_spec()
-        linkstore.new_reflink(rel="toxresult", content_or_file=tox_content1, for_entrypath=link1, hashes=get_hashes(tox_content1))
+        linkstore.new_reflink(rel="toxresult", content_or_file=tox_content1, for_link=link1, hashes=get_hashes(tox_content1))
         tox_content2 = b'tox456'
         hash_spec2 = get_hashes(tox_content2).get_default_spec()
-        linkstore.new_reflink(rel="toxresult", content_or_file=tox_content2, for_entrypath=link2, hashes=get_hashes(tox_content2))
+        linkstore.new_reflink(rel="toxresult", content_or_file=tox_content2, for_link=link2, hashes=get_hashes(tox_content2))
         rlink, = linkstore.get_links(rel="toxresult", for_entrypath=link1)
         assert rlink.best_available_hash_spec == hash_spec1
         assert rlink.for_entrypath == link1.entrypath
