@@ -1401,10 +1401,10 @@ class TestLinkStore:
         hash_spec2 = get_hashes(tox_content2).get_default_spec()
         linkstore.new_reflink(rel="toxresult", content_or_file=tox_content2, for_entrypath=link2, hashes=get_hashes(tox_content2))
         rlink, = linkstore.get_links(rel="toxresult", for_entrypath=link1)
-        assert rlink.hash_spec == hash_spec1
+        assert rlink.best_available_hash_spec == hash_spec1
         assert rlink.for_entrypath == link1.entrypath
         rlink, = linkstore.get_links(rel="toxresult", for_entrypath=link2)
-        assert rlink.hash_spec == hash_spec2
+        assert rlink.best_available_hash_spec == hash_spec2
         assert rlink.for_entrypath == link2.entrypath
 
         link1_entry = link1.entry  # queried below
