@@ -861,13 +861,12 @@ class TestFileReplication:
         l = []
         monkeypatch.setattr(xom.keyfs, "wait_tx_serial",
                             lambda x: l.append(x))
+        content = b'123'
         with xom.keyfs.write_transaction():
-            md5 = hashlib.md5()  # noqa: S324 - testing
-            md5.update(b'123')
-            link = gen.pypi_package_link(
-                "pytest-1.8.zip", md5=md5.hexdigest())
+            md5_1 = get_hashes(content, hash_types=('md5',))['md5']
+            link = gen.pypi_package_link("pytest-1.8.zip", md5=md5_1)
             entry = xom.filestore.maplink(link, "root", "pypi", "pytest")
-            assert entry.hash_spec
+            assert entry.best_available_hash_spec == f"md5={md5_1}"
             assert not entry.file_exists()
         replay(xom, replica_xom)
         with replica_xom.keyfs.read_transaction():
@@ -879,7 +878,7 @@ class TestFileReplication:
             url = replica_xom.config.primary_url.joinpath(entry.relpath).url
             pypistage.xom.httpget.mockresponse(url, status_code=500)
             pypistage.xom.httpget.mockresponse(
-                entry.url, headers=headers, content=b'123')
+                entry.url, headers=headers, content=content)
             stage = replica_xom.model.getstage('root/pypi')
             result = iter_remote_file_replica(stage, entry, entry.url)
             headers = next(result)
@@ -892,7 +891,7 @@ class TestFileReplication:
             # and UUID header
             assert call_log_entry['extra_headers'][H_REPLICA_UUID]
             assert headers['content-length'] == '3'
-            assert b''.join(result) == b'123'
+            assert b''.join(result) == content
 
     def test_checksum_mismatch(self, xom, replica_xom, maketestapp,
                                makemapp, patch_reqsessionmock):
