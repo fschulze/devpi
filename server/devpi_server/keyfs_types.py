@@ -32,6 +32,7 @@ class RelpathInfo:
 @define
 class FilePathInfo:
     relpath: str
+    hash_digest: str | None
 
 
 class PTypedKey:

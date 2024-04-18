@@ -893,7 +893,7 @@ class TestFileReplication:
             assert headers['content-length'] == '3'
             assert b''.join(result) == content
 
-    def test_checksum_mismatch(self, xom, replica_xom, maketestapp,
+    def test_checksum_mismatch(self, file_digest, xom, replica_xom, maketestapp,
                                makemapp, patch_reqsessionmock):
         # this test might seem to be doing the same as test_fetch above, but
         # test_fetch creates a new transaction for the same file, which doesn't
@@ -909,7 +909,7 @@ class TestFileReplication:
         # first we try to return something wrong
         primary_url = replica_xom.config.primary_url
         (path,) = mapp.get_release_paths('hello')
-        file_path_info = FilePathInfo(f"+files{path}")
+        file_path_info = FilePathInfo(f"+files{path}", file_digest(content1))
         primary_file_url = primary_url.joinpath(path).url
         frt_reqmock.mockresponse(primary_file_url, code=200, data=b'13')
         replay(xom, replica_xom, events=False)
