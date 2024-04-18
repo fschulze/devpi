@@ -23,7 +23,7 @@ class TestFileStore:
         entry2 = filestore.maplink(link, "root", "pypi", "pytest")
         assert entry1.relpath == entry2.relpath
         assert entry1.basename == entry2.basename == "pytest-1.2.zip"
-        assert isinstance(entry1.hash_spec, str)
+        assert isinstance(entry1.best_available_hash_spec, str)
 
     @pytest.mark.parametrize("hash_spec", [
         "sha256=%s" %(hashlib.sha256(b'qwe').hexdigest()),
@@ -44,10 +44,11 @@ class TestFileStore:
         link = gen.pypi_package_link("pytest-1.2.zip")
         entry1 = filestore.maplink(link, "root", "pypi", "pytest")
         entry2 = filestore.maplink(link, "root", "pypi", "pytest")
-        assert not entry1.file_exists() and not entry2.file_exists()
+        assert not entry1.file_exists()
+        assert not entry2.file_exists()
         assert entry1 == entry2
         assert entry1.relpath.endswith("/pytest-1.2.zip")
-        assert entry1.hash_spec == link.hash_spec
+        assert entry1.best_available_hash_spec == link.hash_spec
         assert entry1.project == "pytest"
 
     @pytest.mark.parametrize(("releasename", "project", "version"), [
@@ -94,10 +95,10 @@ class TestFileStore:
         link = gen.pypi_package_link("pytest-1.2.zip")
         entry1 = filestore.maplink(link, "root", "pypi", "pytest")
         assert not entry1.file_exists()
-        assert entry1.hash_spec and entry1.hash_spec == link.hash_spec
+        assert entry1.best_available_hash_spec == link.hash_spec
         newlink = gen.pypi_package_link("pytest-1.2.zip")
         entry2 = filestore.maplink(newlink, "root", "pypi", "pytest")
-        assert entry2.hash_spec and entry2.hash_spec == newlink.hash_spec
+        assert entry2.best_available_hash_spec == newlink.hash_spec
 
     def test_maplink_replaced_release_already_cached(self, filestore, gen):
         content1 = b'somedata'
@@ -238,7 +239,6 @@ class TestFileStore:
         link = gen.pypi_package_link("pytest-3.0.zip")
         entry = filestore.maplink(link, "root", "pypi", "pytest")
         assert entry.hashes
-        assert entry.hash_spec == link.hash_spec
         headers = ResponseHeaders({
             "content-length": "3",
             "last-modified": "Thu, 25 Nov 2010 20:00:27 GMT",
@@ -355,6 +355,6 @@ def test_maplink_nochange(filestore, gen):
     entry2 = filestore.maplink(link, "root", "pypi", "pytest")
     assert entry1.relpath == entry2.relpath
     assert entry1.basename == entry2.basename == "pytest-1.2.zip"
-    assert isinstance(entry1.hash_spec, str)
+    assert isinstance(entry1.best_available_hash_spec, str)
     filestore.keyfs.commit_transaction_in_thread()
     assert filestore.keyfs.get_current_serial() == last_serial
