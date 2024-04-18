@@ -281,7 +281,7 @@ class TestExtPYPIDB:
                         "url":"https://files.pythonhosted.org/packages/40/b6/45e98504eba446c8e97ce946760893072cdf3bf6cdd18c296394a55621f9/devpi-0.9.tar.gz",
                         "yanked":false}]}""")
         (link,) = pypistage.get_releaselinks("devpi")
-        assert link.hash_spec == 'sha256=b89846ad42cfee0e44934ef77f28ad44e90b7e744041ace91047dd4c7892cc5e'
+        assert link.best_available_hash_spec == 'sha256=b89846ad42cfee0e44934ef77f28ad44e90b7e744041ace91047dd4c7892cc5e'
         assert link.yanked is None
         assert link.require_python is None
 
@@ -303,7 +303,7 @@ class TestExtPYPIDB:
                         "yanked": "brownbag"}]}""")
         links = pypistage.get_releaselinks("devpi")
         link, = links
-        assert link.hash_spec == 'sha256=b89846ad42cfee0e44934ef77f28ad44e90b7e744041ace91047dd4c7892cc5e'
+        assert link.best_available_hash_spec == 'sha256=b89846ad42cfee0e44934ef77f28ad44e90b7e744041ace91047dd4c7892cc5e'
         assert link.yanked == "brownbag"
         assert link.require_python == ">=3.6"
 
@@ -324,7 +324,7 @@ class TestExtPYPIDB:
                         "url":"https://files.pythonhosted.org/packages/40/b6/45e98504eba446c8e97ce946760893072cdf3bf6cdd18c296394a55621f9/devpi-0.9.tar.gz",
                         "yanked":false}]}""")
         (link,) = pypistage.get_releaselinks("devpi")
-        assert link.hash_spec == 'md5=dbb53f3699703c028483658773628452'
+        assert link.best_available_hash_spec == 'md5=dbb53f3699703c028483658773628452'
         assert link.yanked is None
         assert link.require_python is None
 
@@ -334,21 +334,23 @@ class TestExtPYPIDB:
         link, = links
         assert link.version == "1.0"
         assert link.entry.url == "https://pypi.org/pytest/pytest-1.0.zip"
-        assert not link.hash_spec
+        assert not link.best_available_hash_spec
         assert link.entrypath.endswith("/pytest-1.0.zip")
         assert link.entrypath == link.entry.relpath
 
     @pytest.mark.parametrize("hash_type", ["md5", "sha256"])
     def test_parse_project_replaced_md5(self, pypistage, hash_type):
-        x = pypistage.mock_simple("pytest", pypiserial=10, hash_type=hash_type,
-                                   pkgver="pytest-1.0.zip")
+        x = pypistage.mock_simple(
+            "pytest", pypiserial=10, hash_type=hash_type,
+            pkgver="pytest-1.0.zip")
         links = pypistage.get_releaselinks("pytest")
-        assert links[0].hash_spec == x.hash_spec
+        assert links[0].best_available_hash_spec == x.hash_spec
 
-        y = pypistage.mock_simple("pytest", pypiserial=11, hash_type=hash_type,
-                                   pkgver="pytest-1.0.zip")
+        y = pypistage.mock_simple(
+            "pytest", pypiserial=11, hash_type=hash_type,
+            pkgver="pytest-1.0.zip")
         links = pypistage.get_releaselinks("pytest")
-        assert links[0].hash_spec == y.hash_spec
+        assert links[0].best_available_hash_spec == y.hash_spec
         assert x.hash_spec != y.hash_spec
 
     def test_get_versiondata_inexistent(self, pypistage):
@@ -380,8 +382,7 @@ class TestExtPYPIDB:
         links = pypistage.get_linkstore_perstage("pytest", "1.0").get_links()
         assert len(links) == 1
         assert links[0].basename == "pytest-1.0.zip"
-        assert links[0].entry.hash_spec.startswith("md5=")
-        assert links[0].entry.hash_spec.endswith(md5)
+        assert links[0].entry.best_available_hash_spec == f"md5={md5}"
 
         # check refresh
         hashdir_b = getmd5("456")
