@@ -29,7 +29,6 @@ from pyramid.httpexceptions import status_map
 from queue import Queue as BaseQueue
 from webtest import TestApp as TApp
 from webtest import TestResponse
-import hashlib
 
 
 pytest_plugins = ["test_devpi_server.reqmock"]
@@ -1392,12 +1391,16 @@ def gen():
 
 
 class Gen:
-    def pypi_package_link(self, pkgname, *, md5=True):
+    def __init__(self):
+        from devpi_server.filestore import get_hashes
+        self.get_hashes = get_hashes
+
+    def pypi_package_link(self, pkgname, *, hash_spec=True):
         link = "https://pypi.org/package/some/%s" % pkgname
-        if md5 is True:
-            md5 = hashlib.md5(link.encode()).hexdigest()  # noqa: S324
-        if md5:
-            link += "#md5=%s" % md5
+        if hash_spec is True:
+            hash_spec = self.get_hashes(link.encode()).get_default_spec()
+        if hash_spec:
+            link = f"{link}#{hash_spec}"
         return URL(link)
 
 
