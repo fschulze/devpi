@@ -289,9 +289,10 @@ class IndexDump:
             reflink = linkstore.stage.get_link_from_entrypath(tox_link.for_entrypath)
             relpath = self.exporter.copy_file(
                 tox_link.entry,
-                self.basedir.join(linkstore.project, reflink.hash_spec,
-                                  tox_link.basename)
-            )
+                self.basedir.join(
+                    linkstore.project,
+                    reflink.best_available_hash_spec,
+                    tox_link.basename))
             self.add_filedesc(type="toxresult",
                               project=linkstore.project,
                               relpath=relpath,

@@ -1625,11 +1625,11 @@ class ELink:
         return self.hashes.best_available_type
 
     def matches_checksum(self, content_or_file):
-        hash_algo, hash_value = parse_hash_spec(self.hash_spec)
+        hash_algo, hash_value = parse_hash_spec(self.best_available_hash_spec)
         if not hash_algo:
             return True
         return get_hash_spec(
-            content_or_file, hash_algo().name) == self.hash_spec
+            content_or_file, hash_algo().name) == self.best_available_hash_spec
 
     def __repr__(self):
         return "<ELink rel=%r entrypath=%r>" % (self.rel, self.entrypath)
@@ -1713,7 +1713,7 @@ class LinkStore:
         entry = self._create_file_entry(
             filename, content_or_file,
             hashes=hashes,
-            ref_hash_spec=base_entry.hash_spec)
+            ref_hash_spec=base_entry.best_available_hash_spec)
         if last_modified is not None:
             entry.last_modified = last_modified
         return self._add_link_to_file_entry(
@@ -1903,8 +1903,8 @@ def make_key_and_href(entry):
     # entry is either an ELink or a filestore.FileEntry instance.
     # both provide a "relpath" attribute which points to a file entry.
     href = entry.relpath
-    if entry.hash_spec:
-        href += "#" + entry.hash_spec
+    if (hash_spec := entry.best_available_hash_spec):
+        href += "#" + hash_spec
     return entry.basename, href
 
 
