@@ -62,12 +62,13 @@ class TestRenameFileLogic:
 
     @pytest.mark.storage_with_filesystem
     @pytest.mark.notransaction
-    def test_dirty_files_removed_on_rollback(self, keyfs):
-        with pytest.raises(RuntimeError):
-            with keyfs.read_transaction() as tx:
-                tx.io_file.set_content(FilePathInfo('foo'), b'foo')
-                tmppath = tx.io_file._dirty_files[keyfs.basedir.join('+files', 'foo').strpath].tmppath
-                assert os.path.exists(tmppath)
-                # abort transaction
-                raise RuntimeError
+    def test_dirty_files_removed_on_rollback(self, file_digest, keyfs):
+        content = b'foo'
+        content_hash = file_digest(content)
+        with pytest.raises(RuntimeError), keyfs.read_transaction() as tx:  # noqa: PT012
+            tx.io_file.set_content(FilePathInfo('foo', content_hash), content)
+            tmppath = tx.io_file._dirty_files[keyfs.basedir.join('+files', 'foo').strpath].tmppath
+            assert os.path.exists(tmppath)
+            # abort transaction
+            raise RuntimeError
         assert not os.path.exists(tmppath)
