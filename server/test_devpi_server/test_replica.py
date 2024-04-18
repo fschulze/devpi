@@ -1,4 +1,3 @@
-import hashlib
 import os
 import pytest
 from devpi_server.log import thread_pop_log
@@ -695,8 +694,8 @@ class TestFileReplication:
     def test_fetch(self, gen, reqmock, xom, replica_xom):
         replay(xom, replica_xom)
         content1 = b'hello'
-        md5 = hashlib.md5(content1).hexdigest()
-        link = gen.pypi_package_link("pytest-1.8.zip#md5=%s" % md5, md5=False)
+        md5_1 = get_hashes(content1, hash_types=('md5',))
+        link = gen.pypi_package_link("pytest-1.8.zip", hash_spec=md5_1.get_spec('md5'))
         with xom.keyfs.write_transaction():
             entry = xom.filestore.maplink(link, "root", "pypi", "pytest")
             assert not entry.file_exists()
@@ -746,8 +745,8 @@ class TestFileReplication:
     def test_fetch_later_deleted(self, gen, xom, replica_xom):
         replay(xom, replica_xom)
         content1 = b'hello'
-        md5 = hashlib.md5(content1).hexdigest()
-        link = gen.pypi_package_link("pytest-1.8.zip#md5=%s" % md5, md5=False)
+        md5_1 = get_hashes(content1, hash_types=('md5',))
+        link = gen.pypi_package_link("pytest-1.8.zip", hash_spec=md5_1.get_spec('md5'))
         with xom.keyfs.write_transaction():
             entry = xom.filestore.maplink(link, "root", "pypi", "pytest")
             assert not entry.file_exists()
@@ -783,7 +782,7 @@ class TestFileReplication:
         frt_reqmock = patch_reqsessionmock(frthread.session)
         replay(xom, replica_xom)
         content1 = b'hello'
-        link = gen.pypi_package_link("some-1.8.zip", md5=False)
+        link = gen.pypi_package_link("some-1.8.zip", hash_spec=False)
         with xom.keyfs.write_transaction():
             entry = xom.filestore.maplink(link, "root", "pypi", "some")
             assert not entry.file_exists()
@@ -840,7 +839,7 @@ class TestFileReplication:
         monkeypatch.setattr(xom.keyfs, "wait_tx_serial",
                             lambda x: l.append(x))
         with xom.keyfs.write_transaction():
-            link = gen.pypi_package_link("pytest-1.8.zip", md5=True)
+            link = gen.pypi_package_link("pytest-1.8.zip", hash_spec=True)
             entry = xom.filestore.maplink(link, "root", "pypi", "pytest")
             assert entry.hashes
             assert not entry.file_exists()
@@ -863,10 +862,10 @@ class TestFileReplication:
                             lambda x: l.append(x))
         content = b'123'
         with xom.keyfs.write_transaction():
-            md5_1 = get_hashes(content, hash_types=('md5',))['md5']
-            link = gen.pypi_package_link("pytest-1.8.zip", md5=md5_1)
+            md5_1 = get_hashes(content, hash_types=('md5',)).get_spec('md5')
+            link = gen.pypi_package_link("pytest-1.8.zip", hash_spec=md5_1)
             entry = xom.filestore.maplink(link, "root", "pypi", "pytest")
-            assert entry.best_available_hash_spec == f"md5={md5_1}"
+            assert entry.best_available_hash_spec == md5_1
             assert not entry.file_exists()
         replay(xom, replica_xom)
         with replica_xom.keyfs.read_transaction():
