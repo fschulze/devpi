@@ -521,7 +521,7 @@ class TestImportExport:
             assert link.project == "dddttt"
             assert link.version == "0.1.dev1"
             assert link.relpath == f'root/pypi/+f/{hashdir}/dddttt-0.1.dev1.tar.gz'
-            assert link.entry.hash_spec == hash_spec
+            assert link.entry.best_available_hash_spec == hash_spec
 
     def test_modifiedpypi(self, impexp):
         mapp = impexp.import_testdata('modifiedpypi')
