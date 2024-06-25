@@ -223,6 +223,24 @@ def test_fallback_ini_relative(makehub, tmpdir, pseudo_current):
     assert contains_sublist(args, ["-c", str(p2)])
 
 
+def test_pyproject_toml(makehub, tmpdir, pseudo_current):
+    p = tmpdir.join("pyproject.toml")
+    p.write_text("[tool.tox]", "utf-8")
+    hub = makehub(["test", "somepkg"])
+    index = DevIndex(hub, tmpdir, pseudo_current)
+    args = index.get_tox_args(unpack_path=Path(tmpdir.strpath))
+    assert contains_sublist(args, ["-c", str(p)])
+
+
+def test_setup_cfg(makehub, tmpdir, pseudo_current):
+    p = tmpdir.join("setup.cfg")
+    p.write_text("[tox:tox]", "utf-8")
+    hub = makehub(["test", "somepkg"])
+    index = DevIndex(hub, tmpdir, pseudo_current)
+    args = index.get_tox_args(unpack_path=Path(tmpdir.strpath))
+    assert contains_sublist(args, ["-c", str(p)])
+
+
 class TestWheel:
     def test_find_wheels_and_sdist(self, loghub):
         vl = ViewLinkStore("http://something/index", {"+links": [

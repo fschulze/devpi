@@ -5,6 +5,7 @@ import shutil
 from devpi_common.archive import Archive
 from devpi_common.contextlib import chdir
 from devpi_common.metadata import parse_requirement
+import iniconfig
 import itertools
 import json
 import sys
@@ -13,6 +14,15 @@ from devpi_common.url import URL
 from devpi_common.metadata import get_sorted_versions
 from devpi_common.viewhelp import ViewLinkStore
 from pathlib import Path
+
+
+def check_ini(path, section):
+    if not path.is_file():
+        return False
+    if section is None:
+        return True
+    ini = iniconfig.IniConfig(path)
+    return section in ini.sections
 
 
 class DevIndex:
@@ -127,8 +137,12 @@ class DevIndex:
             toxargs.append("-e" + args.toxenv)
         if args.toxini:
             ini = hub.get_existing_file(args.toxini)
-        elif unpack_path.joinpath("tox.ini").is_file():
+        elif check_ini(unpack_path / "tox.ini", None):
             ini = hub.get_existing_file(unpack_path / "tox.ini")
+        elif check_ini(unpack_path / "pyproject.toml", "tool.tox"):
+            ini = hub.get_existing_file(unpack_path / "pyproject.toml")
+        elif check_ini(unpack_path / "setup.cfg", "tox:tox"):
+            ini = hub.get_existing_file(unpack_path / "setup.cfg")
         elif args.fallback_ini:
             if Path(args.fallback_ini).is_file():
                 # seems to be a direct path
@@ -137,7 +151,7 @@ class DevIndex:
                 # try relative to unpack_path
                 ini = hub.get_existing_file(unpack_path.joinpath(args.fallback_ini))
         else:
-            hub.fatal("no tox.ini file found in %s" % unpack_path)
+            hub.fatal("no tox.ini/pyproject.toml/setup.cfg file found in %s" % unpack_path)
         toxargs.extend(["-c", str(ini)])
         if args.toxargs:
             toxargs.extend(shlex.split(args.toxargs))
