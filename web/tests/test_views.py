@@ -23,8 +23,14 @@ def compareable_text(text):
 def test_macros(dummyrequest, pyramidconfig):
     pyramidconfig.include('pyramid_chameleon')
     pyramidconfig.include('devpi_web.macroregistry')
+    pyramidconfig.scan('devpi_web.macros')
     macros = dummyrequest.registry["macros"]
-    assert sorted(macros._groups) == []
+    assert sorted(macros.get_groups()) == [
+        "main_footer",
+    ]
+    assert macros.get_group("main_footer") == [
+        "footer_versions",
+    ]
 
 
 def test_root_view(testapp):
