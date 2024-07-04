@@ -27,9 +27,13 @@ def test_macros(dummyrequest, pyramidconfig):
     macros = dummyrequest.registry["macros"]
     assert sorted(macros.get_groups()) == [
         "main_footer",
+        "main_header",
     ]
     assert macros.get_group("main_footer") == [
         "footer_versions",
+    ]
+    assert macros.get_group("main_header") == [
+        "header_status",
     ]
 
 
