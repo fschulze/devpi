@@ -1,0 +1,1 @@
+<metal:macros tal:repeat="name macro_names" use-macro="macros[name]" />
