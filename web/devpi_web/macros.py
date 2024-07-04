@@ -107,11 +107,6 @@ def index_permissions(request):
     return dict()
 
 
-@macro_config(template='templates/index_title.pt', groups='index')
-def index_title(request):
-    return dict()
-
-
 @macro_config(
     template='templates/index_whitelist.pt',
     groups=GroupDef('index', after='index_bases'))
@@ -134,6 +129,34 @@ def logout_form(request):
     return dict(url=url)
 
 
+@macro_config(
+    template='templates/project_latest_version.pt',
+    groups=GroupDef('project', after='project_refresh'))
+def project_latest_version(request):
+    return dict()
+
+
+@macro_config(
+    template='templates/project_refresh.pt',
+    groups=GroupDef('project', after='project_whitelist'))
+def project_refresh(request):
+    return dict()
+
+
+@macro_config(
+    template='templates/project_versions.pt',
+    groups=GroupDef('project', after='project_latest_version'))
+def project_versions(request):
+    return dict()
+
+
+@macro_config(
+    template='templates/project_whitelist.pt',
+    groups=GroupDef('project', after='subnavigation'))
+def project_whitelist(request):
+    return dict()
+
+
 @macro_config(template='templates/query_docs.pt')
 def query_doc(request):
     query_docs_html = None
@@ -150,8 +173,15 @@ def status_badge(request):
 
 @macro_config(
     template='templates/subnavigation.pt',
-    groups=GroupDef('index', after='index_title'))
+    groups=(
+        GroupDef('index', after='title'),
+        GroupDef('project', after='title')))
 def subnavigation(request):
+    return dict()
+
+
+@macro_config(template='templates/title.pt', groups=('index', 'project'))
+def title(request):
     return dict()
 
 

@@ -224,13 +224,13 @@ a.logo {
     font-size: 0.75rem;
 }
 
-h1.index_title span:before,
+h1.title span:before,
 .user_index_list dt span:before,
 .user_index_list ul a span:before {
     content: "(";
 }
 
-h1.index_title span:after,
+h1.title span:after,
 .user_index_list dt span:after,
 .user_index_list ul a span:after {
     content: ")";
@@ -721,7 +721,7 @@ footer li {
             "packages  ."
     }
 
-    .index_title {
+    h1.title {
         grid-area: title;
         margin-bottom: 0;
     }

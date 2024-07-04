@@ -1,0 +1,3 @@
+<aside class="project_whitelist" tal:condition="refresh_form">
+    <p tal:content="structure refresh_form"></p>
+</aside>

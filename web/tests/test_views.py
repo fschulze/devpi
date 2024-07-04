@@ -26,6 +26,7 @@ def test_macros(dummyrequest, pyramidconfig):
         "main_header",
         "main_header_top",
         "main_navigation",
+        "project",
         "root",
         "user",
     ]
@@ -58,13 +59,21 @@ def test_macros(dummyrequest, pyramidconfig):
         "user_index_list",
     ]
     assert macros.get_group("index") == [
-        "index_title",
+        "title",
         "subnavigation",
         "index_packages",
         "index_description",
         "index_permissions",
         "index_bases",
         "index_whitelist",
+    ]
+    assert macros.get_group("project") == [
+        "title",
+        "subnavigation",
+        "project_whitelist",
+        "project_refresh",
+        "project_latest_version",
+        "project_versions",
     ]
 
 
@@ -241,8 +250,8 @@ def test_title_description(mapp, testapp):
     assert [x.attrs.get('title') for x in links] == [None, None, None, 'indexdescription']
     r = testapp.xget(200, api.index, headers=dict(accept="text/html"))
     (content,) = r.html.select('main')
-    (indextitle,) = content.select('.index_title')
-    assert compareable_text(indextitle.text) == "user1/dev indextitle index"
+    (indextitle,) = content.select('.title')
+    assert compareable_text(indextitle.text) == "user1/dev (indextitle) index"
     (p,) = content.select('.index_description')
     assert compareable_text(p.text) == "indexdescription"
 
