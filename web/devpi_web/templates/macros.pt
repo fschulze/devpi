@@ -12,19 +12,6 @@
     <metal:headcss use-macro="request.macros['headcss']" />
     <metal:headscript use-macro="request.macros['headscript']" />
 </metal:head>
-<metal:status define-macro="status">
-    <div id="serverstatus" class="${request.status_info.status}"
-         tal:condition="request.status_info.status == 'fatal'">
-        <ul>
-            <tal:msgs repeat="msg request.status_info.msgs">
-                <li tal:condition="msg.status == 'fatal'">${msg.msg}</li>
-            </tal:msgs>
-        </ul>
-        <a href="${request.status_info.url}">
-            Server status ...
-        </a>
-    </div>
-</metal:status>
 <metal:search define-macro="search">
     <form method="get" id="search" action="${request.route_url('search')}">
         <metal:logo use-macro="macros.logo" />
@@ -79,7 +66,7 @@
             </span>
             <metal:statusbadge use-macro="macros.status_badge" />
         </div>
-        <metal:status use-macro="request.macros['status']" />
+        <metal:headerstatus use-macro="macros.header_status" />
         <metal:endofheader define-slot="endofheader" />
     </div>
 </metal:search>
