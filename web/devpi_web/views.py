@@ -1,6 +1,7 @@
 from attrs import define
 from defusedxml.xmlrpc import DefusedExpatParser
 from devpi_common.metadata import Version
+from devpi_common.metadata import get_latest_version
 from devpi_common.metadata import get_pyversion_filetype
 from devpi_common.metadata import get_sorted_versions
 from devpi_common.types import cached_property
@@ -481,11 +482,19 @@ def get_docs_info(request, stage, linkstore):
     name, ver = normalize_name(linkstore.project), linkstore.version
     if docs_exist(stage, name, ver, links[0].entry):
         return dict(
+            name=name,
+            version=ver,
             title="%s-%s" % (name, ver),
             url=request.route_url(
-                "docviewroot", user=stage.user.name, index=stage.index,
-                project=name, version=ver, relpath="index.html"),
-            zip_url=url_for_entrypath(request, links[0].entrypath))
+                "docviewroot",
+                user=stage.user.name,
+                index=stage.index,
+                project=name,
+                version=ver,
+                relpath="index.html",
+            ),
+            zip_url=url_for_entrypath(request, links[0].entrypath),
+        )
 
 
 def get_user_info(context, request, user):
@@ -599,33 +608,75 @@ def index_get(context, request):
                 special=special,
                 users=users))
 
-    for project in stage.list_projects_perstage():
-        version = stage.get_latest_version_perstage(project)
-        verdata = stage.get_versiondata_perstage(project, version)
-        try:
-            name, ver = normalize_name(verdata["name"]), verdata["version"]
-        except KeyError:
-            log.error("metadata for project %r empty: %s, skipping",
-                      project, verdata)
-            continue
+    for project in sorted(stage.list_projects_perstage()):
+        _versions = stage.filter_versions(
+            project, stage.list_versions_perstage(project)
+        )
+        latest_version = get_latest_version(_versions)
+        stable_version = get_latest_version(_versions, stable=True)
+        versions = []
         show_toxresults = (stage.ixconfig['type'] != 'mirror')
-        linkstore = stage.get_linkstore_perstage(name, ver)
-        packages.append(dict(
-            info=dict(
-                title="%s-%s" % (name, ver),
-                url=request.route_url(
-                    "/{user}/{index}/{project}/{version}",
-                    user=stage.user.name, index=stage.index,
-                    project=name, version=ver)),
-            make_toxresults_url=functools.partial(
-                request.route_url, "toxresults",
-                user=stage.user.name, index=stage.index,
-                project=name, version=ver),
-            files=get_files_info(request, linkstore, show_toxresults=show_toxresults),
-            docs=get_docs_info(request, stage, linkstore),
-            _version_data=verdata))
-    packages.sort(key=lambda x: x["info"]["title"])
 
+        def add_version(versions, show_toxresults, project, version, is_pre_release):
+            verdata = stage.get_versiondata_perstage(project, version)
+            try:
+                (name, version) = (normalize_name(verdata["name"]), verdata["version"])
+            except KeyError:
+                log.error(
+                    "metadata for project %r %r empty: %s, skipping",
+                    project,
+                    version,
+                    verdata,
+                )
+                return
+            linkstore = stage.get_linkstore_perstage(name, version)
+            versions.append(
+                dict(
+                    version=version,
+                    is_pre_release=is_pre_release,
+                    docs=get_docs_info(request, stage, linkstore),
+                    files=get_files_info(
+                        request, linkstore, show_toxresults=show_toxresults
+                    ),
+                    url=request.route_url(
+                        "/{user}/{index}/{project}/{version}",
+                        user=stage.user.name,
+                        index=stage.index,
+                        project=name,
+                        version=version,
+                    ),
+                    make_toxresults_url=functools.partial(
+                        request.route_url,
+                        "toxresults",
+                        user=stage.user.name,
+                        index=stage.index,
+                        project=name,
+                        version=version,
+                    ),
+                    _version_data=verdata,
+                )
+            )
+
+        if stable_version is not None:
+            add_version(
+                versions, show_toxresults, project, stable_version, is_pre_release=False
+            )
+        if latest_version is not None and stable_version != latest_version:
+            add_version(
+                versions, show_toxresults, project, latest_version, is_pre_release=True
+            )
+        packages.append(
+            dict(
+                name=project,
+                versions=versions,
+                url=request.route_url(
+                    "/{user}/{index}/{project}",
+                    user=stage.user.name,
+                    index=stage.index,
+                    project=project,
+                ),
+            )
+        )
     return result
 
 

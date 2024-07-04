@@ -3,31 +3,39 @@
 <table class="packages">
     <thead>
         <tr>
-            <th>Info page</th>
+            <th>Name</th>
+            <th>Version</th>
             <th>Releases</th>
             <th>Documentation</th>
         </tr>
     </thead>
     <tbody>
-    <tr tal:repeat="package packages">
-        <td><a href="${package.info.url}">${package.info.title}</a></td>
+    <tal:packages repeat="package packages">
+    <tr class="${repeat.package.parity}" tal:repeat="version_info package.versions">
         <td>
-            <tal:files condition="package.files" repeat="file package.files">
+            <a tal:condition="repeat.version_info.start" href="${package.url}">${package.name}</a>
+        </td>
+        <td class="${'prerelease' if version_info.is_pre_release else 'stable'}">
+            <a href="${version_info.url}">${version_info.version}</a>
+        </td>
+        <td>
+            <tal:files condition="version_info.files" repeat="file version_info.files">
                 <tal:file define="toxresults file.get('toxresults', []);
                                   toxresults_state file.get('toxresults_state', None)">
                     <a href="${file.url}">${file.title}</a>
                     <tal:tests condition="toxresults_state is not None">
-                        (<a href="${package.make_toxresults_url(basename=file.basename)}" class="${toxresults_state}">tests</a>)
+                        (<a href="${version_info.make_toxresults_url(basename=file.basename)}" class="${toxresults_state}">tests</a>)
                     </tal:tests>
                     <br tal:condition="not repeat.file.end">
                 </tal:file>
             </tal:files>
         </td>
         <td>
-            <a tal:condition="package.docs" href="${package.docs.url}">${package.docs.title}</a>
-            <span tal:condition="package.docs">(<a href="${package.docs.zip_url}">Download</a>)</span>
+            <a tal:condition="version_info.docs" href="${version_info.docs.url}">${version_info.docs.name} ${version_info.docs.version}</a>
+            <span tal:condition="version_info.docs">(<a href="${version_info.docs.zip_url}">Download</a>)</span>
         </td>
     </tr>
+    </tal:packages>
     </tbody>
 </table>
 </tal:packages>

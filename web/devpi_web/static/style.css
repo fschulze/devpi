@@ -292,7 +292,7 @@ table.versions thead {
 }
 
 table.files tbody tr:nth-child(even),
-table.packages tbody tr:nth-child(even),
+table.packages tbody tr.odd,
 table.toxresults tbody tr:nth-child(even),
 table.versions tbody tr:nth-child(even) {
     background: #efefef;
@@ -313,6 +313,22 @@ table.files dd {
     margin: 0 1em 0 0;
     padding: 0;
     display: inline;
+}
+
+table.packages td.prerelease a:after {
+    display: inline-block;
+    color: white;
+    font-size: 12px;
+    padding: 3px 5px;
+    margin: 0 0 0 5px;
+    border-radius: 3px;
+    text-shadow: 1px 1px 1px #555555;
+    line-height: 1em;
+}
+
+table.packages td.prerelease a:after {
+    content: "Pre-release";
+    background-color: #bfa047;
 }
 
 .packagename {
