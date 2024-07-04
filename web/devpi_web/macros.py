@@ -79,6 +79,46 @@ def html_head_scripts(request):
     return dict(scripts=scripts)
 
 
+@macro_config(
+    template='templates/index_bases.pt',
+    groups=GroupDef('index', after='index_permissions'))
+def index_bases(request):
+    return dict()
+
+
+@macro_config(
+    template='templates/index_description.pt',
+    groups=GroupDef('index', after='index_packages'))
+def index_description(request):
+    return dict()
+
+
+@macro_config(
+    template='templates/index_packages.pt',
+    groups=GroupDef('index', after='subnavigation'))
+def index_packages(request):
+    return dict()
+
+
+@macro_config(
+    template='templates/index_permissions.pt',
+    groups=GroupDef('index', after='index_description'))
+def index_permissions(request):
+    return dict()
+
+
+@macro_config(template='templates/index_title.pt', groups='index')
+def index_title(request):
+    return dict()
+
+
+@macro_config(
+    template='templates/index_whitelist.pt',
+    groups=GroupDef('index', after='index_bases'))
+def index_whitelist(request):
+    return dict()
+
+
 @macro_config(template='templates/logo.pt', groups='main_header_top')
 def logo(request):
     return dict()
@@ -106,6 +146,13 @@ def query_doc(request):
 @macro_config(template='templates/status_badge.pt', groups='main_navigation')
 def status_badge(request):
     return dict(status_info=status_info(request))
+
+
+@macro_config(
+    template='templates/subnavigation.pt',
+    groups=GroupDef('index', after='index_title'))
+def subnavigation(request):
+    return dict()
 
 
 @macro_config(template='templates/user_index_list.pt', groups=('root', 'user'))

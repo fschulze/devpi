@@ -1,0 +1,3 @@
+<h1 class="index_title">
+    ${index_name} <span tal:condition="index_title">${index_title}</span> index
+</h1>

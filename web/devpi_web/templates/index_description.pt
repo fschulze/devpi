@@ -1,0 +1,1 @@
+<p class="index_description" tal:condition="index_description">${index_description}</p>

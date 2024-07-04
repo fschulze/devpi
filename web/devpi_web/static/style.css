@@ -554,38 +554,38 @@ table.projectinfos .opened td:after {
     padding: 0;
 }
 
-.projectnavigation {
+.subnavigation {
     background: var(--main-alternate-bg-color);
     padding: 0.5em;
 }
 
-.projectnavigation span + span::before {
+.subnavigation span + span::before {
     content: " | ";
     margin: 0 0.25em;
 }
 
-.projectnavigation a {
+.subnavigation a {
     display: inline-block;
 }
 
-.projectnavigation .warning:before,
-.projectnavigation .severe:before {
+.subnavigation .warning:before,
+.subnavigation .severe:before {
     content: " ⚠️ ";
 }
 
-.projectnavigation .warning,
-.projectnavigation .severe {
+.subnavigation .warning,
+.subnavigation .severe {
     padding: 2px 4px;
     margin: 4px -2px;
     border-radius: 3px;
 }
 
-.projectnavigation .severe {
+.subnavigation .severe {
     background-color: var(--fatal-color);
     color: var(--fatal-contrast-color);
 }
 
-.projectnavigation .warning {
+.subnavigation .warning {
     background-color: var(--warning-color);
     color: var(--warning-contrast-color);
 }
@@ -705,6 +705,41 @@ footer li {
     table.main > tbody > tr > td:not(:last-child),
     table.main > thead > tr > th:not(:last-child) {
         border-right: 1px solid var(--table-border-color);
+    }
+}
+
+@media (min-width:1200px) {
+    main.index {
+        display: grid;
+        column-gap: 1rem;
+        grid-template-columns: repeat(1fr 1fr);
+        grid-template-areas:
+            "title     title"
+            "subnav    subnav"
+            "packages  permissions"
+            "packages  whitelist"
+            "packages  ."
+    }
+
+    .index_title {
+        grid-area: title;
+        margin-bottom: 0;
+    }
+
+    .subnavigation {
+        grid-area: subnav;
+    }
+
+    .index_packages {
+        grid-area: packages;
+    }
+
+    .index_permissions {
+        grid-area: permissions;
+    }
+
+    .index_whitelist {
+        grid-area: whitelist;
     }
 }
 
