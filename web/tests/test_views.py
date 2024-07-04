@@ -23,6 +23,8 @@ def test_macros(dummyrequest, pyramidconfig):
         "html_head",
         "main_footer",
         "main_navigation",
+        "root",
+        "user",
     ]
     assert macros.get_group("html_head") == [
         "favicon",
@@ -35,6 +37,12 @@ def test_macros(dummyrequest, pyramidconfig):
     assert macros.get_group("main_navigation") == [
         "header_breadcrumbs",
         "status_badge",
+    ]
+    assert macros.get_group("root") == [
+        "user_index_list",
+    ]
+    assert macros.get_group("user") == [
+        "user_index_list",
     ]
 
 
