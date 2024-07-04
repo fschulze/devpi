@@ -7,6 +7,11 @@ def footer_versions(request):
         version_infos=request.registry.get('devpi_version_info'))
 
 
+@macro_config(template='templates/logo.pt')
+def logo(request):
+    return dict()
+
+
 @macro_config(template='templates/render_group.pt')
 def render_group(request, group_name):
     return dict(
