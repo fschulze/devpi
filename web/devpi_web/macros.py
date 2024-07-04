@@ -89,3 +89,15 @@ def query_doc(request):
 @macro_config(template='templates/status_badge.pt', groups='main_navigation')
 def status_badge(request):
     return dict(status_info=status_info(request))
+
+
+@macro_config(template='templates/user_index_list.pt', groups=('root', 'user'))
+def user_index_list(request):  # noqa: ARG001
+    return dict()
+
+
+@macro_config(template='templates/user_index_list_item.pt')
+def user_index_list_item(request, user, *, show_user_link=True):  # noqa: ARG001
+    return dict(
+        user,
+        show_user_link=show_user_link)
