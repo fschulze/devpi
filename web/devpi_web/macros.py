@@ -1,4 +1,5 @@
 from .macroregistry import macro_config
+from .main import navigation_info
 from .main import status_info
 import os
 
@@ -12,6 +13,11 @@ def favicon(request):
 def footer_versions(request):
     return dict(
         version_infos=request.registry.get('devpi_version_info'))
+
+
+@macro_config(template='templates/header_breadcrumbs.pt', groups='main_navigation')
+def header_breadcrumbs(request):
+    return dict(path=navigation_info(request)['path'])
 
 
 @macro_config(template='templates/header_search.pt')
@@ -66,6 +72,6 @@ def render_group(request, group_name):
         macro_names=request.registry['macros'].get_group(group_name))
 
 
-@macro_config(template='templates/status_badge.pt')
+@macro_config(template='templates/status_badge.pt', groups='main_navigation')
 def status_badge(request):
     return dict(status_info=status_info(request))
