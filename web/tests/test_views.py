@@ -29,6 +29,7 @@ def test_macros(dummyrequest, pyramidconfig):
         "project",
         "root",
         "user",
+        "version",
     ]
     assert macros.get_group("html_head") == [
         "favicon",
@@ -74,6 +75,15 @@ def test_macros(dummyrequest, pyramidconfig):
         "project_refresh",
         "project_latest_version",
         "project_versions",
+    ]
+    assert macros.get_group("version") == [
+        "title",
+        "subnavigation",
+        "version_summary",
+        "version_metadata",
+        "project_whitelist",
+        "version_files",
+        "version_description",
     ]
 
 
@@ -643,22 +653,22 @@ def test_version_view_latest_stable(mapp, testapp):
         "name": "pkg1",
         "version": "2.0"})
     r = testapp.get(api.index + '/pkg1/2.0', headers=dict(accept="text/html"))
-    links = r.html.select('.projectnavigation a')
+    links = r.html.select('.subnavigation a')
     assert 'Stable version available' not in "".join(x.text for x in links)
     link = links[-1]
     assert link.text == 'Newer version available'
     assert link.attrs['href'] == api.index + '/pkg1/stable'
     r = testapp.get(api.index + '/pkg1/2.1b2', headers=dict(accept="text/html"))
-    links = r.html.select('.projectnavigation a')
+    links = r.html.select('.subnavigation a')
     assert 'Newer version available' not in "".join(x.text for x in links)
     link = links[-1]
     assert link.text == 'Stable version available'
     assert link.attrs['href'] == api.index + '/pkg1/stable'
     r = testapp.get(api.index + '/pkg1/2.6', headers=dict(accept="text/html"))
-    links = r.html.select('.projectnavigation a')
+    links = r.html.select('.subnavigation a')
     assert 'version available' not in "".join(x.text for x in links)
     r = testapp.get(api.index + '/pkg1/3.0b1', headers=dict(accept="text/html"))
-    links = r.html.select('.projectnavigation a')
+    links = r.html.select('.subnavigation a')
     assert 'Newer version available' not in "".join(x.text for x in links)
     link = links[-1]
     assert link.text == 'Stable version available'

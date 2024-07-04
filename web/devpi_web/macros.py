@@ -152,7 +152,9 @@ def project_versions(request):
 
 @macro_config(
     template='templates/project_whitelist.pt',
-    groups=GroupDef('project', after='subnavigation'))
+    groups=(
+        GroupDef('project', after='subnavigation'),
+        GroupDef('version', after='version_metadata')))
 def project_whitelist(request):
     return dict()
 
@@ -175,12 +177,13 @@ def status_badge(request):
     template='templates/subnavigation.pt',
     groups=(
         GroupDef('index', after='title'),
-        GroupDef('project', after='title')))
+        GroupDef('project', after='title'),
+        GroupDef('version', after='title')))
 def subnavigation(request):
     return dict()
 
 
-@macro_config(template='templates/title.pt', groups=('index', 'project'))
+@macro_config(template='templates/title.pt', groups=('index', 'project', 'version'))
 def title(request):
     return dict()
 
@@ -195,3 +198,31 @@ def user_index_list_item(request, user, show_user_link=True):
     return dict(
         user,
         show_user_link=show_user_link)
+
+
+@macro_config(
+    template='templates/version_description.pt',
+    groups=GroupDef('version', after='version_files'))
+def version_description(request):
+    return dict()
+
+
+@macro_config(
+    template='templates/version_files.pt',
+    groups=GroupDef('version', after='project_whitelist'))
+def version_files(request):
+    return dict()
+
+
+@macro_config(
+    template='templates/version_metadata.pt',
+    groups=GroupDef('version', after='version_summary'))
+def version_metadata(request):
+    return dict()
+
+
+@macro_config(
+    template='templates/version_summary.pt',
+    groups=GroupDef('version', after='subnavigation'))
+def version_summary(request):
+    return dict()

@@ -1,0 +1,79 @@
+<table class="main files">
+    <caption>Files</caption>
+    <thead>
+        <tr>
+            <th>File</th>
+            <th class="toxresults" tal:condition="show_toxresults">Tox results</th>
+            <th>History</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr tal:condition="not files">
+            <td colspan="3">No releases</td>
+        </tr>
+        <tr tal:condition="files" tal:repeat="file files" class="${repeat.file.parity}">
+            <td class="file">
+                <a href="${file.url}">${file.title}</a>
+                <dl class="size" tal:condition="file.size">
+                    <dt>Size</dt>
+                    <dd>${file.size}</dd>
+                </dl>
+                <dl class="disttype" tal:condition="file.dist_type">
+                    <dt>Type</dt>
+                    <dd>${file.dist_type}</dd>
+                </dl>
+                <dl class="pyversion" tal:condition="file.py_version">
+                    <dt>Python</dt>
+                    <dd>${file.py_version}</dd>
+                </dl>
+                <dl class="hashspec" tal:condition="file.hash_spec">
+                    <dt>${file.hash_type}</dt>
+                    <dd><code>${file.hash_value}</code></dd>
+                </dl>
+            </td>
+            <td class="toxresults" tal:condition="show_toxresults">
+                <table class="inlinetoxresults" tal:condition="file.get('toxresults')">
+                    <tr tal:repeat="toxresult file.get('toxresults')">
+                        <tal:url define="url make_toxresult_url(basename=file.basename, toxresult=toxresult.basename, _anchor=toxresult._key)">
+                        <td><a href="${url}">${toxresult.host} ${toxresult.platform} ${toxresult.envname} ${toxresult.get('pyversion')}</a></td>
+                        <td class="status"><a href="${url}" tal:attributes="class toxresult.status">Tests ${toxresult.status}</a></td>
+                        </tal:url>
+                    </tr>
+                    <tr>
+                        <td colspan="2">
+                            <a href="${make_toxresults_url(basename=file.basename)}">
+                                All toxresults …
+                            </a>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+            <td>
+                <ul class="file_history">
+                    <li tal:repeat="log file.history">
+                        ${log.what}
+                        <tal:src condition="log.get('src')">
+                            from
+                            <a tal:omit-tag="not log.src.href" href="${log.src.href}">
+                                ${log.src.title}
+                            </a>
+                        </tal:src>
+                        <tal:dst condition="log.get('dst')">
+                            to
+                            <a tal:omit-tag="not log.dst.href" href="${log.dst.href}">
+                                ${log.dst.title}
+                            </a>
+                        </tal:dst>
+                        <tal:by condition="log.get('who')">
+                            by ${log.who}
+                        </tal:by>
+                        <tal:count condition="log.get('count')">
+                            ${log.count} time(s)
+                        </tal:count>
+                        <span tal:condition="log.get('when')" class="timestamp">${log.when}</span>
+                    </li>
+                </ul>
+            </td>
+        </tr>
+    </tbody>
+</table>
