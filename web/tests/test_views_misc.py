@@ -295,6 +295,7 @@ class TestStatusView:
         pyramidconfig.scan('devpi_web.macros')
         pyramidconfig.scan('devpi_web.views', ignore=lambda n: 'statusview' not in n)
         dummyrequest.macros = macros(dummyrequest)
+        dummyrequest.add_static_script = lambda _src: None
         return _getViewCallable(
             pyramidconfig,
             request_iface=_getRouteRequestIface(pyramidconfig, "/+status"))
@@ -423,6 +424,7 @@ class TestReplicaStatusView:
         pyramidconfig.scan('devpi_web.macros')
         pyramidconfig.scan('devpi_web.views', ignore=lambda n: 'statusview' not in n)
         dummyrequest.macros = macros(dummyrequest)
+        dummyrequest.add_static_script = lambda _src: None
         return _getViewCallable(
             pyramidconfig,
             request_iface=_getRouteRequestIface(pyramidconfig, "/+status"))

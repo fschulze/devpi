@@ -65,6 +65,15 @@ def macros(request):
     return result
 
 
+def add_src_script(request, src):
+    scripts = request.environ.setdefault('devpiweb.head_scripts', [])
+    scripts.append(dict(src=src))
+
+
+def add_static_script(request, src):
+    return request.add_src_script(request.static_url(src))
+
+
 def navigation_version(context):
     version = context.version
     if version == 'latest':
@@ -195,6 +204,8 @@ def includeme(config):
         "/{user}/",
         "/{user:[^+/]+}/")
     config.add_tween("devpi_web.views.tween_trailing_slash_redirect")
+    config.add_request_method(add_src_script)
+    config.add_request_method(add_static_script)
     config.add_request_method(macros, reify=True)
     config.add_request_method(navigation_info, reify=True)
     config.scan()
