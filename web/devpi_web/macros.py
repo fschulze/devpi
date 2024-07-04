@@ -23,6 +23,14 @@ def header_status(request):
     return dict(status_info=status_info(request))
 
 
+@macro_config(template='templates/html_head_scripts.pt')
+def html_head_scripts(request):
+    request.add_static_script('devpi_web:static/jquery-3.6.0.min.js')
+    request.add_static_script('devpi_web:static/common.js')
+    scripts = request.environ.setdefault('devpiweb.head_scripts', [])
+    return dict(scripts=scripts)
+
+
 @macro_config(template='templates/logo.pt')
 def logo(request):  # noqa: ARG001
     return dict()
