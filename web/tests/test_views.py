@@ -21,7 +21,13 @@ def test_macros(dummyrequest, pyramidconfig):
     pyramidconfig.scan('devpi_web.macros')
     macros = dummyrequest.registry["macros"]
     assert sorted(macros.get_groups()) == [
+        "html_head",
         "main_footer",
+    ]
+    assert macros.get_group("html_head") == [
+        "favicon",
+        "html_head_css",
+        "html_head_scripts",
     ]
     assert macros.get_group("main_footer") == [
         "footer_versions",
