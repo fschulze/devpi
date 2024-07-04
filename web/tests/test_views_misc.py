@@ -285,6 +285,7 @@ class TestStatusView:
         pyramidconfig.include('devpi_web.macroregistry')
         pyramidconfig.add_static_view('+static', 'devpi_web:static')
         pyramidconfig.add_route("/+status", "/+status")
+        pyramidconfig.scan('devpi_web.macros')
         pyramidconfig.scan('devpi_web.views', ignore=lambda n: 'statusview' not in n)
         dummyrequest.macros = macros(dummyrequest)
         view = self._getViewCallable(

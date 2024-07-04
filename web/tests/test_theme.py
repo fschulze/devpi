@@ -20,18 +20,12 @@ def xom(request, xom, themedir):
 
 
 def test_macro_overwrite(testapp, themedir):
-    from devpi_web import __version__
-    themedir.join('templates', 'macros.pt').write("""
-<metal:head define-macro="headcss" use-macro="request.macros['original-headcss']">
-    <metal:mycss fill-slot="headcss">
-        <link rel="stylesheet" type="text/css" href="${request.theme_static_url('style.css')}" />
-    </metal:mycss>
-</metal:head>
+    themedir.join('templates', 'root.pt').write("""
+        <metal:head use-macro="macros.footer_versions" />
     """)
+    themedir.join('templates', 'footer_versions.pt').write("MyFooter")
     r = testapp.get('/')
-    styles = [x.attrs.get('href') for x in r.html.find_all('link')]
-    assert 'http://localhost/+static-%s/style.css' % __version__ in styles
-    assert 'http://localhost/+theme-static-%s/style.css' % __version__ in styles
+    assert "MyFooter" in r.text
 
 
 def test_template_overwrite(testapp, themedir):
