@@ -1,12 +1,6 @@
-<!doctype html>
-<html>
-    <head>
-        <title>${title}</title>
-        <metal:head use-macro="request.macros['head']" />
-    </head>
-    <body>
-        <metal:search use-macro="request.macros['navigation']" />
-        <div id="content">
+<metal:block use-macro="main_template" tal:define="main_class 'index'">
+    <metal:title fill-slot="title">devpi - ${title}</metal:title>
+    <metal:content fill-slot="content">
         <h1 class="index_title">
             ${index_name} <span tal:condition="index_title">${index_title}</span> index
         </h1>
@@ -87,7 +81,5 @@
             <li tal:repeat="name whitelist">${name}</li>
         </ul>
         <p tal:condition="not whitelist">No packages whitelisted.</p>
-        </div>
-        <metal:footer use-macro="request.macros['footer']" />
-    </body>
-</html>
+    </metal:content>
+</metal:block>

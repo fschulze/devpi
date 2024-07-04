@@ -22,6 +22,8 @@ def test_macros(dummyrequest, pyramidconfig):
     assert sorted(macros._groups) == [
         "html_head",
         "main_footer",
+        "main_header",
+        "main_header_top",
         "main_navigation",
         "root",
         "user",
@@ -33,6 +35,13 @@ def test_macros(dummyrequest, pyramidconfig):
     ]
     assert macros.get_group("main_footer") == [
         "footer_versions",
+    ]
+    assert macros.get_group("main_header") == [
+        "header_status",
+    ]
+    assert macros.get_group("main_header_top") == [
+        "logo",
+        "header_search",
     ]
     assert macros.get_group("main_navigation") == [
         "header_breadcrumbs",

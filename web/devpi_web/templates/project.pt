@@ -1,12 +1,6 @@
-<!doctype html>
-<html>
-    <head>
-        <title>${title}</title>
-        <metal:head use-macro="request.macros['head']" />
-    </head>
-    <body>
-        <metal:search use-macro="request.macros['navigation']" />
-        <div id="content">
+<metal:block use-macro="main_template" tal:define="main_class 'project'">
+    <metal:title fill-slot="title">devpi - ${title}</metal:title>
+    <metal:content fill-slot="content">
         <h1>${title}</h1>
 
         <p class="projectnavigation" tal:condition="nav_links">
@@ -39,7 +33,5 @@
                 </tr>
             </tbody>
         </table>
-        </div>
-        <metal:footer use-macro="request.macros['footer']" />
-    </body>
-</html>
+    </metal:content>
+</metal:block>

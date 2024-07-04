@@ -12,11 +12,9 @@ from devpi_server.log import threadlog
 from devpi_server.main import fatal
 from functools import wraps
 from pluggy import HookimplMarker
-from pyramid.renderers import get_renderer
 from pyramid_chameleon.renderer import ChameleonRendererLookup
 import os
 import sys
-import warnings
 
 
 hookimpl = HookimplMarker("devpiweb")
@@ -41,25 +39,6 @@ def cached_on_request(func):
 def theme_static_url(request, path):
     return request.static_url(
         os.path.join(request.registry['theme_path'], 'static', path))
-
-
-def macros(request):
-    # returns macros which may partially be overwritten in a theme
-    warnings.warn(
-        "Using request.macros is deprecated, use macros instead.",
-        DeprecationWarning, stacklevel=5)
-    result = {}
-    paths = [
-        "devpi_web:templates/macros.pt",
-        "templates/macros.pt"]
-    for path in paths:
-        renderer = get_renderer(path)
-        macros = renderer.implementation().macros
-        for name in macros.names:
-            if name in result:
-                result['original-%s' % name] = result[name]
-            result[name] = macros[name]
-    return result
 
 
 def add_href_css(request, href, rel="stylesheet", type="text/css"):
@@ -216,7 +195,6 @@ def includeme(config):
     config.add_request_method(add_src_script)
     config.add_request_method(add_static_css)
     config.add_request_method(add_static_script)
-    config.add_request_method(macros, reify=True)
     config.scan()
 
 

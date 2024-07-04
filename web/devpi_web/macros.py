@@ -1,3 +1,4 @@
+from .macroregistry import GroupDef
 from .macroregistry import macro_config
 from .main import navigation_info
 from .main import status_info
@@ -20,12 +21,14 @@ def header_breadcrumbs(request):
     return dict(path=navigation_info(request)['path'])
 
 
-@macro_config(template='templates/header_search.pt')
+@macro_config(
+    template='templates/header_search.pt',
+    groups=GroupDef('main_header_top', after='logo'))
 def header_search(request):
     return dict()
 
 
-@macro_config(template='templates/header_status.pt')
+@macro_config(template='templates/header_status.pt', groups='main_header')
 def header_status(request):
     return dict(status_info=status_info(request))
 
@@ -52,7 +55,7 @@ def html_head_scripts(request):
     return dict(scripts=scripts)
 
 
-@macro_config(template='templates/logo.pt')
+@macro_config(template='templates/logo.pt', groups='main_header_top')
 def logo(request):
     return dict()
 

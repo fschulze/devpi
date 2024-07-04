@@ -1,7 +1,9 @@
 <!DOCTYPE html>
 <html>
     <head>
-        <metal:head use-macro="request.macros['head']" />
+        <meta http-equiv="content-type" content="text/html; charset=utf-8">
+        <meta name="viewport" content="initial-scale=1.0">
+        <metal:macros tal:repeat="name request.registry['macros'].get_group('html_head')" use-macro="macros[name]" />
         <title>Serial ${serial}/${last_changelog_serial}</title>
         <style>
             body {
