@@ -136,11 +136,6 @@ def status_info(request):
     return dict(status=status, short_msg=short_msg, msgs=msgs, url=url)
 
 
-def query_docs_html(request):
-    search_index = request.registry['search_index']
-    return search_index.get_query_parser_html_help()
-
-
 class ThemeChameleonRendererLookup(ChameleonRendererLookup):
     auto_reload = AUTO_RELOAD
     debug = DEBUG_MODE
@@ -200,7 +195,6 @@ def includeme(config):
     config.add_request_method(macros, reify=True)
     config.add_request_method(navigation_info, reify=True)
     config.add_request_method(status_info, reify=True)
-    config.add_request_method(query_docs_html, reify=True)
     config.scan()
 
 
