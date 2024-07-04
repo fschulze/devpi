@@ -174,7 +174,8 @@ def test_index_view_project_info(mapp, testapp):
     links = r.html.select('#content a')
     assert [(l.text, l.attrs['href']) for l in links] == [
         ("Simple index", "http://localhost/%s/+simple/" % api.stagename),
-        ("pkg1-2.6", "http://localhost/%s/pkg1/2.6" % api.stagename),
+        ("pkg1", "http://localhost/%s/pkg1" % api.stagename),
+        ("2.6", "http://localhost/%s/pkg1/2.6" % api.stagename),
         ("root/pypi", "http://localhost/root/pypi"),
         ("simple", "http://localhost/root/pypi/+simple/")]
 
@@ -189,7 +190,8 @@ def test_index_view_project_files(mapp, testapp):
 
     assert [(l.text, l.attrs['href']) for l in links] == [
         ("Simple index", "http://localhost/%s/+simple/" % api.stagename),
-        ("pkg1-2.6", "http://localhost/%s/pkg1/2.6" % api.stagename),
+        ("pkg1", "http://localhost/%s/pkg1" % api.stagename),
+        ("2.6", "http://localhost/%s/pkg1/2.6" % api.stagename),
         ("pkg1-2.6.tar.gz", tar_url),
         ("root/pypi", "http://localhost/root/pypi"),
         ("simple", "http://localhost/root/pypi/+simple/")]
@@ -200,7 +202,8 @@ def test_index_view_project_files(mapp, testapp):
     links = r.html.select('#content a')
     assert [(l.text, l.attrs['href']) for l in links] == [
         ("Simple index", "http://localhost/%s/+simple/" % api.stagename),
-        ("pkg1-2.6", "http://localhost/%s/pkg1/2.6" % api.stagename),
+        ("pkg1", "http://localhost/%s/pkg1" % api.stagename),
+        ("2.6", "http://localhost/%s/pkg1/2.6" % api.stagename),
         ("pkg1-2.6.tar.gz", tar_url),
         ("pkg1-2.6.zip", zip_url),
         ("root/pypi", "http://localhost/root/pypi"),
@@ -221,8 +224,9 @@ def test_index_view_project_docs(keep_docs_packed, mapp, testapp):
     links = r.html.select('#content a')
     assert [(l.text, l.attrs['href']) for l in links] == [
         ("Simple index", "http://localhost/%s/+simple/" % api.stagename),
-        ("pkg1-2.6", "http://localhost/%s/pkg1/2.6" % api.stagename),
-        ("pkg1-2.6", "http://localhost/%s/pkg1/2.6/+d/index.html" % api.stagename),
+        ("pkg1", "http://localhost/%s/pkg1" % api.stagename),
+        ("2.6", "http://localhost/%s/pkg1/2.6" % api.stagename),
+        ("pkg1 2.6", "http://localhost/%s/pkg1/2.6/+d/index.html" % api.stagename),
         ('Download', doc_zip_url),
         ("root/pypi", "http://localhost/root/pypi"),
         ("simple", "http://localhost/root/pypi/+simple/")]
@@ -705,7 +709,8 @@ def test_complex_name(mapp, testapp):
     links = r.html.select('#content a')
     assert [(compareable_text(l.text), l.attrs['href']) for l in links] == [
         ('Simple index', 'http://localhost/user1/dev/+simple/'),
-        ('%s-0.9' % pkgname, 'http://localhost/user1/dev/%s/0.9' % pkgname),
+        (pkgname, 'http://localhost/user1/dev/%s' % pkgname),
+        ('0.9', 'http://localhost/user1/dev/%s/0.9' % pkgname),
         (
             '%s-0.9.tar.gz' % pkgname,
             make_file_url('%s-0.9.tar.gz' % pkgname, content, stagename='user1/dev'))]
