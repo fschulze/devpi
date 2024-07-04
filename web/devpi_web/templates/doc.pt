@@ -1,4 +1,4 @@
-<metal:block use-macro="main_template" tal:define="main_class 'doc'">
+<metal:block use-macro="main_template" tal:define="main_class 'docview'">
     <metal:title fill-slot="title">${title}</metal:title>
     <metal:endofheader fill-slot="endofheader">
         <div class="infonote" tal:condition="version_mismatch">
@@ -8,17 +8,15 @@
             <tal:link repeat="link version_links"><a tal:attributes="class link.get('css_class')" href="${link.url}">${link.title}</a><tal:sep condition="not repeat.link.end"> | </tal:sep></tal:link>
         </div>
     </metal:endofheader>
-    <metal:content fill-slot="content-wrapper">
-        <div class="iframe">
-            <iframe
-                id="devpi-doc"
-                src="${url}" data-base_url="${base_url}" data-baseview_url="${baseview_url}"
-                scrolling="no">
-            </iframe>
-        </div>
+    <metal:content fill-slot="content">
+        <iframe
+            class="devpidoc"
+            src="${url}" data-base_url="${base_url}" data-baseview_url="${baseview_url}"
+            scrolling="no">
+        </iframe>
         <script type="text/javascript">
         //<![CDATA[
-            $('iframe#devpi-doc').on('load', onIFrameLoad);
+            $('iframe.devpidoc').on('load', onIFrameLoad);
         //]]>
         </script>
     </metal:content>

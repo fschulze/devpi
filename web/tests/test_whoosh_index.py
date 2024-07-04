@@ -93,7 +93,7 @@ def test_search_after_register(mapp, testapp):
         "description": "foo"}, waithooks=True)
     indexer_thread.wait()
     r = testapp.get('/+search?query=foo', expect_errors=False)
-    links = r.html.select('.searchresults a')
+    links = r.html.select('main a')
     assert [(l.text.strip(), l.attrs['href']) for l in links] == [
         ("pkg1-2.6", "http://localhost/%s/pkg1/2.6" % api.stagename),
         ("Description", "http://localhost/%s/pkg1/2.6#description" % api.stagename)]
@@ -103,12 +103,12 @@ def test_search_after_register(mapp, testapp):
         "description": "foo"}, waithooks=True)
     indexer_thread.wait()
     r = testapp.get('/+search?query=foo', expect_errors=False)
-    links = r.html.select('.searchresults a')
+    links = r.html.select('main a')
     assert [(l.text.strip(), l.attrs['href']) for l in links] == [
         ("pkg1-2.7", "http://localhost/%s/pkg1/2.7" % api.stagename),
         ("Description", "http://localhost/%s/pkg1/2.7#description" % api.stagename)]
     r = testapp.xget(200, '/+search?query=foo')
-    links = r.html.select('.searchresults a')
+    links = r.html.select('main a')
     assert [(l.text.strip(), l.attrs['href']) for l in links] == [
         ("pkg1-2.7", "http://localhost/%s/pkg1/2.7" % api.stagename),
         ("Description", "http://localhost/%s/pkg1/2.7#description" % api.stagename)]

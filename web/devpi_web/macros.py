@@ -10,6 +10,11 @@ def favicon(request):
     return dict()
 
 
+@macro_config(template='templates/footer_about.pt', groups='main_footer')
+def footer_about(request):
+    return dict()
+
+
 @macro_config(template='templates/footer_versions.pt', groups='main_footer')
 def footer_versions(request):
     return dict(
@@ -21,7 +26,7 @@ def header_breadcrumbs(request):
     return dict(path=navigation_info(request)['path'])
 
 
-@macro_config(template='templates/header_logged_in_user.pt', groups='main_subnavigation')
+@macro_config(template='templates/header_logged_in_user.pt', groups='main_navigation')
 def header_logged_in_user(request):
     result = dict(
         _user=None)
@@ -98,7 +103,7 @@ def query_doc(request):
     return dict(query_docs_html=query_docs_html)
 
 
-@macro_config(template='templates/status_badge.pt', groups='main_subnavigation')
+@macro_config(template='templates/status_badge.pt', groups='main_navigation')
 def status_badge(request):
     return dict(status_info=status_info(request))
 
