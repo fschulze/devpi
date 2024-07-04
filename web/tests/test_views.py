@@ -25,6 +25,7 @@ def test_macros(dummyrequest, pyramidconfig):
         "main_header",
         "main_header_top",
         "main_navigation",
+        "main_subnavigation",
         "root",
         "user",
     ]
@@ -45,12 +46,16 @@ def test_macros(dummyrequest, pyramidconfig):
     ]
     assert macros.get_group("main_navigation") == [
         "header_breadcrumbs",
+    ]
+    assert macros.get_group("main_subnavigation") == [
+        "header_logged_in_user",
         "status_badge",
     ]
     assert macros.get_group("root") == [
         "user_index_list",
     ]
     assert macros.get_group("user") == [
+        "logout_form",
         "user_index_list",
     ]
 

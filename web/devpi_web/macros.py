@@ -21,6 +21,25 @@ def header_breadcrumbs(request):
     return dict(path=navigation_info(request)['path'])
 
 
+@macro_config(template='templates/header_logged_in_user.pt', groups='main_subnavigation')
+def header_logged_in_user(request):
+    result = dict(
+        _user=None)
+    if request.authenticated_userid is None:
+        return result
+    user = request.context.model.get_user(request.authenticated_userid)
+    if not user:
+        return result
+    info = user.get()
+    result['_user'] = user
+    result['name'] = user.name
+    result['title'] = info.get('title', None)
+    result['description'] = info.get('description', None)
+    result['email'] = info.get('email', None)
+    result['url'] = request.route_url("/{user}", user=user.name)
+    return result
+
+
 @macro_config(
     template='templates/header_search.pt',
     groups=GroupDef('main_header_top', after='logo'))
@@ -60,6 +79,16 @@ def logo(request):
     return dict()
 
 
+@macro_config(template='templates/logout_form.pt', groups='user')
+def logout_form(request):
+    url = None
+    if request.authenticated_userid:
+        introspector = request.registry.introspector
+        if introspector.get('routes', 'logout') is not None:
+            url = request.route_url("logout")
+    return dict(url=url)
+
+
 @macro_config(template='templates/query_docs.pt')
 def query_doc(request):
     query_docs_html = None
@@ -69,7 +98,7 @@ def query_doc(request):
     return dict(query_docs_html=query_docs_html)
 
 
-@macro_config(template='templates/status_badge.pt', groups='main_navigation')
+@macro_config(template='templates/status_badge.pt', groups='main_subnavigation')
 def status_badge(request):
     return dict(status_info=status_info(request))
 
