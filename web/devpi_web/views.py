@@ -1,3 +1,4 @@
+from .main import status_info
 from defusedxml.xmlrpc import DefusedExpatParser
 from devpi_common.metadata import Version
 from devpi_common.metadata import get_pyversion_filetype
@@ -857,7 +858,7 @@ def statusview(request):
             last_request=format_timestamp(
                 replica.get('last-request', 'unknown'))))
     return dict(
-        msgs=request.status_info['msgs'],
+        msgs=status_info(request)['msgs'],
         info=dict(
             uuid=status.get('uuid', 'unknown'),
             role=status.get('role', 'unknown'),
