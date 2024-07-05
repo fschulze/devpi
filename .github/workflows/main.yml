@@ -257,13 +257,13 @@ jobs:
       matrix:
         include:
           - project: "web"
-            python-version: "3.7"
+            python-version: "3.8"
             os: "ubuntu-latest"
-            tox-envs: "py37"
+            tox-envs: "py38"
           - project: "web"
-            python-version: "3.7"
+            python-version: "3.8"
             os: "ubuntu-latest"
-            tox-envs: "py37-keyfs"
+            tox-envs: "py38-keyfs"
           - project: "web"
             python-version: "3.12"
             os: "ubuntu-latest"
@@ -468,9 +468,9 @@ jobs:
       matrix:
         include:
           - project: "postgresql"
-            python-version: "3.7"
+            python-version: "3.8"
             os: "ubuntu-latest"
-            tox-envs: "py37-web"
+            tox-envs: "py38-web"
           - project: "postgresql"
             python-version: "3.12"
             os: "ubuntu-latest"
@@ -480,9 +480,9 @@ jobs:
             os: "ubuntu-latest"
             tox-envs: "pypy3-web"
           - project: "postgresql"
-            python-version: "3.7"
+            python-version: "3.8"
             os: "ubuntu-latest"
-            tox-envs: "py37-dont_use_copy-web"
+            tox-envs: "py38-dont_use_copy-web"
 
     env:
       PY_COLORS: 1
@@ -633,9 +633,9 @@ jobs:
             tox-envs: "py37"
             pytest-options: ""
           - project: "web"
-            python-version: "3.7"
+            python-version: "3.8"
             os: "windows-latest"
-            tox-envs: "py37"
+            tox-envs: "py38"
             pytest-options: ""
 
     env:
