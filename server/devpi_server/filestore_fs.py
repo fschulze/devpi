@@ -81,7 +81,7 @@ class FSIOFile:
                 LazyChangesFormatter({}, files_commit, files_del))
         return True
 
-    def delete(self, path):
+    def delete(self, path, *, is_last_of_hash):  # noqa: ARG002
         assert isinstance(path, FilePathInfo)
         path = str(self.basedir / path.relpath)
         old = self._dirty_files.get(path)
