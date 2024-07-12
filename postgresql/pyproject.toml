@@ -8,7 +8,7 @@ dynamic = ["version", "readme"]
 name = "devpi-postgresql"
 description = "devpi-postgresql: a PostgreSQL storage backend for devpi-server"
 dependencies = [
-    'devpi-server>=6.8.0',
+    'devpi-server>=7dev',
     'pg8000>=1.17.0',
 ]
 license = {file = "LICENSE"}

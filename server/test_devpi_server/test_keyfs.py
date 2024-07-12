@@ -812,7 +812,7 @@ class TestSubscriber:
         keyfs.wait_tx_serial(keyfs.get_current_serial())
 
     def test_wait_tx_async(self, keyfs, pool, queue):
-        from devpi_server.interfaces import IWriter2
+        from devpi_server.interfaces import IWriter
         from devpi_server.keyfs_types import Record
         # start a thread which waits for the next serial
         key = keyfs.add_key("NAME", "hello", int)
@@ -829,7 +829,7 @@ class TestSubscriber:
         # directly modify the database without keyfs-transaction machinery
         with keyfs._storage.get_connection(write=True) as conn:
             with conn.write_transaction() as _wtx:
-                wtx = IWriter2(_wtx)
+                wtx = IWriter(_wtx)
                 wtx.records_set([Record(key, 1, -1, None)])
 
         # check wait_tx_serial() call from the thread returned True

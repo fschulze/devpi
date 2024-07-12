@@ -1,12 +1,15 @@
 from devpi_common.types import cached_property
-from devpi_server import interfaces as ds_interfaces
+from devpi_server.fileutil import SpooledTemporaryFile
 from devpi_server.fileutil import dumps
 from devpi_server.fileutil import loads
-from devpi_server.keyfs import get_relpath_at
+from devpi_server.interfaces import IDBIOFileConnection
+from devpi_server.interfaces import IStorageConnection
+from devpi_server.interfaces import IWriter
 from devpi_server.keyfs_types import RelpathInfo
 from devpi_server.log import thread_pop_log
 from devpi_server.log import thread_push_log
 from devpi_server.log import threadlog
+from devpi_server.markers import absent
 from devpi_server.model import ensure_boolean
 from devpi_server.readonly import ReadonlyView
 from devpi_server.readonly import ensure_deeply_readonly
@@ -17,8 +20,6 @@ from io import BytesIO
 from io import RawIOBase
 from pluggy import HookimplMarker
 from repoze.lru import LRUCache
-from tempfile import SpooledTemporaryFile as SpooledTemporaryFileBase
-from zope.interface import Interface
 from zope.interface import implementer
 import contextlib
 import os
@@ -28,34 +29,10 @@ import ssl
 import time
 
 
-for name in ('IStorageConnection3', 'IStorageConnection2', 'IStorageConnection'):
-    IStorageConnection3 = getattr(ds_interfaces, name, Interface)
-    if IStorageConnection3 is not Interface:
-        break
-
-
-absent = object()
-
-
 devpiserver_hookimpl = HookimplMarker("devpiserver")
 
 
 SIGNATURE = b"PGCOPY\n\xff\r\n\x00"
-
-
-class SpooledTemporaryFile(SpooledTemporaryFileBase):
-    # some missing methods
-    def readable(self):
-        return self._file.readable()
-
-    def readinto(self, buffer):
-        return self._file.readinto(buffer)
-
-    def seekable(self):
-        return self._file.seekable()
-
-    def writable(self):
-        return self._file.writable()
 
 
 class FileIn(RawIOBase):
@@ -171,7 +148,8 @@ class FileOut(RawIOBase):
         return 0
 
 
-@implementer(IStorageConnection3)
+@implementer(IDBIOFileConnection)
+@implementer(IStorageConnection)
 class Connection:
     def __init__(self, sqlconn, storage):
         self._sqlconn = sqlconn
@@ -238,6 +216,33 @@ class Connection:
         (keyname, serial) = res
         return (keyname, serial)
 
+    def _get_relpath_at(self, relpath, serial):
+        (keyname, last_serial) = self.db_read_typedkey(relpath)
+        serials_and_values = self._iter_serial_and_value_backwards(
+            relpath, last_serial)
+        try:
+            (last_serial, back_serial, val) = next(serials_and_values)
+            while last_serial >= 0:
+                if last_serial > serial:
+                    (last_serial, back_serial, val) = next(serials_and_values)
+                    continue
+                return (last_serial, back_serial, val)
+        except StopIteration:
+            pass
+        raise KeyError(relpath)
+
+    def _iter_serial_and_value_backwards(self, relpath, last_serial):
+        while last_serial >= 0:
+            tup = self.get_changes(last_serial).get(relpath)
+            if tup is None:
+                raise RuntimeError("no transaction entry at %s" % (last_serial))
+            keyname, back_serial, val = tup
+            yield (last_serial, back_serial, val)
+            last_serial = back_serial
+
+        # we could not find any change below at_serial which means
+        # the key didn't exist at that point in time
+
     def get_relpath_at(self, relpath, serial):
         result = self._relpath_cache.get((serial, relpath), absent)
         if result is absent:
@@ -248,7 +253,7 @@ class Connection:
                 (keyname, back_serial, value) = changes[relpath]
                 result = (serial, back_serial, value)
         if result is absent:
-            result = get_relpath_at(self, relpath, serial)
+            result = self._get_relpath_at(relpath, serial)
         if gettotalsizeof(result, maxlen=100000) is None:
             # result is big, put it in the changelog cache,
             # which has fewer entries to preserve memory
@@ -290,17 +295,17 @@ class Connection:
         return None
 
     def io_file_exists(self, path):
-        assert not os.path.isabs(path)
-        f = self.dirty_files.get(path, absent)
+        assert not os.path.isabs(path.relpath)
+        f = self.dirty_files.get(path.relpath, absent)
         if f is not absent:
             return f is not None
         q = "SELECT path FROM files WHERE path = :path"
-        return bool(self.fetchscalar(q, path=path))
+        return bool(self.fetchscalar(q, path=path.relpath))
 
     def io_file_set(self, path, content_or_file):
-        assert not os.path.isabs(path)
-        assert not path.endswith("-tmp")
-        f = self.dirty_files.get(path, None)
+        assert not os.path.isabs(path.relpath)
+        assert not path.relpath.endswith("-tmp")
+        f = self.dirty_files.get(path.relpath, None)
         if f is None:
             f = SpooledTemporaryFile(max_size=1048576)
         if not isinstance(content_or_file, bytes) and not callable(getattr(content_or_file, "seekable", None)):
@@ -308,22 +313,22 @@ class Connection:
             if len(content_or_file) > 1048576:
                 threadlog.warn(
                     "Read %.1f megabytes into memory in postgresql io_file_set for %s, because of unseekable file",
-                    len(content_or_file) / 1048576, path)
+                    len(content_or_file) / 1048576, path.relpath)
         if isinstance(content_or_file, bytes):
             f.write(content_or_file)
             f.seek(0)
         else:
             content_or_file.seek(0)
             shutil.copyfileobj(content_or_file, f)
-        self.dirty_files[path] = f
+        self.dirty_files[path.relpath] = f
 
     def io_file_new_open(self, path):
         return SpooledTemporaryFile(max_size=1048576)
 
     def _copy_io_file_open(self, path):
-        dirty_file = self.dirty_files.get(path, absent)
+        dirty_file = self.dirty_files.get(path.relpath, absent)
         if dirty_file is None:
-            raise IOError()
+            raise OSError
         f = SpooledTemporaryFile()
         if dirty_file is not absent:
             # we need a new file to prevent the dirty_file from being closed
@@ -334,7 +339,7 @@ class Connection:
             return f
         q = f"""
             COPY (
-                SELECT data FROM files WHERE path = {pg8000.native.literal(path)})
+                SELECT data FROM files WHERE path = {pg8000.native.literal(path.relpath)})
             TO STDOUT WITH (FORMAT binary);"""
         stream = FileIn(f)
         self._sqlconn.run(
@@ -343,14 +348,14 @@ class Connection:
             f.seek(0)
             return f
         f.close()
-        raise IOError(f"File not found at '{path}'")
+        raise OSError(f"File not found at '{path.relpath}'")
 
     def _copy_io_file_get(self, path):
-        assert not os.path.isabs(path)
-        f = self.dirty_files.get(path, absent)
+        assert not os.path.isabs(path.relpath)
+        f = self.dirty_files.get(path.relpath, absent)
         if f is None:
-            raise IOError()
-        elif f is not absent:
+            raise OSError
+        if f is not absent:
             pos = f.tell()
             f.seek(0)
             content = f.read()
@@ -361,13 +366,13 @@ class Connection:
             if len(res) > 1048576:
                 threadlog.warn(
                     "Read %.1f megabytes into memory in postgresql io_file_get for %s",
-                    len(res) / 1048576, path)
+                    len(res) / 1048576, path.relpath)
             return res
 
     def _select_io_file_open(self, path):
-        dirty_file = self.dirty_files.get(path, absent)
+        dirty_file = self.dirty_files.get(path.relpath, absent)
         if dirty_file is None:
-            raise IOError()
+            raise OSError
         if dirty_file is absent:
             return BytesIO(self._select_io_file_get(path))
         f = SpooledTemporaryFile()
@@ -379,41 +384,41 @@ class Connection:
         return f
 
     def _select_io_file_get(self, path):
-        assert not os.path.isabs(path)
-        f = self.dirty_files.get(path, absent)
+        assert not os.path.isabs(path.relpath)
+        f = self.dirty_files.get(path.relpath, absent)
         if f is None:
-            raise IOError()
-        elif f is not absent:
+            raise OSError
+        if f is not absent:
             pos = f.tell()
             f.seek(0)
             content = f.read()
             f.seek(pos)
             return content
         q = "SELECT data FROM files WHERE path = :path"
-        res = self.fetchscalar(q, path=path)
+        res = self.fetchscalar(q, path=path.relpath)
         if res is None:
-            raise IOError()
+            raise OSError
         return res
 
     def io_file_size(self, path):
-        assert not os.path.isabs(path)
-        f = self.dirty_files.get(path, absent)
+        assert not os.path.isabs(path.relpath)
+        f = self.dirty_files.get(path.relpath, absent)
         if f is None:
-            raise IOError()
-        elif f is not absent:
+            raise OSError
+        if f is not absent:
             pos = f.tell()
             size = f.seek(0, 2)
             f.seek(pos)
             return size
         q = "SELECT size FROM files WHERE path = :path"
-        return self.fetchscalar(q, path=path)
+        return self.fetchscalar(q, path=path.relpath)
 
-    def io_file_delete(self, path):
-        assert not os.path.isabs(path)
-        f = self.dirty_files.pop(path, None)
+    def io_file_delete(self, path, *, is_last_of_hash):
+        assert not os.path.isabs(path.relpath)
+        f = self.dirty_files.pop(path.relpath, None)
         if f is not None:
             f.close()
-        self.dirty_files[path] = None
+        self.dirty_files[path.relpath] = None
 
     def get_raw_changelog_entry(self, serial):
         # because a sequence is used for the next serial, there might be
@@ -436,6 +441,13 @@ class Connection:
                 ) AS serial
             ON changelog.serial=serial.serial;"""
         return self.fetchscalar(q, serial=serial)
+
+    def get_rel_renames(self, serial):
+        if serial == -1:
+            return None
+        data = self.get_raw_changelog_entry(serial)
+        (changes, rel_renames) = loads(data)
+        return rel_renames
 
     def get_changes(self, serial):
         changes = self._changelog_cache.get(serial, absent)
@@ -675,6 +687,7 @@ def devpiserver_storage_backend(settings):
         description="Postgresql backend")
 
 
+@implementer(IWriter)
 class Writer:
     def __init__(self, storage, conn):
         self.conn = conn
@@ -687,6 +700,13 @@ class Writer:
         # so we protect here against the caller modifying the value later
         value = get_mutable_deepcopy(value)
         self.changes[typedkey.relpath] = (typedkey.name, back_serial, value)
+
+    def records_set(self, records) -> None:
+        for record in records:
+            self.record_set(record.key, record.value, record.back_serial)
+
+    def set_rel_renames(self, rel_renames):
+        self.rel_renames = rel_renames
 
     def _db_write_typedkey(self, relpath, name, serial):
         q = """
@@ -720,7 +740,7 @@ class Writer:
                         # update back_serial for write_changelog_entry
                         self.changes[relpath] = (keyname, back_serial, value)
                     self._db_write_typedkey(relpath, keyname, commit_serial)
-                entry = (self.changes, [])
+                entry = (self.changes, self.rel_renames)
                 self.conn.write_changelog_entry(commit_serial, entry)
                 self.conn.commit()
                 message = "committed: keys: %s"

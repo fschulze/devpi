@@ -1,11 +1,11 @@
 from .config import hookimpl
-from .interfaces import IStorageConnection4
+from .interfaces import IStorageConnection
 from .keyfs_sqlite import BaseConnection
 from .keyfs_sqlite import BaseStorage
 from zope.interface import implementer
 
 
-@implementer(IStorageConnection4)
+@implementer(IStorageConnection)
 class Connection(BaseConnection):
     def _write_dirty_files(self):
         return ([], [])
