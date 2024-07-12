@@ -13,7 +13,6 @@ import ssl
 import sys
 import threading
 import time
-import warnings
 
 from requests import Response, exceptions
 from requests.utils import DEFAULT_CA_BUNDLE_PATH
@@ -37,14 +36,6 @@ from operator import iconcat
 
 class Fatal(Exception):
     pass
-
-
-def fatal(msg, *, exc=None):
-    warnings.warn(
-        "The 'fatal' function is deprecated, raise 'Fatal' exception directly.",
-        DeprecationWarning,
-        stacklevel=2)
-    raise Fatal(msg) from exc
 
 
 class CommandRunner:
@@ -667,13 +658,6 @@ class XOM:
         pyramid_config.scan("devpi_server.views")
         app = pyramid_config.make_wsgi_app()
         return OutsideURLMiddleware(app, self)
-
-    def is_master(self):
-        warnings.warn(
-            "is_master is deprecated, use is_primary instead.",
-            DeprecationWarning,
-            stacklevel=2)
-        return self.is_primary
 
     def is_primary(self):
         return self.config.role == "primary"
