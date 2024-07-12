@@ -760,7 +760,7 @@ class TestFileReplication:
 
         # then we delete
         with xom.keyfs.write_transaction():
-            entry.file_delete()
+            entry.file_delete(is_last_of_hash=True)
             entry.delete()
         with xom.keyfs.read_transaction():
             assert not entry.file_exists()

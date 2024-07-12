@@ -1368,7 +1368,7 @@ def test_push_from_pypi_mirror_switch_to_use_external_urls(httpget, mapp, pypist
         # and remove the file to simulate a cleanup
         linkstore = pypistage.get_linkstore_perstage("hello", "1.0")
         (link,) = linkstore.get_links()
-        link.entry.file_delete()
+        link.entry.file_delete(is_last_of_hash=True)
     assert pypistage.use_external_url
     # we should now get a redirect when trying to get the file
     r = testapp.xget(302, URL(pkg_url).joinpath(tag['href']).url)
@@ -1931,7 +1931,7 @@ def test_mirror_use_external_urls(mapp, simpypi, testapp, xom):
     r = testapp.xget(200, link, follow=False)
     # now remove the file, but keep metadata in place
     with testapp.xom.keyfs.write_transaction():
-        getentry(testapp, path).file_delete()
+        getentry(testapp, path).file_delete(is_last_of_hash=True)
     # we should get a redirect to the original URL again
     r = testapp.xget(302, link, follow=False)
 
@@ -2077,7 +2077,7 @@ def test_delete_package_where_file_was_deleted(mapp, testapp):
     path = link.href.replace(api.index, '/' + api.stagename)
     with testapp.xom.keyfs.write_transaction():
         # simulate removal of the file from file system outside of devpi
-        getentry(testapp, path).file_delete()
+        getentry(testapp, path).file_delete(is_last_of_hash=True)
     # delete the whole release
     testapp.xdel(200, api.index + "/pkg5/2.6")
     # check that there are no more releases listed
@@ -2200,7 +2200,7 @@ def test_delete_removed_toxresult(mapp, testapp, tox_result_data):
         entry = getentry(testapp, URL(toxlink1.href).path)
         assert entry.file_exists()
         # remove the file from filesystem
-        entry.file_delete()
+        entry.file_delete(is_last_of_hash=True)
         assert not entry.file_exists()
     # the link entry should still exist
     vv = get_view_version_links(testapp, api.index, "pkg6", "2.6")
