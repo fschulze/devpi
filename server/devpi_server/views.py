@@ -1735,6 +1735,9 @@ def iter_cache_remote_file(stage, entry, url):
                     f,
                     last_modified=r.headers.get("last-modified", None),
                     hashes=file_streamer.hashes)
+                digest_key = entry.get_digest_key()
+                with digest_key.update() as digest_paths:
+                    digest_paths.add(entry.relpath)
                 if entry.project:
                     stage = xom.model.getstage(entry.user, entry.index)
                     # for mirror indexes this makes sure the project is in the database

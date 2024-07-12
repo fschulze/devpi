@@ -148,7 +148,7 @@ class TestFileStore:
         content = b""
         entry1.file_set_content(content, hashes=get_hashes(content))
         assert entry1.file_exists()
-        entry1.file_delete()
+        entry1.file_delete(is_last_of_hash=True)
         assert not entry1.file_exists()
 
     def test_relpathentry(self, filestore, gen):
@@ -299,7 +299,7 @@ def test_file_tx_commit(filestore, gen):
     filestore.keyfs.commit_transaction_in_thread()
     filestore.keyfs.begin_transaction_in_thread(write=True)
     assert filepath.exists()
-    entry.file_delete()
+    entry.file_delete(is_last_of_hash=True)
     assert filepath.exists()
     assert not entry.file_exists()
     filestore.keyfs.commit_transaction_in_thread()
