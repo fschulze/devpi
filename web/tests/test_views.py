@@ -9,7 +9,7 @@ import re
 try:
     from test_devpi_server.plugin import make_file_url
 except ImportError:
-    from test_devpi_server.conftest import make_file_url  # type: ignore[no-redef]
+    from test_devpi_server.conftest import make_file_url  # type: ignore[attr-defined,no-redef]
 
 
 devpi_server_version = parse_version(_devpi_server_version)
