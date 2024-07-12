@@ -1,9 +1,9 @@
 from __future__ import annotations
+
 import contextlib
 import os
 import re
 import traceback
-import warnings
 from time import time
 from devpi_common.types import ensure_unicode
 from devpi_common.url import URL
@@ -59,7 +59,6 @@ devpiweb_hookimpl = HookimplMarker("devpiweb")
 server_version = devpi_server.__version__
 
 
-H_MASTER_UUID = "X-DEVPI-MASTER-UUID"
 H_PRIMARY_UUID = "X-DEVPI-PRIMARY-UUID"
 SIMPLE_API_V1_JSON = "application/vnd.pypi.simple.v1+json"
 
@@ -199,7 +198,6 @@ def tween_request_logging(handler, registry):
             rheaders.update(meta_headers)
             uuid, primary_uuid = make_uuid_headers(nodeinfo)
             rheaders["X-DEVPI-UUID"] = uuid
-            rheaders[H_MASTER_UUID] = primary_uuid
             rheaders[H_PRIMARY_UUID] = primary_uuid
 
             log.debug("%s %.3fs serial=%s length=%s type=%s",
@@ -217,14 +215,7 @@ def tween_request_logging(handler, registry):
 def make_uuid_headers(nodeinfo):
     uuid = primary_uuid = nodeinfo.get("uuid")
     if uuid is not None and nodeinfo["role"] == "replica":
-        if "master-uuid" in nodeinfo:
-            warnings.warn(
-                "master-uuid in nodeinfo is deprecated, use primary-uuid instead",
-                DeprecationWarning,
-                stacklevel=2)
-            primary_uuid = nodeinfo.get("master-uuid", "")
-        else:
-            primary_uuid = nodeinfo.get("primary-uuid", "")
+        primary_uuid = nodeinfo.get("primary-uuid", "")
     return uuid, primary_uuid
 
 
@@ -331,12 +322,6 @@ class StatusView:
                 status["metrics"].append(metric)
         if self.xom.is_replica():
             status["role"] = "REPLICA"
-            status["master-url"] = config.primary_url.url
-            status["master-uuid"] = config.get_primary_uuid()
-            status["master-serial"] = self.xom.replica_thread.get_primary_serial()
-            status["master-serial-timestamp"] = self.xom.replica_thread.get_primary_serial_timestamp()
-            status["master-contacted-at"] = self.xom.replica_thread.primary_contacted_at
-            status["update-from-master-at"] = self.xom.replica_thread.update_from_primary_at
             status["primary-url"] = config.primary_url.url
             status["primary-uuid"] = config.get_primary_uuid()
             status["primary-serial"] = self.xom.replica_thread.get_primary_serial()
@@ -348,7 +333,7 @@ class StatusView:
             replication_errors = self.xom.replica_thread.shared_data.errors
             status["replication-errors"] = replication_errors.errors
         else:
-            status["role"] = "MASTER"
+            status["role"] = "PRIMARY"
         status["polling_replicas"] = self.xom.polling_replicas
         return status
 

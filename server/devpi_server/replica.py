@@ -7,7 +7,6 @@ import threading
 import time
 import traceback
 from contextlib import suppress
-import warnings
 from functools import partial
 from pluggy import HookimplMarker
 from pyramid.httpexceptions import HTTPNotFound, HTTPAccepted, HTTPBadRequest
@@ -28,9 +27,8 @@ from .filestore import FileEntry
 from .fileutil import buffered_iterator
 from .fileutil import dumps, load, loads
 from .log import thread_push_log, threadlog
-from .main import fatal
+from .main import Fatal
 from .views import FileStreamer
-from .views import H_MASTER_UUID
 from .views import H_PRIMARY_UUID
 from .views import make_uuid_headers
 from .model import UpstreamError
@@ -378,68 +376,6 @@ class ReplicaThread:
     def auth_serializer(self):
         return get_auth_serializer(self.xom.config)
 
-    def get_master_serial(self):
-        warnings.warn(
-            "get_master_serial is deprecated, use get_primary_serial instead",
-            DeprecationWarning,
-            stacklevel=2)
-        return self.get_primary_serial()
-
-    def get_master_serial_timestamp(self):
-        warnings.warn(
-            "get_master_serial_timestamp is deprecated, use get_primary_serial_timestamp instead",
-            DeprecationWarning,
-            stacklevel=2)
-        return self.get_primary_serial_timestamp()
-
-    @property
-    def _master_serial(self):
-        warnings.warn(
-            "_master_serial is deprecated, use _primary_serial instead",
-            DeprecationWarning,
-            stacklevel=2)
-        return self._primary_serial
-
-    @property
-    def _master_serial_timestamp(self):
-        warnings.warn(
-            "_master_serial_timestamp is deprecated, use _primary_serial_timestamp instead",
-            DeprecationWarning,
-            stacklevel=2)
-        return self._primary_serial_timestamp
-
-    @property
-    def master_auth(self):
-        warnings.warn(
-            "master_auth is deprecated, use primary_auth instead",
-            DeprecationWarning,
-            stacklevel=2)
-        return self.primary_auth
-
-    @property
-    def master_contacted_at(self):
-        warnings.warn(
-            "master_contacted_at is deprecated, use primary_contacted_at instead",
-            DeprecationWarning,
-            stacklevel=2)
-        return self.primary_contacted_at
-
-    @property
-    def master_url(self):
-        warnings.warn(
-            "master_url is deprecated, use primary_url instead",
-            DeprecationWarning,
-            stacklevel=2)
-        return self.primary_url
-
-    @property
-    def update_from_master_at(self):
-        warnings.warn(
-            "update_from_master_at is deprecated, use update_from_primary_at instead",
-            DeprecationWarning,
-            stacklevel=2)
-        return self.update_from_primary_at
-
     def get_primary_serial(self):
         return self._primary_serial
 
@@ -514,23 +450,14 @@ class ReplicaThread:
             # we check that the remote instance
             # has the same UUID we saw last time
             primary_uuid = config.get_primary_uuid()
-            remote_primary_uuid = r.headers.get(
-                H_PRIMARY_UUID,
-                r.headers.get(H_MASTER_UUID))
-            if H_MASTER_UUID in r.headers and r.headers.get(H_MASTER_UUID, remote_primary_uuid) != remote_primary_uuid:
-                log.error(
-                    "remote has differing values for %r and %r headers: %s",
-                    H_PRIMARY_UUID, H_MASTER_UUID, r.headers)
-                self.thread.sleep(self.ERROR_SLEEP)
-                return True
+            remote_primary_uuid = r.headers.get(H_PRIMARY_UUID)
             if not remote_primary_uuid:
                 # we don't fatally leave the process because
                 # it might just be a temporary misconfiguration
                 # for example of a nginx frontend
-                log.error("remote provides no %r or %r header, running "
-                          "<devpi-server-2.1?"
+                log.error("remote provides no %r header,"
                           " headers were: %s",
-                          H_PRIMARY_UUID, H_MASTER_UUID, r.headers)
+                          H_PRIMARY_UUID, r.headers)
                 self.thread.sleep(self.ERROR_SLEEP)
                 return True
             if primary_uuid and remote_primary_uuid != primary_uuid:
@@ -909,9 +836,10 @@ class FileReplicationThread:
             else:
                 self.file_search_path = self.xom.config.replica_file_search_path
             if not os.path.isdir(self.file_search_path):
-                fatal(
-                    "path for existing files doesn't exist: %s",
-                    self.xom.config.replica_file_search_path)
+                msg = (
+                    f"path for existing files doesn't exist: "
+                    f"{self.xom.config.replica_file_search_path}")
+                raise Fatal(msg)
         self.use_hard_links = self.xom.config.hard_links
         self.uuid, primary_uuid = make_uuid_headers(xom.config.nodeinfo)
         assert self.uuid != primary_uuid
