@@ -2,10 +2,10 @@ from devpi_common.types import cached_property
 from .config import hookimpl
 from .filestore_fs import LazyChangesFormatter
 from .fileutil import dumps, loads
+from .interfaces import IDBIOFileConnection
 from .interfaces import IStorageConnection4
 from .interfaces import IWriter2
 from .keyfs import KeyfsTimeoutError
-from .keyfs import get_relpath_at
 from .keyfs_types import RelpathInfo
 from .log import threadlog, thread_push_log, thread_pop_log
 from .markers import absent
@@ -40,8 +40,6 @@ class SpooledTemporaryFile(SpooledTemporaryFileBase):
 
 
 class BaseConnection:
-    _get_relpath_at = get_relpath_at
-
     def __init__(self, sqlconn, basedir, storage):
         self._sqlconn = sqlconn
         self._basedir = basedir
@@ -213,6 +211,33 @@ class BaseConnection:
         (changes, rel_renames) = loads(data)
         return rel_renames
 
+    def _get_relpath_at(self, relpath, serial):
+        (keyname, last_serial) = self.db_read_typedkey(relpath)
+        serials_and_values = self._iter_serial_and_value_backwards(
+            relpath, last_serial)
+        try:
+            (last_serial, back_serial, val) = next(serials_and_values)
+            while last_serial >= 0:
+                if last_serial > serial:
+                    (last_serial, back_serial, val) = next(serials_and_values)
+                    continue
+                return (last_serial, back_serial, val)
+        except StopIteration:
+            pass
+        raise KeyError(relpath)
+
+    def _iter_serial_and_value_backwards(self, relpath, last_serial):
+        while last_serial >= 0:
+            tup = self.get_changes(last_serial).get(relpath)
+            if tup is None:
+                raise RuntimeError("no transaction entry at %s" % (last_serial))
+            keyname, back_serial, val = tup
+            yield (last_serial, back_serial, val)
+            last_serial = back_serial
+
+        # we could not find any change below at_serial which means
+        # the key didn't exist at that point in time
+
     def get_relpath_at(self, relpath, serial):
         result = self._relpath_cache.get((serial, relpath), absent)
         if result is absent:
@@ -260,24 +285,25 @@ class BaseConnection:
         return Writer(self.storage, self)
 
 
+@implementer(IDBIOFileConnection)
 @implementer(IStorageConnection4)
 class Connection(BaseConnection):
     def io_file_os_path(self, path):
         return None
 
     def io_file_exists(self, path):
-        assert not os.path.isabs(path)
-        f = self.dirty_files.get(path, absent)
+        assert not os.path.isabs(path.relpath)
+        f = self.dirty_files.get(path.relpath, absent)
         if f is not absent:
             return f is not None
         q = "SELECT path FROM files WHERE path = ?"
-        result = self.fetchone(q, (path,))
+        result = self.fetchone(q, (path.relpath,))
         return result is not None
 
     def io_file_set(self, path, content_or_file):
-        assert not os.path.isabs(path)
-        assert not path.endswith("-tmp")
-        f = self.dirty_files.get(path, None)
+        assert not os.path.isabs(path.relpath)
+        assert not path.relpath.endswith("-tmp")
+        f = self.dirty_files.get(path.relpath, None)
         if f is None:
             f = SpooledTemporaryFile(max_size=1048576)
         if isinstance(content_or_file, bytes):
@@ -287,10 +313,13 @@ class Connection(BaseConnection):
             assert content_or_file.seekable()
             content_or_file.seek(0)
             shutil.copyfileobj(content_or_file, f)
-        self.dirty_files[path] = f
+        self.dirty_files[path.relpath] = f
+
+    def io_file_new_open(self, path):
+        return SpooledTemporaryFile(max_size=1048576)
 
     def io_file_open(self, path):
-        dirty_file = self.dirty_files.get(path, absent)
+        dirty_file = self.dirty_files.get(path.relpath, absent)
         if dirty_file is None:
             raise IOError()
         if dirty_file is absent:
@@ -304,8 +333,8 @@ class Connection(BaseConnection):
         return f
 
     def io_file_get(self, path):
-        assert not os.path.isabs(path)
-        f = self.dirty_files.get(path, absent)
+        assert not os.path.isabs(path.relpath)
+        f = self.dirty_files.get(path.relpath, absent)
         if f is None:
             raise IOError()
         elif f is not absent:
@@ -315,14 +344,14 @@ class Connection(BaseConnection):
             f.seek(pos)
             return content
         q = "SELECT data FROM files WHERE path = ?"
-        content = self.fetchone(q, (path,))
+        content = self.fetchone(q, (path.relpath,))
         if content is None:
             raise IOError()
         return bytes(content[0])
 
     def io_file_size(self, path):
-        assert not os.path.isabs(path)
-        f = self.dirty_files.get(path, absent)
+        assert not os.path.isabs(path.relpath)
+        f = self.dirty_files.get(path.relpath, absent)
         if f is None:
             raise IOError()
         elif f is not absent:
@@ -331,16 +360,16 @@ class Connection(BaseConnection):
             f.seek(pos)
             return size
         q = "SELECT size FROM files WHERE path = ?"
-        result = self.fetchone(q, (path,))
+        result = self.fetchone(q, (path.relpath,))
         if result is not None:
             return result[0]
 
-    def io_file_delete(self, path):
-        assert not os.path.isabs(path)
-        f = self.dirty_files.pop(path, None)
+    def io_file_delete(self, path, *, is_last_of_hash):
+        assert not os.path.isabs(path.relpath)
+        f = self.dirty_files.pop(path.relpath, None)
         if f is not None:
             f.close()
-        self.dirty_files[path] = None
+        self.dirty_files[path.relpath] = None
 
     def _file_write(self, path, f):
         assert not os.path.isabs(path)

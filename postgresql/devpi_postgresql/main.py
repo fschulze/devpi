@@ -2,7 +2,6 @@ from devpi_common.types import cached_property
 from devpi_server import interfaces as ds_interfaces
 from devpi_server.fileutil import dumps
 from devpi_server.fileutil import loads
-from devpi_server.keyfs import get_relpath_at
 from devpi_server.keyfs_types import RelpathInfo
 from devpi_server.log import thread_pop_log
 from devpi_server.log import thread_push_log
@@ -238,6 +237,33 @@ class Connection:
         (keyname, serial) = res
         return (keyname, serial)
 
+    def _get_relpath_at(self, relpath, serial):
+        (keyname, last_serial) = self.db_read_typedkey(relpath)
+        serials_and_values = self._iter_serial_and_value_backwards(
+            relpath, last_serial)
+        try:
+            (last_serial, back_serial, val) = next(serials_and_values)
+            while last_serial >= 0:
+                if last_serial > serial:
+                    (last_serial, back_serial, val) = next(serials_and_values)
+                    continue
+                return (last_serial, back_serial, val)
+        except StopIteration:
+            pass
+        raise KeyError(relpath)
+
+    def _iter_serial_and_value_backwards(self, relpath, last_serial):
+        while last_serial >= 0:
+            tup = self.get_changes(last_serial).get(relpath)
+            if tup is None:
+                raise RuntimeError("no transaction entry at %s" % (last_serial))
+            keyname, back_serial, val = tup
+            yield (last_serial, back_serial, val)
+            last_serial = back_serial
+
+        # we could not find any change below at_serial which means
+        # the key didn't exist at that point in time
+
     def get_relpath_at(self, relpath, serial):
         result = self._relpath_cache.get((serial, relpath), absent)
         if result is absent:
@@ -248,7 +274,7 @@ class Connection:
                 (keyname, back_serial, value) = changes[relpath]
                 result = (serial, back_serial, value)
         if result is absent:
-            result = get_relpath_at(self, relpath, serial)
+            result = self._get_relpath_at(relpath, serial)
         if gettotalsizeof(result, maxlen=100000) is None:
             # result is big, put it in the changelog cache,
             # which has fewer entries to preserve memory

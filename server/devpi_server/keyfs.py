@@ -518,36 +518,6 @@ class KeyChangeEvent:
         self.back_serial = back_serial
 
 
-def get_relpath_at(self, relpath, serial):
-    """ Fallback method for legacy storage connections. """
-    (keyname, last_serial) = self.db_read_typedkey(relpath)
-    serials_and_values = iter_serial_and_value_backwards(
-        self, relpath, last_serial)
-    try:
-        (last_serial, back_serial, val) = next(serials_and_values)
-        while last_serial >= 0:
-            if last_serial > serial:
-                (last_serial, back_serial, val) = next(serials_and_values)
-                continue
-            return (last_serial, back_serial, val)
-    except StopIteration:
-        pass
-    raise KeyError(relpath)
-
-
-def iter_serial_and_value_backwards(conn, relpath, last_serial):
-    while last_serial >= 0:
-        tup = conn.get_changes(last_serial).get(relpath)
-        if tup is None:
-            raise RuntimeError("no transaction entry at %s" % (last_serial))
-        keyname, back_serial, val = tup
-        yield (last_serial, back_serial, val)
-        last_serial = back_serial
-
-    # we could not find any change below at_serial which means
-    # the key didn't exist at that point in time
-
-
 class TransactionRootModel(RootModel):
     def __init__(self, xom):
         super().__init__(xom)
