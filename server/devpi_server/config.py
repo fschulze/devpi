@@ -17,7 +17,6 @@ from . import hookspecs
 import json
 import devpi_server
 from devpi_common.url import URL
-import warnings
 
 
 log = threadlog
@@ -72,31 +71,17 @@ def add_configfile_option(parser, pluginmanager):
 def add_role_option(parser, pluginmanager):
     parser.addoption(
         "--role", action="store", dest="role", default="auto",
-        choices=["master", "primary", "replica", "standalone", "auto"],
+        choices=["primary", "replica", "standalone", "auto"],
         help="set role of this instance. The default 'auto' sets "
              "'standalone' by default and 'replica' if the --primary-url "
              "option is used. To enable the replication protocol you have "
-             "to explicitly set the 'primary' role. The 'master' role is "
-             "the deprecated variant of 'primary'.")
-
-
-def add_master_url_option(parser, pluginmanager):
-    warnings.warn(
-        "The add_master_url_option function is deprecated, "
-        "use add_primary_url_option instead",
-        DeprecationWarning,
-        stacklevel=2)
-    add_primary_url_option(parser, pluginmanager)
+             "to explicitly set the 'primary' role.")
 
 
 def add_primary_url_option(parser, pluginmanager):  # noqa: ARG001
     parser.addoption(
         "--primary-url", action="store", dest="primary_url",
         help="run as a replica of the specified primary server",
-        default=None)
-    parser.addoption(
-        "--master-url", action="store", dest="deprecated_master_url",
-        help="DEPRECATED, use --primary-url instead",
         default=None)
 
 
@@ -478,13 +463,7 @@ def load_config_file(config_file):
 
 def default_getter(name, config_options, environ):
     if name is None:
-        return
-    if name == "serverdir":
-        if "DEVPI_SERVERDIR" in environ:
-            log.warning(
-                "Using deprecated DEVPI_SERVERDIR environment variable. "
-                "You should switch to use DEVPISERVER_SERVERDIR.")
-            return environ["DEVPI_SERVERDIR"]
+        return None
     envname = "DEVPISERVER_%s" % name.replace('-', '_').upper()
     if envname in environ:
         value = environ[envname]
@@ -603,14 +582,6 @@ class MyArgumentParser(argparse.ArgumentParser):
     def add_logging_options(self):
         add_logging_options(self, self.pluginmanager)
 
-    def add_master_url_option(self):
-        warnings.warn(
-            "The add_master_url_option method is deprecated, "
-            "use add_primary_url_option instead",
-            DeprecationWarning,
-            stacklevel=2)
-        add_primary_url_option(self, self.pluginmanager)
-
     def add_primary_url_option(self):
         add_primary_url_option(self, self.pluginmanager)
 
@@ -725,14 +696,7 @@ class Config(object):
 
     @property
     def role(self):
-        role = self.nodeinfo["role"]
-        if role == "master":
-            warnings.warn(
-                "role==master is deprecated, use primary instead.",
-                DeprecationWarning,
-                stacklevel=2)
-            return "primary"
-        return role
+        return self.nodeinfo["role"]
 
     def set_uuid(self, uuid):
         # called when importing state
@@ -748,22 +712,9 @@ class Config(object):
         self.nodeinfo["primary-uuid"] = uuid
         self.write_nodeinfo()
 
-    def get_master_uuid(self):
-        warnings.warn(
-            "get_master_uuid is deprecated, use get_primary_uuid instead",
-            DeprecationWarning,
-            stacklevel=2)
-        return self.get_primary_uuid()
-
     def get_primary_uuid(self):
         if self.role != "replica":
             return self.nodeinfo["uuid"]
-        if "master-uuid" in self.nodeinfo:
-            warnings.warn(
-                "master-uuid in nodeinfo is deprecated, use primary-uuid instead",
-                DeprecationWarning,
-                stacklevel=2)
-            return self.nodeinfo["master-uuid"]
         return self.nodeinfo.get("primary-uuid")
 
     @cached_property
@@ -783,22 +734,6 @@ class Config(object):
         threadlog.info("wrote nodeinfo to: %s", self.nodeinfo_path)
 
     @property
-    def master_auth(self):
-        warnings.warn(
-            "master_auth is deprecated, use primary_auth instead",
-            DeprecationWarning,
-            stacklevel=2)
-        return self.primary_auth
-
-    @property
-    def master_url(self):
-        warnings.warn(
-            "master_url is deprecated, use primary_url instead",
-            DeprecationWarning,
-            stacklevel=2)
-        return self.primary_url
-
-    @property
     def primary_auth(self):
         # trigger setting of _primary_auth
         if self.primary_url:
@@ -809,23 +744,10 @@ class Config(object):
         if hasattr(self, '_primary_url'):
             return self._primary_url
         primary_url = None
-        if getattr(self.args, 'deprecated_master_url', None):
-            if getattr(self.args, 'primary_url', None):
-                from .main import fatal
-                fatal("Can't use both --master-url and --primary-url")
-            warnings.warn(
-                "The --master-url option is deprecated, "
-                "use --primary-url instead.",
-                DeprecationWarning,
-                stacklevel=2)
-            threadlog.warning(
-                "The --master-url option is deprecated, "
-                "use --primary-url instead.")
-            primary_url = URL(self.args.deprecated_master_url)
-        elif getattr(self.args, 'primary_url', None):
+        if getattr(self.args, 'primary_url', None):
             primary_url = URL(self.args.primary_url)
-        elif self.nodeinfo.get("masterurl"):
-            primary_url = URL(self.nodeinfo["masterurl"])
+        elif self.nodeinfo.get("primary_url"):
+            primary_url = URL(self.nodeinfo["primary_url"])
         self.primary_url = primary_url
         return self.primary_url
 
@@ -963,9 +885,9 @@ class Config(object):
         if self.nodeinfo["role"] == "replica":
             assert self.primary_url
         if self.primary_url:
-            self.nodeinfo["masterurl"] = self.primary_url.url
+            self.nodeinfo["primary_url"] = self.primary_url.url
         else:
-            self.nodeinfo.pop("masterurl", None)
+            self.nodeinfo.pop("primary_url", None)
 
     def _storage_info_from_name(self, name, settings):
         from .main import Fatal

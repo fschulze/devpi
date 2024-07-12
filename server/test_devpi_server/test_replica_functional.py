@@ -61,8 +61,8 @@ def test_replicating_deleted_pypi_release(
     # - the release/project was removed from pypi
     # - a new replica tries to fetch the file, because it's still
     #   mentioned in the changelog
-    # - the master tries to download it from pypi and gets a 404
-    # - the master replies with a 502 and the replica stops at this point
+    # - the primary tries to download it from pypi and gets a 404
+    # - the primary replies with a 502 and the replica stops at this point
     from devpi_common.url import URL
     import time
     mapp = makemapp(makefunctionaltestapp(primary_host_port))
@@ -91,8 +91,8 @@ def test_replicating_deleted_pypi_release(
     simpypi.remove_file('/pkg/pkg-1.0.zip')
     mapp.delete_index("mirror")
     # now start the replication thread
-    master_serial = mapp.getjson('/+status')['result']['serial']
+    primary_serial = mapp.getjson('/+status')['result']['serial']
     replica_mapp.xom.thread_pool.start_one(replica_mapp.xom.replica_thread)
-    replica_mapp.xom.keyfs.wait_tx_serial(master_serial)
+    replica_mapp.xom.keyfs.wait_tx_serial(primary_serial)
     # the replica is in sync
-    assert replica_mapp.xom.keyfs.get_current_serial() == master_serial
+    assert replica_mapp.xom.keyfs.get_current_serial() == primary_serial
