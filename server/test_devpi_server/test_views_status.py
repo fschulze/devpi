@@ -10,7 +10,7 @@ class TestStatus:
         r = testapp.get_json("/+status", status=200)
         assert r.status_code == 200
         data = r.json["result"]
-        assert data["role"] == "MASTER"
+        assert data["role"] == "PRIMARY"
 
     def test_status_replica(self, maketestapp, replica_xom):
         testapp = maketestapp(replica_xom)
