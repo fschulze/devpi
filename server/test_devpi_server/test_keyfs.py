@@ -878,6 +878,17 @@ class TestSubscriber:
 
 
 @notransaction
+def test_file_rollback(file_digest, keyfs, monkeypatch, storage_info):
+    content = b'foo'
+    content_hash = file_digest(content)
+    # trigger rollback during write
+    monkeypatch.setattr(storage_info.writer_cls, "records_set", lambda _s, _r: 0 / 0)
+    with pytest.raises(ZeroDivisionError), keyfs.write_transaction() as tx:
+        # put a file into the transaction
+        tx.io_file.set_content(FilePathInfo('foo', content_hash), content)
+
+
+@notransaction
 def test_crash_recovery(file_digest, keyfs, storage_info):
     from devpi_server.fileutil import loads
     from pathlib import Path

@@ -396,7 +396,7 @@ class Connection(BaseConnection):
             if files_commit or files_del:
                 threadlog.debug(
                     "wrote files without increasing serial: %s",
-                    LazyChangesFormatter({}, files_commit, files_del))
+                    LazyChangesFormatter((), files_commit, files_del))
         except BaseException:
             self.rollback()
             raise
@@ -715,7 +715,7 @@ class Writer:
         (files_commit, files_del) = self.conn._write_dirty_files()
         self.conn.commit()
         self.storage.last_commit_timestamp = time.time()
-        return LazyChangesFormatter(self.changes, files_commit, files_del)
+        return LazyChangesFormatter(list(self.changes.keys()), files_commit, files_del)
 
     def rollback(self):
         self.conn.rollback()
