@@ -175,8 +175,10 @@ def get_raw_changelog_entry(xom, serial):
 
 class TestReplicaThread:
     @pytest.fixture
-    def rt(self, makexom):
-        xom = makexom(["--primary-url=http://localhost"])
+    def rt(self, makexom, secretfile):
+        xom = makexom([
+            "--primary-url=http://localhost",
+            f"--secretfile={secretfile}"])
         return xom.replica_thread
 
     @pytest.fixture
@@ -1047,9 +1049,11 @@ def test_auth_status_primary_down(maketestapp, replica_xom, mock):
     assert r.json['result']['authstatus'] == ['noauth', '', []]
 
 
-def test_primary_url_auth(makexom, monkeypatch):
+def test_primary_url_auth(makexom, monkeypatch, secretfile):
     from devpi_server.mythread import Shutdown
-    replica_xom = makexom(opts=["--primary-url=http://foo:pass@localhost"])
+    replica_xom = makexom(opts=[
+        "--primary-url=http://foo:pass@localhost",
+        f"--secretfile={secretfile}"])
     assert replica_xom.config.primary_auth == ("foo", "pass")
     assert replica_xom.config.primary_url.url == "http://localhost"
     replica_xom.create_app()
