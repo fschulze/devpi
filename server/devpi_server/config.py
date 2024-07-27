@@ -1043,13 +1043,7 @@ class Config(object):
     @cached_property
     def secret_path(self):
         if not self.args.secretfile:
-            secretfile = self.server_path / '.secret'
-            if not secretfile.is_file():
-                return None
-            log.warning(
-                "Using deprecated existing secret file at '%s', use "
-                "--secretfile to explicitly provide the location." % secretfile)
-            return secretfile
+            return None
         return Path(self.args.secretfile).expanduser()
 
     def get_validated_secret(self):

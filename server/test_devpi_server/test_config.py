@@ -89,25 +89,6 @@ class TestConfig:
         recs = caplog.getrecords(".*new random secret.*")
         assert len(recs) == 1
 
-    def test_bbb_default_secretfile_location(self, caplog, tmpdir):
-        # setup secret file in old default location
-        configdir = tmpdir.ensure_dir('config')
-        configdir.chmod(0o700)
-        p = configdir.join(".secret")
-        secret = b"qwoieuqwelkj1234qwoieuqwelkj1234"
-        p.write(secret)
-        p.chmod(0o600)
-        caplog.clear()
-        config = make_config(["devpi-server", "--serverdir", configdir.strpath])
-        # the existing file should be used
-        assert config.args.secretfile is None
-        assert config.secret_path == Path(p)
-        assert config.basesecret == secret
-        recs = caplog.getrecords(".*new random secret.*")
-        assert len(recs) == 0
-        recs = caplog.getrecords(".*deprecated existing secret.*")
-        assert len(recs) == 1
-
     def test_secret_complexity(self, tmpdir):
         # create a secret file with too short secret
         configdir = tmpdir.ensure_dir('config')
