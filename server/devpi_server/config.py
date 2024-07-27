@@ -744,7 +744,7 @@ class Config(object):
 
     @property
     def role(self):
-        role = self.nodeinfo["role"]
+        role = self.nodeinfo.get("role", "standalone")
         if role == "master":
             warnings.warn(
                 "role==master is deprecated, use primary instead.",
@@ -1042,13 +1042,7 @@ class Config(object):
     @cached_property
     def secret_path(self):
         if not self.args.secretfile:
-            secretfile = self.server_path / '.secret'
-            if not secretfile.is_file():
-                return None
-            log.warning(
-                "Using deprecated existing secret file at '%s', use "
-                "--secretfile to explicitly provide the location." % secretfile)
-            return secretfile
+            return None
         return Path(self.args.secretfile).expanduser()
 
     def get_validated_secret(self):
@@ -1079,6 +1073,11 @@ class Config(object):
     @cached_property
     def basesecret(self):
         if self.secret_path is None:
+            if self.role != "standalone":
+                from .main import Fatal
+                raise Fatal(
+                    f"configuration error, no secretfile option provided "
+                    f"required for role {self.role!r}")
             log.warning(
                 "No secret file provided, creating a new random secret. "
                 "Login tokens issued before are invalid. "
