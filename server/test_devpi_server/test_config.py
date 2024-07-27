@@ -63,7 +63,7 @@ class TestConfig:
         p.chmod(0o600)
         # and use it
         caplog.clear()
-        config = make_config(["devpi-server", "--secretfile=%s" % p])
+        config = make_config(["devpi-server", f"--secretfile={p}"])
         assert config.args.secretfile == str(p)
         assert config.secret_path == Path(p)
         assert config.basesecret == secret
@@ -87,25 +87,6 @@ class TestConfig:
         assert config.basesecret != secret
         assert config.basesecret != prev_secret
         recs = caplog.getrecords(".*new random secret.*")
-        assert len(recs) == 1
-
-    def test_bbb_default_secretfile_location(self, caplog, tmpdir):
-        # setup secret file in old default location
-        configdir = tmpdir.ensure_dir('config')
-        configdir.chmod(0o700)
-        p = configdir.join(".secret")
-        secret = b"qwoieuqwelkj1234qwoieuqwelkj1234"
-        p.write(secret)
-        p.chmod(0o600)
-        caplog.clear()
-        config = make_config(["devpi-server", "--serverdir", configdir.strpath])
-        # the existing file should be used
-        assert config.args.secretfile is None
-        assert config.secret_path == Path(p)
-        assert config.basesecret == secret
-        recs = caplog.getrecords(".*new random secret.*")
-        assert len(recs) == 0
-        recs = caplog.getrecords(".*deprecated existing secret.*")
         assert len(recs) == 1
 
     def test_secret_complexity(self, tmpdir):
@@ -162,29 +143,6 @@ class TestConfig:
         config = make_config(["devpi-server"])
         assert config.server_path == tmpdir
 
-    def test_role_master(self, tmpdir):
-        config = make_config([
-            "devpi-server", "--role=master",
-            "--serverdir", str(tmpdir)])
-        config.init_nodeinfo()
-        assert config.nodeinfo["role"] == "master"
-        with pytest.deprecated_call():
-            assert config.role == "primary"
-        # now switch
-        config = make_config([
-            "devpi-server", "--role=primary",
-            "--serverdir", str(tmpdir)])
-        assert config.nodeinfo["role"] == "master"
-        config.init_nodeinfo()
-        assert config.role == "primary"
-        config = make_config([
-            "devpi-server", "--role=master",
-            "--serverdir", str(tmpdir)])
-        config.init_nodeinfo()
-        assert config.nodeinfo["role"] == "master"
-        with pytest.deprecated_call():
-            assert config.role == "primary"
-
     def test_role_permanence_standalone(self, tmpdir):
         config = make_config(["devpi-server", "--serverdir", str(tmpdir)])
         config.init_nodeinfo()
@@ -219,8 +177,9 @@ class TestConfig:
         assert config.role == "standalone"
 
     def test_role_permanence_replica(self, tmpdir):
-        config = make_config(["devpi-server", "--primary-url", "http://qwe",
-                               "--serverdir", str(tmpdir)])
+        config = make_config(
+            ["devpi-server", "--primary-url", "http://qwe", "--serverdir", str(tmpdir)]
+        )
         config.init_nodeinfo()
         assert config.role == "replica"
         assert not config.get_primary_uuid()
@@ -228,11 +187,6 @@ class TestConfig:
         config.init_nodeinfo()
         assert config.role == "replica"
         assert not config.get_primary_uuid()
-        config = make_config(["devpi-server", "--serverdir", str(tmpdir),
-                               "--role=master"])
-        config.init_nodeinfo()
-        with pytest.deprecated_call():
-            assert config.role == "primary"
         config = make_config([
             "devpi-server", "--serverdir", str(tmpdir),
             "--role=primary"])
