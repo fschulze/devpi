@@ -796,7 +796,7 @@ class BaseStage(object):
         return ELink(
             self.filestore, dict(
                 entrypath=link_meta.path,
-                hash_spec=link_meta.hash_spec,
+                hashes=link_meta.hashes,
                 require_python=link_meta.require_python,
                 yanked=link_meta.yanked),
             project, link_meta.version)
@@ -831,7 +831,7 @@ class BaseStage(object):
         return links[0] if links else None
 
     def store_toxresult(self, link, content_or_file,
-                        *, filename=None, hashes=None, last_modified=None):
+                        *, filename=None, hashes, last_modified=None):
         if self.customizer.readonly:
             raise ReadonlyIndex("index is marked read only")
         assert not isinstance(content_or_file, dict)
@@ -1402,7 +1402,7 @@ class PrivateStage(BaseStage):
         return normalize_name(project) in self.list_projects_perstage()
 
     def store_releasefile(self, project, version, filename, content_or_file,
-                          *, hashes=None, last_modified=None):
+                          *, hashes, last_modified=None):
         if self.customizer.readonly:
             raise ReadonlyIndex("index is marked read only")
         project = normalize_name(project)
@@ -1427,7 +1427,7 @@ class PrivateStage(BaseStage):
         return link
 
     def store_doczip(self, project, version, content_or_file,
-                     *, hashes=None, last_modified=None):
+                     *, hashes, last_modified=None):
         if self.customizer.readonly:
             raise ReadonlyIndex("index is marked read only")
         project = normalize_name(project)
@@ -1558,13 +1558,14 @@ class ELink:
     _log = linkdictprop("_log")
     entrypath = linkdictprop("entrypath")
     for_entrypath = linkdictprop("for_entrypath", default=None)
-    _hash_spec = linkdictprop("hash_spec", default="")
+    _hashes = linkdictprop("hashes", default=None)
     rel = linkdictprop("rel", default=None)
     relpath = linkdictprop("entrypath")
     require_python = linkdictprop("require_python")
     yanked = linkdictprop("yanked")
 
     def __init__(self, filestore, linkdict, project, version):
+        assert "hash_spec" not in linkdict
         self._entry = notset
         self.filestore = filestore
         self.linkdict = linkdict
@@ -1594,7 +1595,7 @@ class ELink:
 
     @property
     def hashes(self):
-        return Digests.from_spec(self._hash_spec)
+        return Digests() if self._hashes is None else Digests(self._hashes)
 
     @property
     def hash_spec(self):
@@ -1603,7 +1604,7 @@ class ELink:
             "use best_available_hash_spec instead",
             DeprecationWarning,
             stacklevel=2)
-        return self._hash_spec
+        return self.hashes.best_available_spec
 
     @property
     def hash_value(self):
@@ -1612,7 +1613,7 @@ class ELink:
             "use best_available_hash_value instead",
             DeprecationWarning,
             stacklevel=2)
-        return self._hash_spec.split("=")[1]
+        return self.hashes.best_available_value
 
     @property
     def hash_type(self):
@@ -1621,14 +1622,14 @@ class ELink:
             "use best_available_hash_type instead",
             DeprecationWarning,
             stacklevel=2)
-        return self._hash_spec.split("=")[0]
+        return self.hashes.best_available_type
 
     def matches_checksum(self, content_or_file):
-        hash_algo, hash_value = parse_hash_spec(self._hash_spec)
+        hash_algo, hash_value = parse_hash_spec(self.best_available_hash_spec)
         if not hash_algo:
             return True
         return get_hash_spec(
-            content_or_file, hash_algo().name) == self._hash_spec
+            content_or_file, hash_algo().name) == self.best_available_hash_spec
 
     def __repr__(self):
         return "<ELink rel=%r entrypath=%r>" % (self.rel, self.entrypath)
@@ -1676,7 +1677,7 @@ class LinkStore:
     def get_file_entry(self, relpath):
         return self.filestore.get_file_entry(relpath)
 
-    def create_linked_entry(self, rel, basename, content_or_file, *, hashes=None, last_modified=None):
+    def create_linked_entry(self, rel, basename, content_or_file, *, hashes, last_modified=None):
         overwrite = None
         for link in self.get_links(rel=rel, basename=basename):
             if not self.stage.ixconfig.get("volatile"):
@@ -1697,7 +1698,7 @@ class LinkStore:
         return link
 
     def new_reflink(self, rel, content_or_file, for_entrypath,
-                    *, filename=None, hashes=None, last_modified=None):
+                    *, filename=None, hashes, last_modified=None):
         if isinstance(for_entrypath, ELink):
             for_entrypath = for_entrypath.entrypath
         links = self.get_links(entrypath=for_entrypath)
@@ -1711,7 +1712,7 @@ class LinkStore:
         entry = self._create_file_entry(
             filename, content_or_file,
             hashes=hashes,
-            ref_hash_spec=base_entry._hash_spec)
+            ref_hash_spec=base_entry.best_available_hash_spec)
         if last_modified is not None:
             entry.last_modified = last_modified
         return self._add_link_to_file_entry(
@@ -1745,7 +1746,7 @@ class LinkStore:
         return list(filter(fil, [ELink(self.filestore, linkdict, self.project, self.version)
                            for linkdict in self.verdata.get("+elinks", [])]))
 
-    def _create_file_entry(self, basename, content_or_file, *, hashes=None, ref_hash_spec=None):
+    def _create_file_entry(self, basename, content_or_file, *, hashes, ref_hash_spec=None):
         entry = self.filestore.store(
             user=self.stage.username, index=self.stage.index,
             basename=basename,
@@ -1765,16 +1766,17 @@ class LinkStore:
     def _add_link_to_file_entry(self, rel, file_entry, for_entrypath=None):
         if isinstance(for_entrypath, ELink):
             for_entrypath = for_entrypath.entrypath
-        new_linkdict = {"rel": rel, "entrypath": file_entry.relpath,
-                        "hash_spec": file_entry._hash_spec, "_log": []}
+        new_linkdict = {
+            "rel": rel, "entrypath": file_entry.relpath,
+            "hashes": file_entry.hashes, "_log": []}
         if for_entrypath:
             new_linkdict["for_entrypath"] = for_entrypath
         linkdicts = self._get_inplace_linkdicts()
         linkdicts.append(new_linkdict)
         threadlog.info("added %r link %s", rel, file_entry.relpath)
         self._mark_dirty()
-        return ELink(self.filestore, new_linkdict, self.project,
-                     self.version)
+        return ELink(
+            self.filestore, new_linkdict, self.project, self.version)
 
 
 class MutableLinkStore(LinkStore):
@@ -1788,7 +1790,7 @@ class SimplelinkMeta:
     """ helper class to provide information for items from get_simplelinks() """
 
     __slots__ = (
-        '__basename', '__cmpval', '__ext', '__hash_spec',
+        '__basename', '__cmpval', '__ext', '__hashes',
         '__name', '__path', '__url', '__version',
         'key', 'href', 'require_python', 'yanked')
 
@@ -1796,7 +1798,7 @@ class SimplelinkMeta:
         self.__basename = notset
         self.__cmpval = notset
         self.__ext = notset
-        self.__hash_spec = notset
+        self.__hashes = notset
         self.__name = notset
         self.__path = notset
         self.__url = notset
@@ -1836,7 +1838,9 @@ class SimplelinkMeta:
     def __parse_url(self):
         url = URL(self.href)
         self.__basename = url.basename
-        self.__hash_spec = url.hash_spec
+        self.__hashes = Digests()
+        if (hash_type := url.hash_type):
+            self.__hashes[hash_type] = url.hash_value
         self.__path = url.path
 
     @property
@@ -1846,10 +1850,10 @@ class SimplelinkMeta:
         return self.__basename
 
     @property
-    def hash_spec(self):
-        if self.__hash_spec is notset:
+    def hashes(self):
+        if self.__hashes is notset:
             self.__parse_url()
-        return self.__hash_spec
+        return self.__hashes
 
     @property
     def path(self):
@@ -1898,8 +1902,8 @@ def make_key_and_href(entry):
     # entry is either an ELink or a filestore.FileEntry instance.
     # both provide a "relpath" attribute which points to a file entry.
     href = entry.relpath
-    if entry._hash_spec:
-        href += "#" + entry._hash_spec
+    if (hash_spec := entry.best_available_hash_spec):
+        href += "#" + hash_spec
     return entry.basename, href
 
 

@@ -13,6 +13,7 @@ from devpi_server import __version__ as server_version
 from devpi_server.model import is_valid_name
 from devpi_server.model import get_stage_customizer_classes
 from .filestore import Digests
+from .filestore import best_available_hash_type
 from .filestore import get_hashes
 from .log import threadlog
 from .main import CommandRunner
@@ -266,7 +267,7 @@ class IndexDump:
                 self.basedir.join("%s-%s.doc.zip" % (linkstore.project, link.version)))
             self.add_filedesc(
                 "doczip", linkstore.project, relpath,
-                version=link.version, entrymapping=entry.meta)
+                version=link.version, entrymapping=get_mutable_deepcopy(entry.meta))
 
     def dump_releasefiles(self, linkstore):
         for link in linkstore.get_links(rel="releasefile"):
@@ -279,26 +280,29 @@ class IndexDump:
             relpath = self.exporter.copy_file(
                 entry,
                 self.basedir.join(linkstore.project, link.version, entry.basename))
-            self.add_filedesc("releasefile", linkstore.project, relpath,
-                               version=linkstore.version,
-                               entrymapping=entry.meta,
-                               log=link.get_logs())
+            self.add_filedesc(
+                "releasefile", linkstore.project, relpath,
+                version=linkstore.version,
+                entrymapping=get_mutable_deepcopy(entry.meta),
+                log=link.get_logs())
 
     def dump_toxresults(self, linkstore):
         for tox_link in linkstore.get_links(rel="toxresult"):
             reflink = linkstore.stage.get_link_from_entrypath(tox_link.for_entrypath)
             relpath = self.exporter.copy_file(
                 tox_link.entry,
-                self.basedir.join(linkstore.project, reflink._hash_spec,
-                                  tox_link.basename)
-            )
-            self.add_filedesc(type="toxresult",
-                              project=linkstore.project,
-                              relpath=relpath,
-                              version=linkstore.version,
-                              entrymapping=tox_link.entry.meta,
-                              for_entrypath=reflink.entrypath,
-                              log=tox_link.get_logs())
+                self.basedir.join(
+                    linkstore.project,
+                    reflink.best_available_hash_spec,
+                    tox_link.basename))
+            self.add_filedesc(
+                type="toxresult",
+                project=linkstore.project,
+                relpath=relpath,
+                version=linkstore.version,
+                entrymapping=get_mutable_deepcopy(tox_link.entry.meta),
+                for_entrypath=reflink.entrypath,
+                log=tox_link.get_logs())
 
     def add_filedesc(self, type, project, relpath, **kw):
         if not self.exporter.basepath.join(relpath).check():
@@ -308,6 +312,10 @@ class IndexDump:
         d["type"] = type
         d["projectname"] = project
         d["relpath"] = relpath
+        # backward compatibility to allow devpi-server 6.x importing 7.x exports
+        hashes = d["entrymapping"]["hashes"]
+        hash_type = best_available_hash_type(hashes)
+        d["entrymapping"]["hash_spec"] = f"{hash_type}={hashes[hash_type]}"
         self.indexmeta["files"].append(d)
         self.exporter.completed(f"{type}: {relpath} ")
 
@@ -595,21 +603,13 @@ class Importer:
                     yanked.append(is_yanked)
                 stage._save_cache_links(
                     project, links, requires_python, yanked, serial, None)
-            errors = entry.file_get_hash_errors(hashes)
-            if errors:
-                # get one error
-                error_hash_type = next(iter(errors))
-                error_info = errors[error_hash_type]
-                digest = error_info['got']
-                expected = error_info['expected']
-                msg = f"File {p} has bad checksum {digest}, expected {expected}."
-                raise Fatal(msg)
         elif filedesc["type"] == "doczip":
             version = filedesc["version"]
             # docs didn't always have entrymapping in export dump
             last_modified = mapping.get("last_modified")
             link = stage.store_doczip(
                 project, version, f, hashes=hashes, last_modified=last_modified)
+            entry = link.entry
         elif filedesc["type"] == "toxresult":
             linkstore = stage.get_linkstore_perstage(
                 filedesc["projectname"], filedesc["version"])
@@ -622,8 +622,12 @@ class Importer:
             link = stage.store_toxresult(
                 link, f, filename=posixpath.basename(filedesc["relpath"]),
                 hashes=hashes, last_modified=last_modified)
+            entry = link.entry
         else:
             msg = f"unknown file type: {type}"
+            raise Fatal(msg)
+        if (msg := entry.validate(f)) is not None:
+            msg = f"{p}: {msg}"
             raise Fatal(msg)
         if link is not None:
             history_log = filedesc.get('log')
