@@ -337,7 +337,8 @@ class FileStore:
         key = key_from_link(self.keyfs, link, user, index)
         entry = MutableFileEntry(key)
         entry.url = link.geturl_nofragment().url
-        entry.hash_spec = unicode_if_bytes(link.hash_spec)
+        if (digest := link.hash_value):
+            entry._hashes = Digests({link.hash_type: digest})
         entry.project = project
         version = None
         try:
@@ -368,11 +369,9 @@ class FileStore:
     def get_file_entry_from_key(self, key, meta=_nodefault):
         return MutableFileEntry(key, meta=meta)
 
-    def store(self, user, index, basename, content_or_file, *, dir_hash_spec=None, hashes=None):
+    def store(self, user, index, basename, content_or_file, *, dir_hash_spec=None, hashes):
         # dir_hash_spec is set for toxresult files
         if dir_hash_spec is None:
-            if hashes is None:
-                hashes = get_hashes(content_or_file)
             dir_hash_spec = hashes.get_default_spec()
         hashdir_a, hashdir_b = make_splitdir(dir_hash_spec)
         key = self.keyfs.STAGEFILE(
@@ -407,7 +406,7 @@ class BaseFileEntry:
     __slots__ = ('_meta', 'basename', 'key', 'relpath')
 
     BadGateway = BadGateway
-    _hash_spec = metaprop("hash_spec")  # e.g. "md5=120938012"
+    _hashes = metaprop("hashes")  # e.g. "dict(md5=120938012)"
     last_modified = metaprop("last_modified")
     url = metaprop("url")
     project = metaprop("project")
@@ -452,18 +451,7 @@ class BaseFileEntry:
 
     @property
     def hashes(self):
-        return Digests.from_spec(self._hash_spec)
-
-    @property
-    def hash_algo(self):
-        warnings.warn(
-            "The hash_algo property is deprecated.",
-            DeprecationWarning,
-            stacklevel=2)
-        if self._hash_spec:
-            return parse_hash_spec(self.hash_spec)[0]
-        else:
-            return get_default_hash_algo()
+        return Digests() if self._hashes is None else Digests(self._hashes)
 
     @property
     def hash_spec(self):
@@ -472,11 +460,7 @@ class BaseFileEntry:
             "use best_available_hash_spec instead",
             DeprecationWarning,
             stacklevel=2)
-        return self._hash_spec
-
-    @hash_spec.setter
-    def hash_spec(self, hash_spec):
-        self._hash_spec = hash_spec
+        return self.best_available_hash_spec
 
     @property
     def hash_value(self):
@@ -485,10 +469,7 @@ class BaseFileEntry:
             "use best_available_hash_value instead",
             DeprecationWarning,
             stacklevel=2)
-        if self._hash_spec:
-            return self._hash_spec.split("=", 1)[1]
-        else:
-            return self._hash_spec
+        return self.best_available_hash_value
 
     @property
     def hash_type(self):
@@ -497,7 +478,7 @@ class BaseFileEntry:
             "use best_available_hash_type instead",
             DeprecationWarning,
             stacklevel=2)
-        return self._hash_spec.split("=")[0]
+        return self.best_available_hash_type
 
     def file_get_checksum(self, hash_type):
         warnings.warn(
@@ -551,20 +532,17 @@ class BaseFileEntry:
             raise RuntimeError("Can't access file %s directly during transaction" % path)
         return path
 
-    def file_set_content(self, content_or_file, *, last_modified=None, hash_spec=None, hashes=None):
+    def file_set_content(self, content_or_file, *, last_modified=None, hashes):
         if last_modified != -1:
             if last_modified is None:
                 last_modified = unicode_if_bytes(format_date_time(None))
             self.last_modified = last_modified
-        hashes = Digests() if hashes is None else Digests(hashes)
-        if hash_spec:
-            hashes.add_spec(hash_spec)
+        hashes = Digests(hashes)
         missing_hash_types = hashes.get_missing_hash_types()
         if missing_hash_types:
-            hashes.update(get_hashes(content_or_file, hash_types=missing_hash_types))
-        if not hash_spec:
-            hash_spec = hashes.get_default_spec()
-        self.hash_spec = hash_spec
+            msg = f"Missing hash types: {missing_hash_types!r}"
+            raise RuntimeError(msg)
+        self._hashes = self.hashes | hashes
         self.tx.io_file.set_content(self.file_path_info, content_or_file)
         # we make sure we always refresh the meta information
         # when we set the file content. Otherwise we might
@@ -572,7 +550,11 @@ class BaseFileEntry:
         # changed which will not replay correctly at a replica.
         self.key.set(self.meta)
 
-    def file_set_content_no_meta(self, content_or_file, *, hashes=None):  # noqa: ARG002
+    def file_set_content_no_meta(self, content_or_file, *, hashes):
+        missing_hash_types = hashes.get_missing_hash_types()
+        if missing_hash_types:
+            msg = f"Missing hash types: {missing_hash_types!r}"
+            raise RuntimeError(msg)
         self.tx.io_file.set_content(self.file_path_info, content_or_file)
 
     def gethttpheaders(self):
@@ -603,7 +585,7 @@ class BaseFileEntry:
         self.file_delete()
 
     def has_existing_metadata(self):
-        return bool(self._hash_spec and self.last_modified)
+        return bool(self.hashes and self.last_modified and DEFAULT_HASH_TYPE in self.hashes)
 
     def validate(self, content_or_file=None):
         if content_or_file is None:
