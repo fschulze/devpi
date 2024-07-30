@@ -4,6 +4,11 @@ from .main import status_info
 import os
 
 
+@macro_config(template='templates/blocked_indexes.pt')
+def blocked_indexes(request):  # noqa: ARG001
+    return dict()
+
+
 @macro_config(template='templates/favicon.pt', groups='html_head')
 def favicon(request):  # noqa: ARG001
     return dict()
