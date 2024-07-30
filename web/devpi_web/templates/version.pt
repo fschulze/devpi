@@ -20,10 +20,7 @@
             </tr>
         </table>
 
-        <p class="infonote" tal:condition="blocked_by_mirror_whitelist">
-            Because this project isn't in the <code>mirror_whitelist</code>,
-            no releases from <strong>${blocked_by_mirror_whitelist}</strong> are included.
-        </p>
+        <metal:blockedindexes use-macro="macros.blocked_indexes" />
 
         <table class="files">
             <thead>
