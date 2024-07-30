@@ -91,6 +91,11 @@ def status_badge(request):
     return dict(status_info=status_info(request))
 
 
+@macro_config(template='templates/subnavigation.pt')
+def subnavigation(request):  # noqa: ARG001
+    return dict()
+
+
 @macro_config(template='templates/user_index_list.pt', groups=('root', 'user'))
 def user_index_list(request):  # noqa: ARG001
     return dict()

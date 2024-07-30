@@ -115,7 +115,7 @@ def test_index_view_root_pypi(testapp):
     assert r.status_code == 200
     links = r.html.select('#content a')
     assert [(l.text, l.attrs['href']) for l in links] == [
-        ("simple index", "http://localhost/root/pypi/+simple/")]
+        ("Simple index", "http://localhost/root/pypi/+simple/")]
 
 
 def test_index_view(mapp, testapp):
@@ -124,7 +124,7 @@ def test_index_view(mapp, testapp):
     assert r.status_code == 200
     links = r.html.select('#content a')
     assert [(l.text, l.attrs['href']) for l in links] == [
-        ("simple index", "http://localhost/%s/+simple/" % api.stagename),
+        ("Simple index", "http://localhost/%s/+simple/" % api.stagename),
         ("root/pypi", "http://localhost/root/pypi"),
         ("simple", "http://localhost/root/pypi/+simple/")]
 
@@ -143,7 +143,7 @@ def test_index_view_project_info(mapp, testapp):
     assert r.status_code == 200
     links = r.html.select('#content a')
     assert [(l.text, l.attrs['href']) for l in links] == [
-        ("simple index", "http://localhost/%s/+simple/" % api.stagename),
+        ("Simple index", "http://localhost/%s/+simple/" % api.stagename),
         ("pkg1-2.6", "http://localhost/%s/pkg1/2.6" % api.stagename),
         ("root/pypi", "http://localhost/root/pypi"),
         ("simple", "http://localhost/root/pypi/+simple/")]
@@ -158,7 +158,7 @@ def test_index_view_project_files(mapp, testapp):
     links = r.html.select('#content a')
 
     assert [(l.text, l.attrs['href']) for l in links] == [
-        ("simple index", "http://localhost/%s/+simple/" % api.stagename),
+        ("Simple index", "http://localhost/%s/+simple/" % api.stagename),
         ("pkg1-2.6", "http://localhost/%s/pkg1/2.6" % api.stagename),
         ("pkg1-2.6.tar.gz", tar_url),
         ("root/pypi", "http://localhost/root/pypi"),
@@ -169,7 +169,7 @@ def test_index_view_project_files(mapp, testapp):
     assert r.status_code == 200
     links = r.html.select('#content a')
     assert [(l.text, l.attrs['href']) for l in links] == [
-        ("simple index", "http://localhost/%s/+simple/" % api.stagename),
+        ("Simple index", "http://localhost/%s/+simple/" % api.stagename),
         ("pkg1-2.6", "http://localhost/%s/pkg1/2.6" % api.stagename),
         ("pkg1-2.6.tar.gz", tar_url),
         ("pkg1-2.6.zip", zip_url),
@@ -190,7 +190,7 @@ def test_index_view_project_docs(keep_docs_packed, mapp, testapp):
     assert r.status_code == 200
     links = r.html.select('#content a')
     assert [(l.text, l.attrs['href']) for l in links] == [
-        ("simple index", "http://localhost/%s/+simple/" % api.stagename),
+        ("Simple index", "http://localhost/%s/+simple/" % api.stagename),
         ("pkg1-2.6", "http://localhost/%s/pkg1/2.6" % api.stagename),
         ("pkg1-2.6", "http://localhost/%s/pkg1/2.6/+d/index.html" % api.stagename),
         ('Download', doc_zip_url),
@@ -627,22 +627,22 @@ def test_version_view_latest_stable(mapp, testapp):
         "name": "pkg1",
         "version": "2.0"})
     r = testapp.get(api.index + '/pkg1/2.0', headers=dict(accept="text/html"))
-    links = r.html.select('.projectnavigation a')
+    links = r.html.select('.subnavigation a')
     assert 'Stable version available' not in "".join(x.text for x in links)
     link = links[-1]
     assert link.text == 'Newer version available'
     assert link.attrs['href'] == api.index + '/pkg1/stable'
     r = testapp.get(api.index + '/pkg1/2.1b2', headers=dict(accept="text/html"))
-    links = r.html.select('.projectnavigation a')
+    links = r.html.select('.subnavigation a')
     assert 'Newer version available' not in "".join(x.text for x in links)
     link = links[-1]
     assert link.text == 'Stable version available'
     assert link.attrs['href'] == api.index + '/pkg1/stable'
     r = testapp.get(api.index + '/pkg1/2.6', headers=dict(accept="text/html"))
-    links = r.html.select('.projectnavigation a')
+    links = r.html.select('.subnavigation a')
     assert 'version available' not in "".join(x.text for x in links)
     r = testapp.get(api.index + '/pkg1/3.0b1', headers=dict(accept="text/html"))
-    links = r.html.select('.projectnavigation a')
+    links = r.html.select('.subnavigation a')
     assert 'Newer version available' not in "".join(x.text for x in links)
     link = links[-1]
     assert link.text == 'Stable version available'
@@ -674,7 +674,7 @@ def test_complex_name(mapp, testapp):
     r = testapp.xget(200, api.index, headers=dict(accept="text/html"))
     links = r.html.select('#content a')
     assert [(compareable_text(l.text), l.attrs['href']) for l in links] == [
-        ('simple index', 'http://localhost/user1/dev/+simple/'),
+        ('Simple index', 'http://localhost/user1/dev/+simple/'),
         ('%s-0.9' % pkgname, 'http://localhost/user1/dev/%s/0.9' % pkgname),
         (
             '%s-0.9.tar.gz' % pkgname,

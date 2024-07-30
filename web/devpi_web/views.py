@@ -543,7 +543,9 @@ def index_get(context, request):
     result = dict(
         _context=context,
         title="%s index" % stage.name,
-        simple_index_url=request.simpleindex_url(stage),
+        nav_links=[dict(
+            title="Simple index",
+            url=request.simpleindex_url(stage))],
         permissions=permissions,
         bases=bases,
         packages=packages,
