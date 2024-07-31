@@ -74,14 +74,15 @@ def test_empty_export(tmpdir, terminalwriter, xom):
         make_export(tmpdir, terminalwriter, xom)
 
 
-def test_export_empty_serverdir(tmpdir, capfd, monkeypatch):
+def test_export_empty_serverdir(tmpdir, capfd, monkeypatch, storage_args):
     from devpi_server.importexport import export
     empty = tmpdir.join("empty").ensure(dir=True)
     export_dir = tmpdir.join("export")
     monkeypatch.setattr("devpi_server.main.configure_logging", lambda a: None)
     ret = export(argv=[
         "devpi-export",
-        "--serverdir", empty.strpath,
+        "--serverdir", str(empty),
+        *storage_args(empty),
         export_dir.strpath])
     out, err = capfd.readouterr()
     assert empty.listdir() == []
@@ -90,7 +91,7 @@ def test_export_empty_serverdir(tmpdir, capfd, monkeypatch):
     assert ("The path '%s' contains no devpi-server data" % empty) in err
 
 
-def test_export_import(tmpdir, capfd, monkeypatch, sorted_serverdir):
+def test_export_import(tmpdir, capfd, monkeypatch, sorted_serverdir, storage_args):
     from devpi_server.importexport import export
     from devpi_server.importexport import import_
     from devpi_server.init import init
@@ -98,18 +99,21 @@ def test_export_import(tmpdir, capfd, monkeypatch, sorted_serverdir):
     clean = tmpdir.join("clean").ensure(dir=True)
     ret = init(argv=[
         "devpi-init",
-        "--serverdir", clean.strpath])
+        "--serverdir", str(clean),
+        *storage_args(clean)])
     assert ret == 0
     export_dir = tmpdir.join("export")
     ret = export(argv=[
         "devpi-export",
-        "--serverdir", clean.strpath,
+        "--serverdir", str(clean),
+        *storage_args(clean),
         export_dir.strpath])
     assert ret == 0
     import_dir = tmpdir.join("import")
     ret = import_(argv=[
         "devpi-import",
-        "--serverdir", import_dir.strpath,
+        "--serverdir", str(import_dir),
+        *storage_args(import_dir),
         "--no-events",
         export_dir.strpath])
     assert ret == 0
@@ -119,7 +123,7 @@ def test_export_import(tmpdir, capfd, monkeypatch, sorted_serverdir):
     assert err == ''
 
 
-def test_export_import_no_root_pypi(tmpdir, capfd, monkeypatch, sorted_serverdir):
+def test_export_import_no_root_pypi(tmpdir, capfd, monkeypatch, sorted_serverdir, storage_args):
     from devpi_server.importexport import export
     from devpi_server.importexport import import_
     from devpi_server.init import init
@@ -127,20 +131,23 @@ def test_export_import_no_root_pypi(tmpdir, capfd, monkeypatch, sorted_serverdir
     clean = tmpdir.join("clean").ensure(dir=True)
     ret = init(argv=[
         "devpi-init",
-        "--serverdir", clean.strpath,
+        "--serverdir", str(clean),
+        *storage_args(clean),
         "--no-root-pypi"])
     assert ret == 0
     export_dir = tmpdir.join("export")
     ret = export(argv=[
         "devpi-server",
-        "--serverdir", clean.strpath,
+        "--serverdir", str(clean),
+        *storage_args(clean),
         export_dir.strpath])
     assert ret == 0
     # first we test regular import
     import_dir = tmpdir.join("import")
     ret = import_(argv=[
         "devpi-import",
-        "--serverdir", import_dir.strpath,
+        "--serverdir", str(import_dir),
+        *storage_args(import_dir),
         "--no-events",
         export_dir.strpath])
     assert ret == 0
@@ -152,7 +159,8 @@ def test_export_import_no_root_pypi(tmpdir, capfd, monkeypatch, sorted_serverdir
     import_dir.remove()
     ret = import_(argv=[
         "devpi-import",
-        "--serverdir", import_dir.strpath,
+        "--serverdir", str(import_dir),
+        *storage_args(import_dir),
         "--no-events",
         "--no-root-pypi",
         export_dir.strpath])
@@ -194,7 +202,7 @@ class TestIndexTree:
 
 class TestImportExport:
     @pytest.fixture()
-    def makeimpexp(self, makemapp, gen_path, storage_info):
+    def makeimpexp(self, makemapp, gen_path, storage_args):
         class ImpExp:
             def __init__(self, options=()):
                 from devpi_server.main import set_state_version
@@ -207,10 +215,10 @@ class TestImportExport:
                 from devpi_server.importexport import export
                 argv = [
                     "devpi-export",
-                    "--serverdir", self.mapp1.xom.config.server_path]
-                argv.extend(self.options)
-                argv.extend(["--storage", storage_info["name"]])
-                argv.append(self.exportdir)
+                    "--serverdir", str(self.mapp1.xom.config.server_path),
+                    *storage_args(self.mapp1.xom.config.server_path),
+                    *self.options,
+                    self.exportdir]
                 assert export(argv=argv) == 0
 
             def import_testdata(self, name, options=()):
@@ -222,13 +230,12 @@ class TestImportExport:
                     argv = [
                         "devpi-import",
                         "--no-events",
-                        "--serverdir", serverdir]
-                    argv.extend(options)
-                    argv.extend(["--storage", storage_info["name"]])
-                    argv.append(path / name)
+                        "--serverdir", serverdir,
+                        *storage_args(serverdir),
+                        *options,
+                        path / name]
                     assert import_(argv=argv) == 0
-                mapp = makemapp(options=["--serverdir", serverdir])
-                return mapp
+                return makemapp(options=["--serverdir", serverdir])
 
             def new_import(self, options=(), plugin=None):
                 from devpi_server.config import get_pluginmanager
@@ -237,10 +244,10 @@ class TestImportExport:
                 argv = [
                     "devpi-import",
                     "--no-events",
-                    "--serverdir", serverdir]
-                argv.extend(options)
-                argv.extend(["--storage", storage_info["name"]])
-                argv.append(self.exportdir)
+                    "--serverdir", serverdir,
+                    *storage_args(serverdir),
+                    *options,
+                    self.exportdir]
                 pm = get_pluginmanager()
                 pm.register(plugin)
                 assert import_(pluginmanager=pm, argv=argv) == 0
