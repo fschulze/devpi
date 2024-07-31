@@ -793,6 +793,8 @@ class Transaction(object):
             if val == old_val and ulid == old_ulid:
                 continue
             if val is deleted:
+                if old_val in (absent, deleted):
+                    continue
                 val = None
             assert ulid is not None or old_ulid is None
             records.append(Record(typedkey, ulid, val, back_serial, old_ulid, old_val))
