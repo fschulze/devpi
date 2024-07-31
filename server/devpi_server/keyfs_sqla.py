@@ -13,6 +13,7 @@ from .log import thread_pop_log
 from .log import thread_push_log
 from .log import threadlog
 from .markers import absent
+from .markers import deleted
 from .mythread import current_thread
 from .readonly import ReadonlyView
 from .readonly import ensure_deeply_readonly
@@ -25,7 +26,6 @@ from repoze.lru import LRUCache
 from typing import TYPE_CHECKING
 from zope.interface import implementer
 import contextlib
-import secrets
 import sqlalchemy as sa
 import time
 import warnings
@@ -74,10 +74,6 @@ ulid_changelog_table = sa.Table(
     sa.Column("serial", sa.Integer, index=True, nullable=False),
     sa.Column("back_serial", sa.Integer, nullable=False),
     sa.Column("value", sa.BINARY, nullable=True))
-
-
-def make_ulid(_randbits=secrets.randbits, _time_ns=time.time_ns):
-    return ((_time_ns() // 1_000_000) << 16 | _randbits(16))
 
 
 @implementer(IStorageConnection4)
@@ -138,7 +134,7 @@ class Connection:
             stmt = (
                 sa.update(relpath_ulid_table)
                 .where(
-                    relpath_ulid_table.c.relpath == sa.bindparam("b_relpath"),
+                    relpath_ulid_table.c.ulid == sa.bindparam("b_ulid"),
                     relpath_ulid_table.c.keytype == sa.bindparam("b_keytype"),
                     relpath_ulid_table.c.serial == sa.bindparam("b_back_serial"))
                 .values(serial=sa.bindparam("b_serial"))
@@ -189,8 +185,10 @@ class Connection:
             results[relpath] = (
                 relpath_infos[relpath].keytype,
                 info["back_serial"],
+                info["ulid"],
                 info["value"])
         for relpath in set(relpath_infos).difference(results):
+            import pdb; pdb.set_trace()
             relpath_info = relpath_infos[relpath]
             results[relpath] = (
                 relpath_info.keytype, relpath_info.back_serial, None)
@@ -292,6 +290,7 @@ class Connection:
                 result[ulid_relpath_map[ulid]] = dict(
                     last_serial=ulid_serial_map[ulid],
                     back_serial=ulid_back_serial_map[ulid],
+                    ulid=ulid,
                     value=current_obj)
         return result
 
@@ -299,8 +298,9 @@ class Connection:
         result = self._get_relpaths_at((relpath,), serial)
         if relpath not in result:
             raise KeyError(relpath)
+        assert len(result) == 1
         result = result[relpath]
-        return (result["last_serial"], result["back_serial"], ensure_deeply_readonly(result["value"]))
+        return (result["last_serial"], result["back_serial"], result["ulid"], ensure_deeply_readonly(result["value"]))
 
     def iter_relpaths_at(self, typedkeys: list[PTypedKey | TypedKey], serial: int) -> Iterator[RelpathInfo]:
         execute = self._sqlaconn.execute
@@ -335,29 +335,29 @@ class Connection:
         execute = self._sqlaconn.execute
         threadlog.debug("writing changelog for serial %s", serial)
         ulid_changelog = []
-        latest_serial_stmt = (
-            sa.select(
-                relpath_ulid_table.c.relpath,
-                sa.func.max(relpath_ulid_table.c.serial).label("serial"))
-            .where(
-                relpath_ulid_table.c.relpath.in_(
-                    {x.key.relpath for x in records}))
-            .group_by(
-                relpath_ulid_table.c.relpath))
-        latest_serial_sq = latest_serial_stmt.subquery("latest_serial_sq")
-        stmt = (
-            sa.select(
-                relpath_ulid_table.c.relpath,
-                relpath_ulid_table.c.ulid)
-            .join(
-                latest_serial_sq,
-                sa.and_(
-                    relpath_ulid_table.c.relpath == latest_serial_sq.c.relpath,
-                    relpath_ulid_table.c.serial == latest_serial_sq.c.serial)))
-        relpath_ulid_map = dict(execute(stmt).all())
+        # latest_serial_stmt = (
+        #     sa.select(
+        #         ulid_changelog_table.c.ulid,
+        #         sa.func.max(ulid_changelog_table.c.serial).label("serial"))
+        #     .where(
+        #         ulid_changelog_table.c.ulid.in_(
+        #             {x.key.ulid for x in records}))
+        #     .group_by(
+        #         ulid_changelog_table.c.ulid))
+        # latest_serial_sq = latest_serial_stmt.subquery("latest_serial_sq")
+        # stmt = (
+        #     sa.select(
+        #         relpath_ulid_table.c.relpath,
+        #         relpath_ulid_table.c.ulid)
+        #     .join(
+        #         latest_serial_sq,
+        #         sa.and_(
+        #             relpath_ulid_table.c.relpath == latest_serial_sq.c.ulid,
+        #             relpath_ulid_table.c.serial == latest_serial_sq.c.serial)))
+        # relpath_ulid_map = dict(execute(stmt).all())
         append = ulid_changelog.append
         for record in records:
-            ulid = relpath_ulid_map[record.key.relpath]
+            ulid = record.ulid
             if record.value is None:
                 append((ulid, serial, record.back_serial, None))
             else:
@@ -437,15 +437,15 @@ class Writer:
             if record.back_serial is None:
                 raise RuntimeError
             assert not isinstance(record.value, ReadonlyView), record.value
-            if record.back_serial == -1 or record.old_value is absent:
+            if record.ulid != record.old_ulid:
                 new_typedkeys.append(dict(
                     relpath=record.key.relpath,
-                    ulid=make_ulid(),
+                    ulid=record.ulid,
                     keytype=record.key.name,
                     serial=commit_serial))
             else:
                 updated_typedkeys.append(dict(
-                    b_relpath=record.key.relpath,
+                    b_ulid=record.ulid,
                     b_keytype=record.key.name,
                     b_serial=commit_serial,
                     b_back_serial=record.back_serial))

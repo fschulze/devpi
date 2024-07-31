@@ -15,6 +15,7 @@ from .interfaces import IWriter2
 from .keyfs_types import PTypedKey
 from .keyfs_types import Record
 from .keyfs_types import TypedKey
+from .keyfs_types import ULID
 from .log import thread_change_log_prefix
 from .log import thread_pop_log
 from .log import thread_push_log
@@ -159,7 +160,7 @@ class TxNotificationThread:
         with self.keyfs.get_connection() as conn:
             changes = conn.get_changes(event_serial)
         # we first check for missing files before we call subscribers
-        for relpath, (keyname, back_serial, val) in changes.items():
+        for relpath, (keyname, _back_serial, _ulid, val) in changes.items():
             if keyname in ('STAGEFILE', 'PYPIFILE_NOMD5'):
                 key = self.keyfs.get_key_instance(keyname, relpath)
                 entry = FileEntry(key, val)
@@ -207,7 +208,7 @@ class TxNotificationThread:
                 raise MissingFileException(relpath, event_serial)
         # all files exist or are deleted in a later serial,
         # call subscribers now
-        for relpath, (keyname, back_serial, val) in changes.items():
+        for relpath, (keyname, back_serial, _ulid, val) in changes.items():
             subscribers = self._on_key_change.get(keyname, [])
             if not subscribers:
                 continue
@@ -227,7 +228,7 @@ class TxNotificationThread:
         log.debug("finished calling all hooks for tx%s", event_serial)
 
 
-class KeyFS(object):
+class KeyFS:
     """ singleton storage object. """
     class ReadOnly(Exception):
         """ attempt to open write transaction while in readonly mode. """
@@ -275,17 +276,22 @@ class KeyFS(object):
             assert next_serial == serial, (next_serial, serial)
             records = []
             subscriber_changes = {}
-            for relpath, (keyname, back_serial, val) in changes.items():
+            for relpath, (keyname, back_serial, ulid, val) in changes.items():
                 try:
-                    (_, _, old_val) = conn.get_relpath_at(relpath, serial - 1)
+                    (_, _, old_ulid, old_val) = conn.get_relpath_at(relpath, serial - 1)
                 except KeyError:
+                    old_ulid = None
                     old_val = absent
+                if old_val is None:
+                    old_val = deleted
                 typedkey = self.get_key_instance(keyname, relpath)
                 subscriber_changes[typedkey] = (val, back_serial)
                 records.append(Record(
                     typedkey,
+                    ulid,
                     get_mutable_deepcopy(val),
                     back_serial,
+                    old_ulid,
                     old_val))
             fswriter.records_set(records)
         if callable(self._import_subscriber):
@@ -349,12 +355,12 @@ class KeyFS(object):
     def tx(self):
         return self._threadlocal.tx
 
-    def add_key(self, name, path, type):
+    def add_key(self, name, path, cls):
         assert isinstance(path, str)
         if "{" in path:
-            key = PTypedKey(self, path, type, name)
+            key = PTypedKey(self, path, cls, name)
         else:
-            key = TypedKey(self, path, type, name)
+            key = TypedKey(self, path, cls, name)
         if name in self._keys:
             raise ValueError("Duplicate registration for key named '%s'" % name)
         self._keys[name] = key
@@ -380,7 +386,7 @@ class KeyFS(object):
 
     def begin_transaction_in_thread(self, write=False, at_serial=None):
         if write and self._readonly:
-            raise self.ReadOnly()
+            raise self.ReadOnly
         assert not hasattr(self._threadlocal, "tx")
         tx = Transaction(self, write=write, at_serial=at_serial)
         self._threadlocal.tx = tx
@@ -394,7 +400,7 @@ class KeyFS(object):
 
     def restart_as_write_transaction(self):
         if self._readonly:
-            raise self.ReadOnly()
+            raise self.ReadOnly
         tx = self.tx
         if tx.write:
             raise RuntimeError("Can't restart a write transaction.")
@@ -645,7 +651,7 @@ class Transaction(object):
 
     def iter_serial_and_value_backwards(self, relpath, last_serial):
         while last_serial >= 0:
-            (last_serial, back_serial, val) = self.conn.get_relpath_at(
+            (last_serial, back_serial, ulid, val) = self.conn.get_relpath_at(
                 relpath, last_serial)
             yield (last_serial, val)
             last_serial = back_serial
@@ -653,21 +659,21 @@ class Transaction(object):
     def get_last_serial_and_value_at(self, typedkey, at_serial, raise_on_error=True):
         relpath = typedkey.relpath
         try:
-            (last_serial, back_serial, val) = self.conn.get_relpath_at(relpath, at_serial)
+            (last_serial, back_serial, ulid, val) = self.conn.get_relpath_at(relpath, at_serial)
         except KeyError:
             if not raise_on_error:
                 return None
             raise
         if val is None and raise_on_error:
             raise KeyError(relpath)  # was deleted
-        return (last_serial, val)
+        return (last_serial, ULID(ulid), val)
 
     def get_value_at(self, typedkey, at_serial):
-        (last_serial, val) = self.get_last_serial_and_value_at(typedkey, at_serial)
+        (last_serial, ulid, val) = self.get_last_serial_and_value_at(typedkey, at_serial)
         return val
 
     def last_serial(self, typedkey):
-        (last_serial, val) = self.get_last_serial_and_value_at(typedkey, self.at_serial)
+        (last_serial, ulid, val) = self.get_last_serial_and_value_at(typedkey, self.at_serial)
         return last_serial
 
     def derive_key(self, relpath):
@@ -683,7 +689,7 @@ class Transaction(object):
 
     def get_key_in_transaction(self, relpath):
         for key in self.cache:
-            if key.relpath == relpath and self.cache[key] not in (absent, deleted):
+            if key.relpath == relpath and self.cache[key][1] not in (absent, deleted):
                 return key
         raise KeyError(relpath)
 
@@ -698,55 +704,70 @@ class Transaction(object):
                 typedkey, self.at_serial, raise_on_error=False)
             if tup is None:
                 serial = -1
+                ulid = None
                 val = absent
             else:
-                (serial, val) = tup
+                (serial, ulid, val) = tup
                 assert is_deeply_readonly(val)
                 if val is None:
                     val = deleted
-            self._original[typedkey] = (serial, val)
+            self._original[typedkey] = (serial, ulid, val)
         return self._original[typedkey]
 
     def _get(self, typedkey):
         if typedkey in self.cache:
-            val = self.cache[typedkey]
+            (ulid, val) = self.cache[typedkey]
         else:
-            (back_serial, val) = self.get_original(typedkey)
-        if val in (absent, deleted):
-            # for convenience we return an empty instance
-            val = typedkey.type()
-        return val
+            (back_serial, ulid, val) = self.get_original(typedkey)
+        return (ulid, val)
 
     def get(self, typedkey):
         """ Return current read-only value referenced by typedkey. """
-        return ensure_deeply_readonly(self._get(typedkey))
+        (ulid, val) = self._get(typedkey)
+        if val in (absent, deleted):
+            # for convenience we return an empty instance
+            val = typedkey.type()
+        return ensure_deeply_readonly(val)
 
     def get_mutable(self, typedkey):
         """ Return current mutable value referenced by typedkey. """
-        return get_mutable_deepcopy(self._get(typedkey))
+        (ulid, val) = self._get(typedkey)
+        if val in (absent, deleted):
+            # for convenience we return an empty instance
+            val = typedkey.type()
+        return get_mutable_deepcopy(val)
+
+    def get_ulid(self, typedkey):
+        (ulid, val) = self._get(typedkey)
+        return ulid
 
     def exists(self, typedkey):
         if typedkey in self.cache:
-            val = self.cache[typedkey]
-            return val not in (absent, deleted)
-        (serial, val) = self.get_original(typedkey)
+            (ulid, val) = self.cache[typedkey]
+        else:
+            (serial, ulid, val) = self.get_original(typedkey)
         return val not in (absent, deleted)
 
     def delete(self, typedkey):
         if not self.write:
-            raise self.keyfs.ReadOnly()
-        self.cache[typedkey] = deleted
+            raise self.keyfs.ReadOnly
+        (serial, ulid, val) = self.get_original(typedkey)
+        self.cache[typedkey] = (ulid, deleted)
         self.dirty.add(typedkey)
 
     def set(self, typedkey, val):  # noqa: A003
         if not self.write:
-            raise self.keyfs.ReadOnly()
+            raise self.keyfs.ReadOnly
         # sanity check for dictionaries: we always want to have unicode
         # keys, not bytes
         if typedkey.type is dict:
             check_unicode_keys(val)
         assert val is not None
-        self.cache[typedkey] = val
+        (ulid, old_val) = self._get(typedkey)
+        if old_val in (absent, deleted):
+            ulid = ULID()
+        assert ulid is not None
+        self.cache[typedkey] = (ulid, val)
         self.dirty.add(typedkey)
 
     def commit(self):
@@ -766,14 +787,15 @@ class Transaction(object):
             return result
         records = []
         for typedkey in self.dirty:
-            val = self.cache[typedkey]
+            (ulid, val) = self.cache[typedkey]
             assert val is not absent
-            (back_serial, old_val) = self.get_original(typedkey)
-            if val == old_val:
+            (back_serial, old_ulid, old_val) = self.get_original(typedkey)
+            if val == old_val and ulid == old_ulid:
                 continue
             if val is deleted:
                 val = None
-            records.append(Record(typedkey, val, back_serial, old_val))
+            assert ulid is not None or old_ulid is None
+            records.append(Record(typedkey, ulid, val, back_serial, old_ulid, old_val))
         if not records and not self.io_file.is_dirty():
             threadlog.debug("nothing to commit, just closing tx")
             result = self._close()

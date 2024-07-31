@@ -4,17 +4,35 @@ from attrs import define
 from typing import TYPE_CHECKING
 import contextlib
 import re
+import secrets
+import time
 
 
 if TYPE_CHECKING:
     from typing import Any
 
 
+class ULID(int):
+    def __new__(cls, value: int | None = None):
+        if value is None:
+            return cls.new()
+        return super().__new__(cls, value)
+
+    @classmethod
+    def new(cls, *, _randbits=secrets.randbits, _time_ns=time.time_ns):
+        return cls((_time_ns() // 1_000_000) << 16 | _randbits(16))
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}({super().__repr__()})"
+
+
 @define
 class Record:
     key: PTypedKey | TypedKey
+    ulid: ULID
     value: Any
     back_serial: int
+    old_ulid: ULID | None
     old_value: Any
 
 
@@ -37,11 +55,11 @@ class PTypedKey:
     __slots__ = ('keyfs', 'name', 'pattern', 'rex_reverse', 'type')
     rex_braces = re.compile(r'\{(.+?)\}')
 
-    def __init__(self, keyfs, key, type, name):
+    def __init__(self, keyfs, key, cls, name):
         self.keyfs = keyfs
         assert isinstance(key, str)
         self.pattern = key
-        self.type = type
+        self.type = cls
         self.name = name
 
         def repl(match):
@@ -73,10 +91,10 @@ class PTypedKey:
 class TypedKey:
     __slots__ = ('keyfs', 'name', 'params', 'relpath', 'type')
 
-    def __init__(self, keyfs, relpath, type, name, params=None):
+    def __init__(self, keyfs, relpath, cls, name, params=None):
         self.keyfs = keyfs
         self.relpath = relpath
-        self.type = type
+        self.type = cls
         self.name = name
         self.params = params or {}
 
@@ -113,7 +131,7 @@ class TypedKey:
         self.set(val)
 
     def set(self, val):
-        if not isinstance(val, self.type):
+        if not isinstance(val, self.type) and not issubclass(self.type, type(val)):
             raise TypeError(
                 "%r requires value of type %r, got %r" % (
                     self.relpath, self.type.__name__, type(val).__name__))

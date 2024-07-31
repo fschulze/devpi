@@ -97,9 +97,11 @@ class TestKeyFS:
         with keyfs.read_transaction() as tx:
             assert tx.at_serial == 1
             assert tx.get(key) == {'bar'}
+            ulid = tx.get_ulid(key)
         with keyfs.read_transaction(at_serial=0) as tx:
             assert tx.at_serial == 0
             assert tx.get(key) == {'bar', 'egg'}
+            assert tx.get_ulid(key) == ulid
 
     @notransaction
     def test_double_set(self, keyfs):
@@ -125,12 +127,15 @@ class TestKeyFS:
         key = keyfs.add_key("NAME", "somekey", type(before))
         with keyfs.write_transaction() as tx:
             tx.set(key, before)
+            ulid = tx.get_ulid(key)
         with keyfs.write_transaction() as tx:
             tx.delete(key)
         with keyfs.write_transaction() as tx:
             tx.set(key, after)
+            assert tx.get_ulid(key) != ulid
         with keyfs.read_transaction() as tx:
             assert tx.get(key) == after
+            assert tx.get_ulid(key) != ulid
 
     @notransaction
     def test_not_exists_cached(self, keyfs, monkeypatch):
@@ -801,6 +806,7 @@ class TestSubscriber:
     def test_wait_tx_async(self, keyfs, pool, queue):
         from devpi_server.interfaces import IWriter2
         from devpi_server.keyfs_types import Record
+        from devpi_server.keyfs_types import ULID
         # start a thread which waits for the next serial
         key = keyfs.add_key("NAME", "hello", int)
         wait_serial = keyfs.get_next_serial()
@@ -817,7 +823,7 @@ class TestSubscriber:
         with keyfs._storage.get_connection(write=True) as conn:
             with conn.write_transaction() as _wtx:
                 wtx = IWriter2(_wtx)
-                wtx.records_set([Record(key, 1, -1, None)])
+                wtx.records_set([Record(key, ULID(), 1, -1, None, None)])
 
         # check wait_tx_serial() call from the thread returned True
         assert queue.get() is True

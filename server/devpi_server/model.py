@@ -876,7 +876,7 @@ class BaseStage(object):
         if info is None:
             # never existed
             return -1
-        (last_serial, projects) = info
+        (last_serial, ulid, projects) = info
         if projects is None:
             # the whole index was deleted
             return -1
@@ -889,7 +889,7 @@ class BaseStage(object):
                 return last_serial
             # the project never existed or was deleted and didn't have versions
             return -1
-        (last_serial, versions) = info
+        (last_serial, ulid, versions) = info
         if versions is None:
             # was deleted
             return last_serial
@@ -900,7 +900,7 @@ class BaseStage(object):
         if info is None:
             # never existed
             return -1
-        (version_serial, version) = info
+        (version_serial, ulid, version) = info
         return max(last_serial, version_serial)
 
     def get_versiondata(self, project, version):
@@ -1443,7 +1443,7 @@ class PrivateStage(BaseStage):
         if at_serial is None:
             at_serial = tx.at_serial
         try:
-            (last_serial, projects) = tx.get_last_serial_and_value_at(
+            (last_serial, ulid, projects) = tx.get_last_serial_and_value_at(
                 self.key_projects, at_serial)
         except KeyError:
             last_serial = -1
@@ -1451,20 +1451,20 @@ class PrivateStage(BaseStage):
         if last_serial >= at_serial:
             return last_serial
         for project in projects:
-            (versions_serial, versions) = tx.get_last_serial_and_value_at(
+            (versions_serial, ulid, versions) = tx.get_last_serial_and_value_at(
                 self.key_projversions(project), at_serial)
             last_serial = max(last_serial, versions_serial)
             if last_serial >= at_serial:
                 return last_serial
             for version in versions:
-                (version_serial, version) = tx.get_last_serial_and_value_at(
+                (version_serial, ulid, version) = tx.get_last_serial_and_value_at(
                     self.key_projversion(project, version), at_serial)
                 last_serial = max(last_serial, version_serial)
                 if last_serial >= at_serial:
                     return last_serial
         # no project uploaded yet
         user_key = self.user.key
-        (user_serial, user_config) = tx.get_last_serial_and_value_at(
+        (user_serial, ulid, user_config) = tx.get_last_serial_and_value_at(
             user_key, at_serial)
         try:
             current_index_config = user_config["indexes"][self.index]
