@@ -153,9 +153,12 @@ class Connection:
             else:
                 ulid_serials = []
                 for updated_typedkey in updated_typedkeys:
+                    result = self._sqlaconn.execute(stmt, updated_typedkey).fetchall()
+                    if not result:
+                        raise RuntimeError
                     ulid_serials.extend(
                         dict(b_ulid=x.ulid, b_serial=x.serial, b_back_serial=x.b_back_serial)
-                        for x in self._sqlaconn.execute(stmt, updated_typedkey))
+                        for x in result)
             stmt = (
                 sa.update(ulid_latest_serial_table)
                 .where(
