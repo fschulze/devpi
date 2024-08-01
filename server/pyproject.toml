@@ -19,7 +19,6 @@ dependencies = [
     "passlib[argon2]",
     "platformdirs",
     "pluggy>=0.6.0,<2.0",
-    "py>=1.4.23",
     "pyramid>=2",
     "repoze.lru>=0.6",
     "strictyaml",
@@ -126,7 +125,6 @@ extend-ignore = [
     "FLY002", # maybe cleanup later - f-string instead of join
     "G002", # cleanup soon - logging statement uses %
     "I001", # maybe cleanup later - import block unsorted
-    "PERF102", # cleanup soon - keys/values of dict
     "PERF401", # maybe cleanup later - list comprehension
     "PLR0911", # cleanup later
     "PLR0912", # maybe cleanup later
