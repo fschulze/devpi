@@ -2,7 +2,6 @@ import itertools
 import sys
 import json
 import os
-import py
 import logging
 import posixpath
 import shutil
@@ -23,6 +22,7 @@ from .main import init_default_indexes
 from .main import set_state_version
 from .main import xom_from_config
 from .readonly import get_mutable_deepcopy, ReadonlyView
+from pathlib import Path
 
 
 def has_users_or_stages(xom):
@@ -45,12 +45,12 @@ def has_users_or_stages(xom):
 
 
 def do_export(path, tw, xom):
-    path = py.path.local(path)
-    if path.check() and path.listdir():
+    path = Path(path)
+    if path.exists() and path.is_dir() and any(path.iterdir()):
         msg = f"export directory {path} must not exist or be empty"
         raise Fatal(msg)
-    path.ensure(dir=1)
-    tw.line("creating %s" % path)
+    path.mkdir(parents=True, exist_ok=True)
+    tw.line(f"creating {path}")
     dumper = Exporter(tw, xom)
     with xom.keyfs.read_transaction():
         dumper.dump_all(path)
@@ -87,9 +87,9 @@ def export(pluginmanager=None, argv=None):
 
 def do_import(path, tw, xom):
     logging.basicConfig(level=logging.INFO, format='%(message)s')
-    path = py.path.local(path)
+    path = Path(path)
 
-    if not path.check():
+    if not path.is_dir():
         msg = f"path for importing not found: {path}"
         raise Fatal(msg)
 
@@ -159,20 +159,19 @@ class Exporter:
         self.export_indexes = self.export["indexes"] = {}
 
     def copy_file(self, entry, dest):
-        dest.dirpath().ensure(dir=1)
-        relpath = dest.relto(self.basepath)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        relpath = dest.relative_to(self.basepath)
         src = entry.file_os_path()
         if self.config.args.hard_links and src is not None:
             self.tw.line("link file at %s" % relpath)
-            os.link(src, dest.strpath)
+            os.link(src, dest)
         elif src is not None:
             self.tw.line("copy file at %s" % relpath)
-            shutil.copyfile(src, dest.strpath)
+            shutil.copyfile(src, dest)
         else:
             self.tw.line("write file at %s" % relpath)
-            with open(dest.strpath, 'wb') as df:
-                with entry.file_open_read() as sf:
-                    shutil.copyfileobj(sf, df)
+            with dest.open('wb') as df, entry.file_open_read() as sf:
+                shutil.copyfileobj(sf, df)
         return relpath
 
     def warn(self, msg):
@@ -187,15 +186,15 @@ class Exporter:
         self.export["pythonversion"] = list(sys.version_info)
         self.export["devpi_server"] = server_version
         for user in self.xom.model.get_userlist():
-            userdir = path.join(user.name)
+            userdir = path / user.name
             data = user.get(credentials=True)
             indexes = data.pop("indexes", {})
             self.export_users[user.name] = data
             self.completed("user %r" % user.name)
-            for indexname, indexconfig in indexes.items():
+            for indexname in indexes:
                 stage = self.xom.model.getstage(user.name, indexname)
-                IndexDump(self, stage, userdir.join(indexname)).dump()
-        self._write_json(path.join("dataindex.json"), self.export)
+                IndexDump(self, stage, userdir / indexname).dump()
+        self._write_json(path / "dataindex.json", self.export)
 
     def _write_json(self, path, data):
         # use a special handler for serializing ReadonlyViews
@@ -205,10 +204,11 @@ class Exporter:
             raise TypeError(type(val))
 
         writedata = json.dumps(data, indent=2, default=handle_readonly)
-        path.dirpath().ensure(dir=1)
+        path.parent.mkdir(parents=True, exist_ok=True)
         self.tw.line(
-            f"writing {path.relto(self.basepath)}, length {len(writedata)}")
-        path.write(writedata)
+            f"writing {path.relative_to(self.basepath)}, length {len(writedata)}")
+        with path.open("w") as f:
+            f.write(writedata)
 
 
 class IndexDump:
@@ -247,7 +247,7 @@ class IndexDump:
             for version in data:
                 vername = data[version]["name"]
                 linkstore = self.stage.get_linkstore_perstage(vername, version)
-                self.basedir.ensure(dir=1)
+                self.basedir.mkdir(parents=True, exist_ok=True)
                 self.dump_releasefiles(linkstore)
                 self.dump_toxresults(linkstore)
                 self.dump_docfiles(linkstore)
@@ -264,7 +264,7 @@ class IndexDump:
             entry = self.exporter.filestore.get_file_entry(link.entrypath)
             relpath = self.exporter.copy_file(
                 entry,
-                self.basedir.join("%s-%s.doc.zip" % (linkstore.project, link.version)))
+                self.basedir / f"{linkstore.project}-{link.version}.doc.zip")
             self.add_filedesc(
                 "doczip", linkstore.project, relpath,
                 version=link.version, entrymapping=get_mutable_deepcopy(entry.meta))
@@ -279,7 +279,7 @@ class IndexDump:
                 raise Fatal(msg)
             relpath = self.exporter.copy_file(
                 entry,
-                self.basedir.join(linkstore.project, link.version, entry.basename))
+                self.basedir / linkstore.project / link.version / entry.basename)
             self.add_filedesc(
                 "releasefile", linkstore.project, relpath,
                 version=linkstore.version,
@@ -291,7 +291,7 @@ class IndexDump:
             reflink = linkstore.stage.get_link_from_entrypath(tox_link.for_entrypath)
             relpath = self.exporter.copy_file(
                 tox_link.entry,
-                self.basedir.join(
+                self.basedir.joinpath(
                     linkstore.project,
                     reflink.best_available_hash_spec,
                     tox_link.basename))
@@ -305,13 +305,13 @@ class IndexDump:
                 log=tox_link.get_logs())
 
     def add_filedesc(self, type, project, relpath, **kw):
-        if not self.exporter.basepath.join(relpath).check():
+        if not self.exporter.basepath.joinpath(relpath).is_file():
             msg = f"The file for {relpath} is missing."
             raise Fatal(msg)
         d = kw.copy()
         d["type"] = type
         d["projectname"] = project
-        d["relpath"] = relpath
+        d["relpath"] = str(relpath)
         # backward compatibility to allow devpi-server 6.x importing 7.x exports
         hashes = d["entrymapping"]["hashes"]
         hash_type = best_available_hash_type(hashes)
@@ -331,7 +331,8 @@ class Importer:
 
     def read_json(self, path):
         self.tw.line(f"reading json: {path}")
-        return json.loads(path.read())
+        with path.open() as f:
+            return json.load(f)
 
     def warn(self, msg):
         self.tw.line(msg, yellow=True)
@@ -400,7 +401,7 @@ class Importer:
 
     def import_all(self, path):
         self.import_rootdir = path
-        json_path = path.join("dataindex.json")
+        json_path = path / "dataindex.json"
         self.import_data = self.read_json(json_path)
         self.dumpversion = self.import_data["dumpversion"]
         if self.dumpversion not in ("1", "2"):
@@ -547,14 +548,14 @@ class Importer:
     def import_filedesc(self, stage, filedesc, versions):
         rel = filedesc["relpath"]
         project = filedesc["projectname"]
-        p = self.import_rootdir.join(rel)
-        if not p.check():
+        p = self.import_rootdir / rel
+        if not p.is_file():
             msg = f"The file at {p} is missing."
             raise Fatal(msg)
         f = p.open("rb")
         if self.xom.config.hard_links:
             # additional attribute for hard links
-            f.devpi_srcpath = p.strpath
+            f.devpi_srcpath = p
 
         # docs and toxresults didn't always have entrymapping in export dump
         mapping = filedesc.get("entrymapping", {})
@@ -573,14 +574,14 @@ class Importer:
         if filedesc["type"] == "releasefile":
             if self.dumpversion == "1":
                 # previous versions would not add a version attribute
-                version = BasenameMeta(p.basename).version
+                version = BasenameMeta(p.name).version
             else:
                 version = filedesc["version"]
 
             if hasattr(stage, 'store_releasefile'):
                 link = stage.store_releasefile(
                     project, version,
-                    p.basename, f,
+                    p.name, f,
                     hashes=hashes,
                     last_modified=mapping["last_modified"])
                 entry = link.entry

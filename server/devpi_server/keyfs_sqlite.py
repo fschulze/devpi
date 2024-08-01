@@ -369,7 +369,7 @@ class Connection(BaseConnection):
 class BaseStorage(object):
     def __init__(self, basedir, notify_on_commit, cache_size):
         self.basedir = basedir
-        self.sqlpath = self.basedir.join(self.db_filename)
+        self.sqlpath = self.basedir / self.db_filename
         self._notify_on_commit = notify_on_commit
         changelog_cache_size = max(1, cache_size // 20)
         relpath_cache_size = max(1, cache_size - changelog_cache_size)
