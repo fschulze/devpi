@@ -9,7 +9,6 @@ import inspect
 import os
 import os.path
 import asyncio
-import py
 import ssl
 import sys
 import threading
@@ -18,6 +17,7 @@ import warnings
 
 from requests import Response, exceptions
 from requests.utils import DEFAULT_CA_BUNDLE_PATH
+from devpi_common.terminal import TerminalWriter
 from devpi_common.types import cached_property
 from devpi_common.request import new_requests_session
 from .config import MyArgumentParser
@@ -81,11 +81,11 @@ class CommandRunner:
 
     @cached_property
     def tw(self):
-        return py.io.TerminalWriter()
+        return TerminalWriter()
 
     @cached_property
     def tw_err(self):
-        return py.io.TerminalWriter(sys.stderr)
+        return TerminalWriter(sys.stderr)
 
 
 DATABASE_VERSION = "4"
