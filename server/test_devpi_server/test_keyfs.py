@@ -1,5 +1,4 @@
 import contextlib
-import py
 import pytest
 from devpi_server.mythread import ThreadPool
 
@@ -297,19 +296,21 @@ class TestKey:
          (tuple, (3,4)),
          (str, "hello")])
 def test_trans_get_not_modify(keyfs, type, val, monkeypatch):
+    from devpi_server.keyfs import Transaction
     attr = keyfs.add_key("NAME", "hello", type)
     with keyfs.write_transaction():
         attr.set(val)
     with keyfs.read_transaction():
         assert attr.get() == val
     # make sure keyfs doesn't write during the transaction and its commit
-    orig_write = py.path.local.write
+    orig_close = Transaction._close
 
-    def write_checker(path, content):
-        assert not path.endswith(attr.relpath)
-        orig_write(path, content)
+    def _close_checker(self):
+        assert self.commit_serial is None
+        orig_close(self)
+        assert self.commit_serial is None
 
-    monkeypatch.setattr(py.path.local, "write", write_checker)
+    monkeypatch.setattr(Transaction, "_close", _close_checker)
     with keyfs.read_transaction():
         x = attr.get()
     assert x == val
