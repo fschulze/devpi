@@ -1015,7 +1015,7 @@ class PyPIView:
         if not request.has_permission("pkg_read"):
             abort(request, 403, "package read forbidden")
 
-        metadata = linkstore.metadata
+        metadata = get_mutable_deepcopy(linkstore.metadata)
 
         results = []
         targetindex = pushdata.get("targetindex", None)
