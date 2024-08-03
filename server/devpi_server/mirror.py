@@ -857,7 +857,7 @@ class MirrorStage(BaseStage):
         (last_serial, links) = info
         return last_serial
 
-    def get_versiondata_perstage(self, project, version):
+    def get_versiondata_perstage(self, project, version, *, with_elinks=True):
         # we do not use normalize_name name here, so the returned data
         # contains whatever this method was called with, which is hopefully
         # the title from the project list
@@ -872,9 +872,10 @@ class MirrorStage(BaseStage):
                     verdata['requires_python'] = sm.require_python
                 if sm.yanked is not None and sm.yanked is not False:
                     verdata['yanked'] = sm.yanked
-                elinks = verdata.setdefault("+elinks", [])
-                entrypath = sm.path
-                elinks.append({"rel": "releasefile", "entrypath": entrypath})
+                if with_elinks:
+                    elinks = verdata.setdefault("+elinks", [])
+                    entrypath = sm.path
+                    elinks.append({"rel": "releasefile", "entrypath": entrypath})
         return ensure_deeply_readonly(verdata)
 
 
