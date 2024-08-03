@@ -164,22 +164,6 @@ def devpiserver_identity_loaded(request, credential_plugin_name, identity_plugin
     """
 
 
-@hookspec(warn_on_impl=DeprecationWarning("Use new devpiserver_auth_request hook instead"))
-def devpiserver_auth_user(userdict, username, password):
-    """return dict containing authentication validation results.
-
-    A dict must be returned with a key "status" with one of the
-    following values:
-
-        "ok" - authentication succeeded
-        "unknown" - no matching user, other plugins are tried
-        "reject" - invalid password, authentication stops
-
-    Optionally the plugin can return a list of group names the user is
-    member of using the "groups" key of the result dict.
-    """
-
-
 @hookspec(firstresult=True)
 def devpiserver_auth_request(request, userdict, username, password):
     """return authentication validation results.
