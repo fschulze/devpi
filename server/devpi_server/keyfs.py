@@ -803,6 +803,8 @@ class Transaction(object):
             if val == old_val:
                 continue
             if val is deleted:
+                if old_val in (absent, deleted):
+                    continue
                 val = None
             records.append(Record(typedkey, val, back_serial, old_val))
         if not records and not self.io_file.is_dirty():
