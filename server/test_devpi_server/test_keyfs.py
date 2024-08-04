@@ -171,7 +171,7 @@ class TestGetKey:
     def test_typed_keys(self, keyfs):
         key = keyfs.add_key("NAME", "hello", dict)
         assert key == keyfs.get_key("NAME")
-        assert key.name == "NAME"
+        assert key.key_name == "NAME"
 
     def test_pattern_key(self, keyfs):
         pkey = keyfs.add_key("NAME", "{hello}/{this}", dict)
@@ -179,9 +179,9 @@ class TestGetKey:
         assert found_key == pkey
         assert pkey.extract_params("cat/dog") == dict(hello="cat", this="dog")
         assert pkey.extract_params("cat") == {}
-        assert pkey.name == "NAME"
+        assert pkey.key_name == "NAME"
         key = pkey(hello="cat", this="dog")
-        assert key.name == "NAME"
+        assert key.key_name == "NAME"
 
 
 @pytest.mark.parametrize(("type", "val"),
@@ -332,7 +332,7 @@ def test_trans_get_not_modify(keyfs, type, val, monkeypatch):
 @notransaction
 class TestTransactionIsolation:
     def test_cannot_write_on_read_trans(self, keyfs):
-        key = keyfs.add_key("hello", "hello", dict)
+        key = keyfs.add_key("HELLO", "hello", dict)
         tx_1 = Transaction(keyfs)
         with pytest.raises(keyfs.ReadOnly):
             tx_1.set(key, {})
@@ -777,7 +777,7 @@ class TestSubscriber:
         ev = queue.get()
         assert ev.typedkey == key
         assert ev.typedkey.params == {"name": "hello"}
-        assert ev.typedkey.name == pkey.name
+        assert ev.typedkey.key_name == pkey.key_name
 
     @pytest.mark.parametrize("meth", ["wait_event_serial", "wait_tx_serial"])
     def test_wait_event_serial(self, keyfs, pool, queue, meth):
@@ -848,14 +848,14 @@ class TestSubscriber:
             assert tx.commit_serial is None
         assert tx.commit_serial is None
 
-        key = keyfs.add_key("hello", "hello", dict)
+        key = keyfs.add_key("HELLO", "hello", dict)
         with keyfs.write_transaction() as tx:
             assert tx.at_serial == -1
             tx.set(key, {})
         assert tx.commit_serial == 0
 
     def test_commit_serial_restart(self, keyfs):
-        key = keyfs.add_key("hello", "hello", dict)
+        key = keyfs.add_key("HELLO", "hello", dict)
         with keyfs.read_transaction() as tx:
             keyfs.restart_as_write_transaction()
             tx.set(key, {})
@@ -863,7 +863,7 @@ class TestSubscriber:
         assert tx.write
 
     def test_at_serial_restart(self, keyfs):
-        key = keyfs.add_key("hello", "hello", dict)
+        key = keyfs.add_key("HELLO", "hello", dict)
         with keyfs.read_transaction() as txr:
             tx = Transaction(keyfs, write=True)
             tx.set(key, {1:1})

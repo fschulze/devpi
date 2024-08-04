@@ -11,10 +11,9 @@ from zope.interface.verify import verifyObject
 
 if TYPE_CHECKING:
     from .keyfs_types import FilePathInfo
-    from .keyfs_types import PTypedKey
+    from .keyfs_types import IKeyFSKey
     from .keyfs_types import Record
     from .keyfs_types import RelpathInfo
-    from .keyfs_types import TypedKey
     from collections.abc import Iterable
     from collections.abc import Iterator
     from collections.abc import Sequence
@@ -100,7 +99,7 @@ class IStorage(Interface):
     def __init__(basedir: Path, *, notify_on_commit: Callable, cache_size: int, settings: dict) -> None:
         """ Create the storage object and initialize it. """
 
-    def add_key(key: PTypedKey | TypedKey) -> None:
+    def add_key(key: IKeyFSKey) -> None:
         """ Register key information. """
 
     def get_connection(*, closing: bool, write: bool, timeout: int) -> IStorageConnection:
@@ -133,7 +132,7 @@ class IStorageConnection(Interface):
             at given serial.
             Raises KeyError if not found. """
 
-    def iter_relpaths_at(typedkeys: Iterable[PTypedKey | TypedKey], at_serial: int) -> Iterator[RelpathInfo]:
+    def iter_relpaths_at(typedkeys: Iterable[IKeyFSKey], at_serial: int) -> Iterator[RelpathInfo]:
         """ Iterate over all relpaths of the given typed keys starting
             from at_serial until the first serial in the database. """
 
