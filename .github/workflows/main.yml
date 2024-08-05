@@ -407,9 +407,9 @@ jobs:
       matrix:
         include:
           - project: "postgresql"
-            python-version: "3.7"
+            python-version: "3.9"
             os: "ubuntu-latest"
-            tox-envs: "py37-server680"
+            tox-envs: "py39-server680"
 
     env:
       PY_COLORS: 1
@@ -913,7 +913,8 @@ jobs:
         shell: "bash"
         run: |
           set -xe -o nounset
-          ruff check --output-format=github --extend-exclude server .
+          ruff check --output-format=github --extend-exclude postgresql server .
+          ruff check --output-format=github --target-version py39 postgresql
           ruff check --output-format=github --target-version py39 server
 
   plugins-tests:

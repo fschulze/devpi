@@ -599,7 +599,10 @@ class Storage:
     def perform_crash_recovery(self):
         pass
 
-    def get_connection(self, closing=True, write=False):
+    def add_key(self, key):
+        pass
+
+    def get_connection(self, *, closing=True, write=False, timeout=30):
         sqlconn = pg8000.native.Connection(
             user=self.user,
             database=self.database,
@@ -608,7 +611,7 @@ class Storage:
             unix_sock=self.unix_sock,
             password=self.password,
             ssl_context=self.ssl_context,
-            timeout=60)
+            timeout=timeout)
         sqlconn.text_factory = bytes
         conn = Connection(sqlconn, self)
         if closing:
