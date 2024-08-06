@@ -177,7 +177,7 @@ class Connection:
                 .values(serial=sa.bindparam("b_serial")))
             self._sqlaconn.execute(stmt, ulid_serials)
 
-    def _get_changes_at(self, serial):
+    def iter_changes_at(self, serial: int) -> Iterator[KeyData]:
         stmt = (
             sa.select(
                 relpath_ulid_table.c.relpath,
@@ -189,22 +189,18 @@ class Connection:
             .where(
                 ulid_changelog_table.c.serial == serial))
         relpaths_stmt = stmt.with_only_columns(relpath_ulid_table.c.relpath)
-        results = {}
-        for keydata in self._iter_relpaths_at(relpaths_stmt, serial):
-            results[keydata.relpath] = (
-                keydata.keyname,
-                keydata.back_serial,
-                None if keydata.value is deleted else keydata.value)
-        return results
-
-    def get_changes(self, serial: int) -> dict:
-        return ensure_deeply_readonly(self._get_changes_at(serial))
+        yield from self._iter_relpaths_at(relpaths_stmt, serial)
 
     def get_raw_changelog_entry(self, serial: int) -> bytes | None:
         renames = self.get_rel_renames(serial)
         if renames is None:
             return None
-        changes = self._get_changes_at(serial)
+        changes = {
+            c.relpath: (
+                c.keyname,
+                c.back_serial,
+                None if c.value is deleted else c.value)
+            for c in self.iter_changes_at(serial)}
         return dumps((changes, renames))
 
     def get_rel_renames(self, serial) -> list | None:
