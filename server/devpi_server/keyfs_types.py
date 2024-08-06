@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .markers import deleted
+from .readonly import get_mutable_deepcopy
 from attrs import define
 from attrs import frozen
 from string import Formatter
@@ -43,6 +45,10 @@ class KeyData:
     @property
     def last_serial(self):
         return self.serial
+
+    @property
+    def mutable_value(self):
+        return deleted if (val := self.value) is deleted else get_mutable_deepcopy(val)
 
 
 @define

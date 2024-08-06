@@ -1,3 +1,4 @@
+from devpi_server.keyfs import KeyChangeEvent
 from devpi_server.keyfs import KeyFS
 from devpi_server.keyfs import Transaction
 from devpi_server.keyfs_types import FilePathInfo
@@ -459,7 +460,7 @@ class TestTransactionIsolation:
         D2 = new_keyfs.register_located_key("NAME", "", "hello", dict)
         for serial in range(3):
             with keyfs.read_transaction() as tx:
-                changes = tx.conn.get_changes(serial)
+                changes = list(tx.conn.iter_changes_at(serial))
             new_keyfs.import_changes(serial, changes)
         with new_keyfs.read_transaction() as tx:
             assert tx.get_value_at(D2, 0) == {1:1}
@@ -527,7 +528,7 @@ class TestTransactionIsolation:
         l = []
         new_keyfs.subscribe_on_import(lambda *args: l.append(args))
         with keyfs.read_transaction() as tx:
-            changes = tx.conn.get_changes(0)
+            changes = list(tx.conn.iter_changes_at(0))
         new_keyfs.import_changes(0, changes)
         ((serial, changes),) = l
         assert serial == 0
@@ -544,7 +545,7 @@ class TestTransactionIsolation:
         new_keyfs.subscribe_on_import(lambda *args: 0 / 0)
         serial = new_keyfs.get_current_serial()
         with keyfs.read_transaction() as tx:
-            changes = tx.conn.get_changes(0)
+            changes = list(tx.conn.iter_changes_at(0))
         with pytest.raises(ZeroDivisionError):
             new_keyfs.import_changes(0, changes)
         # the error in the subscriber didn't prevent the serial from
@@ -595,7 +596,7 @@ class TestTransactionIsolation:
         # get all changes
         serial1 = keyfs1.get_current_serial()
         with keyfs1.get_connection() as conn1:
-            changes1 = [conn1.get_changes(i) for i in range(serial1 + 1)]
+            changes1 = [list(conn1.iter_changes_at(i)) for i in range(serial1 + 1)]
         # create new keyfs
         keyfs2 = KeyFS(tmpdir.join("newkeyfs"), storage)
         pkey1 = keyfs2.register_named_key("NAME1", "hello1/{name}", None, dict)
@@ -635,7 +636,7 @@ class TestTransactionIsolation:
         changes2 = []
         for i in range(serial1 + 1):
             with keyfs2.get_connection() as conn2:
-                changes2.append(conn2.get_changes(i))
+                changes2.append(list(conn2.iter_changes_at(i)))
         assert serial1 == keyfs2.get_current_serial()
         assert changes1 == changes2
 
@@ -704,26 +705,32 @@ def queue(TimeoutQueue):
 class TestSubscriber:
     def test_change_subscription(self, keyfs, queue, pool):
         key1 = keyfs.register_located_key("NAME1", "", "hello", int)
-        keyfs.notifier.on_key_change(key1, queue.put)
+
+        def subscriber(ev: KeyChangeEvent) -> None:
+            queue.put(ev)
+        keyfs.notifier.on_key_change(key1, subscriber)
         pool.start()
         with keyfs.write_transaction():
             key1.set(1)
             assert queue.empty()
         event = queue.get()
-        assert event.value == 1
-        assert event.typedkey == key1
+        assert event.data.value == 1
+        assert event.key == key1
         assert event.at_serial == 0
-        assert event.back_serial == -1
+        assert event.data.back_serial == -1
 
     def test_change_subscription_fails(self, keyfs, queue, pool):
         key1 = keyfs.register_located_key("NAME1", "", "hello", int)
 
-        def failing(event):
+        def failing(_ev: KeyChangeEvent) -> None:
             queue.put("willfail")
             0/0  # noqa: B018
 
+        def subscriber(ev: KeyChangeEvent) -> None:
+            queue.put(ev)
+
         keyfs.notifier.on_key_change(key1, failing)
-        keyfs.notifier.on_key_change(key1, queue.put)
+        keyfs.notifier.on_key_change(key1, subscriber)
         pool.start()
         with keyfs.write_transaction():
             key1.set(1)
@@ -731,7 +738,7 @@ class TestSubscriber:
         msg = queue.get()
         assert msg == "willfail"
         event = queue.get()
-        assert event.typedkey == key1
+        assert event.key == key1
 
     @pytest.mark.xfail(reason="test monkeypatching wrong thing after refactoring")
     def test_persistent(self, tmpdir, queue, monkeypatch, storage, storage_io_file_factory):
@@ -769,15 +776,19 @@ class TestSubscriber:
 
     def test_subscribe_pattern_key(self, keyfs, queue, pool):
         pkey = keyfs.register_named_key("NAME1", "{name}", None, int)
-        keyfs.notifier.on_key_change(pkey, queue.put)
+
+        def subscriber(ev: KeyChangeEvent) -> None:
+            queue.put(ev)
+
+        keyfs.notifier.on_key_change(pkey, subscriber)
         key = pkey(name="hello")
         pool.start()
         with keyfs.write_transaction():
             key.set(1)
         ev = queue.get()
-        assert ev.typedkey == key
-        assert ev.typedkey.params == {"name": "hello"}
-        assert ev.typedkey.key_name == pkey.key_name
+        assert ev.key == key
+        assert ev.key.params == {"name": "hello"}
+        assert ev.key.key_name == pkey.key_name
 
     @pytest.mark.parametrize("meth", ["wait_event_serial", "wait_tx_serial"])
     def test_wait_event_serial(self, keyfs, pool, queue, meth):
