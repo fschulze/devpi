@@ -12,24 +12,36 @@ import re
 
 
 if TYPE_CHECKING:
-    from typing import Any
+    from .markers import _absent
+    from .readonly import DictViewReadonly
+    from .readonly import ListViewReadonly
+    from .readonly import SetViewReadonly
+    from .readonly import TupleViewReadonly
+    from typing import Union
+
+    KeyFSTypesRO = Union[bool, bytes, DictViewReadonly, float, frozenset, int, ListViewReadonly, SetViewReadonly, str, TupleViewReadonly]
+    KeyFSTypes = Union[bool, bytes, dict, float, frozenset, int, list, set, str, tuple]
 
 
 @frozen
 class Record:
     key: LocatedKey
-    value: Any
+    value: KeyFSTypes | None
     back_serial: int
-    old_value: Any
+    old_value: KeyFSTypesRO | _absent
 
 
-@define
-class RelpathInfo:
+@frozen
+class KeyData:
     relpath: str
     keyname: str
     serial: int
     back_serial: int
-    value: Any
+    value: KeyFSTypesRO | None
+
+    @property
+    def last_serial(self):
+        return self.serial
 
 
 @define
