@@ -13,6 +13,7 @@ import re
 
 if TYPE_CHECKING:
     from .markers import _absent
+    from .markers import _deleted
     from .readonly import DictViewReadonly
     from .readonly import ListViewReadonly
     from .readonly import SetViewReadonly
@@ -37,7 +38,7 @@ class KeyData:
     keyname: str
     serial: int
     back_serial: int
-    value: KeyFSTypesRO | None
+    value: KeyFSTypesRO | _deleted
 
     @property
     def last_serial(self):

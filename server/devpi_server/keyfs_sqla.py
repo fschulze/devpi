@@ -11,6 +11,7 @@ from .log import thread_pop_log
 from .log import thread_push_log
 from .log import threadlog
 from .markers import absent
+from .markers import deleted
 from .mythread import current_thread
 from .readonly import ReadonlyView
 from .readonly import ensure_deeply_readonly
@@ -184,7 +185,7 @@ class Connection:
             results[keydata.relpath] = (
                 keydata.keyname,
                 keydata.back_serial,
-                keydata.value)
+                None if keydata.value is deleted else keydata.value)
         return results
 
     def get_changes(self, serial: int) -> dict:
@@ -283,7 +284,7 @@ class Connection:
             yield KeyData(
                 relpath=ulid_relpath_map[ulid], keyname=ulid_keytype_map[ulid],
                 serial=ulid_serial_map[ulid], back_serial=ulid_back_serial_map[ulid],
-                value=None if value is None else ensure_deeply_readonly(loads(value)))
+                value=deleted if value is None else ensure_deeply_readonly(loads(value)))
         return result
 
     def get_relpath_at(self, relpath: str, serial: int) -> KeyData:
