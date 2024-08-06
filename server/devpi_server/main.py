@@ -395,14 +395,14 @@ class XOM:
     @cached_property
     def keyfs(self):
         from devpi_server.keyfs import KeyFS
-        from devpi_server.model import add_keys
+        from devpi_server.model import register_keys
         keyfs = KeyFS(
             self.config.server_path,
             self.config.storage,
             io_file_factory=self.config.io_file_factory,
             readonly=self.is_replica(),
             cache_size=self.config.args.keyfs_cache_size)
-        add_keys(self, keyfs)
+        register_keys(self, keyfs)
         try:
             keyfs.finalize_init()
         except Exception as e:
