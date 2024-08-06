@@ -246,8 +246,8 @@ class Connection:
 
     def _iter_serial_and_value_backwards(self, key: LocatedKey, last_serial) -> Iterator[KeyData]:
         while last_serial >= 0:
-            changes = {c.relpath: c for c in self.iter_changes_at(last_serial)}
-            change = changes.get(key.relpath)
+            changes = {(c.keyname, c.relpath): c for c in self.iter_changes_at(last_serial)}
+            change = changes.get((key.key_name, key.relpath))
             if change is None:
                 raise RuntimeError("no transaction entry at %s" % (last_serial))
             yield change
@@ -257,7 +257,7 @@ class Connection:
         # the key didn't exist at that point in time
 
     def get_key_at_serial(self, key: LocatedKey, serial) -> KeyData:
-        cache_key = key.relpath
+        cache_key = (key.key_name, key.relpath)
         result = self._relpath_cache.get((serial, cache_key), absent)
         if result is absent:
             result = self._changelog_cache.get((serial, cache_key), absent)
@@ -461,7 +461,7 @@ class Connection:
             changes = ensure_deeply_readonly(changes)
             assert isinstance(changes, ReadonlyView)
             self._changelog_cache.put(serial, changes)
-        for relpath, (keyname, back_serial, val) in changes.items():
+        for (keyname, relpath, back_serial, val) in changes:
             yield KeyData(
                 relpath=relpath, keyname=keyname,
                 serial=serial, back_serial=back_serial,
@@ -558,6 +558,9 @@ class Storage:
         index=dict(
             kv_serial_idx="""
                 CREATE INDEX kv_serial_idx ON kv (serial);
+            """,
+            kv_key_keyname_idx="""
+                CREATE UNIQUE INDEX kv_key_keyname_idx ON kv (key, keyname);
             """),
         sequence=dict(
             changelog_serial_seq="""
@@ -575,8 +578,8 @@ class Storage:
             """,
             kv="""
                 CREATE TABLE kv (
-                    key TEXT NOT NULL PRIMARY KEY,
-                    keyname TEXT,
+                    key TEXT NOT NULL,
+                    keyname TEXT NOT NULL,
                     serial INTEGER
                 )
             """,
@@ -716,17 +719,14 @@ class Writer:
         self.storage = storage
         self.rel_renames = []
 
-    def record_set(self, typedkey, value=None, back_serial=None):
-        """ record setting typedkey to value (None means it's deleted) """
-        assert not isinstance(value, ReadonlyView), value
-        # at __exit__ time we write out changes to the _changelog_cache
-        # so we protect here against the caller modifying the value later
-        value = None if value is deleted else get_mutable_deepcopy(value)
-        self.changes[typedkey.relpath] = (typedkey.key_name, back_serial, value)
-
     def records_set(self, records) -> None:
+        self.changes = []
         for record in records:
-            self.record_set(record.key, record.value, record.back_serial)
+            assert not isinstance(record.value, ReadonlyView), record.value
+            value = None if record.value is deleted else get_mutable_deepcopy(record.value)
+            self.changes.append((
+                record.key.key_name, record.key.relpath,
+                record.back_serial, value))
 
     def set_rel_renames(self, rel_renames):
         self.rel_renames = rel_renames
@@ -757,7 +757,6 @@ class Writer:
         q = """SELECT nextval('changelog_serial_seq');"""
         self.commit_serial = self.conn.fetchscalar(q)
         self.log = thread_push_log("fswriter%s:" % self.commit_serial)
-        self.changes = {}
         return self
 
     def __exit__(self, cls, val, tb):
@@ -784,7 +783,7 @@ class Writer:
 
     def commit(self, commit_serial):
         self.conn._write_dirty_files()
-        for relpath, (keyname, back_serial, _value) in self.changes.items():
+        for (keyname, relpath, back_serial, _value) in self.changes:
             if back_serial is None:
                 raise RuntimeError
             if back_serial == -1:
@@ -795,7 +794,7 @@ class Writer:
         self.conn.write_changelog_entry(commit_serial, entry)
         self.conn.commit()
         self.storage.last_commit_timestamp = time.time()
-        return LazyChangesFormatter(list(self.changes.keys()), (), ())
+        return LazyChangesFormatter({c[:2] for c in self.changes}, (), ())
 
     def rollback(self):
         self.conn.rollback()
