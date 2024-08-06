@@ -7,6 +7,7 @@ from .interfaces import IStorageConnection
 from .interfaces import IWriter
 from .keyfs import KeyfsTimeoutError
 from .keyfs_types import KeyData
+from .keyfs_types import LocatedKey
 from .log import thread_pop_log
 from .log import thread_push_log
 from .log import threadlog
@@ -103,13 +104,13 @@ class Connection:
             sa.func.max(renames_table.c.serial),
             -1))).scalar()
 
-    def db_read_typedkey(self, relpath: str) -> tuple[str, int]:
+    def last_key_serial(self, key: LocatedKey) -> int:
         latest_serial_stmt = (
             sa.select(
                 relpath_ulid_table.c.relpath,
                 sa.func.max(relpath_ulid_table.c.serial).label("serial"))
             .where(
-                relpath_ulid_table.c.relpath == relpath)
+                relpath_ulid_table.c.relpath == key.relpath)
             .group_by(
                 relpath_ulid_table.c.relpath))
         latest_serial_sq = latest_serial_stmt.subquery("latest_serial_sq")
@@ -124,7 +125,7 @@ class Connection:
                     relpath_ulid_table.c.serial == latest_serial_sq.c.serial)))
         row = self._sqlaconn.execute(stmt).one_or_none()
         if row is None:
-            raise KeyError(relpath)
+            raise KeyError(key)
         return row
 
     def _db_write_typedkeys(self, new_typedkeys, updated_typedkeys):
@@ -287,10 +288,10 @@ class Connection:
                 value=deleted if value is None else ensure_deeply_readonly(loads(value)))
         return result
 
-    def get_relpath_at(self, relpath: str, serial: int) -> KeyData:
-        result = list(self._get_relpaths_at((relpath,), serial))
+    def get_key_at_serial(self, key: LocatedKey, serial: int) -> KeyData:
+        result = list(self._get_relpaths_at((key.relpath,), serial))
         if not result:
-            raise KeyError(relpath)
+            raise KeyError(key)
         (result,) = result
         return result
 

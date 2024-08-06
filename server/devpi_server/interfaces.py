@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from .keyfs_types import FilePathInfo
     from .keyfs_types import IKeyFSKey
     from .keyfs_types import KeyData
+    from .keyfs_types import LocatedKey
     from .keyfs_types import Record
     from collections.abc import Iterable
     from collections.abc import Iterator
@@ -99,8 +100,8 @@ class IStorageConnection(Interface):
         """ Return last stored serial.
             Returns -1 if nothing is stored yet. """
 
-    def db_read_typedkey(relpath: str) -> tuple[str, int]:
-        """ Return key name and serial for given relpath.
+    def last_key_serial(key: LocatedKey) -> int:
+        """ Return the latest serial for given key.
             Raises KeyError if not found. """
 
     def get_changes(serial: int) -> dict:
@@ -112,7 +113,7 @@ class IStorageConnection(Interface):
     def get_rel_renames(serial: int) -> Optional[Iterable]:
         """ Returns deserialized rel_renames for given serial. """
 
-    def get_relpath_at(relpath: str, serial: int) -> KeyData:
+    def get_key_at_serial(key: LocatedKey, serial: int) -> KeyData:
         """ Get tuple of (last_serial, back_serial, value) for given relpath
             at given serial.
             Raises KeyError if not found. """

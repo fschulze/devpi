@@ -649,7 +649,7 @@ def test_changelog(keyfs):
         D.set({2: 2})
     with keyfs.read_transaction() as tx:
         changes = list(
-            tx.iter_serial_and_value_backwards(D.relpath, tx.at_serial))
+            tx.iter_serial_and_value_backwards(D, tx.at_serial))
     assert changes == [
         (1, {2: 2}),
         (0, {1: 1})]
