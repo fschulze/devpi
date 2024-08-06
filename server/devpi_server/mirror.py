@@ -850,7 +850,7 @@ class MirrorStage(BaseStage):
             at_serial = tx.at_serial
         info = tx.get_last_serial_and_value_at(
             self.key_projsimplelinks(project),
-            at_serial, raise_on_error=False)
+            at_serial)
         if info is None:
             # never existed
             return -1
