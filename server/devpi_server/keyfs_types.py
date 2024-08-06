@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 @frozen
 class Record:
     key: LocatedKey
-    value: KeyFSTypes | None
+    value: KeyFSTypes | _deleted
     back_serial: int
     old_value: KeyFSTypesRO | _absent
 

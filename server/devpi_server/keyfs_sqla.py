@@ -343,7 +343,7 @@ class Connection:
         append = ulid_changelog.append
         for record in records:
             ulid = relpath_ulid_map[record.key.relpath]
-            if record.value is None:
+            if record.value is deleted:
                 append((ulid, serial, record.back_serial, None))
             else:
                 append((ulid, serial, record.back_serial, dumps(record.value)))
