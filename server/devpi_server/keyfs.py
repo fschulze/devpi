@@ -280,7 +280,7 @@ class KeyFS:
             subscriber_changes = {}
             for relpath, (keyname, back_serial, val) in changes.items():
                 try:
-                    (_, _, old_val) = conn.get_relpath_at(relpath, serial - 1)
+                    old_val = conn.get_relpath_at(relpath, serial - 1).value
                 except KeyError:
                     old_val = absent
                 typedkey = self.get_key_instance(keyname, relpath)
@@ -664,22 +664,21 @@ class Transaction(object):
 
     def iter_serial_and_value_backwards(self, relpath, last_serial):
         while last_serial >= 0:
-            (last_serial, back_serial, val) = self.conn.get_relpath_at(
-                relpath, last_serial)
-            yield (last_serial, val)
-            last_serial = back_serial
+            data = self.conn.get_relpath_at(relpath, last_serial)
+            yield (data.last_serial, data.value)
+            last_serial = data.back_serial
 
     def get_last_serial_and_value_at(self, typedkey, at_serial, raise_on_error=True):
         relpath = typedkey.relpath
         try:
-            (last_serial, back_serial, val) = self.conn.get_relpath_at(relpath, at_serial)
+            data = self.conn.get_relpath_at(relpath, at_serial)
         except KeyError:
             if not raise_on_error:
                 return None
             raise
-        if val is None and raise_on_error:
+        if data.value is None and raise_on_error:
             raise KeyError(relpath)  # was deleted
-        return (last_serial, val)
+        return (data.last_serial, data.value)
 
     def get_value_at(self, typedkey, at_serial):
         (last_serial, val) = self.get_last_serial_and_value_at(typedkey, at_serial)
