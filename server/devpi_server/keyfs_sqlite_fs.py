@@ -18,6 +18,9 @@ class Storage(BaseStorage):
         index=dict(
             kv_serial_idx="""
                 CREATE INDEX kv_serial_idx ON kv (serial);
+            """,
+            kv_key_keyname_idx="""
+                CREATE UNIQUE INDEX kv_key_keyname_idx ON kv (key, keyname);
             """),
         table=dict(
             changelog="""
@@ -28,8 +31,8 @@ class Storage(BaseStorage):
             """,
             kv="""
                 CREATE TABLE kv (
-                    key TEXT NOT NULL PRIMARY KEY,
-                    keyname TEXT,
+                    key TEXT NOT NULL,
+                    keyname TEXT NOT NULL,
                     serial INTEGER
                 )
             """))

@@ -78,7 +78,7 @@ class FSIOFile:
         if files_commit or files_del:
             threadlog.debug(
                 "wrote files: %s",
-                LazyChangesFormatter({}, files_commit, files_del))
+                LazyChangesFormatter((), files_commit, files_del))
         return True
 
     def delete(self, path, *, is_last_of_hash):  # noqa: ARG002
@@ -170,7 +170,7 @@ class FSIOFile:
         if files_commit or files_del:
             threadlog.debug(
                 "wrote files without increasing serial: %s",
-                LazyChangesFormatter({}, files_commit, files_del))
+                LazyChangesFormatter((), files_commit, files_del))
 
     def get_rel_renames(self):
         pending_renames = []
@@ -210,7 +210,7 @@ class LazyChangesFormatter:
     def __init__(self, changes, files_commit, files_del):
         self.files_commit = files_commit
         self.files_del = files_del
-        self.keys = changes.keys()
+        self.keys = (c[:2] for c in changes)
 
     def __str__(self):
         msg = []

@@ -1,7 +1,9 @@
 from devpi_server.fileutil import loads
 from difflib import SequenceMatcher
 from functools import partial
+from hashlib import sha256
 from itertools import chain
+from operator import itemgetter
 from pyramid.httpexceptions import HTTPForbidden
 from pyramid.view import view_config
 import json
@@ -70,26 +72,28 @@ def keyfs_changelog_view(request):
     storage = xom.keyfs._storage
     serial = request.matchdict['serial']
     query = request.params.get('query')
+    changes = []
     with storage.get_connection() as conn:
         data = conn.get_raw_changelog_entry(serial)
         last_changelog_serial = conn.last_changelog_serial
-        (changes, rel_renames) = loads(data)
-        for k, v in list(changes.items()):
+        (_changes, rel_renames) = loads(data)
+        for (keyname, relpath, back_serial, value) in _changes:
+            key = xom.keyfs.get_key_instance(keyname, relpath)
             prev_formatted = ''
-            if v[1] >= 0:
-                prev_data = conn.get_raw_changelog_entry(v[1])
-                prev_changes = loads(prev_data)[0]
-                for prev_k, prev_v in sorted(prev_changes.items()):
-                    if prev_k == k and prev_v[0] == v[0]:
-                        prev_formatted = pformat(prev_v[2])
-            formatted = pformat(v[2])
+            if back_serial >= 0:
+                prev_formatted = pformat(
+                    conn.get_key_at_serial(key, back_serial).value)
+            formatted = pformat(value)
             diffed = diff(prev_formatted, formatted)
-            latest_serial = conn.last_key_serial(k)
-            changes[k] = dict(
-                type=v[0],
-                previous_serial=v[1],
+            latest_serial = conn.last_key_serial(key)
+            changes.append(dict(
+                fragment=sha256(f"{keyname}-{relpath}".encode()).hexdigest(),
+                type=keyname,
+                relpath=relpath,
+                previous_serial=back_serial,
                 latest_serial=latest_serial,
-                diffed=diffed)
+                diffed=diffed))
+    changes.sort(key=itemgetter('type', 'relpath'))
     return dict(
         changes=changes,
         rel_renames=rel_renames,
