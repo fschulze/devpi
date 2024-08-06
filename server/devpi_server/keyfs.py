@@ -228,7 +228,7 @@ class TxNotificationThread:
         log.debug("finished calling all hooks for tx%s", event_serial)
 
 
-class KeyFS(object):
+class KeyFS:
     """ singleton storage object. """
     class ReadOnly(Exception):
         """ attempt to open write transaction while in readonly mode. """
@@ -367,6 +367,14 @@ class KeyFS(object):
         if isinstance(key, PTypedKey):
             key = key(**key.extract_params(relpath))
         return key
+
+    def match_key(self, relpath, *key_candidates):
+        for key_candidate in key_candidates:
+            if not hasattr(key_candidate, "extract_params"):
+                return key_candidate
+            if (params := key_candidate.extract_params(relpath)):
+                return key_candidate(**params)
+        return None
 
     def _tx_prefix(self, filestore=False):
         tx = self._threadlocal.tx
@@ -662,25 +670,10 @@ class Transaction(object):
         return val
 
     def last_serial(self, typedkey):
-        (last_serial, val) = self.get_last_serial_and_value_at(typedkey, self.at_serial)
+        if typedkey in self.cache:
+            return self.at_serial
+        (last_serial, val) = self.get_original(typedkey)
         return last_serial
-
-    def derive_key(self, relpath):
-        """ return key instance for a given key path."""
-        try:
-            return self.get_key_in_transaction(relpath)
-        except KeyError:
-            # XXX we could avoid asking the database
-            # if the relpath included the keyname
-            # but that's yet another refactoring (tm).
-            keyname, serial = self.conn.db_read_typedkey(relpath)
-        return self.keyfs.get_key_instance(keyname, relpath)
-
-    def get_key_in_transaction(self, relpath):
-        for key in self.cache:
-            if key.relpath == relpath and self.cache[key] not in (absent, deleted):
-                return key
-        raise KeyError(relpath)
 
     def is_dirty(self, typedkey):
         return typedkey in self.dirty
