@@ -99,14 +99,14 @@ class IStorage(Interface):
     def __init__(basedir: Path, *, notify_on_commit: Callable, cache_size: int, settings: dict) -> None:
         """ Create the storage object and initialize it. """
 
-    def add_key(key: IKeyFSKey) -> None:
-        """ Register key information. """
-
     def get_connection(*, closing: bool, write: bool, timeout: int) -> IStorageConnection:
         """ Returns a connection to the storage. """
 
     def perform_crash_recovery() -> None:
         """ Perform recovery from crash during two phase commit. """
+
+    def register_key(key: IKeyFSKey) -> None:
+        """ Register key information. """
 
 
 class IStorageConnection(Interface):
