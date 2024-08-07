@@ -118,7 +118,7 @@ class IStorageConnection(Interface):
     def iter_rel_renames(serial: int) -> Optional[Iterable]:
         """ Returns deserialized rel_renames for given serial. """
 
-    def iter_relpaths_at(typedkeys: Iterable[IKeyFSKey], at_serial: int) -> Iterator[KeyData]:
+    def iter_keys_at_serial(typedkeys: Iterable[IKeyFSKey], at_serial: int) -> Iterator[KeyData]:
         """ Iterate over all relpaths of the given typed keys starting
             from at_serial until the first serial in the database. """
 

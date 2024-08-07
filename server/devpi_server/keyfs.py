@@ -40,6 +40,8 @@ import time
 
 
 if TYPE_CHECKING:
+    from .keyfs_types import IKeyFSKey
+    from collections.abc import Iterator
     from typing import Any
 
 
@@ -669,8 +671,8 @@ class Transaction(object):
             self._model = TransactionRootModel(xom)
         return self._model
 
-    def iter_relpaths_at(self, typedkeys, at_serial):
-        return self.conn.iter_relpaths_at(typedkeys, at_serial)
+    def iter_keys_at_serial(self, keys: IKeyFSKey, at_serial: int) -> Iterator[KeyData]:
+        return self.conn.iter_keys_at_serial(keys, at_serial)
 
     def iter_serial_and_value_backwards(self, key: LocatedKey, last_serial):
         while last_serial >= 0:

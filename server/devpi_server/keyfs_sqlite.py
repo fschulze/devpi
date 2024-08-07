@@ -9,6 +9,7 @@ from .interfaces import IDBIOFileConnection
 from .interfaces import IStorageConnection
 from .interfaces import IWriter
 from .keyfs import KeyfsTimeoutError
+from .keyfs_types import IKeyFSKey
 from .keyfs_types import KeyData
 from .keyfs_types import LocatedKey
 from .log import thread_pop_log
@@ -34,6 +35,7 @@ import time
 
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
     from collections.abc import Iterator
 
 
@@ -267,8 +269,8 @@ class BaseConnection:
             self._relpath_cache.put((serial, cache_key), result)
         return result
 
-    def iter_relpaths_at(self, typedkeys, at_serial):
-        keynames = frozenset(k.key_name for k in typedkeys)
+    def iter_keys_at_serial(self, keys: Iterable[IKeyFSKey], at_serial: int) -> Iterator[KeyData]:
+        keynames = frozenset(k.key_name for k in keys)
         keyname_id_values = {"keynameid%i" % i: k for i, k in enumerate(keynames)}
         q = """
             SELECT key, keyname
