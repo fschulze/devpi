@@ -219,8 +219,14 @@ class Storage(BaseStorage):
         for name, table in tables.items():
             setattr(self, name, table)
         if not self.sqlpath.exists():
-            engine = sa.create_engine(self._url(mode="rwc"), echo=False)
+            engine = sa.create_engine(self._url(mode="rwc"), echo=False, poolclass=sa.NullPool)
             metadata_obj.create_all(engine)
+            engine.dispose()
+
+    def _execute_conn_pragmas(self, conn: sa.Connection) -> None:
+        c = conn.connection.cursor()
+        c.execute("PRAGMA cache_size = 200000")
+        c.close()
 
     @overload
     def get_connection(self, *, closing: Literal[True], write: bool = False, timeout: int = 30) -> AbstractContextManager[Connection]:
@@ -233,6 +239,7 @@ class Storage(BaseStorage):
     def get_connection(self, *, closing: bool = True, write: bool = False, timeout: int = 30) -> Connection | AbstractContextManager[Connection]:
         engine = self.rw_engine if write else self.ro_engine
         sqlaconn = engine.connect()
+        self._execute_conn_pragmas(sqlaconn)
         if write:
             start_time = time.monotonic()
             thread = current_thread()
