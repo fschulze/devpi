@@ -82,8 +82,6 @@ devpi-server-view-auth = "devpi_server.view_auth"
 devpi-server-views = "devpi_server.views"
 devpi-server-sqla-lite = "devpi_server.keyfs_sqla_lite"
 devpi-server-sqla-lite-files = "devpi_server.keyfs_sqla_lite_files"
-devpi-server-sqlite = "devpi_server.keyfs_sqlite"
-devpi-server-sqlite-fs = "devpi_server.keyfs_sqlite_fs"
 
 
 [project.entry-points.devpi_web]
