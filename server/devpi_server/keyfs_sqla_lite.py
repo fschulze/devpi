@@ -29,11 +29,17 @@ if TYPE_CHECKING:
 
 @implementer(IStorageConnection)
 class Connection(BaseConnection):
+    storage: Storage
+
     def get_next_serial(self) -> int:
         return self.last_changelog_serial + 1
 
     def _write_dirty_files(self) -> tuple[Sequence, Sequence]:
         return ([], [])
+
+    def analyze(self) -> None:
+        super().analyze()
+        self.storage.ro_engine.dispose()
 
 
 @implementer(IStorage)
