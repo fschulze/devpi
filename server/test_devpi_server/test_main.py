@@ -130,9 +130,11 @@ def test_run_commands_called(tmpdir):
 
 
 @wsgi_run_throws
-def test_fatal_if_no_storage_and_no_sqlite_file(tmpdir):
+def test_fatal_if_no_storage_and_no_sqlite_file(tmp_path):
     from devpi_server.init import init
-    from devpi_server.main import _main, get_pluginmanager
+    from devpi_server.main import _main
+    from devpi_server.main import get_pluginmanager
+    import shutil
 
     class Plugin:
         @hookimpl
@@ -140,18 +142,22 @@ def test_fatal_if_no_storage_and_no_sqlite_file(tmpdir):
             return 1
     pm = get_pluginmanager()
     pm.register(Plugin())
+
+    init_path = tmp_path / "with_init"
     init(
-        argv=["devpi-init", "--serverdir", str(tmpdir)],
+        argv=["devpi-init", "--serverdir", str(init_path)],
         pluginmanager=pm)
     _main(
-        argv=["devpi-server", "--serverdir", str(tmpdir)],
+        argv=["devpi-server", "--serverdir", str(init_path)],
         pluginmanager=pm)
-    tmpdir.join('.sqlite').remove()
+    no_init_path = tmp_path / "without_init"
+    shutil.copytree(init_path, no_init_path)
+    for p in no_init_path.glob(".sql*"):
+        p.unlink()
     with pytest.raises(Fatal) as excinfo:
         _main(
-            argv=["devpi-server", "--serverdir", str(tmpdir)],
-            pluginmanager=pm
-        )
+            argv=["devpi-server", "--serverdir", str(no_init_path)],
+            pluginmanager=pm)
     assert "you first need to run devpi-init or devpi-import" in str(excinfo.value)
 
 
