@@ -119,7 +119,7 @@ def devpipostgresql_postgresql(request: pytest.FixtureRequest) -> Generator[dict
 
             storage = main.Storage(
                 tmpdir, notify_on_commit=lambda: None,
-                cache_size=10000, settings=settings)
+                settings=settings)
             storage.engine.dispose()
             yield settings
             storage.engine.dispose()
@@ -231,6 +231,7 @@ def _devpipostgresql_devpiserver_describe_storage_backend_mock(request: pytest.F
             connection_cls=result.connection_cls,
             writer_cls=result.writer_cls,
             storage_factory=Storage,
+            process_settings=Storage.process_settings,
             settings=result.settings)
 
     main.devpiserver_describe_storage_backend = devpiserver_describe_storage_backend

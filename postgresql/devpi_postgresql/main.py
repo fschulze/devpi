@@ -395,11 +395,10 @@ class Storage(BaseStorage):
     ssl_context = None
     poolclass: type[sa.Pool] = sa.QueuePool
 
-    def __init__(self, basedir: Path, *, notify_on_commit: Callable, cache_size: int, settings: dict) -> None:
+    def __init__(self, basedir: Path, *, notify_on_commit: Callable, settings: dict) -> None:
         super().__init__(
             basedir,
             notify_on_commit=notify_on_commit,
-            cache_size=cache_size,
             settings=settings)
 
         for key in ("database", "host", "port", "unix_sock", "user", "password"):
@@ -488,6 +487,7 @@ def devpiserver_describe_storage_backend(settings: dict) -> StorageInfo:
         connection_cls=Connection,
         writer_cls=Writer,
         storage_factory=Storage,
+        process_settings=Storage.process_settings,
         settings=settings)
 
 
