@@ -37,6 +37,9 @@ class DBIOFile:
     def is_dirty(self):
         return bool(self._dirty_files)
 
+    def is_path_dirty(self, path):
+        return path in self._dirty_files
+
     def _perform_crash_recovery(self):
         pass
 
