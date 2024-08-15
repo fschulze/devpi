@@ -53,13 +53,15 @@ target-version = "py39"
 
 [tool.ruff.lint]
 extend-ignore = [
-    "COM812", # cleanup later
-    "FLY002", # maybe cleanup later - f-string instead of join
-    "I001", # maybe cleanup later - import block unsorted
-    "PLR0912", # maybe cleanup later
-    "RUF012", # cleanup later
-    "S608", # cleanup soon - possible sql injection
-    "UP032", # cleanup later - f-string instead of format
+    "ANN101", # deprecated - missing-type-self
+    "ANN102", # deprecated - missing-type-self
+]
+
+
+extend-select = [
+    "ANN", # annotations
+    "I001", # import block unsorted
+    "UP031", # printf string formatting
 ]
 
 

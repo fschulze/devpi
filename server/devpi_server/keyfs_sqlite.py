@@ -603,6 +603,9 @@ class Storage(BaseStorage):
                 )
             """))
 
+    def close(self):
+        pass
+
     def perform_crash_recovery(self):
         pass
 
