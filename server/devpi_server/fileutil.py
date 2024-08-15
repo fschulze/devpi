@@ -1,12 +1,13 @@
-import errno
-import os.path
-import sys
 from . import filestore
 from . import readonly
 from io import BytesIO
 from struct import error as struct_error
 from struct import pack
 from struct import unpack
+from tempfile import SpooledTemporaryFile as SpooledTemporaryFileBase
+import errno
+import os.path
+import sys
 
 
 _nodefault = object()
@@ -37,6 +38,21 @@ class DumpError(DataFormatError):
 
 class LoadError(DataFormatError):
     """Error while unserializing an object."""
+
+
+class SpooledTemporaryFile(SpooledTemporaryFileBase):
+    # some missing methods
+    def readable(self):
+        return self._file.readable()
+
+    def readinto(self, buffer):
+        return self._file.readinto(buffer)
+
+    def seekable(self):
+        return self._file.seekable()
+
+    def writable(self):
+        return self._file.writable()
 
 
 def load(fp, _from_bytes=int.from_bytes, _unpack=unpack):
