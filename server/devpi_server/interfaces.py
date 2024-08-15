@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import closing
 from inspect import getfullargspec
 from typing import TYPE_CHECKING
+from typing import overload
 from zope.interface import Attribute
 from zope.interface import Interface
 from zope.interface.interface import adapter_hooks
@@ -18,12 +19,13 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
     from collections.abc import Iterator
     from collections.abc import Sequence
+    from contextlib import AbstractContextManager
     from pathlib import Path
     from types import TracebackType
     from typing import Any
     from typing import Callable
     from typing import IO
-    from typing import Optional
+    from typing import Literal
 
 
 class IDBIOFileConnection(Interface):
@@ -46,14 +48,14 @@ class IDBIOFileConnection(Interface):
     def io_file_open(path: FilePathInfo) -> IO[bytes]:
         """ Returns an open file like object for binary reading. """
 
-    def io_file_os_path(path: FilePathInfo) -> Optional[str]:
+    def io_file_os_path(path: FilePathInfo) -> str | None:
         """ Returns the real path to the file if the storage is filesystem
             based, otherwise None. """
 
     def io_file_set(path: FilePathInfo, content_or_file: bytes | IO[bytes]) -> None:
         """ Set the binary content of the file at path. """
 
-    def io_file_size(path: FilePathInfo) -> Optional[int]:
+    def io_file_size(path: FilePathInfo) -> int | None:
         """ Returns the size of the file at path. """
 
 
@@ -79,7 +81,7 @@ class IIOFile(Interface):
     def open_read(path: FilePathInfo) -> IO[bytes]:
         """ Returns an open file like object for binary reading. """
 
-    def os_path(path: FilePathInfo) -> Optional[str]:
+    def os_path(path: FilePathInfo) -> str | None:
         """ Returns the real path to the file if the storage is filesystem
             based, otherwise None. """
 
@@ -92,7 +94,7 @@ class IIOFile(Interface):
     def set_content(path: FilePathInfo, content_or_file: bytes | IO[bytes]) -> None:
         """ Set the binary content of the file at path. """
 
-    def size(path: FilePathInfo) -> Optional[int]:
+    def size(path: FilePathInfo) -> int | None:
         """ Returns the size of the file at path. """
 
 
@@ -100,7 +102,18 @@ class IStorage(Interface):
     def __init__(basedir: Path, *, notify_on_commit: Callable, cache_size: int, settings: dict) -> None:
         """ Create the storage object and initialize it. """
 
-    def get_connection(*, closing: bool, write: bool, timeout: int) -> IStorageConnection:
+    def close() -> None:
+        """ Close the storage. """
+
+    @overload
+    def get_connection(*, closing: Literal[True], write: bool, timeout: int) -> AbstractContextManager[IStorageConnection]:
+        pass
+
+    @overload
+    def get_connection(*, closing: Literal[False], write: bool, timeout: int) -> IStorageConnection:
+        pass
+
+    def get_connection(*, closing: bool, write: bool, timeout: int) -> IStorageConnection | AbstractContextManager[IStorageConnection]:
         """ Returns a connection to the storage. """
 
     def perform_crash_recovery() -> None:
@@ -111,6 +124,8 @@ class IStorage(Interface):
 
 
 class IStorageConnection(Interface):
+    storage: IStorage = Attribute(""" A reference back to the storage. """)
+
     def db_read_last_changelog_serial() -> int:
         """ Return last stored serial.
             Returns -1 if nothing is stored yet. """
@@ -119,7 +134,7 @@ class IStorageConnection(Interface):
         """ Return the latest serial for given key.
             Raises KeyError if not found. """
 
-    def get_raw_changelog_entry(serial: int) -> Optional[bytes]:
+    def get_raw_changelog_entry(serial: int) -> bytes | None:
         """ Returns serialized changes for given serial. """
 
     def get_key_at_serial(key: LocatedKey, serial: int) -> KeyData:
@@ -134,7 +149,7 @@ class IStorageConnection(Interface):
         """ Iterate over all relpaths of the given typed keys starting
             from at_serial until the first serial in the database. """
 
-    def iter_rel_renames(serial: int) -> Optional[Iterable]:
+    def iter_rel_renames(serial: int) -> Iterable | None:
         """ Returns deserialized rel_renames for given serial. """
 
     def write_transaction(io_file: IIOFile | None) -> IWriter:
