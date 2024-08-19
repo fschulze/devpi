@@ -36,7 +36,7 @@ from urllib.parse import urlparse
 import itertools
 import json
 from devpi_common.request import new_requests_session
-from devpi_common.validation import normalize_name, is_valid_archive_name
+from devpi_common.validation import is_valid_archive_name
 
 from .config import hookimpl
 from .exceptions import lazy_format_exception_only
@@ -49,6 +49,7 @@ from .keyfs import KeyfsTimeoutError
 from .model import InvalidIndex, InvalidIndexconfig, InvalidUser, InvalidUserconfig
 from .model import ReadonlyIndex
 from .model import RemoveValue
+from .normalized import normalize_name
 from .readonly import get_mutable_deepcopy
 from .log import thread_push_log, thread_pop_log, threadlog
 
