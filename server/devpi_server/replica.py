@@ -18,7 +18,6 @@ from pyramid.response import Response
 from repoze.lru import LRUCache
 from devpi_common.types import cached_property
 from devpi_common.url import URL
-from devpi_common.validation import normalize_name
 from webob.headers import EnvironHeaders, ResponseHeaders
 
 from . import mythread
@@ -33,6 +32,7 @@ from .keyfs_types import ULID
 from .log import thread_push_log, threadlog
 from .main import Fatal
 from .markers import deleted
+from .normalized import normalize_name
 from .views import FileStreamer
 from .views import H_PRIMARY_UUID
 from .views import make_uuid_headers

@@ -1,7 +1,7 @@
+from .normalized import normalize_name
 from pyramid.httpexceptions import HTTPFound
 from devpi_common.types import cached_property
 from devpi_common.types import ensure_unicode
-from devpi_common.validation import normalize_name
 from devpi_server.auth import Auth
 from devpi_server.config import hookimpl
 from devpi_server.views import abort
@@ -123,6 +123,7 @@ class RootFactory(object):
     def list_versions(self, project=None, perstage=False):
         if project is None:
             project = self.project
+        project = normalize_name(project)
         try:
             if perstage:
                 res = self.stage.list_versions_perstage(project)
@@ -131,7 +132,7 @@ class RootFactory(object):
         except UpstreamError as e:
             abort(self.request, 502, str(e))
         if not res and not self.stage.has_project(project):
-            abort(self.request, 404, f"no project {project!r}")
+            abort(self.request, 404, f"no project {project.original!r}")
         return res
 
     @cached_property

@@ -4,6 +4,7 @@ from devpi_server.fileutil import LoadError
 from devpi_server.fileutil import dumplen
 from devpi_server.fileutil import dumps
 from devpi_server.fileutil import loads
+from devpi_server.normalized import NormalizedName
 from execnet.gateway_base import _Serializer
 from execnet.gateway_base import DumpError as _DumpError
 from execnet.gateway_base import LoadError as _LoadError
@@ -68,27 +69,34 @@ def test_execnet_opcodes():
     (b'S\x00\x00\x00\x02\xc3\xa4Q', 'ä'),
     (b'T\x3f\xf0\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00Q', complex(1, 0)),
     (b'T\x00\x00\x00\x00\x00\x00\x00\x00\x3f\xf0\x00\x00\x00\x00\x00\x00Q', complex(0, 1)),
-    (b'T\x3f\xf0\x00\x00\x00\x00\x00\x00\x3f\xf0\x00\x00\x00\x00\x00\x00Q', complex(1, 1))])
+    (b'T\x3f\xf0\x00\x00\x00\x00\x00\x00\x3f\xf0\x00\x00\x00\x00\x00\x00Q', complex(1, 1)),
+    (b'z\x00\x00\x00\x0cH\xc3\xa4llo___XYZ\x00\x00\x00\x09h-llo-xyzQ', NormalizedName('Hällo___XYZ')),
+])
 def test_loads(data, expected):
+    custom_opcode_start = b'z'
     result = loads(data)
     assert result == expected
     assert type(result) is type(expected)
-    result = _loads(data)
-    assert result == expected
-    assert type(result) is type(expected)
+    # test original
+    if data < custom_opcode_start:
+        result = _loads(data)
+        assert result == expected
+        assert type(result) is type(expected)
     # try round-trip
     dump = dumps(expected)
     assert len(dump) == dumplen(expected)
     assert loads(dump) == expected
     # try round-trip with original
-    _dump = _dumps(expected)
-    assert len(_dump) == dumplen(expected)
-    assert loads(_dump) == expected
-    assert dump == _dump
+    if data < custom_opcode_start:
+        _dump = _dumps(expected)
+        assert len(_dump) == dumplen(expected)
+        assert loads(_dump) == expected
+        assert dump == _dump
     # compare to original
-    assert result == _loads(data)
-    assert _loads(dumps(expected)) == expected
-    assert _loads(_dumps(expected)) == expected
+    if data < custom_opcode_start:
+        assert result == _loads(data)
+        assert _loads(dumps(expected)) == expected
+        assert _loads(_dumps(expected)) == expected
 
 
 def test_dumplen():

@@ -8,7 +8,6 @@ import logging
 import posixpath
 import shutil
 from collections import defaultdict
-from devpi_common.validation import normalize_name
 from devpi_common.metadata import BasenameMeta
 from devpi_common.url import URL
 from devpi_server import __version__ as server_version
@@ -17,6 +16,7 @@ from devpi_server.model import get_stage_customizer_classes
 from .filestore import Digests
 from .filestore import best_available_hash_type
 from .filestore import get_hashes
+from .normalized import normalize_name
 from .log import threadlog
 from .main import CommandRunner
 from .main import DATABASE_VERSION
