@@ -24,7 +24,7 @@ echo devpi-server: `which devpi-server` $*
 regendoc \
     --verbose \
     --normalize "/[ \t]+\n/\n/" \
-    --normalize "@Waiting for (.+:3141) \.+@Waiting for \1@" \
+    --normalize "@Waiting for (.+:\d+).*\$@Waiting for \1@" \
     --normalize "@generated uuid: [0-9a-f]+@generated uuid: 446e22e0db5e41a5989fd671e98ec30b@" \
     --normalize "@\\\$PYTHON_PREFIX@/home/devpi/devpi@" \
     --normalize "@\\\$REGENDOC_TMPDIR@/home/devpi/devpi/doc@" \
@@ -34,8 +34,8 @@ regendoc \
     --normalize "@/private/tmp@/tmp@" \
     --normalize "@/tmp/devpi-test-[a-z0-9_]+\b@/tmp/devpi-test0@" \
     --normalize "@/tmp/devpi(?!-test)-[a-z0-9_]+\b@/tmp/devpi0@" \
-    --normalize "@python3\.\d+@python3.8@" \
-    --normalize "@Python 3\.\d+\.\d+@Python 3.8.12@" \
+    --normalize "@python3\.\d+@python3.9@" \
+    --normalize "@Python 3\.\d+\.\d+@Python 3.9.19@" \
     --normalize "@platform .+ --@platform linux --@" \
     --normalize "@/[0-9a-f]{3}/[0-9a-f]{13}/example-1.0.tar.gz@/853/34ff3d48c83ba/example-1.0.tar.gz@" \
     --normalize "@/[0-9a-f]{3}/[0-9a-f]{13}/example-1.0-py3-none-any.whl@/0b1/6414c21b576b1/example-1.0-py3-none-any.whl@" \
