@@ -344,6 +344,10 @@ Now we can start supervisor which will manage our server::
 
     $ supervisord -c gen-config/supervisord.conf
 
+..
+    $ waitforports -t 60 3141
+    Waiting for 127.0.0.1:3141
+
 The server will listen on ``http://localhost:4040`` and also serve
 the devpi web interface if you have ``devpi-web`` installed.
 
