@@ -47,7 +47,7 @@ jobs:
       - uses: "actions/checkout@v4"
       - uses: "actions/setup-python@v5"
         with:
-          python-version: "3.8"
+          python-version: "3.9"
       - name: "Install dependencies"
         run: |
           set -xe -o nounset
@@ -137,10 +137,6 @@ jobs:
             python-version: "3.7"
             os: "ubuntu-latest"
             tox-envs: "py37-setuptools6920"
-          - project: "web"
-            python-version: "3.6"
-            os: "ubuntu-20.04"
-            tox-envs: "py36-server520"
 
     env:
       PY_COLORS: 1
@@ -261,13 +257,13 @@ jobs:
       matrix:
         include:
           - project: "web"
-            python-version: "3.7"
+            python-version: "3.9"
             os: "ubuntu-latest"
-            tox-envs: "py37"
+            tox-envs: "py39"
           - project: "web"
-            python-version: "3.7"
+            python-version: "3.9"
             os: "ubuntu-latest"
-            tox-envs: "py37-keyfs"
+            tox-envs: "py39-keyfs"
           - project: "web"
             python-version: "3.12"
             os: "ubuntu-latest"
@@ -451,9 +447,9 @@ jobs:
             os: "ubuntu-latest"
             tox-envs: "py37"
           - project: "web"
-            python-version: "3.7"
+            python-version: "3.9"
             os: "ubuntu-latest"
-            tox-envs: "py37"
+            tox-envs: "py39"
 
     env:
       PY_COLORS: 1
@@ -571,9 +567,9 @@ jobs:
       matrix:
         include:
           - project: "postgresql"
-            python-version: "3.7"
+            python-version: "3.9"
             os: "ubuntu-latest"
-            tox-envs: "py37-web"
+            tox-envs: "py39-web"
           - project: "postgresql"
             python-version: "3.12"
             os: "ubuntu-latest"
@@ -583,9 +579,9 @@ jobs:
             os: "ubuntu-latest"
             tox-envs: "pypy3-web"
           - project: "postgresql"
-            python-version: "3.7"
+            python-version: "3.9"
             os: "ubuntu-latest"
-            tox-envs: "py37-dont_use_copy-web"
+            tox-envs: "py39-dont_use_copy-web"
 
     env:
       PY_COLORS: 1
@@ -736,9 +732,9 @@ jobs:
             tox-envs: "py37"
             pytest-options: ""
           - project: "web"
-            python-version: "3.7"
+            python-version: "3.9"
             os: "windows-latest"
-            tox-envs: "py37"
+            tox-envs: "py39"
             pytest-options: ""
 
     env:
@@ -791,10 +787,10 @@ jobs:
             # os-version: "13"
             tox-envs: "py38"
           - project: "web"
-            python-version: "3.8"
+            python-version: "3.9"
             os: "macos-latest"
             # os-version: "13"
-            tox-envs: "py38"
+            tox-envs: "py39"
 
     env:
       PY_COLORS: 1
@@ -838,7 +834,7 @@ jobs:
       - uses: "actions/checkout@v4"
       - uses: "actions/setup-python@v5"
         with:
-          python-version: "3.7"
+          python-version: "3.9"
       - name: "Install dependencies"
         shell: "bash"
         run: |
