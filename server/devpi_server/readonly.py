@@ -4,21 +4,26 @@ basic mechanics for turning a mutable dict/list/seq/tuple
 into a readonly view.
 """
 from __future__ import annotations
-from abc import ABC, abstractmethod
+
+from abc import ABC
+from abc import abstractmethod
+from collections.abc import Hashable
+from collections.abc import ItemsView
+from collections.abc import Mapping
+from collections.abc import Sequence
+from collections.abc import Set as AbstractSet
+from collections.abc import ValuesView
 from functools import singledispatch
 from functools import total_ordering
-from typing import AbstractSet
-from typing import Any
-from typing import Hashable
-from typing import ItemsView
-from typing import Iterator
-from typing import KeysView
-from typing import Mapping
+from typing import TYPE_CHECKING
 from typing import Union
-from typing import Sequence
-from typing import Tuple
-from typing import ValuesView
 from typing import overload
+
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from collections.abc import KeysView
+    from typing import Any
 
 
 _immutable = (bool, bytes, float, frozenset, int, str, type(None))
@@ -82,10 +87,10 @@ class DictViewReadonly(ReadonlyView, Mapping[Hashable, Readonly]):
         pass
 
     @overload
-    def get(self, key: Hashable, default: Union[Readonly, Any]) -> Readonly:
+    def get(self, key: Hashable, default: Readonly | Any) -> Readonly:
         pass
 
-    def get(self, key: Hashable, default: Union[Readonly, Any] = None) -> Readonly:
+    def get(self, key: Hashable, default: Readonly | Any = None) -> Readonly:
         val = self._data.get(key, default)
         return ensure_deeply_readonly(val)
 
@@ -97,7 +102,7 @@ class DictItemsViewReadonly(ItemsView[Hashable, Readonly]):
     __slots__ = ()
     _mapping: DictViewReadonly
 
-    def __iter__(self) -> Iterator[Tuple[Hashable, Readonly]]:
+    def __iter__(self) -> Iterator[tuple[Hashable, Readonly]]:
         for x, y in self._mapping._data.items():
             yield (x, ensure_deeply_readonly(y))
 
@@ -129,7 +134,7 @@ class SeqViewReadonly(ReadonlyView, ABC, Sequence[Readonly]):
     def __getitem__(self, key: slice) -> Sequence[Readonly]:
         pass
 
-    def __getitem__(self, key: Union[int, slice]) -> Union[Readonly, Sequence[Readonly]]:
+    def __getitem__(self, key: int | slice) -> Readonly | Sequence[Readonly]:
         return ensure_deeply_readonly(self._data[key])
 
 
