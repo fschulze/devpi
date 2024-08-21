@@ -95,7 +95,7 @@ pytest_devpi_server = "pytest_devpi_server"
 
 [tool.ruff]
 extend = "../pyproject.toml"
-target-version = "py37"
+target-version = "py39"
 
 
 [tool.ruff.lint]
