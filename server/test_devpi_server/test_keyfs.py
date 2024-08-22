@@ -1023,7 +1023,8 @@ def test_keyfs_sqla_lite_files(gen_path, file_digest, sorted_serverdir):
     class StorageInfo:
         storage_factory = keyfs_sqla_lite_files.Storage
         settings = None
-    keyfs = KeyFS(tmp, StorageInfo(), io_file_factory=DBIOFile)
+    io_file_factory = partial(DBIOFile, settings={})
+    keyfs = KeyFS(tmp, StorageInfo(), io_file_factory=io_file_factory)
     content = b'bar'
     file_path_info = FilePathInfo('foo', file_digest(content))
     with keyfs.write_transaction() as tx:
