@@ -19,24 +19,12 @@ from .filestore import Digests
 from .filestore import FileEntry
 from .filestore import get_hash_spec
 from .log import threadlog
+from .markers import unknown
 from .readonly import get_mutable_deepcopy
 from operator import iconcat
 
 
 notset = object()
-
-
-class _Unknown:
-    __slots__ = ()
-
-    def __bool__(self):
-        return False
-
-    def __repr__(self):
-        return "<Unknown>"
-
-
-Unknown = _Unknown()
 
 
 def join_links_data(links, requires_python, yanked):
@@ -982,12 +970,12 @@ class BaseStage(object):
                 if private_hit and not whitelisted:
                     # don't check the mirror for private packages
                     return dict(
-                        has_mirror_base=Unknown,
+                        has_mirror_base=unknown,
                         blocked_by_mirror_whitelist=stage.name)
                 in_index = stage.has_project_perstage(project)
-                if in_index is Unknown:
+                if in_index is unknown:
                     return dict(
-                        has_mirror_base=Unknown,
+                        has_mirror_base=unknown,
                         blocked_by_mirror_whitelist=None)
                 has_mirror_base = in_index and (not private_hit or whitelisted)
                 blocked_by_mirror_whitelist = in_index and private_hit and not whitelisted
@@ -1028,7 +1016,7 @@ class BaseStage(object):
         if not self.filter_projects([project]):
             return False
         for stage, res in self.op_sro("has_project_perstage", project=project):
-            if res is Unknown:
+            if res is unknown:
                 return res
             if res:
                 return True
@@ -1122,7 +1110,7 @@ class BaseStage(object):
 
             try:
                 exists = stage.has_project_perstage(project)
-                if not private_hit and exists is Unknown and stage.no_project_list:
+                if not private_hit and exists is unknown and stage.no_project_list:
                     # direct fetching is allowed
                     pass
                 elif not exists:
