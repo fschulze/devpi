@@ -4,7 +4,7 @@ from zope.interface import implementer
 
 @implementer(IIOFile)
 class DBIOFile:
-    def __init__(self, conn):
+    def __init__(self, conn, settings):  # noqa: ARG002
         self.conn = conn
 
     def __enter__(self):

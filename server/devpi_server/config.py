@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argon2
 import base64
 import os.path
@@ -410,9 +412,9 @@ def get_parser(pluginmanager):
 
 def find_config_file():
     import platformdirs
-    config_dirs = platformdirs.site_config_dir(
+    config_dirs_str: str = platformdirs.site_config_dir(
         'devpi-server', 'devpi', multipath=True)
-    config_dirs = config_dirs.split(os.pathsep)
+    config_dirs: list[str] = config_dirs_str.split(os.pathsep)
     config_dirs.append(
         platformdirs.user_config_dir('devpi-server', 'devpi'))
     config_files = []
@@ -546,8 +548,8 @@ class MyArgumentParser(argparse.ArgumentParser):
                 action.help += " [%s]" % default
 
     def addgroup(self, *args, **kwargs):
-        grp = super(MyArgumentParser, self).add_argument_group(*args, **kwargs)
-        grp.addoption = grp.add_argument
+        grp = super().add_argument_group(*args, **kwargs)
+        grp.addoption = grp.add_argument  # type: ignore[attr-defined]
         return grp
 
     def add_all_options(self):
@@ -600,6 +602,7 @@ def get_io_file_factory(storage_info):
     from .interfaces import IIOFile
     from zope.interface.verify import verifyClass
     db_filestore = IDBIOFileConnection.implementedBy(storage_info.connection_cls)
+    _io_file_factory: type
     if db_filestore:
         from .filestore_db import DBIOFile
         verifyClass(IIOFile, DBIOFile)
@@ -607,15 +610,16 @@ def get_io_file_factory(storage_info):
     else:
         from .filestore_fs import FSIOFile
         verifyClass(IIOFile, FSIOFile)
-        _io_file_factory = partial(FSIOFile, settings=storage_info.settings)
+        _io_file_factory = FSIOFile
+    settings = storage_info.settings
 
     def io_file_factory(conn):
-        return IIOFile(_io_file_factory(conn))
+        return IIOFile(_io_file_factory(conn, settings))
 
     return io_file_factory
 
 
-class Config(object):
+class Config:
     def __init__(self, args, pluginmanager):
         self.args = args
         self.pluginmanager = pluginmanager
@@ -743,7 +747,7 @@ class Config(object):
 
     @primary_url.setter
     def primary_url(self, value):
-        auth = (None, None)
+        auth: tuple[str, str] | tuple[None, None] | None = (None, None)
         if value is not None:
             auth = (value.username, value.password)
             netloc = value.hostname

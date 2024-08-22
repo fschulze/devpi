@@ -122,7 +122,7 @@ def abort_submit(request, code, msg, level="error"):
 
 
 def abort_authenticate(request, msg="authentication required"):
-    err = type(
+    err: HTTPException = type(
         'HTTPError', (HTTPException,), dict(
             code=401, title=msg))
     err = err()
@@ -141,7 +141,7 @@ class HTTPResponse(HTTPSuccessful):
         Exception.__init__(self)
 
 
-def apireturn(code, message=None, result=None, type=None):
+def apiresult(code, message=None, *, result=None, type=None):  # noqa: A002
     d = dict()
     if result is not None:
         assert type is not None
@@ -151,7 +151,11 @@ def apireturn(code, message=None, result=None, type=None):
         d["message"] = message
     data = json.dumps(d, indent=2) + "\n"
     headers = {"content-type": "application/json"}
-    raise HTTPResponse(body=data, status=code, headers=headers)
+    return HTTPResponse(body=data, status=code, headers=headers)
+
+
+def apireturn(code, message=None, *, result=None, type=None):  # noqa: A002
+    raise apiresult(code, message=message, result=result, type=type)
 
 
 def json_preferred(request):
@@ -159,15 +163,15 @@ def json_preferred(request):
     return "application/json" in request.headers.get("Accept", "")
 
 
-class ContentTypePredicate(object):
-    def __init__(self, val, config):
+class ContentTypePredicate:
+    def __init__(self, val, config):  # noqa: ARG002
         self.val = val
 
     def text(self):
         return 'content type = %s' % self.val
     phash = text
 
-    def __call__(self, context, request):
+    def __call__(self, context, request):  # noqa: ARG002
         return request.content_type == self.val
 
 
@@ -395,7 +399,7 @@ def devpiweb_get_status_info(request):
             msgs.append(dict(status="warn", msg="The event processing hasn't been in sync for more than 1 hour"))
         if sync_at is not None and (last_processed is None or (last_processed > 1800)):
             msgs.append(dict(status="fatal", msg="No changes processed by plugins for more than 30 minutes"))
-        elif sync_at is not None and (last_processed > 300):
+        elif sync_at is not None and (last_processed is None or (last_processed > 300)):
             msgs.append(dict(status="warn", msg="No changes processed by plugins for more than 5 minutes"))
     return msgs
 
@@ -1018,7 +1022,7 @@ class PyPIView:
 
         metadata = get_mutable_deepcopy(linkstore.metadata)
 
-        results = []
+        results: list = []
         targetindex = pushdata.get("targetindex", None)
         if targetindex is not None:  # in-server push
             parts = targetindex.split("/")
@@ -1266,6 +1270,7 @@ class PyPIView:
 
     def _get_versiondata_from_form(self, stage, form, skip_missing=False):
         metadata = {}
+        val: list | str
         for key in stage.metadata_keys:
             if skip_missing and key not in form:
                 continue
@@ -1625,9 +1630,9 @@ class PyPIView:
     @view_config(route_name="/{user}/", accept="application/json", request_method="GET")
     def user_get(self):
         if self.context.user is None:
-            apireturn(404, "user %r does not exist" % self.context.username)
+            return apiresult(404, f"user {self.context.username!r} does not exist")
         userconfig = self.context.user.get()
-        apireturn(200, type="userconfig", result=userconfig)
+        return apiresult(200, type="userconfig", result=userconfig)
 
     @view_config(route_name="/", accept="application/json", request_method="GET")
     def user_list(self):
