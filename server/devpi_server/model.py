@@ -33,6 +33,9 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .keyfs import KeyChangeEvent
+    from collections.abc import Sequence
+    from typing import Any
+    from typing import Literal
 
 
 notset = object()
@@ -259,7 +262,7 @@ def normalize_whitelist_name(name):
 
 
 def get_stage_customizer_classes(xom):
-    customizer_classes = functools.reduce(
+    customizer_classes: list[tuple[str, type]] = functools.reduce(
         iconcat,
         xom.config.hook.devpiserver_get_stage_customizer_classes(),
         [])
@@ -350,7 +353,7 @@ class User:
 
     def _modify(self, password=None, pwhash=None, **kwargs):
         self.validate_config(**kwargs)
-        modified = {}
+        modified: dict[str, object] = {}
         with self.key.update() as userconfig:
             if password is not None or pwhash:
                 self._setpassword(userconfig, password, pwhash=pwhash)
@@ -478,7 +481,7 @@ def get_principals(value):
     return principals
 
 
-class BaseStageCustomizer(object):
+class BaseStageCustomizer:
     readonly = False
 
     def __init__(self, stage):
@@ -515,12 +518,17 @@ class BaseStageCustomizer(object):
 
     def get_principals_for_index_delete(self, restrict_modify=None):
         if restrict_modify is None:
-            modify_principals = set(['root', self.stage.username])
+            modify_principals = {'root', self.stage.username}
         else:
             modify_principals = restrict_modify
         return modify_principals
 
-    get_principals_for_index_modify = get_principals_for_index_delete
+    def get_principals_for_index_modify(self, restrict_modify=None):
+        if restrict_modify is None:
+            modify_principals = {'root', self.stage.username}
+        else:
+            modify_principals = restrict_modify
+        return modify_principals
 
     def get_principals_for_del_entry(self, restrict_modify=None):
         modify_principals = set(self.stage.ixconfig.get("acl_upload", []))
@@ -530,8 +538,21 @@ class BaseStageCustomizer(object):
             modify_principals.update(restrict_modify)
         return modify_principals
 
-    get_principals_for_del_project = get_principals_for_del_entry
-    get_principals_for_del_verdata = get_principals_for_del_entry
+    def get_principals_for_del_project(self, restrict_modify=None):
+        modify_principals = set(self.stage.ixconfig.get("acl_upload", []))
+        if restrict_modify is None:
+            modify_principals.update(['root', self.stage.username])
+        else:
+            modify_principals.update(restrict_modify)
+        return modify_principals
+
+    def get_principals_for_del_verdata(self, restrict_modify=None):
+        modify_principals = set(self.stage.ixconfig.get("acl_upload", []))
+        if restrict_modify is None:
+            modify_principals.update(['root', self.stage.username])
+        else:
+            modify_principals.update(restrict_modify)
+        return modify_principals
 
     def get_possible_indexconfig_keys(self):
         """ Returns all possible custom index config keys.
@@ -598,21 +619,32 @@ class UnknownCustomizer(BaseStageCustomizer):
     readonly = True
 
     # prevent uploads and deletions besides complete index removal
-    def get_principals_for_index_modify(self, restrict_modify=None):
+    def get_principals_for_index_modify(self, restrict_modify=None):  # noqa: ARG002
         return []
 
-    get_principals_for_upload = get_principals_for_index_modify
-    get_principals_for_toxresult_upload = get_principals_for_index_modify
-    get_principals_for_del_entry = get_principals_for_index_modify
-    get_principals_for_del_project = get_principals_for_index_modify
-    get_principals_for_del_verdata = get_principals_for_index_modify
+    def get_principals_for_upload(self, restrict_modify=None):  # noqa: ARG002
+        return []
+
+    def get_principals_for_toxresult_upload(self, restrict_modify=None):  # noqa: ARG002
+        return []
+
+    def get_principals_for_del_entry(self, restrict_modify=None):  # noqa: ARG002
+        return []
+
+    def get_principals_for_del_project(self, restrict_modify=None):  # noqa: ARG002
+        return []
+
+    def get_principals_for_del_verdata(self, restrict_modify=None):  # noqa: ARG002
+        return []
 
 
 @total_ordering
 class SimpleLinks:
     __slots__ = ('_links', 'stale')
+    _links: list
+    stale: bool
 
-    def __init__(self, links, stale=False):
+    def __init__(self, links: list, *, stale: bool = False) -> None:
         assert links is not None
         if isinstance(links, SimpleLinks):
             self._links = links._links
@@ -762,6 +794,15 @@ class BaseStage:
         ixconfig["type"] = index_type
         return (ixconfig, kwargs)
 
+    def get_default_config_items(self) -> Sequence[tuple[str, Any]]:
+        raise NotImplementedError
+
+    def get_possible_indexconfig_keys(self) -> Sequence:
+        raise NotImplementedError
+
+    def normalize_indexconfig_value(self, key: str, value: Any) -> Any:
+        raise NotImplementedError
+
     @cached_property
     def user(self):
         # only few methods need the user object.
@@ -843,6 +884,9 @@ class BaseStage:
         assert len(links) < 2
         return links[0] if links else None
 
+    def get_simplelinks_perstage(self, project: str) -> list:
+        raise NotImplementedError
+
     def store_toxresult(self, link, content_or_file,
                         *, filename=None, hashes, last_modified=None):
         if self.customizer.readonly:
@@ -879,6 +923,9 @@ class BaseStage:
             versions.update(res)
         return self.filter_versions(project, versions)
 
+    def list_versions_perstage(self, project: str) -> set:
+        raise NotImplementedError
+
     def get_latest_version(self, name, stable=False):
         return get_latest_version(
             self.filter_versions(
@@ -891,33 +938,9 @@ class BaseStage:
                 name, self.list_versions_perstage(name)),
             stable=stable)
 
-    def get_last_project_change_serial_perstage(self, project, at_serial=None):
-        project = normalize_name(project)
-        tx = self.keyfs.tx
-        if at_serial is None:
-            at_serial = tx.at_serial
-        (last_serial, projectname_ulid, projectname) = tx.get_last_serial_and_value_at(
-            self.key_projectname(project),
-            at_serial)
-        if projectname in (absent, deleted):
-            # the whole index never existed or was deleted
-            return last_serial
-        for version_keydata in tx.conn.iter_keys_at_serial((self.key_version(project),), at_serial=at_serial, fill_cache=False, with_deleted=True):
-            last_serial = max(last_serial, version_keydata.key.last_serial)
-            if last_serial >= at_serial:
-                return last_serial
-            if version_keydata.value in (absent, deleted):
-                continue
-            version = version_keydata.key.name
-            for versionfile_key in tx.conn.iter_ulidkeys_at_serial((self.key_versionfile(project, version),), at_serial=at_serial, fill_cache=False, with_deleted=True):
-                last_serial = max(last_serial, versionfile_key.last_serial)
-                if last_serial >= at_serial:
-                    return last_serial
-        return last_serial
-
     def get_versiondata(self, project, version):
         assert isinstance(project, str), "project %r not text" % project
-        result = {}
+        result: dict[str, Any] = {}
         if not self.filter_versions(project, [version]):
             return result
         for stage, res in self.op_sro_check_mirror_whitelist(
@@ -961,14 +984,14 @@ class BaseStage:
             all_links.sort(reverse=True)
         return all_links
 
-    def get_whitelist_inheritance(self):
+    def get_whitelist_inheritance(self) -> str:
         return self.ixconfig.get("mirror_whitelist_inheritance", "union")
 
     def get_mirror_whitelist_info(self, project):
         project = ensure_unicode(project)
         private_hit = whitelisted = False
         whitelist_inheritance = self.get_whitelist_inheritance()
-        whitelist = None
+        whitelist: set | None = None
         for stage in self.sro():
             if stage.ixconfig["type"] == "mirror":
                 if private_hit and not whitelisted:
@@ -1079,11 +1102,12 @@ class BaseStage:
         project = normalize_name(kw["project"])
         if not self.filter_projects([project]):
             return
-        whitelisted = private_hit = False
+        whitelisted: BaseStage | Literal[False] = False
+        private_hit: BaseStage | bool = whitelisted
         # the default value if the setting is missing is the old behaviour,
         # so existing indexes work as before
-        whitelist_inheritance = self.get_whitelist_inheritance()
-        whitelist = None
+        whitelist_inheritance: str = self.get_whitelist_inheritance()
+        whitelist: set | None = None
         for stage in self.sro():
             if stage.ixconfig["type"] == "mirror":
                 if private_hit:
@@ -1359,6 +1383,30 @@ class PrivateStage(BaseStage):
         return [
             v for k, v in self.key_versionfile(project, version).iter_ulidkey_values()]
 
+    def get_last_project_change_serial_perstage(self, project, at_serial=None):
+        project = normalize_name(project)
+        tx = self.keyfs.tx
+        if at_serial is None:
+            at_serial = tx.at_serial
+        (last_serial, projectname_ulid, projectname) = tx.get_last_serial_and_value_at(
+            self.key_projectname(project),
+            at_serial)
+        if projectname in (absent, deleted):
+            # the whole index never existed or was deleted
+            return last_serial
+        for version_keydata in tx.conn.iter_keys_at_serial((self.key_version(project),), at_serial=at_serial, fill_cache=False, with_deleted=True):
+            last_serial = max(last_serial, version_keydata.key.last_serial)
+            if last_serial >= at_serial:
+                return last_serial
+            if version_keydata.value in (absent, deleted):
+                continue
+            version = version_keydata.key.name
+            for versionfile_key in tx.conn.iter_ulidkeys_at_serial((self.key_versionfile(project, version),), at_serial=at_serial, fill_cache=False, with_deleted=True):
+                last_serial = max(last_serial, versionfile_key.last_serial)
+                if last_serial >= at_serial:
+                    return last_serial
+        return last_serial
+
     def get_versiondata_perstage(self, project, version, *, with_elinks=True):
         project = normalize_name(project)
         verdata = self.key_version(project, version).get()
@@ -1374,13 +1422,13 @@ class PrivateStage(BaseStage):
         data = self.key_projsimplelinks(project).get()
         links = data.get("links", [])
         requires_python = data.get("requires_python", [])
-        yanked = []  # PEP 592 isn't supported for private stages yet
+        yanked: list = []  # PEP 592 isn't supported for private stages yet
         return self.SimpleLinks(
             join_links_data(links, requires_python, yanked))
 
     def _regen_simplelinks(self, project_input):
         project = normalize_name(project_input)
-        links = []
+        links: list = []
         requires_python = []
         for version in self.list_versions_perstage(project):
             linkstore = self.get_linkstore_perstage(project, version)
@@ -1455,7 +1503,7 @@ class PrivateStage(BaseStage):
         linkstore = self.get_linkstore_perstage(project, version)
         links = linkstore.get_links(rel="doczip")
         link = links[-1] if links else None
-        if len(links) > 1:
+        if len(links) > 1 and link is not None:
             # the order is not defined, but since devpi-server 2.4.0 it
             # shouldn't be possible to get into this case anyway
             threadlog.warn("Multiple documentation files for %s-%s, returning %s",
