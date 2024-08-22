@@ -240,9 +240,8 @@ class IndexDump:
             versions = self.stage.list_versions_perstage(name)
             for version in versions:
                 v = self.stage.get_versiondata_perstage(name, version, with_elinks=False)
+                assert '+elinks' not in v
                 data[version] = get_mutable_deepcopy(v)
-            for val in data.values():
-                val.pop("+elinks", None)
             norm_name = normalize_name(name)
             assert norm_name not in self.indexmeta["projects"]
             self.indexmeta["projects"][norm_name] = data
