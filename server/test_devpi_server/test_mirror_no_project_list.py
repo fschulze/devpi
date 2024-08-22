@@ -1,7 +1,7 @@
 from bs4 import BeautifulSoup
 from devpi_common.metadata import splitbasename
 from devpi_server.filestore import get_hashes
-from devpi_server.model import Unknown
+from devpi_server.model import unknown
 import pytest
 
 
@@ -55,9 +55,9 @@ def user(model):
 
 
 def test_unknown():
-    assert bool(Unknown) is False
-    assert (not Unknown) is True
-    assert repr(Unknown) == "<Unknown>"
+    assert bool(unknown) is False
+    assert (not unknown) is True
+    assert repr(unknown) == "<unknown>"
 
 
 @pytest.mark.nomocking
@@ -100,11 +100,11 @@ def test_listing_projects(mapp, mirrorapi, simpypi, testapp):
 
 @pytest.mark.nomocking
 def test_has_project_perstage(mirrorstage, simpypi):
-    assert mirrorstage.has_project_perstage("pkg") is Unknown
+    assert mirrorstage.has_project_perstage("pkg") is unknown
     assert simpypi.log == []
     assert simpypi.requests == []
     simpypi.add_release("pkg", pkgver="pkg-1.0.zip")
-    assert mirrorstage.has_project_perstage("pkg") is Unknown
+    assert mirrorstage.has_project_perstage("pkg") is unknown
     assert simpypi.log == []
     assert simpypi.requests == []
     (link,) = mirrorstage.get_releaselinks_perstage("pkg")
@@ -121,7 +121,7 @@ def test_has_project_perstage(mirrorstage, simpypi):
 @pytest.mark.writetransaction
 def test_get_releaselinks_with_upstream(mirrorstage, simpypi, stage):
     simpypi.add_release("pkg", pkgver="pkg-1.0.zip")
-    assert stage.has_project("pkg") is Unknown
+    assert stage.has_project("pkg") is unknown
     (link,) = stage.get_releaselinks("pkg")
     assert link.basename == "pkg-1.0.zip"
     assert simpypi.log
@@ -131,16 +131,16 @@ def test_get_releaselinks_with_upstream(mirrorstage, simpypi, stage):
 @pytest.mark.nomocking
 @pytest.mark.writetransaction
 def test_get_mirror_whitelist_info_without_upstream(mirrorstage, simpypi, stage):
-    assert stage.has_project("pkg") is Unknown
+    assert stage.has_project("pkg") is unknown
     info = stage.get_mirror_whitelist_info("pkg")
-    assert info["has_mirror_base"] is Unknown
+    assert info["has_mirror_base"] is unknown
     assert info["blocked_by_mirror_whitelist"] is None
     assert simpypi.log == []
     assert simpypi.requests == []
     register_and_store(stage, "pkg-1.0.zip")
     assert stage.has_project("pkg") is True
     info = stage.get_mirror_whitelist_info("pkg")
-    assert info["has_mirror_base"] is Unknown
+    assert info["has_mirror_base"] is unknown
     assert info["blocked_by_mirror_whitelist"] == "root/pypi"
     (link,) = stage.get_releaselinks("pkg")
     assert link.basename == "pkg-1.0.zip"
@@ -152,16 +152,16 @@ def test_get_mirror_whitelist_info_without_upstream(mirrorstage, simpypi, stage)
 @pytest.mark.writetransaction
 def test_get_mirror_whitelist_info_with_unfetched_upstream(mirrorstage, simpypi, stage):
     simpypi.add_release("pkg", pkgver="pkg-1.0.zip")
-    assert stage.has_project("pkg") is Unknown
+    assert stage.has_project("pkg") is unknown
     info = stage.get_mirror_whitelist_info("pkg")
-    assert info["has_mirror_base"] is Unknown
+    assert info["has_mirror_base"] is unknown
     assert info["blocked_by_mirror_whitelist"] is None
     assert simpypi.log == []
     assert simpypi.requests == []
     register_and_store(stage, "pkg-1.0.zip")
     assert stage.has_project("pkg") is True
     info = stage.get_mirror_whitelist_info("pkg")
-    assert info["has_mirror_base"] is Unknown
+    assert info["has_mirror_base"] is unknown
     assert info["blocked_by_mirror_whitelist"] == "root/pypi"
     (link,) = stage.get_releaselinks("pkg")
     assert link.basename == "pkg-1.0.zip"
@@ -187,7 +187,7 @@ def test_get_mirror_whitelist_info_with_fetched_upstream(mirrorstage, simpypi, s
     register_and_store(stage, "pkg-1.0.zip")
     assert stage.has_project("pkg") is True
     info = stage.get_mirror_whitelist_info("pkg")
-    assert info["has_mirror_base"] is Unknown
+    assert info["has_mirror_base"] is unknown
     assert info["blocked_by_mirror_whitelist"] == "root/pypi"
     (link,) = stage.get_releaselinks("pkg")
     assert link.basename == "pkg-1.0.zip"
@@ -200,16 +200,16 @@ def test_get_mirror_whitelist_info_with_fetched_upstream(mirrorstage, simpypi, s
 def test_whitelisted_with_unfetched_upstream(mirrorstage, simpypi, stage):
     stage.ixconfig["mirror_whitelist"] = ["pkg"]
     simpypi.add_release("pkg", pkgver="pkg-1.0.zip")
-    assert stage.has_project("pkg") is Unknown
+    assert stage.has_project("pkg") is unknown
     info = stage.get_mirror_whitelist_info("pkg")
-    assert info["has_mirror_base"] is Unknown
+    assert info["has_mirror_base"] is unknown
     assert info["blocked_by_mirror_whitelist"] is None
     assert simpypi.log == []
     assert simpypi.requests == []
     register_and_store(stage, "pkg-1.0.zip")
     assert stage.has_project("pkg") is True
     info = stage.get_mirror_whitelist_info("pkg")
-    assert info["has_mirror_base"] is Unknown
+    assert info["has_mirror_base"] is unknown
     assert info["blocked_by_mirror_whitelist"] is None
     assert simpypi.log == []
     assert simpypi.requests == []
