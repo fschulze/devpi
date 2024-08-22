@@ -259,7 +259,7 @@ def key_from_link(keyfs, link, index_key):
         # so let's take the first 3 bytes which gives
         # us a maximum of 16^3 = 4096 entries in the root dir
         a, b = make_splitdir(link.hash_spec)
-        return keyfs.STAGEFILE(
+        return keyfs.FILE(
             parent_key=index_key,
             hashdir_a=a, hashdir_b=b,
             filename=link.basename)
@@ -268,7 +268,7 @@ def key_from_link(keyfs, link, index_key):
         assert parts
         dirname = "_".join(parts[:-1])
         dirname = re.sub('[^a-zA-Z0-9_.-]', '_', dirname)
-        return keyfs.PYPIFILE_NOMD5(
+        return keyfs.FILE_NOHASH(
             parent_key=index_key,
             dirname=unquote(dirname),
             basename=link.basename)
@@ -311,7 +311,7 @@ class FileStore:
         return entry
 
     def get_file_entry(self, relpath):
-        if (key := self.keyfs.match_key(relpath, self.keyfs.PYPIFILE_NOMD5, self.keyfs.STAGEFILE)):
+        if (key := self.keyfs.match_key(relpath, self.keyfs.FILE_NOHASH, self.keyfs.FILE)):
             (ulid_key, val) = self.keyfs.tx._get(key)
             if val is absent:
                 return None
@@ -327,7 +327,7 @@ class FileStore:
         if ref_hash_spec is None:
             ref_hash_spec = hashes.get_default_spec()
         hashdir_a, hashdir_b = make_splitdir(ref_hash_spec)
-        key = self.keyfs.STAGEFILE(
+        key = self.keyfs.FILE(
             user=user, index=index,
             hashdir_a=hashdir_a, hashdir_b=hashdir_b, filename=basename)
         entry = MutableFileEntry(key)
