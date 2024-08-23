@@ -1013,7 +1013,7 @@ class PyPIView:
             links[link.rel].append(link)
         for rel in links:
             links[rel] = sorted(links[rel], key=attrgetter('basename'))
-        if not links["releasefile"]:
+        if not any(links.values()):
             self.log.info("%s: no files for version %s %s", stage.name, name, version)
             return apiresult(404, f"no release/files found for {name} {version}")
 
