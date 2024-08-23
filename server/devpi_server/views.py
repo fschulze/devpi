@@ -3,8 +3,8 @@ from __future__ import annotations
 import contextlib
 import os
 import re
-import traceback
 from time import time
+from collections import defaultdict
 from devpi_common.types import ensure_unicode
 from devpi_common.url import URL
 from devpi_common.metadata import get_pyversion_filetype
@@ -1006,8 +1006,8 @@ class PyPIView:
         try:
             linkstore = stage.get_linkstore_perstage(name, version)
         except stage.MissesRegistration:
-            apireturn(400, "there are no files for %s-%s on stage %s" % (
-                name, version, stage.name))
+            return apiresult(
+                400, f"there are no files for {name} {version} on stage {stage.name}")
         rels = {'releasefile', 'doczip', 'toxresult'}
         no_docs = pushdata.pop("no_docs", False)
         only_docs = pushdata.pop("only_docs", False)
@@ -1017,114 +1017,137 @@ class PyPIView:
             rels.remove('doczip')
         elif only_docs:
             rels = {'doczip'}
-        links = {
-            rel: sorted(linkstore.get_links(rel=rel), key=attrgetter('basename'))
-            for rel in rels}
+        links = defaultdict(list)
+        for link in linkstore.get_links():
+            if link.rel not in rels:
+                continue
+            links[link.rel].append(link)
+        for rel in links:
+            links[rel] = sorted(links[rel], key=attrgetter('basename'))
         if not any(links.values()):
             self.log.info("%s: no files for version %s %s", stage.name, name, version)
-            apireturn(404, f"no release/files found for {name} {version}")
+            return apiresult(404, f"no release/files found for {name} {version}")
 
         if not request.has_permission("pkg_read"):
             abort(request, 403, "package read forbidden")
 
-        metadata = get_mutable_deepcopy(linkstore.metadata)
-
-        results: list = []
         targetindex = pushdata.pop("targetindex", None)
-        if targetindex is not None:  # in-server push
-            if pushdata:
-                keys = ', '.join(sorted(pushdata.keys()))
-                return apiresult(400, f"unknown additional options: {keys}")
-            parts = targetindex.split("/")
-            if len(parts) != 2:
-                apireturn(400, message="targetindex not in format user/index")
-            target_stage = self.context.getstage(*parts)
-            auth_user = request.authenticated_userid
-            self.log.debug("targetindex %r, auth_user %r", targetindex,
-                           auth_user)
-            if not request.has_permission("upload", context=target_stage):
-                apireturn(401, message="user %r cannot upload to %r" % (
-                    auth_user, targetindex))
-            self._set_versiondata_dict(target_stage, metadata)
-            results.append((200, "register", name, version,
-                            "->", target_stage.name))
+        metadata = get_mutable_deepcopy(linkstore.metadata)
+        if targetindex is None:
+            return self._push_external(name, version, links, metadata, pushdata)
+        if pushdata:
+            keys = ', '.join(sorted(pushdata.keys()))
+            return apiresult(400, f"unknown additional options: {keys}")
+        return self._push_internal(name, version, links, metadata, targetindex)
+
+    def _push_internal(self, name, version, links, metadata, targetindex):
+        request = self.request
+        results: list = []
+        parts = targetindex.split("/")
+        if len(parts) != 2:
+            return apiresult(400, "targetindex not in format user/index")
+        target_stage = self.context.getstage(*parts)
+        auth_user = request.authenticated_userid
+        self.log.debug("targetindex %r, auth_user %r", targetindex,
+                       auth_user)
+        if not request.has_permission("upload", context=target_stage):
+            return apiresult(
+                401, f"user {auth_user!r} cannot upload to {targetindex!r}")
+        self._set_versiondata_dict(target_stage, metadata)
+        results.append((200, "register", name, version,
+                        "->", target_stage.name))
+        try:
+            results.extend(self._push_links(links, target_stage, name, version))
+        except target_stage.NonVolatile as e:
+            return apiresult(
+                409, f"{e.link.basename} already exists in non-volatile index")
+        except BadGateway as e:
+            return apiresult(502, e.args[0])
+        return apiresult(200, result=results, type="actionlog")
+
+    def _push_external(self, name, version, links, metadata, pushdata):
+        results: list = []
+        posturl = pushdata["posturl"]
+        pypiauth = (pushdata["username"], pushdata["password"])
+        # prepare metadata for submission
+        metadata[":action"] = "submit"
+        metadata["metadata_version"] = "2.1"
+        self.log.info("registering %s %s to %s", name, version, posturl)
+        session = new_requests_session(agent=("server", server_version))
+        with contextlib.closing(session):
             try:
-                results.extend(self._push_links(links, target_stage, name, version))
-            except target_stage.NonVolatile as e:
-                apireturn(409, "%s already exists in non-volatile index" % (
-                          e.link.basename,))
-            except BadGateway as e:
-                return apireturn(502, e.args[0])
-            apireturn(200, result=results, type="actionlog")
-        else:
-            posturl = pushdata["posturl"]
-            username = pushdata["username"]
-            password = pushdata["password"]
-            pypiauth = (username, password)
-            # prepare metadata for submission
-            metadata[":action"] = "submit"
-            metadata["metadata_version"] = "2.1"
-            self.log.info("registering %s-%s to %s", name, version, posturl)
-            session = new_requests_session(agent=("server", server_version))
-            with contextlib.closing(session):
-                try:
-                    r = session.post(posturl, data=metadata, auth=pypiauth)
-                    r.close()
-                except Exception as e:
-                    exc_msg = ''.join(traceback.format_exception_only(e.__class__, e))
-                    results.append((-1, "exception on register:", exc_msg))
-                    apireturn(502, result=results, type="actionlog")
-                self.log.debug("register returned: %s", r.status_code)
-                results.append((r.status_code, "register", name, version))
-                ok_codes = (200, 201, 410)
-                proceed = (r.status_code in ok_codes)
-                if proceed:
-                    for link in links["releasefile"]:
-                        entry = link.entry
-                        file_metadata = metadata.copy()
-                        file_metadata[":action"] = "file_upload"
-                        basename = link.basename
-                        pyver, filetype = get_pyversion_filetype(basename)
-                        file_metadata["filetype"] = filetype
-                        file_metadata["pyversion"] = pyver
-                        file_metadata["%s_digest" % link.best_available_hash_type] = link.best_available_hash_value
-                        content = entry.file_get_content()
-                        self.log.info(
-                            "sending %s to %s, metadata %s",
-                            basename, posturl, file_metadata)
-                        try:
-                            r = session.post(
-                                posturl, data=file_metadata, auth=pypiauth,
-                                files={"content": (basename, content)})
-                        except Exception as e:
-                            exc_msg = ''.join(traceback.format_exception_only(e.__class__, e))
-                            results.append((-1, "exception on release upload:", exc_msg))
-                        else:
-                            self.log.debug("send finished, status: %s", r.status_code)
-                            # ignore response body on success
-                            text = '' if r.status_code in (200, 201) else r.text
-                            results.append((
-                                r.status_code, "upload", entry.relpath, text))
-                            r.close()
-                    if links["doczip"]:
-                        doc_metadata = metadata.copy()
-                        doc_metadata[":action"] = "doc_upload"
-                        doczip = links["doczip"][0].entry.file_get_content()
-                        try:
-                            r = session.post(
-                                posturl, data=doc_metadata, auth=pypiauth,
-                                files={"content": (name + ".zip", doczip)})
-                            r.close()
-                        except Exception as e:
-                            exc_msg = ''.join(traceback.format_exception_only(e.__class__, e))
-                            results.append((-1, "exception on documentation upload:", exc_msg))
-                        else:
-                            self.log.debug("send finished, status: %s", r.status_code)
-                            results.append((r.status_code, "docfile", name))
-                if r.status_code in ok_codes:
-                    apireturn(200, result=results, type="actionlog")
-                else:
-                    apireturn(502, result=results, type="actionlog")
+                r = session.post(posturl, data=metadata, auth=pypiauth)
+                r.close()
+            except Exception as e:  # noqa: BLE001
+                exc_msg = lazy_format_exception_only(e)
+                results.append((-1, "exception on register:", str(exc_msg)))
+                return apiresult(502, result=results, type="actionlog")
+            self.log.debug("register returned: %s", r.status_code)
+            results.append((r.status_code, "register", name, version))
+            ok_codes = (200, 201, 410)
+            proceed = (r.status_code in ok_codes)
+            if proceed:
+                for link in links["releasefile"]:
+                    results.extend(
+                        self._push_external_release(
+                            link, metadata, session, posturl, pypiauth))
+                if doczip_link := next(iter(links.get("doczip", ())), None):
+                    results.extend(
+                        self._push_external_doczip(
+                            doczip_link, metadata, session, posturl, pypiauth))
+            return (
+                apiresult(200, result=results, type="actionlog")
+                if r.status_code in ok_codes else
+                apiresult(502, result=results, type="actionlog"))
+
+    def _push_external_release(self, link, metadata, session, posturl, pypiauth):
+        results: list = []
+        entry = link.entry
+        file_metadata = metadata.copy()
+        file_metadata[":action"] = "file_upload"
+        basename = link.basename
+        pyver, filetype = get_pyversion_filetype(basename)
+        file_metadata["filetype"] = filetype
+        file_metadata["pyversion"] = pyver
+        file_metadata[f"{link.best_available_hash_type}_digest"] = link.best_available_hash_value
+        content = entry.file_get_content()
+        self.log.info(
+            "sending %s to %s, metadata %s",
+            basename, posturl, file_metadata)
+        try:
+            r = session.post(
+                posturl, data=file_metadata, auth=pypiauth,
+                files={"content": (basename, content)})
+        except Exception as e:  # noqa: BLE001
+            exc_msg = lazy_format_exception_only(e)
+            results.append((-1, "exception on release upload:", str(exc_msg)))
+            return results
+        self.log.debug("send finished, status: %s", r.status_code)
+        # ignore response body on success
+        text = '' if r.status_code in (200, 201) else r.text
+        results.append((
+            r.status_code, "upload", entry.relpath, text))
+        r.close()
+        return results
+
+    def _push_external_doczip(self, link, metadata, session, posturl, pypiauth):
+        results: list = []
+        doc_metadata = metadata.copy()
+        doc_metadata[":action"] = "doc_upload"
+        name = doc_metadata["name"]
+        doczip = link.entry.file_get_content()
+        try:
+            r = session.post(
+                posturl, data=doc_metadata, auth=pypiauth,
+                files={"content": (f"{name}.zip", doczip)})
+            r.close()
+        except Exception as e:  # noqa: BLE001
+            exc_msg = lazy_format_exception_only(e)
+            results.append((-1, "exception on documentation upload:", exc_msg))
+            return results
+        self.log.debug("send finished, status: %s", r.status_code)
+        results.append((r.status_code, "docfile", name))
+        return results
 
     def _push_links(self, links, target_stage, name, version):
         stage = self.context.stage
