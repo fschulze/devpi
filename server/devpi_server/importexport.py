@@ -273,7 +273,7 @@ class IndexDump:
                 version=link.version, entrymapping=get_mutable_deepcopy(entry.meta))
 
     def dump_releasefiles(self, linkstore):
-        for link in linkstore.get_links(rel="releasefile"):
+        for link in linkstore.get_links(rel=Rel.ReleaseFile):
             entry = self.exporter.filestore.get_file_entry(link.relpath)
             if not entry.last_modified:
                 continue
@@ -284,13 +284,13 @@ class IndexDump:
                 entry,
                 self.basedir / linkstore.project / link.version / entry.basename)
             self.add_filedesc(
-                "releasefile", linkstore.project, relpath,
+                Rel.ReleaseFile, linkstore.project, relpath,
                 version=linkstore.version,
                 entrymapping=get_mutable_deepcopy(entry.meta),
                 log=link.get_logs())
 
     def dump_toxresults(self, linkstore):
-        for tox_link in linkstore.get_links(rel="toxresult"):
+        for tox_link in linkstore.get_links(rel=Rel.ToxResult):
             reflink = linkstore.stage.get_link_from_entrypath(tox_link.for_entrypath)
             relpath = self.exporter.copy_file(
                 tox_link.entry,
@@ -299,7 +299,7 @@ class IndexDump:
                     reflink.best_available_hash_spec,
                     tox_link.basename))
             self.add_filedesc(
-                type="toxresult",
+                type=Rel.ToxResult,
                 project=linkstore.project,
                 relpath=relpath,
                 version=linkstore.version,
@@ -579,7 +579,7 @@ class Importer:
         # determined here but in store_releasefile/store_doczip/store_toxresult etc
         hashes.update(get_hashes(f, hash_types=hashes.get_missing_hash_types()))
 
-        if filedesc["type"] == "releasefile":
+        if filedesc["type"] == Rel.ReleaseFile:
             if self.dumpversion == "1":
                 # previous versions would not add a version attribute
                 version = BasenameMeta(p.name).version
@@ -622,7 +622,7 @@ class Importer:
             link = stage.store_doczip(
                 project, version, f, hashes=hashes, last_modified=last_modified)
             entry = link.entry
-        elif filedesc["type"] == "toxresult":
+        elif filedesc["type"] == Rel.ToxResult:
             linkstore = stage.get_linkstore_perstage(
                 filedesc["projectname"], filedesc["version"])
             # we can not search for the full relative path because
