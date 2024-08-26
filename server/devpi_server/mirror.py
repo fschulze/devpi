@@ -22,6 +22,7 @@ from .filestore import key_from_link
 from .markers import unknown
 from .model import BaseStageCustomizer
 from .model import BaseStage
+from .model import Rel
 from .model import ensure_boolean
 from .model import join_links_data
 from .normalized import NormalizedName
@@ -869,7 +870,9 @@ class MirrorStage(BaseStage):
         (last_serial, ulid, links) = info
         return last_serial
 
-    def _get_elinks(self, project: str, version: str) -> list:
+    def _get_elinks(self, project: str, version: str, *, rel: Rel | None = None) -> list:
+        if rel not in (Rel.ReleaseFile, None):
+            return []
         verdata = self.get_versiondata_perstage(project, version, with_elinks=True)
         return verdata['+elinks']
 
