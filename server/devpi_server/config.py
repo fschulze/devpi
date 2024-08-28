@@ -222,10 +222,11 @@ def add_web_options(parser, pluginmanager):
              "This will become the default at some point.")
 
     parser.addoption(
-        "--profile-requests", type=int, metavar="NUM", default=0,
-        help="profile NUM requests and print out cumulative stats. "
-             "After print profiling is restarted. "
-             "By default no profiling is performed.")
+        "--profile-requests",
+        help=argparse.SUPPRESS,
+        metavar="PROFILE",
+        type=str,
+    )
 
 
 def add_mirror_options(parser, pluginmanager):
