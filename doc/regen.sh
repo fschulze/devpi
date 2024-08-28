@@ -52,7 +52,7 @@ regendoc \
     --normalize '@= 1 passed in \d+\.\d+s =@= 1 passed in 0.01s =@' \
     --normalize "@py: OK \(\d+\.\d+ seconds\)@py: OK (10.57 seconds)@" \
     --normalize "@congratulations :\) \(\d+\.\d+ seconds\)@congratulations :) (10.85 seconds)@" \
-    --normalize "@\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d+ INFO @INFO @" \
+    --normalize "@\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d+ INFO\s+[^\s]+\s+@INFO  @" \
     --normalize "@\.temp/devpi-test-.+/targz/example-1\.0/\.tox/py/\.pytest_cache@.tox/py/.pytest_cache@" \
     --normalize "@^.*WARNING: Retrying.*ReadTimeoutError.*\$@@" \
     $*
