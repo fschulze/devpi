@@ -770,6 +770,8 @@ _pypi_ixconfig_default = {
 
 def tween_request_profiling(handler, registry):
     from cProfile import Profile
+    from pstats import Stats
+
     req = [0]
     num_profile = registry["xom"].config.args.profile_requests
     # we need to use a list, so we can create a new Profile instance without
@@ -784,7 +786,9 @@ def tween_request_profiling(handler, registry):
             profile[0].disable()
             req[0] += 1
             if req[0] >= num_profile:
-                profile[0].print_stats("cumulative")
+                stats = Stats(profile[0])
+                stats.sort_stats("tottime")
+                stats.print_stats(100)
                 req[0] = 0
                 profile[:] = [Profile()]
     return request_profiling_handler
