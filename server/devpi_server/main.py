@@ -45,7 +45,13 @@ import warnings
 
 if TYPE_CHECKING:
     from collections.abc import Coroutine
+    from typing import TypedDict
     import argparse
+
+    class ProfileOptions(TypedDict):
+        restriction: list[float | int | str]
+        skip: int | None
+        sort: list[str]
 
 
 class Fatal(Exception):
@@ -773,21 +779,60 @@ _pypi_ixconfig_default = {
 
 def tween_request_profiling(handler, registry):
     from cProfile import Profile
+    from pstats import Stats
+
     req = [0]
-    num_profile = registry["xom"].config.args.profile_requests
+    (_num_profile, *_profile_options) = [
+        x.strip() for x in registry["xom"].config.args.profile_requests.split(",")
+    ]
+    num_profile = int(_num_profile)
+    profile_options: ProfileOptions = dict(
+        restriction=[],
+        skip=None,
+        sort=[],
+    )
+    for profile_option in _profile_options:
+        (_k, _, _v) = profile_option.partition("=")
+        k = _k.strip()
+        v = _v.strip()
+        match k:
+            case "restriction":
+                for func in (int, float, str):
+                    try:
+                        profile_options[k].append(func(v))
+                        break
+                    except (TypeError, ValueError):
+                        pass
+            case "skip":
+                if profile_options[k] is not None:
+                    raise ValueError("Can't have duplicate 'skip'")
+                profile_options[k] = int(v)
+            case "sort":
+                profile_options[k].append(v)
+            case _:
+                raise ValueError(f"Unknown profile key {k!r}")
+    num_skip = profile_options["skip"]
+    if num_skip is None:
+        num_skip = 0
+    if not profile_options["sort"]:
+        profile_options["sort"].append("cumulative")
     # we need to use a list, so we can create a new Profile instance without
     # getting variable scope issues
     profile = [Profile()]
 
     def request_profiling_handler(request):
-        profile[0].enable()
+        if req[0] >= num_skip:
+            profile[0].enable()
         try:
             return handler(request)
         finally:
-            profile[0].disable()
+            if req[0] >= num_skip:
+                profile[0].disable()
             req[0] += 1
             if req[0] >= num_profile:
-                profile[0].print_stats("cumulative")
+                stats = Stats(profile[0])
+                stats.sort_stats(*profile_options["sort"])
+                stats.print_stats(*profile_options["restriction"])
                 req[0] = 0
                 profile[:] = [Profile()]
     return request_profiling_handler
