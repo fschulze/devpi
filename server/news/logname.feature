@@ -1,0 +1,1 @@
+Add name of logger to log output to make it easier to customize logging options.

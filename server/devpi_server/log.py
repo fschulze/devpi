@@ -23,7 +23,7 @@ def _configure_logging(config_args: argparse.Namespace) -> None:
             logging.DEBUG
             if getattr(config_args, "debug", False) else
             logging.INFO),
-        format='%(asctime)s %(levelname)-5.5s %(message)s',
+        format='%(asctime)s %(levelname)-5.5s %(name)s %(message)s',
         stream=sys.stdout)
     requests_log = logging.getLogger("requests.packages.urllib3")
     requests_log.setLevel(logging.ERROR)
