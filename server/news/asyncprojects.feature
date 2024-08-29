@@ -1,0 +1,1 @@
+Fetch projects list on mirrors asynchronously to allow update in background even after a timeout.

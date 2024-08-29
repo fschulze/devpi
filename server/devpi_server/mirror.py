@@ -616,44 +616,63 @@ class MirrorStage(BaseStage):
         return self.xom.setdefault_singleton(
             self.name, "project_retrieve_times", factory=ProjectUpdateCache)
 
-    def _get_remote_projects(self):
+    async def _get_remote_projects(self, projects_future: asyncio.Future) -> None:
         headers = {"Accept": SIMPLE_API_ACCEPT}
         etag = self.cache_projectnames.get_etag()
         if etag is not None:
             headers["If-None-Match"] = etag
-        response = self.httpget(
+        threadlog.debug("fetching remote projects from %r with etag %r", self.mirror_url, etag)
+        (response, text) = await self.async_httpget(
             self.mirror_url_without_auth, allow_redirects=True,
-            extra_headers=headers, timeout=self.projects_timeout)
+            extra_headers=headers)
         if response.status_code == 304:
-            return (self.cache_projectnames.get(), etag)
-        elif response.status_code != 200:
+            raise self.UpstreamNotModified(
+                f"{response.status_code} status on GET {self.mirror_url!r}",
+                etag=etag)
+        if response.status_code != 200:
             raise self.UpstreamError(
                 "URL %r returned %s %s",
                 self.mirror_url, response.status_code, response.reason)
         parser: ProjectHTMLParser | ProjectJSONv1Parser
         if response.headers.get('content-type') == SIMPLE_API_V1_JSON:
             parser = ProjectJSONv1Parser(response.url)
-            parser.feed(response.json())
+            parser.feed(json.loads(text))
         else:
             parser = ProjectHTMLParser(response.url)
-            parser.feed(response.text)
-        return (
+            parser.feed(text)
+        projects_future.set_result((
             {normalize_name(x) for x in parser.projects},
-            response.headers.get("ETag"))
+            response.headers.get("ETag")))
 
     def _stale_list_projects_perstage(self):
         return {
             v for k, v in self.key_projectname.iter_ulidkey_values(fill_cache=False)}
 
     def _update_projects(self):
+        projects_future = self.xom.create_future()
         try:
-            (projects, etag) = self._get_remote_projects()
+            self.xom.run_coroutine_threadsafe(
+                self._get_remote_projects(projects_future),
+                timeout=self.projects_timeout)
+        except asyncio.TimeoutError:
+            threadlog.warn(
+                "serving stale projects for %r, getting data timed out after %s seconds",
+                self.index, self.projects_timeout)
+            return self._stale_list_projects_perstage()
+        except self.UpstreamNotModified as e:
+            # the etag might have changed
+            self.cache_projectnames.mark_current(e.etag)
+            return self._stale_list_projects_perstage()
         except self.UpstreamError as e:
             threadlog.warn(
-                "upstream error (%s): using stale projects list" % e)
+                "upstream error (%s): using stale projects list", e)
             return self._stale_list_projects_perstage()
+        (projects, etag) = projects_future.result()
         old = self.cache_projectnames.get()
-        if not self.cache_projectnames.exists() or old != projects:
+        if self.cache_projectnames.exists() and old == projects:
+            # mark current without updating contents
+            self.cache_projectnames.mark_current(etag)
+        else:
             self.cache_projectnames.set(projects, etag)
 
             # trigger an initial-load event on primary
@@ -669,9 +688,6 @@ class MirrorStage(BaseStage):
                 if k.get() in (0, 1):
                     with self.keyfs.write_transaction(allow_restart=True):
                         k.set(2)
-        else:
-            # mark current without updating contents
-            self.cache_projectnames.mark_current(etag)
         return projects
 
     def _list_projects_perstage(self):
@@ -1064,6 +1080,7 @@ class MirrorStage(BaseStage):
             if project in self._stale_list_projects_perstage():
                 return True
             return unknown
+        # recheck full project list while abiding to expiration etc
         # use the internal method to avoid a copy
         return project in self._list_projects_perstage()
 
