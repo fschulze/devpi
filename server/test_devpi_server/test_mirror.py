@@ -509,7 +509,8 @@ class TestExtPYPIDB:
         recs = caplog.getrecords("serving stale.*pytest.*")
         assert len(recs) >= 1
 
-    def test_basic_auth_mirror(self, pypistage):
+    @pytest.mark.asyncio
+    async def test_basic_auth_mirror(self, pypistage):
         pypistage.ixconfig["mirror_url"] = "https://foo:bar@example.com/simple/"
         pypistage.xom.httpget.mockresponse(
             pypistage.mirror_url_without_auth, code=200, text="""
@@ -518,8 +519,9 @@ class TestExtPYPIDB:
             <body>
                 <a href="https://example.com/simple/pkg">Pkg</a><br/>
             </body></html>""")
-        assert pypistage._get_remote_projects() == (
-            {normalize_name('Pkg')}, None)
+        projects_future = pypistage.xom.create_future()
+        await pypistage._get_remote_projects(projects_future)
+        assert projects_future.result() == ({normalize_name('Pkg')}, None)
 
     def test_pypi_mirror_redirect_to_canonical_issue139(self, pypistage):
         # GET https://pypi.org/simple/Hello_World
@@ -684,7 +686,8 @@ class TestExtPYPIDB:
 
 
 class TestMirrorStageprojects:
-    def test_get_remote_projects(self, pypistage):
+    @pytest.mark.asyncio
+    async def test_get_remote_projects(self, pypistage):
         pypistage.xom.httpget.mockresponse(
             pypistage.mirror_url, code=200, text="""
             <html><head><title>Simple Index</title>
@@ -694,7 +697,9 @@ class TestMirrorStageprojects:
                 <a href='django'>Django</a><br/>
                 <a href='ploy-ansible/'>ploy_ansible</a><br/>
             </body></html>""")
-        (projects, etag) = pypistage._get_remote_projects()
+        projects_future = pypistage.xom.create_future()
+        await pypistage._get_remote_projects(projects_future)
+        (projects, etag) = projects_future.result()
         assert projects == {
             normalize_name("ploy_ansible"),
             normalize_name("devpi-server"),
@@ -705,7 +710,8 @@ class TestMirrorStageprojects:
             "devpi-server": "devpi-server",
             "django": "Django"}
 
-    def test_get_remote_projects_pep691_json(self, pypistage):
+    @pytest.mark.asyncio
+    async def test_get_remote_projects_pep691_json(self, pypistage):
         pypistage.xom.httpget.mockresponse(
             pypistage.mirror_url, code=200,
             content_type="application/vnd.pypi.simple.v1+json",
@@ -716,7 +722,9 @@ class TestMirrorStageprojects:
                     {"name": "Django"},
                     {"name": "ploy_ansible"}
                 ]}""")
-        (projects, etag) = pypistage._get_remote_projects()
+        projects_future = pypistage.xom.create_future()
+        await pypistage._get_remote_projects(projects_future)
+        (projects, etag) = projects_future.result()
         assert projects == {
             normalize_name("ploy_ansible"),
             normalize_name("devpi-server"),
@@ -727,7 +735,8 @@ class TestMirrorStageprojects:
             "devpi-server": "devpi-server",
             "django": "Django"}
 
-    def test_get_remote_projects_doctype(self, pypistage):
+    @pytest.mark.asyncio
+    async def test_get_remote_projects_doctype(self, pypistage):
         pypistage.xom.httpget.mockresponse(
             pypistage.mirror_url, code=200, text="""
             <!DOCTYPE html>
@@ -736,10 +745,13 @@ class TestMirrorStageprojects:
             <body>
                 <a href='devpi-server'>devpi-server</a><br/>
             </body></html>""")
-        (projects, etag) = pypistage._get_remote_projects()
+        projects_future = pypistage.xom.create_future()
+        await pypistage._get_remote_projects(projects_future)
+        (projects, etag) = projects_future.result()
         assert projects == {normalize_name("devpi-server")}
 
-    def test_get_remote_projects_etag(self, pypistage):
+    @pytest.mark.asyncio
+    async def test_get_remote_projects_etag(self, pypistage):
         orig_etag = '"foo"'
         changed_etag = '"bar"'
         pypistage.xom.httpget.add(
@@ -763,8 +775,10 @@ class TestMirrorStageprojects:
                 <a href='django'>Django</a><br/>
                 <a href='ploy/'>ploy</a><br/>
             </body></html>""", headers={"ETag": changed_etag})
-        (projects, etag) = pypistage._get_remote_projects()
-        pypistage.cache_projectnames.set(projects, etag)
+        projects_future = pypistage.xom.create_future()
+        await pypistage._get_remote_projects(projects_future)
+        (projects, etag) = projects_future.result()
+        pypistage.cache_projectnames.mark_current(etag)
         assert etag == orig_etag
         assert projects == {
             normalize_name("ploy_ansible"),
@@ -772,17 +786,17 @@ class TestMirrorStageprojects:
             normalize_name("Django")}
         call = pypistage.xom.httpget.call_log.pop()
         assert 'If-None-Match' not in call['extra_headers']
-        (projects, etag) = pypistage._get_remote_projects()
-        pypistage.cache_projectnames.set(projects, etag)
+        projects_future = pypistage.xom.create_future()
+        with pytest.raises(pypistage.UpstreamNotModified) as e:
+            await pypistage._get_remote_projects(projects_future)
+        pypistage.cache_projectnames.mark_current(e.value.etag)
         assert etag == orig_etag
-        assert projects == {
-            normalize_name("ploy_ansible"),
-            normalize_name("devpi-server"),
-            normalize_name("Django")}
         call = pypistage.xom.httpget.call_log.pop()
         assert call['extra_headers']['If-None-Match'] == orig_etag
-        (projects, etag) = pypistage._get_remote_projects()
-        pypistage.cache_projectnames.set(projects, etag)
+        projects_future = pypistage.xom.create_future()
+        await pypistage._get_remote_projects(projects_future)
+        (projects, etag) = projects_future.result()
+        pypistage.cache_projectnames.mark_current(etag)
         assert etag == changed_etag
         assert projects == {
             normalize_name("ploy"),
