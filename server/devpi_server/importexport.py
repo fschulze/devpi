@@ -257,7 +257,7 @@ class IndexDump:
 
     def dump_releasefiles(self, linkstore):
         for link in linkstore.get_links(rel="releasefile"):
-            entry = self.exporter.filestore.get_file_entry(link.entrypath)
+            entry = self.exporter.filestore.get_file_entry(link.relpath)
             if not entry.last_modified:
                 continue
             if not entry.file_exists():
@@ -284,7 +284,7 @@ class IndexDump:
                               relpath=relpath,
                               version=linkstore.version,
                               entrymapping=tox_link.entry.meta,
-                              for_entrypath=reflink.entrypath,
+                              for_entrypath=reflink.relpath,
                               log=tox_link.get_logs())
 
     def add_filedesc(self, type, project, relpath, **kw):
