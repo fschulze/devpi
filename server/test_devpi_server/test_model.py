@@ -131,20 +131,20 @@ def test_get_mirror_whitelist_info_private_package(mapp, monkeypatch, testapp):
     with mapp.xom.keyfs.read_transaction():
         with monkeypatch.context() as m:
             # make sure we get an error if data is fetched
-            m.setattr(mapp.xom, 'httpget', None)
+            m.setattr(mapp.xom.http, 'get', None)
             stage = mapp.xom.model.getstage(api.stagename)
             info = stage.get_mirror_whitelist_info("pkg1")
             assert info['has_mirror_base'] is unknown
             assert info['blocked_by_mirror_whitelist'] == "root/pypi"
     mapp.use("root/pypi")
-    mapp.xom.httpget.mockresponse(
+    mapp.xom.http.mockresponse(
         "https://pypi.org/simple/", text='<a href="pkg1"></a>')
-    mapp.xom.httpget.mock_simple("pkg1", text="")
+    mapp.xom.http.mock_simple("pkg1", text="")
     mapp.get_simple("pkg1")
     with mapp.xom.keyfs.read_transaction():
         with monkeypatch.context() as m:
             # make sure we get an error if data is fetched
-            m.setattr(mapp.xom, 'httpget', None)
+            m.setattr(mapp.xom.http, 'get', None)
             pypistage = mapp.xom.model.getstage("root/pypi")
             # expire the project data, otherwise we wouldn't fetch data
             # by accident
