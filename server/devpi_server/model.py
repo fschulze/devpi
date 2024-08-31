@@ -1271,7 +1271,8 @@ class PrivateStage(BaseStage):
         if self.customizer.readonly:
             raise ReadonlyIndex("index is marked read only")
         metadata = {k: v for k, v in metadata.items() if not k.startswith('+')}
-        validate_metadata(metadata)
+        # use a copy, as validate_metadata actually removes metadata_version
+        validate_metadata(dict(metadata))
         self._set_versiondata(metadata)
 
     def key_doczip(self, project, version=None):

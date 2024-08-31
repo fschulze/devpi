@@ -137,6 +137,12 @@ class HTTPClient:
         else:
             return resp
 
+    def post(self, url: str, *, data: dict | None = None, files: dict | None = None, extra_headers: dict | None = None) -> Response:
+        headers = {}
+        if extra_headers:
+            headers.update(extra_headers)
+        return self.session.post(url, data=data, files=files, headers=headers)
+
 
 class OfflineHTTPClient:
     def close(self) -> None:
