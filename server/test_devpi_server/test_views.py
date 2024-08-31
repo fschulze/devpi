@@ -1754,7 +1754,7 @@ def test_upload_to_mirror_fails(mapp, simpypi):
 
 
 @pytest.mark.nomocking
-def test_delete_mirror(mapp, simpypi, testapp, xom):
+def test_delete_mirror(mapp, monkeypatch, simpypi, testapp, xom):
     indexconfig = dict(
         type="mirror",
         mirror_url=simpypi.simpleurl,
@@ -1785,12 +1785,12 @@ def test_delete_mirror(mapp, simpypi, testapp, xom):
         assert not getentry(testapp, path).key.exists()
 
     # patch async_httpget to simulate broken PyPI
-    async def async_httpget(url, **kwargs):
+    async def async_httpget(url, **kwargs):  # noqa: ARG001 - testing
         class Response:
             status_code = 503
             reason = "Service Unavailable"
         return (Response(), None)
-    xom.async_httpget = async_httpget
+    monkeypatch.setattr(xom, "async_httpget", async_httpget)
 
     # to prove that all metadata is gone when deleting the stage,
     # we recreate the stage, block access to PyPI
