@@ -14,7 +14,7 @@ from devpi_server.config import hookimpl
 from devpi_server.filestore import FileEntry
 from devpi_server.filestore import get_hashes
 from devpi_server.filestore import make_splitdir
-from devpi_server.views import tween_keyfs_transaction, make_uuid_headers
+from devpi_server.views import tween_keyfs_transaction
 from devpi_server.mirror import parse_index
 from io import BytesIO
 from .functional import TestIndexThings  # noqa: F401
@@ -117,17 +117,6 @@ def test_user_patch_trailing_slash(testapp):
     testapp.patch_json("/foo/", dict(description="bar"))
     r = testapp.get("/foo")
     assert r.json['result']['description'] == 'bar'
-
-
-@pytest.mark.parametrize("nodeinfo,expected", [
-    ({}, (None, None)),
-    ({"uuid": "123", "role": "primary"}, ("123", "123")),
-    ({"uuid": "123", "role": "replica"}, ("123", "")),
-    ({"uuid": "123", "primary-uuid": "456", "role": "replica"}, ("123", "456")),
-])
-def test_make_uuid_headers(nodeinfo, expected):
-    output = make_uuid_headers(nodeinfo)
-    assert output == expected
 
 
 def test_simple_project(pypistage, testapp):
