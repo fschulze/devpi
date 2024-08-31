@@ -26,7 +26,7 @@ def patch_reqsessionmock(monkeypatch):
         def get_adapter(self, url):
             return MockAdapter(mr, url)
 
-        monkeypatch.setattr(session, "get_adapter", get_adapter.__get__(session))
+        monkeypatch.setattr(session.session, "get_adapter", get_adapter.__get__(session))
         return mr
     return patch_reqsessionmock
 

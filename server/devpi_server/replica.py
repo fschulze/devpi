@@ -380,7 +380,7 @@ class ReplicaThread:
         self.update_from_primary_at = None
         # set whenever the primary serial and current replication serial match
         self.replica_in_sync_at = None
-        self.session = self.xom.new_http_session("replica")
+        self.session = self.xom.new_http_client("replica")
         self.initial_fetch = True
 
     @cached_property
@@ -438,10 +438,9 @@ class ReplicaThread:
             r = self.session.get(
                 url,
                 allow_redirects=False,
-                headers=headers,
-                stream=self.use_streaming,
+                extra_headers=headers,
                 timeout=self.REPLICA_REQUEST_TIMEOUT)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             msg = ''.join(traceback.format_exception_only(e.__class__, e)).strip()
             log.error("error fetching %s: %s", url, msg)  # noqa: TRY400
             return False
@@ -857,7 +856,7 @@ class FileReplicationThread:
     def __init__(self, xom, shared_data):
         self.xom = xom
         self.shared_data = shared_data
-        self.session = self.xom.new_http_session("replica")
+        self.session = self.xom.new_http_client("replica")
         self.file_search_path: str | None = None
         if self.xom.config.replica_file_search_path is not None:
             search_path = os.path.join(
@@ -963,11 +962,10 @@ class FileReplicationThread:
         token = self.auth_serializer.dumps(self.uuid)
         r = session.get(
             url, allow_redirects=False,
-            headers={
+            extra_headers={
                 H_REPLICA_FILEREPL: "YES",
                 H_REPLICA_UUID: self.uuid,
-                'Authorization': 'Bearer %s' % token},
-            stream=True,
+                'Authorization': f'Bearer {token}'},
             timeout=self.xom.config.args.request_timeout)
         if r.status_code == 302:
             r.close()
@@ -1025,7 +1023,7 @@ class FileReplicationThread:
                 for _chunk in file_streamer:
                     # we only need the data to be written to the file
                     pass
-            except Exception as err:
+            except Exception as err:  # noqa: BLE001
                 if isinstance(err, ChecksumError):
                     threadlog.error(
                         "checksum mismatch for '%s', will be retried later: %s",
@@ -1092,7 +1090,7 @@ class FileReplicationThread:
                 self.tick()
             except mythread.Shutdown:
                 raise
-            except Exception:
+            except Exception:  # noqa: BLE001
                 threadlog.exception(
                     "Unhandled exception in file replication thread.")
                 self.thread.sleep(1.0)
@@ -1226,7 +1224,7 @@ def proxy_request_to_primary(xom, request, *, stream=False):
         .replace(query=request_url.query)
         .url)
     assert url.startswith(primary_url.url)
-    http = xom._httpsession
+    http = xom._http.session
     with threadlog.around("info", "relaying: %s %s", request.method, url):
         try:
             headers = clean_request_headers(request)
