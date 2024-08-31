@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import contextlib
 import os
 import re
 from time import time
@@ -35,7 +34,6 @@ from pyramid.view import view_config
 from urllib.parse import urlparse
 import itertools
 import json
-from devpi_common.request import new_requests_session
 from devpi_common.validation import is_valid_archive_name
 
 from .config import hookimpl
@@ -1061,39 +1059,38 @@ class PyPIView:
     def _push_external(self, name, version, links, metadata, pushdata):
         results: list = []
         posturl = pushdata["posturl"]
-        pypiauth = (pushdata["username"], pushdata["password"])
+        pypiauth = f'{pushdata["username"]}:{pushdata["password"]}'.encode()
+        extra_headers = {"Authorization": f"Basic {b64encode(pypiauth).decode()}"}
         # prepare metadata for submission
         metadata[":action"] = "submit"
         metadata["metadata_version"] = "2.1"
         self.log.info("registering %s %s to %s", name, version, posturl)
-        session = new_requests_session(agent=("server", server_version))
-        with contextlib.closing(session):
-            try:
-                r = session.post(posturl, data=metadata, auth=pypiauth)
-                r.close()
-            except Exception as e:  # noqa: BLE001
-                exc_msg = lazy_format_exception_only(e)
-                results.append((-1, "exception on register:", str(exc_msg)))
-                return apiresult(502, result=results, type="actionlog")
-            self.log.debug("register returned: %s", r.status_code)
-            results.append((r.status_code, "register", name, version))
-            ok_codes = (200, 201, 410)
-            proceed = (r.status_code in ok_codes)
-            if proceed:
-                for link in links["releasefile"]:
-                    results.extend(
-                        self._push_external_release(
-                            link, metadata, session, posturl, pypiauth))
-                if doczip_link := next(iter(links.get("doczip", ())), None):
-                    results.extend(
-                        self._push_external_doczip(
-                            doczip_link, metadata, session, posturl, pypiauth))
-            return (
-                apiresult(200, result=results, type="actionlog")
-                if r.status_code in ok_codes else
-                apiresult(502, result=results, type="actionlog"))
+        try:
+            r = self.xom.http.post(posturl, data=metadata, extra_headers=extra_headers)
+            r.close()
+        except Exception as e:  # noqa: BLE001
+            exc_msg = lazy_format_exception_only(e)
+            results.append((-1, "exception on register:", str(exc_msg)))
+            return apiresult(502, result=results, type="actionlog")
+        self.log.debug("register returned: %s", r.status_code)
+        results.append((r.status_code, "register", name, version))
+        ok_codes = (200, 201, 410)
+        proceed = (r.status_code in ok_codes)
+        if proceed:
+            for link in links["releasefile"]:
+                results.extend(
+                    self._push_external_release(
+                        link, metadata, posturl, extra_headers))
+            if doczip_link := next(iter(links.get("doczip", ())), None):
+                results.extend(
+                    self._push_external_doczip(
+                        doczip_link, metadata, posturl, extra_headers))
+        return (
+            apiresult(200, result=results, type="actionlog")
+            if r.status_code in ok_codes else
+            apiresult(502, result=results, type="actionlog"))
 
-    def _push_external_release(self, link, metadata, session, posturl, pypiauth):
+    def _push_external_release(self, link, metadata, posturl, extra_headers):
         results: list = []
         entry = link.entry
         file_metadata = metadata.copy()
@@ -1108,8 +1105,8 @@ class PyPIView:
             "sending %s to %s, metadata %s",
             basename, posturl, file_metadata)
         try:
-            r = session.post(
-                posturl, data=file_metadata, auth=pypiauth,
+            r = self.xom.http.post(
+                posturl, data=file_metadata, extra_headers=extra_headers,
                 files={"content": (basename, content)})
         except Exception as e:  # noqa: BLE001
             exc_msg = lazy_format_exception_only(e)
@@ -1123,15 +1120,15 @@ class PyPIView:
         r.close()
         return results
 
-    def _push_external_doczip(self, link, metadata, session, posturl, pypiauth):
+    def _push_external_doczip(self, link, metadata, posturl, extra_headers):
         results: list = []
         doc_metadata = metadata.copy()
         doc_metadata[":action"] = "doc_upload"
         name = doc_metadata["name"]
         doczip = link.entry.file_get_content()
         try:
-            r = session.post(
-                posturl, data=doc_metadata, auth=pypiauth,
+            r = self.xom.http.post(
+                posturl, data=doc_metadata, extra_headers=extra_headers,
                 files={"content": (f"{name}.zip", doczip)})
             r.close()
         except Exception as e:  # noqa: BLE001

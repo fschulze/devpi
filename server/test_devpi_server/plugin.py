@@ -398,6 +398,9 @@ def http(pypiurls):
         def get(self, url, *, allow_redirects, timeout=None, extra_headers=None):
             return self.__call__(url, allow_redirects=allow_redirects, extra_headers=extra_headers, timeout=timeout)
 
+        def post(self, url, *, data=None, files=None, extra_headers=None):
+            return self.__call__(url, data=data, files=files, extra_headers=extra_headers)
+
         def __call__(self, url, *, allow_redirects=False, extra_headers=None, **kw):
             class mockresponse:
                 def __init__(xself, url):
@@ -413,6 +416,9 @@ def http(pypiurls):
                         fakeresponse = dict(
                             status_code=404,
                             reason="Not Found")
+                    if "exception" in fakeresponse:
+                        assert set(fakeresponse.keys()) == {"exception"}
+                        raise fakeresponse["exception"]
                     fakeresponse["headers"] = requests.structures.CaseInsensitiveDict(
                         fakeresponse.setdefault("headers", {}))
                     xself.__dict__.update(fakeresponse)
@@ -457,6 +463,8 @@ def http(pypiurls):
             return r
 
         def _prepare_kw(self, kw):
+            if "exception" in kw:
+                return
             kw.setdefault("status_code", kw.pop("code", 200))
             kw.setdefault("reason", getattr(
                 status_map.get(kw["status_code"]),
