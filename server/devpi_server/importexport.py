@@ -638,9 +638,11 @@ class Importer:
             entry = link.entry
         else:
             msg = f"unknown file type: {type}"
+            f.close()
             raise Fatal(msg)
         if (msg := entry.validate(f)) is not None:
             msg = f"{p}: {msg}"
+            f.close()
             raise Fatal(msg)
         if link is not None:
             history_log = filedesc.get('log')
