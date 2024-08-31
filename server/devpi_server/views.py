@@ -201,7 +201,7 @@ def tween_request_logging(handler, registry):
             rheaders = response.headers
             serial = rheaders.get("X-DEVPI-SERIAL")
             rheaders.update(meta_headers)
-            uuid, primary_uuid = make_uuid_headers(nodeinfo)
+            uuid, primary_uuid = nodeinfo.make_uuid_headers()
             rheaders["X-DEVPI-UUID"] = uuid
             rheaders[H_PRIMARY_UUID] = primary_uuid
 
@@ -215,13 +215,6 @@ def tween_request_logging(handler, registry):
             thread_pop_log(tag)
         return response
     return request_log_handler
-
-
-def make_uuid_headers(nodeinfo):
-    uuid = primary_uuid = nodeinfo.get("uuid")
-    if uuid is not None and nodeinfo["role"] == "replica":
-        primary_uuid = nodeinfo.get("primary-uuid", "")
-    return uuid, primary_uuid
 
 
 def tween_keyfs_transaction(handler, registry):

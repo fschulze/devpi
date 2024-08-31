@@ -35,7 +35,6 @@ from .markers import deleted
 from .normalized import normalize_name
 from .views import FileStreamer
 from .views import H_PRIMARY_UUID
-from .views import make_uuid_headers
 from .model import UpstreamError
 from typing import TYPE_CHECKING
 
@@ -424,7 +423,7 @@ class ReplicaThread:
         log = self.log
         config = self.xom.config
         log.info("fetching %s", url)
-        uuid, primary_uuid = make_uuid_headers(config.nodeinfo)
+        uuid, primary_uuid = config.nodeinfo.make_uuid_headers()
         assert uuid != primary_uuid
         try:
             self.primary_contacted_at = time.time()
@@ -875,7 +874,7 @@ class FileReplicationThread:
                     f"{self.xom.config.replica_file_search_path}")
                 raise Fatal(msg)
         self.use_hard_links = self.xom.config.hard_links
-        self.uuid, primary_uuid = make_uuid_headers(xom.config.nodeinfo)
+        self.uuid, primary_uuid = xom.config.nodeinfo.make_uuid_headers()
         assert self.uuid != primary_uuid
 
     @cached_property
