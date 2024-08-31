@@ -40,7 +40,6 @@ extend-ignore = [
     "RET508", # maybe cleanup later - unnecessary else after break
     "RUF005", # cleanup later
     "RUF012", # cleanup later
-    "RUF100", # after soon to cleanup
     "RSE102", # maybe cleanup later
     "SIM102", # maybe cleanup later
     "SIM105", # cleanup soon
