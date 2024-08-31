@@ -754,8 +754,8 @@ class Config:
     def nodeinfo(self):
         if self.nodeinfo_path.is_file():
             with self.nodeinfo_path.open() as f:
-                return json.load(f)
-        return {}
+                return NodeInfo(json.load(f))
+        return NodeInfo({})
 
     def write_nodeinfo(self):
         nodeinfo_dir = self.nodeinfo_path.parent
@@ -1050,6 +1050,14 @@ class Config:
 
     def get_replica_secret(self):
         return self.get_derived_key(b'devpi-server-replica')
+
+
+class NodeInfo(dict):
+    def make_uuid_headers(self) -> tuple:
+        uuid = primary_uuid = self.get("uuid")
+        if uuid is not None and self["role"] == "replica":
+            primary_uuid = self.get("primary-uuid", "")
+        return (uuid, primary_uuid)
 
 
 def gensecret():
