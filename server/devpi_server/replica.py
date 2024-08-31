@@ -1215,7 +1215,7 @@ class BodyFileWrapper:
         self.len = length
 
 
-def proxy_request_to_primary(xom, request, *, stream=False):
+def proxy_request_to_primary(xom, request):
     primary_url = xom.config.primary_url
     request_url = URL(request.url)
     url = (
@@ -1224,7 +1224,7 @@ def proxy_request_to_primary(xom, request, *, stream=False):
         .replace(query=request_url.query)
         .url)
     assert url.startswith(primary_url.url)
-    http = xom._http.session
+    http = xom._http
     with threadlog.around("info", "relaying: %s %s", request.method, url):
         try:
             headers = clean_request_headers(request)
@@ -1238,7 +1238,7 @@ def proxy_request_to_primary(xom, request, *, stream=False):
             return http.request(request.method, url,
                                 data=body,
                                 headers=headers,
-                                stream=stream,
+                                stream=True,
                                 allow_redirects=False,
                                 timeout=xom.config.args.proxy_timeout)
         except http.Errors as e:
@@ -1250,7 +1250,7 @@ def proxy_write_to_primary(xom, request):
     """ relay modifying http requests to primary and wait until
     the change is replicated back.
     """
-    r = proxy_request_to_primary(xom, request, stream=True)
+    r = proxy_request_to_primary(xom, request)
     # for redirects, the body is already read and stored in the ``next``
     # attribute (see requests.sessions.send)
     if r.raw.closed and r.next:
@@ -1279,8 +1279,7 @@ def proxy_write_to_primary(xom, request):
 
 def proxy_view_to_primary(_context, request):
     xom = request.registry["xom"]
-    tx = getattr(xom.keyfs, "tx", None)
-    if getattr(tx, "write", False):
+    if (tx := getattr(xom.keyfs, "tx", None)) is not None and tx.write:
         raise RuntimeError("there should be no write transaction")
     return proxy_write_to_primary(xom, request)
 

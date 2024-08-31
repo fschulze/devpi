@@ -384,8 +384,12 @@ def http(pypiurls):
 
     class MockHTTPClient:
         def __init__(self):
+            import urllib3.exceptions
             self.url2response = {}
             self.call_log = []
+            self.Errors = (
+                requests.exceptions.RequestException,
+                urllib3.exceptions.HTTPError)
 
         async def async_get(self, url, *, allow_redirects, timeout=None, extra_headers=None):
             response = self.__call__(url, allow_redirects=allow_redirects, extra_headers=extra_headers, timeout=timeout)
@@ -400,6 +404,9 @@ def http(pypiurls):
 
         def post(self, url, *, data=None, files=None, extra_headers=None):
             return self.__call__(url, data=data, files=files, extra_headers=extra_headers)
+
+        def request(self, _method, url, *, data, headers, stream, allow_redirects, timeout):
+            return self.__call__(url, data=data, allow_redirects=allow_redirects, stream=stream, extra_headers=headers, timeout=timeout)
 
         def __call__(self, url, *, allow_redirects=False, extra_headers=None, **kw):
             class mockresponse:
@@ -427,6 +434,10 @@ def http(pypiurls):
                     xself.allow_redirects = allow_redirects
                     if "content" in fakeresponse:
                         xself.raw = BytesIO(fakeresponse["content"])
+
+                        def stream(self):
+                            yield self.read()
+                        xself.raw.stream = stream.__get__(xself.raw)
                     xself.headers.setdefault('content-type', fakeresponse.get(
                         'content_type', 'text/html'))
                     if "etag" in fakeresponse:
