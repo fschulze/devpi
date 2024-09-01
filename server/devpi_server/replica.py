@@ -25,7 +25,11 @@ from .exceptions import lazy_format_exception
 from .filestore import ChecksumError
 from .filestore import FileEntry
 from .fileutil import buffered_iterator
-from .fileutil import dumps, load, loads
+from .fileutil import dump_iter
+from .fileutil import dumplen
+from .fileutil import dumps
+from .fileutil import load
+from .fileutil import loads
 from .keyfs_types import KeyData
 from .keyfs_types import ULID
 from .log import thread_push_log, threadlog
@@ -285,9 +289,8 @@ class PrimaryChangelogRequest:
             raw_size = 0
             start_time = time.time()
             for serial in range(start_serial, devpi_serial + 1):
-                raw_entry = keyfs.tx.conn.get_raw_changelog_entry(serial)
-                raw_size += len(raw_entry)
-                (changes, rel_renames) = loads(raw_entry)
+                changes = list(keyfs.tx.conn.iter_serializable_changes(serial))
+                raw_size += dumplen(changes)
                 all_changes.append((serial, changes))
                 now = time.time()
                 if raw_size > self.MAX_REPLICA_CHANGES_SIZE:
@@ -312,12 +315,11 @@ class PrimaryChangelogRequest:
         threadlog.info("Streaming from %s to %s", start_serial, devpi_serial)
 
         def iter_changelog_entries():
-            for serial in range(start_serial, devpi_serial + 1):
-                with keyfs.get_connection() as conn:
-                    raw = conn.get_raw_changelog_entry(serial)
-                with self.update_replica_status(serial, streaming=True):
-                    yield dumps(serial)
-                    yield raw
+            with keyfs.get_connection() as conn:
+                for serial in range(start_serial, devpi_serial + 1):
+                    with self.update_replica_status(serial, streaming=True):
+                        yield dumps(serial)
+                        yield from dump_iter(conn.iter_serializable_changes(serial))
             # update status again when done
             with self.update_replica_status(devpi_serial + 1, streaming=False):
                 pass
@@ -527,7 +529,7 @@ class ReplicaThread:
                 try:
                     while True:
                         serial = load(stream)
-                        (changes, rel_renames) = load(stream)
+                        changes = load(stream)
                         self.xom.keyfs.import_changes(serial, self.get_changes(serial, changes))
                         self.update_primary_serial(serial, update_sync=False, ignore_lower=True)
                 except StopIteration:
