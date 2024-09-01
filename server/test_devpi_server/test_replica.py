@@ -181,7 +181,9 @@ class TestReplicaThread:
         return xom.replica_thread
 
     @pytest.fixture
-    def mockchangelog(self, reqmock):
+    def mockchangelog(self, makehttp, monkeypatch, rt):
+        monkeypatch.setattr(
+            rt, "http", makehttp())
         def mockchangelog(num, code, data=b'',
                           uuid="123", headers=None):
             if headers is None:
@@ -197,7 +199,7 @@ class TestReplicaThread:
                 url = url + '?initial_fetch'
             if isinstance(data, list):
                 data = dumps([(num, data)])
-            reqmock.mockresponse(url, code=code, data=data, headers=headers)
+            rt.http.mockresponse(url, code=code, content=data, headers=headers)
         return mockchangelog
 
     def test_thread_run_fail(self, rt, mockchangelog, caplog):
@@ -214,18 +216,19 @@ class TestReplicaThread:
             rt.thread_run()
         assert caplog.getrecords("could not process")
 
-    def test_thread_run_recovers_from_error(self, mock, rt, reqmock, mockchangelog, caplog, xom):
-        import socket
+    def test_thread_run_recovers_from_error(self, mock, rt, mockchangelog, monkeypatch, caplog, xom):
         # setup a regular request
         data = get_changelog_entry(xom, 0)
         mockchangelog(0, code=200, data=data)
         # get the result
-        orig_req = reqmock.url2reply[("http://localhost/+changelog/0?initial_fetch", None)]
+        orig_req = rt.http.url2response["http://localhost/+changelog/0-?initial_fetch"]
         # setup so the first attempt fails, then the second succeeds
-        reqmock.url2reply = mock.Mock()
-        reqmock.url2reply.get.side_effect = [socket.error(), orig_req]
-        rt.thread.sleep = mock.Mock()
-        rt.thread.sleep.side_effect = [
+        url2response = mock.Mock()
+        monkeypatch.setattr(rt.http, "url2response", url2response)
+        url2response.get.side_effect = [OSError(), orig_req]
+        sleep = mock.Mock()
+        monkeypatch.setattr(rt.thread, "sleep", sleep)
+        sleep.side_effect = [
             # 1. sleep
             0,
             # 2. raise exception to get into exception part of while loop
@@ -235,12 +238,13 @@ class TestReplicaThread:
         # run
         with pytest.raises(ZeroDivisionError):
             rt.thread_run()
-        msgs = [x.msg for x in caplog.getrecords(r".*http://localhost/\+changelog/0")]
+        msgs = [x.msg for x in caplog.getrecords(r"\[REP\].*http://localhost/\+changelog/0-")]
         assert msgs == [
             '[REP] fetching %s',
-            '[REP] OS error during http.get of %s at %s: %s',
-            '[REP] %s %s: failed fetching %s',
-            '[REP] fetching %s']
+            '[REP] error fetching %s: %s',
+            '[REP] fetching %s',
+            '[REP] returning %s',  # from MockHTTPClient.__call__
+        ]
 
     def test_thread_run_ok(self, rt, mockchangelog, caplog, xom):
         rt.thread.sleep = lambda *x: 0/0
@@ -473,7 +477,7 @@ def replay(xom, replica_xom, events=True):
 
 @pytest.fixture
 def make_replica_xom(makehttp, makexom, monkeypatch, secretfile):
-    def make_replica_xom(options=(), *, mock_frt_session=False):
+    def make_replica_xom(options=(), *, mock_frt_http=False):
         replica_xom = makexom([
             "--primary-url", "http://localhost",
             "--file-replication-threads", "1",
@@ -481,9 +485,9 @@ def make_replica_xom(makehttp, makexom, monkeypatch, secretfile):
         # shorten error delay for tests
         replica_xom.replica_thread.shared_data.ERROR_QUEUE_MAX_DELAY = 0.1
         (replica_xom.frt,) = replica_xom.replica_thread.file_replication_threads
-        if mock_frt_session:
+        if mock_frt_http:
             monkeypatch.setattr(
-                replica_xom.frt, "session", makehttp())
+                replica_xom.frt, "http", makehttp())
         replica_xom.thread_pool.start_one(replica_xom.frt)
         return replica_xom
     return make_replica_xom
@@ -596,8 +600,8 @@ class TestUseExistingFiles:
         # create the replica with the path to existing files
         replica_xom = make_replica_xom(
             options=['--replica-file-search-path', existing_base.strpath],
-            mock_frt_session=True)
-        replica_xom.frt.session.mockresponse(
+            mock_frt_http=True)
+        replica_xom.frt.http.mockresponse(
             f"http://localhost{path}", content=content1)
         # now sync the replica, if the file is not found there will be an error
         # because httpget is mocked
@@ -637,8 +641,8 @@ class TestUseExistingFiles:
             options=[
                 '--replica-file-search-path', existing_base.strpath,
                 '--hard-links'],
-            mock_frt_session=True)
-        replica_xom.frt.session.mockresponse(
+            mock_frt_http=True)
+        replica_xom.frt.http.mockresponse(
             f"http://localhost{path}", content=content1)
         # now sync the replica, if the file is not found there will be an error
         # because httpget is mocked
@@ -657,8 +661,8 @@ class TestUseExistingFiles:
 class TestFileReplication:
     @pytest.fixture
     def replica_xom(self, request, make_replica_xom):
-        mock_frt_session = bool(request.node.get_closest_marker("mock_frt_session"))
-        return make_replica_xom(mock_frt_session=mock_frt_session)
+        mock_frt_http = bool(request.node.get_closest_marker("mock_frt_http"))
+        return make_replica_xom(mock_frt_http=mock_frt_http)
 
     def test_no_set_default_indexes(self, replica_xom):
         assert replica_xom.keyfs.get_current_serial() == -1
@@ -684,7 +688,7 @@ class TestFileReplication:
             assert not replica_xom.model.get_user("world")
             assert replica_xom.model.get_user("hello")
 
-    @pytest.mark.mock_frt_session
+    @pytest.mark.mock_frt_http
     def test_fetch(self, gen, xom, replica_xom):
         replay(xom, replica_xom)
         content1 = b'hello'
@@ -708,7 +712,7 @@ class TestFileReplication:
         # first we try to return something wrong
         primary_url = replica_xom.config.primary_url
         primary_file_path = primary_url.joinpath(entry.relpath).url
-        replica_xom.frt.session.mockresponse(primary_file_path, content=b'13')
+        replica_xom.frt.http.mockresponse(primary_file_path, content=b'13')
         replay(xom, replica_xom, events=False)
         replica_xom.replica_thread.wait(error_queue=True)
         replication_errors = replica_xom.replica_thread.shared_data.errors
@@ -721,7 +725,7 @@ class TestFileReplication:
         with xom.keyfs.write_transaction():
             # trigger a change
             entry.last_modified = 'Fri, 09 Aug 2019 13:15:02 GMT'
-        replica_xom.frt.session.mockresponse(primary_file_path, content=content1)
+        replica_xom.frt.http.mockresponse(primary_file_path, content=content1)
         replay(xom, replica_xom)
         assert replication_errors.errors == {}
         with replica_xom.keyfs.read_transaction():
@@ -735,7 +739,6 @@ class TestFileReplication:
         with replica_xom.keyfs.read_transaction():
             assert not r_entry.file_exists()
 
-    @pytest.mark.usefixtures("reqmock")
     def test_fetch_later_deleted(self, gen, xom, replica_xom):
         replay(xom, replica_xom)
         content1 = b'hello'
@@ -770,7 +773,7 @@ class TestFileReplication:
             assert not r_entry.file_exists()
 
     @pytest.mark.slow
-    @pytest.mark.mock_frt_session
+    @pytest.mark.mock_frt_http
     def test_fetch_pypi_nomd5(self, gen, xom, replica_xom):
         (frthread,) = replica_xom.replica_thread.file_replication_threads
         replay(xom, replica_xom)
@@ -794,7 +797,7 @@ class TestFileReplication:
         primary_url = replica_xom.config.primary_url
         primary_file_path = primary_url.joinpath(entry.relpath).url
         # simulate some 500 primary server error
-        replica_xom.frt.session.mockresponse(
+        replica_xom.frt.http.mockresponse(
             primary_file_path, code=500, content=b'')
         with pytest.raises(MissingFileException, match="missing file .* at serial 2") as e:
             # the event handling will stop with an exception
@@ -810,7 +813,7 @@ class TestFileReplication:
             'root/pypi/+e/https_pypi.org_package_some/some-1.8.zip']
 
         # now get the real thing
-        replica_xom.frt.session.mockresponse(primary_file_path, content=content1)
+        replica_xom.frt.http.mockresponse(primary_file_path, content=content1)
         # wait for the error queue to clear
         replica_xom.replica_thread.wait(error_queue=True)
         # there should be no errors anymore
@@ -824,7 +827,6 @@ class TestFileReplication:
         # event handling has continued
         assert replica_xom.keyfs.notifier.read_event_serial() == replica_xom.keyfs.get_current_serial()
 
-    @pytest.mark.usefixtures("reqmock")
     def test_cache_remote_file_fails(self, xom, replica_xom, gen,
                                      pypistage, monkeypatch):
         from devpi_server.filestore import BadGateway
@@ -847,7 +849,6 @@ class TestFileReplication:
             e.match('received 500 from primary')
             e.match('pypi.org/package/some/pytest-1.8.zip: received 404')
 
-    @pytest.mark.usefixtures("reqmock")
     def test_cache_remote_file_fetch_original(self, xom, replica_xom, gen,
                                               pypistage, monkeypatch):
         l = []
@@ -885,7 +886,7 @@ class TestFileReplication:
             assert headers['content-length'] == '3'
             assert b''.join(result) == content
 
-    @pytest.mark.mock_frt_session
+    @pytest.mark.mock_frt_http
     def test_checksum_mismatch(self, file_digest, xom, replica_xom, maketestapp, makemapp):
         # this test might seem to be doing the same as test_fetch above, but
         # test_fetch creates a new transaction for the same file, which doesn't
@@ -902,7 +903,7 @@ class TestFileReplication:
         (path,) = mapp.get_release_paths('hello')
         file_path_info = FilePathInfo(f"+files{path}", file_digest(content1))
         primary_file_url = primary_url.joinpath(path).url
-        replica_xom.frt.session.mockresponse(primary_file_url, content=b'13')
+        replica_xom.frt.http.mockresponse(primary_file_url, content=b'13')
         replay(xom, replica_xom, events=False)
         replica_xom.replica_thread.wait()
         assert xom.keyfs.get_current_serial() == replica_xom.keyfs.get_current_serial()
