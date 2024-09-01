@@ -754,6 +754,10 @@ class Config:
         return getattr(self.args, 'offline_mode', False)
 
     @property
+    def outside_url(self):
+        return getattr(self.args, 'outside_url', None)
+
+    @property
     def file_replication_threads(self):
         return getattr(
             self.args,
