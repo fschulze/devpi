@@ -464,20 +464,21 @@ class ReplicaThread:
         log = self.log
         config = self.xom.config
         log.info("fetching %s", url)
-        try:
-            self.primary_contacted_at = time.time()
-            headers = {"Accept": REPLICA_ACCEPT_STREAMING} if self.use_streaming else {}
-            r = self.http.get(
-                url,
-                allow_redirects=False,
-                extra_headers=headers,
-                timeout=self.REPLICA_REQUEST_TIMEOUT)
-        except Exception as e:  # noqa: BLE001
-            msg = ''.join(traceback.format_exception_only(e.__class__, e)).strip()
-            log.error("error fetching %s: %s", url, msg)  # noqa: TRY400
-            return False
 
-        with contextlib.closing(r):
+        with contextlib.ExitStack() as cstack:
+            try:
+                self.primary_contacted_at = time.time()
+                headers = {"Accept": REPLICA_ACCEPT_STREAMING} if self.use_streaming else {}
+                r = self.http.stream(
+                    cstack, "GET", url,
+                    allow_redirects=False,
+                    extra_headers=headers,
+                    timeout=self.REPLICA_REQUEST_TIMEOUT)
+            except Exception as e:  # noqa: BLE001
+                msg = ''.join(traceback.format_exception_only(e.__class__, e)).strip()
+                log.error("error fetching %s: %s", url, msg)  # noqa: TRY400
+                return False
+
             if r.status_code in (301, 302):
                 log.error(
                     "%s %s: redirect detected at %s to %s",
@@ -551,7 +552,7 @@ class ReplicaThread:
         if response.headers.get("content-type", "") == REPLICA_CONTENT_TYPE:
             with contextlib.closing(response):
                 readableiterable = ReadableIterabel(
-                    response.iter_content(chunk_size=None))
+                    response.iter_bytes(65536))
                 stream = io.BufferedReader(readableiterable, buffer_size=65536)
                 try:
                     while True:
