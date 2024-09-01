@@ -99,7 +99,17 @@ class TestStreaming(object):
         ("size_factor", "pkg_version", "pkg_name"),
         [(2, "1.2", "pkg3"), (0.5, "1.3", "pkg4")],
     )
-    def test_streaming_differing_content_size(self, content_digest, files_path, pkg_version, pkg_name, server_url_session, simpypi, size_factor, storage_info):
+    def test_streaming_differing_content_size(
+        self,
+        content_digest,
+        files_path,
+        pkg_version,
+        pkg_name,
+        server_url_session,
+        simpypi,
+        size_factor,
+        storage_info,
+    ):
         from requests.exceptions import ChunkedEncodingError
 
         if not storage_info.storage_with_filesystem:
