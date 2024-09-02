@@ -254,18 +254,13 @@ def test_offline_mode_httpget_returns_server_error(makexom, url, allowRedirect):
 def test_request_args_timeout_handover(makexom, monkeypatch, input_set):
     import contextlib
 
-    def http_request(*_args, **kwargs):
-        assert kwargs["timeout"] == input_set['timeout']
-
     @contextlib.contextmanager
     def http_stream(*_args, **kwargs):
         assert kwargs["timeout"] == input_set['timeout']
         yield
     xom = makexom(input_set['arg'])
-    monkeypatch.setattr(xom.http.session, "request", http_request)
     monkeypatch.setattr(xom.http.client, "stream", http_stream)
 
-    xom.http.request("GET", "http://whatever", data=b'', headers={}, stream=False, allow_redirects=False, timeout=input_set['kwarg'])
     with contextlib.ExitStack() as cstack:
         xom.http.stream(cstack, "GET", "http://whatever", allow_redirects=False, timeout=input_set['kwarg'])
 
