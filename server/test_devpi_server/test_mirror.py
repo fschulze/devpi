@@ -1,5 +1,4 @@
 import httpx
-import requests.exceptions
 import time
 import hashlib
 import pytest
@@ -1054,12 +1053,9 @@ class TestMirrorStageprojects:
             assert pypistage.name not in pypistage.xom._stagecache
 
 
-def raise_ValueError():
-    raise ValueError(42)
-
-
 @pytest.mark.nomocking
 def test_requests_httpget_negative_status_code(xom, monkeypatch):
+    import requests.exceptions
     l = []
 
     def r(*_a, **_k):
@@ -1070,27 +1066,36 @@ def test_requests_httpget_negative_status_code(xom, monkeypatch):
 
 
 @pytest.mark.nomocking
-def test_requests_httpget_timeout(xom, monkeypatch):
-    def httpget(_url, **kw):
-        assert kw["timeout"] == 1.2
-        raise requests.exceptions.Timeout
+def test_http_timeout(xom, monkeypatch):
+    import contextlib
 
-    monkeypatch.setattr(xom.http.session, "get", httpget)
-    r = xom.httpget(
-        "http://notexists.qwe", allow_redirects=False, timeout=1.2)
+    @contextlib.contextmanager
+    def http_stream(*_args, **kw):
+        assert kw["timeout"] == 1.2
+        raise httpx.ConnectTimeout(message="foo")
+
+    monkeypatch.setattr(xom.http.client, "stream", http_stream)
+    with contextlib.ExitStack() as cstack:
+        r = xom.http.stream(
+            cstack, "GET", "http://notexists.qwe", allow_redirects=False, timeout=1.2)
     assert r.status_code == -1
 
 
 @pytest.mark.nomocking
 @pytest.mark.parametrize("exc", [
-    OSError,
-    requests.exceptions.ConnectionError])
-def test_requests_httpget_error(exc, xom, monkeypatch):
-    def httpget(_url, **_kw):
-        raise exc()
+    OSError(),
+    httpx.HTTPError(message="fail")])
+def test_http_error(exc, xom, monkeypatch):
+    import contextlib
 
-    monkeypatch.setattr(xom.http.session, "get", httpget)
-    r = xom.httpget("http://notexists.qwe", allow_redirects=False)
+    @contextlib.contextmanager
+    def http_stream(*_args, **_kw):
+        raise exc
+
+    monkeypatch.setattr(xom.http.client, "stream", http_stream)
+    with contextlib.ExitStack() as cstack:
+        r = xom.http.stream(
+            cstack, "GET", "http://notexists.qwe", allow_redirects=False)
     assert r.status_code == -1
 
 

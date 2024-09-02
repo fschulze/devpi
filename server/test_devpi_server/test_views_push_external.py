@@ -69,7 +69,7 @@ def test_upload_and_push_external(mapp, testapp):
 
 
 def test_upload_and_push_external_exception(mapp, testapp):
-    import requests
+    import httpx
     api = mapp.create_and_use()
     mapp.upload_file_pypi("pkg1-2.6.tgz", b"123", "pkg1", "2.6")
 
@@ -78,7 +78,7 @@ def test_upload_and_push_external_exception(mapp, testapp):
     req = dict(name="pkg1", version="2.6", posturl=posturl,
                username="user", password="password")
     body = json.dumps(req).encode()
-    exc = requests.urllib3.exceptions.NewConnectionError(None, "")
+    exc = httpx.HTTPError("")
     mapp.xom.http.add(posturl, exception=exc)
     r = testapp.request(
         api.index, method="POST", body=body, expect_errors=True)
@@ -87,7 +87,7 @@ def test_upload_and_push_external_exception(mapp, testapp):
     assert len(r.json['result']) == 1
     assert r.json['result'][0][0] == -1
     assert r.json['result'][0][1] == 'exception on register:'
-    assert 'NewConnectionError' in r.json['result'][0][2]
+    assert 'HTTPError' in r.json['result'][0][2]
 
     # second test should fail during release upload
     mapp.xom.http.add(
@@ -106,7 +106,7 @@ def test_upload_and_push_external_exception(mapp, testapp):
     assert r.json['result'][0][1] == 'register'
     assert r.json['result'][1][0] == -1
     assert r.json['result'][1][1] == 'exception on release upload:'
-    assert 'NewConnectionError' in r.json['result'][1][2]
+    assert 'HTTPError' in r.json['result'][1][2]
 
 
 def test_upload_and_push_external_metadata12(mapp, testapp):
