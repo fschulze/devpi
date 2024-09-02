@@ -5,6 +5,7 @@ from .exceptions import lazy_format_exception_only
 from .log import threadlog
 from devpi_common.request import new_requests_session
 from devpi_common.types import cached_property
+from devpi_common.url import URL
 from requests import Response
 from requests import exceptions
 from requests.utils import DEFAULT_CA_BUNDLE_PATH
@@ -19,7 +20,7 @@ import sys
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
-    from devpi_common.url import URL
+    from contextlib import ExitStack
 
 
 def get_caller_location(stacklevel: int = 2) -> str:
@@ -55,10 +56,13 @@ class FatalResponse:
 
 
 class HTTPClient:
-    Errors = (exceptions.RequestException, HTTPError)
+    Errors = (exceptions.RequestException, HTTPError, httpx.HTTPError, httpx.StreamError)
 
     def __init__(self, *, component_name: str, timeout: int | None) -> None:
         self.headers = {'User-Agent': f'{component_name}/{server_version}'}
+        self.client = httpx.Client(
+            headers=self.headers,
+            verify=self._ssl_context)
         self.session = new_requests_session(
             agent=(component_name, server_version))
         self.timeout = timeout
@@ -107,6 +111,7 @@ class HTTPClient:
             return FatalResponse(url, repr(sys.exc_info()[1]))
 
     def close(self) -> None:
+        self.client.close()
         self.session.close()
 
     def get(self, url: str, *, allow_redirects: bool, timeout: int | None = None, extra_headers: dict | None = None) -> Response | FatalResponse:
@@ -150,6 +155,32 @@ class HTTPClient:
         return self.session.request(
             method, url, data=data, headers=headers, stream=stream, allow_redirects=allow_redirects, timeout=timeout or self.timeout)
 
+    def stream(self, cstack: ExitStack, method: str, url: URL | str, *, allow_redirects: bool, timeout: int | None = None, extra_headers: dict | None = None) -> httpx.Response | FatalResponse:
+        headers = {}
+        if extra_headers:
+            headers.update(extra_headers)
+        try:
+            gen = self.client.stream(
+                method, url.url if isinstance(url, URL) else url,
+                follow_redirects=allow_redirects,
+                headers=headers,
+                timeout=timeout or self.timeout)
+            resp = cstack.enter_context(gen)
+        except OSError as e:
+            location = get_caller_location()
+            threadlog.warn(
+                "OS error during http.stream of %s at %s: %s",
+                url, location, lazy_format_exception_only(e))
+            return FatalResponse(url, repr(sys.exc_info()[1]))
+        except self.Errors as e:
+            location = get_caller_location()
+            threadlog.warn(
+                "HTTPError during http.stream of %s at %s: %s",
+                url, location, lazy_format_exception_only(e))
+            return FatalResponse(url, repr(sys.exc_info()[1]))
+        else:
+            return resp
+
 
 class OfflineHTTPClient:
     def close(self) -> None:
@@ -164,4 +195,7 @@ class OfflineHTTPClient:
         return self._resp()
 
     def request(self, method: str, url: str, *, data: dict | None, headers: dict | None, stream: bool, allow_redirects: bool, timeout: int | None) -> Response:  # noqa: ARG002
+        return self._resp()
+
+    def stream(self, cstack: ExitStack, method: str, url: str, *, allow_redirects: bool, timeout: int | None = None, extra_headers: dict | None = None) -> Response:  # noqa: ARG002
         return self._resp()
