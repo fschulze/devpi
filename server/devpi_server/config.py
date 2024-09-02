@@ -221,12 +221,6 @@ def add_replica_options(parser, pluginmanager):
     add_primary_url_option(parser, pluginmanager)
 
     parser.addoption(
-        "--replica-max-retries", type=int, metavar="NUM",
-        default=0,
-        help="Number of retry attempts for replica connection failures "
-             "(such as aborted connections to pypi).")
-
-    parser.addoption(
         "--replica-file-search-path", metavar="PATH",
         help="path to existing files to try before downloading "
              "from primary. These could be from a previous "
@@ -812,10 +806,6 @@ class Config:
     @property
     def replica_file_search_path(self):
         return getattr(self.args, 'replica_file_search_path', None)
-
-    @property
-    def replica_max_retries(self):
-        return getattr(self.args, 'replica_max_retries', None)
 
     @property
     def replica_streaming(self):
