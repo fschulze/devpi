@@ -519,10 +519,10 @@ devpi command reference (server)
                         [--profile-requests NUM] [--mirror-cache-expiry SECS]
                         [--primary-url PRIMARY_URL] [--replica-max-retries NUM]
                         [--replica-file-search-path PATH] [--hard-links]
-                        [--replica-cert pem_file] [--file-replication-threads NUM]
-                        [--proxy-timeout NUM] [--no-replica-streaming]
-                        [--request-timeout NUM] [--offline-mode] [--serverdir DIR]
-                        [--storage NAME] [--secretfile path] [--requests-only]
+                        [--file-replication-threads NUM] [--proxy-timeout NUM]
+                        [--no-replica-streaming] [--request-timeout NUM]
+                        [--offline-mode] [--serverdir DIR] [--storage NAME]
+                        [--secretfile path] [--requests-only]
                         [--restrict-modify SPEC] [--theme THEME]
                         [--documentation-path DOCUMENTATION_PATH]
                         [--keep-docs-packed] [--indexer-backend NAME]
@@ -613,10 +613,6 @@ devpi command reference (server)
                             --replica-file-search-path instead of copying or
                             downloading files. All limitations for hard links on
                             your OS apply. USE AT YOUR OWN RISK [False]
-      --replica-cert pem_file
-                            when running as a replica, use the given .pem file as
-                            the SSL client certificate to authenticate to the
-                            server (EXPERIMENTAL) [None]
       --file-replication-threads NUM
                             number of threads for file download from primary [5]
       --proxy-timeout NUM   Number of seconds to wait before proxied requests from
