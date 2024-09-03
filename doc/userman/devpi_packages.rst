@@ -193,7 +193,7 @@ delete it (beware, this can't be undone)::
 And has the list command show, the project is no longer there::
 
    $ devpi list pysober   
-   GET http://localhost:3141/emilie/dev/pysober
+   GET http://localhost:3141/emilie/dev/pysober/
    404 Not Found: no project 'pysober'
 
 .. _devpi_um_packages_fromdir_upload:
@@ -317,7 +317,7 @@ Let's also make sure we now switch (use) the appropriate index::
 Finally let's take a look at the index to see if the ``pysober`` is present::
 
    $ devpi list pysober
-   GET http://localhost:3141/sophie/dev/pysober
+   GET http://localhost:3141/sophie/dev/pysober/
    404 Not Found: no project 'pysober'
 
 As expected, this package is not found. In order to access this package, Sophie 
