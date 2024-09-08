@@ -45,6 +45,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .keyfs import KeyChangeEvent
     from .keyfs_types import KeyFSTypesRO
+    from .log import ThreadLog
     from collections.abc import Sequence
 
 
@@ -352,6 +353,7 @@ class HTTPClient:
     def __init__(self, xom):
         self.config = xom.config
         self.http = xom.new_http_client("replica")
+        self.Errors = self.http.Errors
         self.outside_url = xom.config.outside_url
 
     @cached_property
@@ -391,15 +393,147 @@ class HTTPClient:
             timeout=timeout, extra_headers=extra_headers)
 
 
+class ReplicaConnection:
+    REPLICA_REQUEST_TIMEOUT = REPLICA_REQUEST_TIMEOUT
+    log: ThreadLog
+
+    def __init__(self, xom, continue_on_missing_remote_primary_uuid, set_primary_uuid, update_primary_serial):
+        self.http = HTTPClient(xom)
+        self.initial_fetch = True
+        self.primary_url = xom.config.primary_url
+        self.continue_on_missing_remote_primary_uuid = continue_on_missing_remote_primary_uuid
+        self.set_primary_uuid = set_primary_uuid
+        self.update_primary_serial = update_primary_serial
+        self.use_streaming = xom.config.replica_streaming
+        self.xom = xom
+
+    def fetch(self, handler, url, import_changes):  # noqa: PLR0911,PLR0912
+        log = self.log
+        config = self.xom.config
+        log.info("fetching %s", url)
+
+        with contextlib.ExitStack() as cstack:
+            try:
+                headers = {"Accept": REPLICA_ACCEPT_STREAMING} if self.use_streaming else {}
+                r = self.http.stream(
+                    cstack, "GET", url,
+                    allow_redirects=False,
+                    extra_headers=headers,
+                    timeout=self.REPLICA_REQUEST_TIMEOUT)
+            except Exception as e:  # noqa: BLE001
+                msg = ''.join(traceback.format_exception_only(e.__class__, e)).strip()
+                log.error("error fetching %s: %s", url, msg)  # noqa: TRY400
+                return (False, e)
+
+            if r.status_code in (301, 302):
+                log.error(
+                    "%s %s: redirect detected at %s to %s",
+                    r.status_code, r.reason_phrase, url, r.headers.get('Location'))
+                return (False, None)
+
+            if r.status_code not in (200, 202):
+                log.error("%s %s: failed fetching %s", r.status_code, r.reason_phrase, url)
+                return (False, None)
+
+            # we check that the remote instance
+            # has the same UUID we saw last time
+            primary_uuid = config.get_primary_uuid()
+            remote_primary_uuid = r.headers.get(H_PRIMARY_UUID)
+            if not remote_primary_uuid and not self.continue_on_missing_remote_primary_uuid(r.headers):
+                return (True, None)
+            if primary_uuid and remote_primary_uuid != primary_uuid:
+                # we got a primary_uuid and it is not the one we
+                # expect, we are replicating for -- it's unlikely this heals
+                # itself.  It's thus better to die and signal we can't operate.
+                log.error("FATAL: primary UUID %r does not match "
+                          "expected primary UUID %r. EXITING.",
+                          remote_primary_uuid, primary_uuid)
+                # force exit of the process
+                os._exit(3)
+
+            try:
+                remote_serial = int(r.headers["X-DEVPI-SERIAL"])
+            except Exception as e:  # noqa: BLE001
+                msg = ''.join(traceback.format_exception_only(e.__class__, e)).strip()
+                log.error("error fetching %s: %s", url, msg)  # noqa: TRY400
+                return (False, e)
+
+            if r.status_code == 200:
+                # we successfully received data so let's
+                # record the primary_uuid for future consistency checks
+                if not primary_uuid:
+                    self.set_primary_uuid(remote_primary_uuid)
+                # also record the current primary serial for status info
+                self.update_primary_serial(remote_serial)
+                try:
+                    handler(r, import_changes)
+                except mythread.Shutdown:
+                    raise
+                except Exception as e:
+                    log.exception("could not process: %s", r.url)
+                    return (False, e)
+                else:
+                    # we successfully received data so let's
+                    # record the primary_uuid for future consistency checks
+                    if not primary_uuid:
+                        self.set_primary_uuid(remote_primary_uuid)
+                    # also record the current primary serial for status info
+                    self.update_primary_serial(remote_serial, ignore_lower=True)
+                    return (True, None)
+            elif r.status_code == 202:
+                remote_serial = int(r.headers["X-DEVPI-SERIAL"])
+                log.debug("%s: trying again %s\n", r.status_code, url)
+                # also record the current primary serial for status info
+                self.update_primary_serial(remote_serial)
+                return (True, None)
+            return (False, None)
+
+    def get_changelog_url(self, serial):
+        url = self.primary_url.joinpath("+changelog", f"{serial}-").url
+        if self.initial_fetch:
+            url = URL(url)
+            if url.query:
+                url = url.replace(query=url.query + '&initial_fetch')
+            else:
+                url = url.replace(query='initial_fetch')
+            url = url.url
+        return url
+    def handler_multi(self, response, import_changes):
+        if response.headers.get("content-type") == REPLICA_CONTENT_TYPE:
+            with contextlib.closing(response):
+                readableiterable = ReadableIterabel(
+                    response.iter_bytes(65536))
+                stream = io.BufferedReader(readableiterable, buffer_size=65536)
+                try:
+                    while True:
+                        serial = load(stream)
+                        changes = load(stream)
+                        import_changes(serial, changes)
+                        self.update_primary_serial(serial, update_sync=False, ignore_lower=True)
+                except StopIteration:
+                    pass
+                except EOFError:
+                    pass
+        else:
+            all_changes = loads(response.content)
+            for serial, changes in all_changes:
+                import_changes(serial, changes)
+                self.update_primary_serial(serial, update_sync=False, ignore_lower=True)
+
+
 class ReplicaThread:
     H_REPLICA_FILEREPL = H_REPLICA_FILEREPL
     H_REPLICA_UUID = H_REPLICA_UUID
-    REPLICA_REQUEST_TIMEOUT = REPLICA_REQUEST_TIMEOUT
     ERROR_SLEEP = 50
     thread: mythread.MyThread
 
     def __init__(self, xom):
         self.xom = xom
+        self.connection = ReplicaConnection(
+            xom,
+            self.continue_on_missing_remote_primary_uuid,
+            xom.config.set_primary_uuid,
+            self.update_primary_serial)
         self.shared_data = FileReplicationSharedData(xom)
         keyfs = self.xom.keyfs
         keyfs.subscribe_on_import(self.shared_data.on_import)
@@ -413,25 +547,31 @@ class ReplicaThread:
             xom.thread_pool.register(frt)
         self.initial_queue_thread = InitialQueueThread(xom, self.shared_data)
         xom.thread_pool.register(self.initial_queue_thread)
-        self.primary_url = xom.config.primary_url
-        self.use_streaming = xom.config.replica_streaming
         self._primary_serial = None
         self._primary_serial_timestamp = None
-        self.started_at = None
         # updated whenever we try to connect to the primary
         self.primary_contacted_at = None
+        self.started_at = None
         # updated on valid reply or 202 from primary
         self.update_from_primary_at = None
         # set whenever the primary serial and current replication serial match
         self.replica_in_sync_at = None
-        self.http = HTTPClient(xom)
-        self.initial_fetch = True
 
     def get_primary_serial(self):
         return self._primary_serial
 
     def get_primary_serial_timestamp(self):
         return self._primary_serial_timestamp
+
+    def continue_on_missing_remote_primary_uuid(self, headers):
+        # we don't fatally leave the process because
+        # it might just be a temporary misconfiguration
+        # for example of a nginx frontend
+        self.log.error(
+            "remote provides no %r header, headers were: %s",
+            H_PRIMARY_UUID, headers)
+        self.thread.sleep(self.ERROR_SLEEP)
+        return False
 
     def update_primary_serial(self, serial, *, update_sync=True, ignore_lower=False):
         now = time.time()
@@ -451,130 +591,15 @@ class ReplicaThread:
         self._primary_serial = serial
         self._primary_serial_timestamp = now
 
-    def fetch(self, handler, url):
-        if self.initial_fetch:
-            url = URL(url)
-            if url.query:
-                url = url.replace(query=url.query + '&initial_fetch')
-            else:
-                url = url.replace(query='initial_fetch')
-            url = url.url
-        log = self.log
-        config = self.xom.config
-        log.info("fetching %s", url)
-
-        with contextlib.ExitStack() as cstack:
-            try:
-                self.primary_contacted_at = time.time()
-                headers = {"Accept": REPLICA_ACCEPT_STREAMING} if self.use_streaming else {}
-                r = self.http.stream(
-                    cstack, "GET", url,
-                    allow_redirects=False,
-                    extra_headers=headers,
-                    timeout=self.REPLICA_REQUEST_TIMEOUT)
-            except Exception as e:  # noqa: BLE001
-                msg = ''.join(traceback.format_exception_only(e.__class__, e)).strip()
-                log.error("error fetching %s: %s", url, msg)  # noqa: TRY400
-                return False
-
-            if r.status_code in (301, 302):
-                log.error(
-                    "%s %s: redirect detected at %s to %s",
-                    r.status_code, r.reason_phrase, url, r.headers.get('Location'))
-                return False
-
-            if r.status_code not in (200, 202):
-                log.error("%s %s: failed fetching %s", r.status_code, r.reason_phrase, url)
-                return False
-
-            # we check that the remote instance
-            # has the same UUID we saw last time
-            primary_uuid = config.get_primary_uuid()
-            remote_primary_uuid = r.headers.get(H_PRIMARY_UUID)
-            if not remote_primary_uuid:
-                # we don't fatally leave the process because
-                # it might just be a temporary misconfiguration
-                # for example of a nginx frontend
-                log.error("remote provides no %r header,"
-                          " headers were: %s",
-                          H_PRIMARY_UUID, r.headers)
-                self.thread.sleep(self.ERROR_SLEEP)
-                return True
-            if primary_uuid and remote_primary_uuid != primary_uuid:
-                # we got a primary_uuid and it is not the one we
-                # expect, we are replicating for -- it's unlikely this heals
-                # itself.  It's thus better to die and signal we can't operate.
-                log.error("FATAL: primary UUID %r does not match "
-                          "expected primary UUID %r. EXITING.",
-                          remote_primary_uuid, primary_uuid)
-                # force exit of the process
-                os._exit(3)
-
-            try:
-                remote_serial = int(r.headers["X-DEVPI-SERIAL"])
-            except Exception as e:
-                msg = ''.join(traceback.format_exception_only(e.__class__, e)).strip()
-                log.error("error fetching %s: %s", url, msg)  # noqa: TRY400
-                return False
-
-            if r.status_code == 200:
-                # we successfully received data so let's
-                # record the primary_uuid for future consistency checks
-                if not primary_uuid:
-                    self.xom.config.set_primary_uuid(remote_primary_uuid)
-                # also record the current primary serial for status info
-                self.update_primary_serial(remote_serial)
-                try:
-                    handler(r)
-                except mythread.Shutdown:
-                    raise
-                except Exception:
-                    log.exception("could not process: %s", r.url)
-                else:
-                    # we successfully received data so let's
-                    # record the primary_uuid for future consistency checks
-                    if not primary_uuid:
-                        self.xom.config.set_primary_uuid(remote_primary_uuid)
-                    # also record the current primary serial for status info
-                    self.update_primary_serial(remote_serial, ignore_lower=True)
-                    return True
-            elif r.status_code == 202:
-                remote_serial = int(r.headers["X-DEVPI-SERIAL"])
-                log.debug("%s: trying again %s\n", r.status_code, url)
-                # also record the current primary serial for status info
-                self.update_primary_serial(remote_serial)
-                return True
-            return False
-
-    def handler_single(self, response, serial):
-        changes, rel_renames = loads(response.content)
-        self.xom.keyfs.import_changes(serial, self.get_changes(serial, changes))
-
-    def handler_multi(self, response):
-        if response.headers["content-type"] == REPLICA_CONTENT_TYPE:
-            with contextlib.closing(response):
-                readableiterable = ReadableIterabel(
-                    response.iter_bytes(65536))
-                stream = io.BufferedReader(readableiterable, buffer_size=65536)
-                try:
-                    while True:
-                        serial = load(stream)
-                        changes = load(stream)
-                        self.xom.keyfs.import_changes(serial, self.get_changes(serial, changes))
-                        self.update_primary_serial(serial, update_sync=False, ignore_lower=True)
-                except StopIteration:
-                    pass
-                except EOFError:
-                    pass
-        else:
-            all_changes = loads(response.content)
-            for serial, changes in all_changes:
-                self.xom.keyfs.import_changes(serial, self.get_changes(serial, changes))
-                self.update_primary_serial(serial, update_sync=False, ignore_lower=True)
-
     def fetch_multi(self, serial):
-        url = self.primary_url.joinpath("+changelog", "%s-" % serial).url
-        return self.fetch(self.handler_multi, url)
+        self.primary_contacted_at = time.time()
+        return self.connection.fetch(
+            self.connection.handler_multi,
+            self.connection.get_changelog_url(serial),
+            self.import_changes)
+
+    def import_changes(self, serial: int, changes: list[tuple]) -> None:
+        self.xom.keyfs.import_changes(serial, self.get_changes(serial, changes))
 
     def get_changes(self, serial: int, changes: list[tuple]) -> Sequence[KeyData]:
         result = []
@@ -591,18 +616,18 @@ class ReplicaThread:
     def tick(self):
         self.thread.exit_if_shutdown()
         serial = self.xom.keyfs.get_next_serial()
-        result = self.fetch_multi(serial)
+        (result, exc) = self.fetch_multi(serial)
         if not result:
             # we got an error, let's wait a bit
             self.thread.sleep(5.0)
         else:
             # from now on we do polling
-            self.initial_fetch = False
+            self.connection.initial_fetch = False
 
     def thread_run(self):
         # within a devpi replica server this thread is the only writer
         self.started_at = time.time()
-        self.log = thread_push_log("[REP]")
+        self.log = self.connection.log = thread_push_log("[REP]")
         last_time = time.time()
         while 1:
             try:
@@ -620,7 +645,7 @@ class ReplicaThread:
                 self.thread.sleep(1.0)
 
     def thread_shutdown(self):
-        self.http.close()
+        self.connection.http.close()
 
     def wait(self, error_queue=False):
         self.shared_data.wait(error_queue=error_queue)
