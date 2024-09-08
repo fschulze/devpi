@@ -378,7 +378,7 @@ class MirrorStage(BaseStage):
     def del_project(self, project):
         if not self.is_project_cached(project):
             raise KeyError("project not found")
-        (is_expired, links, cache_serial) = self._load_cache_links(project)
+        (is_expired, links, cache_serial, etag) = self._load_cache_links(project)
         if links is not None:
             entries = (self._entry_from_href(x[1]) for x in links)
             entries = (x for x in entries if x.file_exists())
@@ -398,7 +398,7 @@ class MirrorStage(BaseStage):
         # since this is a mirror, we only have the simple links and no
         # metadata, so only delete the files and keep the simple links
         # for the possibility to re-download a release
-        (is_expired, links, cache_serial) = self._load_cache_links(project)
+        (is_expired, links, cache_serial, etag) = self._load_cache_links(project)
         if links is not None:
             entries = list(self._entry_from_href(x[1]) for x in links)
             entries = list(x for x in entries if x.version == version and x.file_exists())
@@ -412,7 +412,7 @@ class MirrorStage(BaseStage):
         if not entry.file_exists():
             raise self.NotFound("entry has no file data %r" % entry)
         entry.delete()
-        (is_expired, links, cache_serial) = self._load_cache_links(project)
+        (is_expired, links, cache_serial, etag) = self._load_cache_links(project)
         if links is not None:
             has_links = any(self._is_file_cached(x) for x in links)
         else:
@@ -594,12 +594,13 @@ class MirrorStage(BaseStage):
         self.keyfs.tx.on_commit_success(on_commit)
 
     def _load_cache_links(self, project):
-        is_expired, links_with_data, serial = True, None, -1
+        (is_expired, links_with_data, serial, etag) = (True, None, -1, None)
 
         links_with_data = None
         if self.key_projectname(project).exists():
             cache_info = self.key_projectcacheinfo(project).get()
             serial = cache_info.get("serial", -1)
+            etag = cache_info.get("etag", None)
             if cache_info:
                 key_mirrorfile = self.key_mirrorfile(project=project)
                 links_with_data = [
@@ -614,7 +615,7 @@ class MirrorStage(BaseStage):
                     for (link, entry) in zip(links_with_data, entries)
                     if entry is not None and entry.file_exists()])
 
-        return is_expired, links_with_data, serial
+        return (is_expired, links_with_data, serial, etag)
 
     def _entry_from_href(self, href):
         # extract relpath from href by cutting of the hash
@@ -632,13 +633,13 @@ class MirrorStage(BaseStage):
         self.key_projectcacheinfo(project).set({})
         threadlog.debug("cleared cache for %s", project)
 
-    async def _async_fetch_releaselinks(self, newlinks_future, project, cache_serial, _key_from_link):
+    async def _async_fetch_releaselinks(self, newlinks_future, project, cache_serial, etag, _key_from_link):
         # get the simple page for the project
         url = self.mirror_url.joinpath(project).asdir()
         get_url = self.mirror_url_without_auth.joinpath(project).asdir()
         threadlog.debug("reading index %r", url)
         headers = {"Accept": SIMPLE_API_ACCEPT}
-        etag = self.cache_retrieve_times.get_etag(project)
+        etag = self.cache_retrieve_times.get_etag(project) or etag
         if etag is not None:
             headers["If-None-Match"] = etag
         (response, text) = await self.async_httpget(
@@ -726,7 +727,7 @@ class MirrorStage(BaseStage):
                                 devpi_serial)
                 # XXX raise TransactionRestart to get a consistent clean view
                 self.keyfs.restart_read_transaction()
-                is_expired, links, cache_serial = self._load_cache_links(project)
+                (is_expired, links, cache_serial, etag) = self._load_cache_links(project)
             if links is not None:
                 self.keyfs.tx.on_commit_success(partial(
                     self.cache_retrieve_times.refresh, project, info["etag"]))
@@ -762,7 +763,7 @@ class MirrorStage(BaseStage):
         with self.keyfs.write_transaction():
             self.keyfs.tx.on_finished(lock.release)
             # fetch current links
-            (is_expired, links, cache_serial) = self._load_cache_links(project)
+            (is_expired, links, cache_serial, etag) = self._load_cache_links(project)
             if links is None or set(links) != set(newlinks):
                 # we got changes, so store them
                 self._update_simplelinks(project, info, links, newlinks)
@@ -783,7 +784,7 @@ class MirrorStage(BaseStage):
         lock = self.cache_retrieve_times.acquire(project, self.timeout)
         if lock is not None:
             self.keyfs.tx.on_finished(lock.release)
-        is_expired, links, cache_serial = self._load_cache_links(project)
+        (is_expired, links, cache_serial, etag) = self._load_cache_links(project)
         if not is_expired and lock is not None:
             lock.release()
 
@@ -832,7 +833,7 @@ class MirrorStage(BaseStage):
         try:
             self.xom.run_coroutine_threadsafe(
                 self._async_fetch_releaselinks(
-                    newlinks_future, project, cache_serial, _key_from_link),
+                    newlinks_future, project, cache_serial, etag, _key_from_link),
                 timeout=self.timeout)
         except asyncio.TimeoutError:
             if not self.xom.is_replica():
