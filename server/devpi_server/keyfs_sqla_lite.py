@@ -19,8 +19,9 @@ import time
 
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
     from contextlib import AbstractContextManager
+    from typing import Any
+    from collections.abc import Sequence
     from pathlib import Path
     from pyramid.request import Request
     from typing import Callable
@@ -137,7 +138,7 @@ def devpiserver_describe_storage_backend(settings: dict) -> StorageInfo:
 
 @hookimpl
 def devpiserver_metrics(request: Request) -> list[tuple[str, str, object]]:
-    result: list[tuple[str, str, object]] = []
+    result: list[tuple[str, str, Any]] = []
     xom = request.registry["xom"]
     storage = xom.keyfs._storage
     if isinstance(storage, Storage):

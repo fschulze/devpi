@@ -5,6 +5,7 @@ from .fileutil import dumps
 from .fileutil import loads
 from .interfaces import IWriter
 from .keyfs_types import KeyData
+from .keyfs_types import ULID
 from .log import thread_pop_log
 from .log import thread_push_log
 from .log import threadlog
@@ -22,7 +23,6 @@ from sqlalchemy.ext.compiler import compiles
 from typing import TYPE_CHECKING
 from zope.interface import implementer
 import inspect
-import random
 import sqlalchemy as sa
 import time
 import warnings
@@ -86,13 +86,6 @@ class Cache:
 
     def put_large(self, key: Any, value: Any) -> None:
         self._large_cache.put(key, value)
-
-
-def make_ulid(_randbits=random.getrandbits, _time_ns=time.time_ns):
-    ns = _time_ns()
-    high_part = (ns // 1_000_000_000) << 26
-    low_part = _randbits(26)
-    return high_part | low_part
 
 
 class explain(sa.Executable, sa.ClauseElement):
@@ -205,29 +198,20 @@ class BaseConnection:
         raise NotImplementedError
 
     def last_key_serial(self, key: LocatedKey) -> int:
-        latest_serial_stmt = (
+        stmt = (
             sa.select(
-                self.relpath_ulid_table.c.relpath,
-                self.relpath_ulid_table.c.keytype,
-                sa.func.max(self.relpath_ulid_table.c.serial).label("serial"))
+                sa.func.max(self.ulid_latest_serial_table.c.latest_serial))
+            .join(
+                self.ulid_latest_serial_table,
+                self.relpath_ulid_table.c.ulid == self.ulid_latest_serial_table.c.ulid)
             .where(
                 sa.tuple_(
                     self.relpath_ulid_table.c.relpath,
                     self.relpath_ulid_table.c.keytype,
-                ) == sa.tuple_(key.relpath, key.key_name))
+                ) == sa.tuple_(sa.literal(key.relpath), sa.literal(key.key_name)))
             .group_by(
                 self.relpath_ulid_table.c.relpath,
                 self.relpath_ulid_table.c.keytype))
-        latest_serial_sq = latest_serial_stmt.subquery("latest_serial_sq")
-        stmt = (
-            sa.select(
-                self.relpath_ulid_table.c.serial)
-            .join(
-                latest_serial_sq,
-                sa.and_(
-                    self.relpath_ulid_table.c.relpath == latest_serial_sq.c.relpath,
-                    self.relpath_ulid_table.c.keytype == latest_serial_sq.c.keytype,
-                    self.relpath_ulid_table.c.serial == latest_serial_sq.c.serial)))
         result = self._sqlaconn.execute(stmt).scalar()
         if result is None:
             raise KeyError(key)
@@ -240,39 +224,14 @@ class BaseConnection:
                 new_typedkeys)
             self._sqlaconn.execute(
                 sa.insert(self.ulid_latest_serial_table),
-                [dict(serial=x["serial"], ulid=x["ulid"]) for x in new_typedkeys])
+                [dict(latest_serial=x["added_at_serial"], ulid=x["ulid"]) for x in new_typedkeys])
         if updated_typedkeys:
-            relpath_update_stmt = (
-                sa.update(self.relpath_ulid_table)
-                .where(
-                    self.relpath_ulid_table.c.relpath == sa.bindparam("b_relpath"),
-                    self.relpath_ulid_table.c.keytype == sa.bindparam("b_keytype"),
-                    self.relpath_ulid_table.c.serial == sa.bindparam("b_back_serial"))
-                .values(serial=sa.bindparam("b_serial"))
-                .returning(
-                    self.relpath_ulid_table.c.ulid,
-                    self.relpath_ulid_table.c.serial,
-                    sa.bindparam("b_back_serial")))
-            if self._sqlaconn.dialect.update_executemany_returning:
-                ulid_serials = [
-                    dict(b_ulid=x.ulid, b_serial=x.serial, b_back_serial=x.b_back_serial)
-                    for x in self._sqlaconn.execute(relpath_update_stmt, updated_typedkeys)]
-            else:
-                ulid_serials = []
-                for updated_typedkey in updated_typedkeys:
-                    result = self._sqlaconn.execute(relpath_update_stmt, updated_typedkey).fetchall()
-                    if not result:
-                        raise RuntimeError
-                    ulid_serials.extend(
-                        dict(b_ulid=x.ulid, b_serial=x.serial, b_back_serial=x.b_back_serial)
-                        for x in result)
-            ulid_update_stmt = (
+            stmt = (
                 sa.update(self.ulid_latest_serial_table)
                 .where(
-                    self.ulid_latest_serial_table.c.ulid == sa.bindparam("b_ulid"),
-                    self.ulid_latest_serial_table.c.serial == sa.bindparam("b_back_serial"))
-                .values(serial=sa.bindparam("b_serial")))
-            self._sqlaconn.execute(ulid_update_stmt, ulid_serials)
+                    self.ulid_latest_serial_table.c.ulid == sa.bindparam("b_ulid"))
+                .values(latest_serial=sa.bindparam("b_serial")))
+            self._sqlaconn.execute(stmt, updated_typedkeys)
 
     def iter_changes_at(self, serial: int) -> Iterator[KeyData]:
         stmt = (
@@ -289,7 +248,7 @@ class BaseConnection:
             self.relpath_ulid_table.c.relpath,
             self.relpath_ulid_table.c.keytype,
         )
-        yield from self._iter_relpaths_at(relpaths_stmt, serial)
+        yield from self._iter_relpaths_at(relpaths_stmt, serial, with_deleted=True)
 
     def get_raw_changelog_entry(self, serial: int) -> bytes | None:
         data = self._sqlaconn.execute(
@@ -299,7 +258,7 @@ class BaseConnection:
             return None
         renames = loads(data)
         changes = [
-            (c.keyname, c.relpath, c.back_serial, None if c.value is deleted else c.value)
+            (c.keyname, c.relpath, int(c.ulid), c.back_serial, None if c.value is deleted else c.value)
             for c in self.iter_changes_at(serial)]
         return dumps((changes, renames))
 
@@ -311,118 +270,110 @@ class BaseConnection:
             return
         yield from loads(data)
 
-    def _iter_relpaths_at(self, relpaths, serial):
+    def _iter_relpaths_at(self, relpaths_stmt: Any, serial: int, *, with_deleted: bool) -> Iterator[KeyData]:
         execute = self._sqlaconn.execute
-        relpaths_stmt = (
-            sa.select(self.relpath_ulid_table)
-            .where(
+        relpaths_sq = relpaths_stmt.subquery("relpaths_sq")
+        full_relpaths_ulid_serials_stmt = (
+            sa.select(
+                self.relpath_ulid_table,
+                self.ulid_latest_serial_table.c.latest_serial)
+            .join(
+                relpaths_sq,
                 sa.tuple_(
                     self.relpath_ulid_table.c.relpath,
                     self.relpath_ulid_table.c.keytype,
-                ).in_(relpaths)))
-        deleted_at_stmt = (
+                ) == sa.tuple_(
+                    relpaths_sq.c.relpath,
+                    relpaths_sq.c.keytype,
+                ))
+            .where(
+                self.relpath_ulid_table.c.added_at_serial <= serial)
+            .join(
+                self.ulid_latest_serial_table,
+                self.relpath_ulid_table.c.ulid == self.ulid_latest_serial_table.c.ulid))
+        full_relpaths_ulid_serials_cte = full_relpaths_ulid_serials_stmt.cte("full_relpaths_ulid_serials_cte")
+        relpath_max_added_at_stmt = (
+            sa.select(
+                full_relpaths_ulid_serials_cte.c.relpath,
+                full_relpaths_ulid_serials_cte.c.keytype,
+                sa.func.max(full_relpaths_ulid_serials_cte.c.added_at_serial).label("max_added_at_serial"))
+            .group_by(
+                full_relpaths_ulid_serials_cte.c.relpath,
+                full_relpaths_ulid_serials_cte.c.keytype))
+        relpath_max_added_at_sq = relpath_max_added_at_stmt.subquery("relpath_max_added_at_sq")
+        relpaths_ulid_serials_stmt = (
+            sa.select(
+                full_relpaths_ulid_serials_cte.c.relpath,
+                full_relpaths_ulid_serials_cte.c.keytype,
+                full_relpaths_ulid_serials_cte.c.ulid)
+            .join(
+                relpath_max_added_at_sq,
+                sa.and_(
+                    sa.tuple_(
+                        full_relpaths_ulid_serials_cte.c.relpath,
+                        full_relpaths_ulid_serials_cte.c.keytype,
+                    ) == sa.tuple_(
+                        relpath_max_added_at_sq.c.relpath,
+                        relpath_max_added_at_sq.c.keytype,
+                    ),
+                    full_relpaths_ulid_serials_cte.c.latest_serial >= relpath_max_added_at_sq.c.max_added_at_serial)))
+        relpaths_ulid_serials_cte = relpaths_ulid_serials_stmt.cte("relpaths_ulid_serials_cte")
+        ulid_max_serial_stmt = (
             sa.select(
                 self.ulid_changelog_table.c.ulid,
-                sa.func.max(self.ulid_changelog_table.c.serial).label("deleted_serial"))
-            .where(
-                self.ulid_changelog_table.c.value.is_(None),
-                self.ulid_changelog_table.c.serial <= serial)
-            .group_by(self.ulid_changelog_table.c.ulid))
-        relpaths_sq = relpaths_stmt.subquery("relpaths_sq")
-        deleted_at_sq = deleted_at_stmt.subquery("deleted_at_sq")
-        relpaths_info_stmt = (
-            sa.select(
-                relpaths_sq.c.relpath,
-                relpaths_sq.c.keytype,
-                relpaths_sq.c.ulid,
-                sa.func.coalesce(
-                    deleted_at_sq.c.deleted_serial,
-                    -1).label("deleted_serial"))
-            .join_from(
-                relpaths_sq,
-                deleted_at_sq,
-                relpaths_sq.c.ulid == deleted_at_sq.c.ulid,
-                isouter=True))
-        relpaths_info_sq = relpaths_info_stmt.subquery("relpaths_info_sq")
-        ulid_relpath_map = {}
-        ulid_keytype_map = {}
-        for info in execute(relpaths_info_stmt):
-            ulid_relpath_map[info.ulid] = info.relpath
-            ulid_keytype_map[info.ulid] = info.keytype
-        if not ulid_relpath_map:
-            return
-        ulid_changelog_stmt = (
-            sa.select(self.ulid_changelog_table)
-            .join_from(
-                relpaths_info_sq,
-                self.ulid_changelog_table,
-                relpaths_info_sq.c.ulid == self.ulid_changelog_table.c.ulid)
-            .where(
-                self.ulid_changelog_table.c.serial <= serial,
-                self.ulid_changelog_table.c.serial >= relpaths_info_sq.c.deleted_serial))
-        ulid_changelog_sq = ulid_changelog_stmt.subquery("ulid_changelog_sq")
-        latest_ulid_stmt = (
-            sa.select(
-                ulid_changelog_sq.c.ulid,
-                sa.func.max(ulid_changelog_sq.c.serial).label("serial"))
-            .group_by(ulid_changelog_sq.c.ulid))
-        latest_ulid_sq = latest_ulid_stmt.subquery("latest_ulid_sq")
-        stmt = (
-            sa.select(
-                ulid_changelog_sq.c.ulid,
-                ulid_changelog_sq.c.value)
+                sa.func.max(self.ulid_changelog_table.c.serial).label("ulid_max_serial"))
             .join(
-                latest_ulid_sq,
+                relpaths_ulid_serials_cte,
                 sa.and_(
-                    latest_ulid_sq.c.ulid == ulid_changelog_sq.c.ulid,
-                    latest_ulid_sq.c.serial == ulid_changelog_sq.c.serial))
-            .order_by(ulid_changelog_sq.c.ulid))
-        ulid_serials_stmt = (
+                    self.ulid_changelog_table.c.ulid == relpaths_ulid_serials_cte.c.ulid,
+                    self.ulid_changelog_table.c.serial <= serial))
+            .group_by(self.ulid_changelog_table.c.ulid))
+        ulid_max_serial_sq = ulid_max_serial_stmt.subquery("ulid_max_serial_sq")
+        ulid_changelog_stmt = (
             sa.select(
-                ulid_changelog_sq.c.ulid,
-                sa.func.max(ulid_changelog_sq.c.back_serial),
-                sa.func.max(ulid_changelog_sq.c.serial))
-            .group_by(ulid_changelog_sq.c.ulid))
-        ulid_back_serial_map = {}
-        ulid_serial_map = {}
-        for ulid, back_serial, ulid_serial in execute(ulid_serials_stmt):
-            ulid_back_serial_map[ulid] = back_serial
-            ulid_serial_map[ulid] = ulid_serial
-        rows = execute(stmt).all()
-        for ulid, value in rows:
+                relpaths_ulid_serials_cte.c.relpath,
+                relpaths_ulid_serials_cte.c.keytype,
+                self.ulid_changelog_table)
+            .join_from(
+                relpaths_ulid_serials_cte,
+                self.ulid_changelog_table,
+                relpaths_ulid_serials_cte.c.ulid == self.ulid_changelog_table.c.ulid)
+            .join(
+                ulid_max_serial_sq,
+                sa.and_(
+                    relpaths_ulid_serials_cte.c.ulid == ulid_max_serial_sq.c.ulid,
+                    self.ulid_changelog_table.c.serial == ulid_max_serial_sq.c.ulid_max_serial)))
+        if not with_deleted:
+            ulid_changelog_stmt = ulid_changelog_stmt.where(self.ulid_changelog_table.c.value.isnot(None))
+        for row in execute(ulid_changelog_stmt):
             yield KeyData(
-                relpath=ulid_relpath_map[ulid], keyname=ulid_keytype_map[ulid],
-                serial=ulid_serial_map[ulid], back_serial=ulid_back_serial_map[ulid],
-                value=deleted if value is None else ensure_deeply_readonly(loads(value)))
+                relpath=row.relpath, keyname=row.keytype, ulid=ULID(row.ulid),
+                serial=row.serial, back_serial=row.back_serial,
+                value=deleted if row.value is None else ensure_deeply_readonly(loads(row.value)))
 
     def get_key_at_serial(self, key: LocatedKey, serial: int) -> KeyData:
         cache_key = (key.key_name, key.relpath)
         result = self._cache.get_keydata((serial, cache_key), absent)
         if result is absent:
-            results = list(self._iter_relpaths_at((sa.tuple_(key.relpath, key.key_name),), serial))
+            results = list(self._iter_relpaths_at(
+                sa.select(sa.literal(key.relpath).label("relpath"), sa.literal(key.key_name).label("keytype")),
+                serial, with_deleted=True))
             if not results:
                 raise KeyError(key)
             (result,) = results
             self._cache.add_keydata(serial, result)
         return result
 
-    def iter_keys_at_serial(self, keys: Iterable[IKeyFSKey], at_serial: int) -> Iterator[KeyData]:
+    def iter_keys_at_serial(self, keys: Iterable[IKeyFSKey], at_serial: int, *, with_deleted: bool = False) -> Iterator[KeyData]:
         keytypes = frozenset(k.key_name for k in keys)
-        stmt = (
+        relpaths_stmt = (
             sa.select(
-                self.relpath_ulid_table.c.relpath.distinct(),
+                self.relpath_ulid_table.c.relpath,
                 self.relpath_ulid_table.c.keytype)
-            .join(
-                self.relpath_ulid_table,
-                self.relpath_ulid_table.c.ulid == self.ulid_changelog_table.c.ulid)
             .where(
-                self.ulid_changelog_table.c.serial <= at_serial,
-                self.relpath_ulid_table.c.keytype.in_(keytypes)))
-        relpaths_stmt = stmt.with_only_columns(
-            self.relpath_ulid_table.c.relpath,
-            self.relpath_ulid_table.c.keytype,
-        )
-        yield from self._iter_relpaths_at(relpaths_stmt, at_serial)
+                self.relpath_ulid_table.c.keytype.in_(keytypes))
+            .distinct())
+        yield from self._iter_relpaths_at(relpaths_stmt, at_serial, with_deleted=with_deleted)
 
     @cached_property
     def last_changelog_serial(self) -> int:
@@ -437,42 +388,12 @@ class BaseConnection:
     def _write_records(self, serial: int, records: Sequence[Record], renames: Sequence[str]) -> None:
         execute = self._sqlaconn.execute
         threadlog.debug("writing changelog for serial %s", serial)
-        ulid_changelog: list[tuple[int, int, int, bytes | None]] = []
-        latest_serial_stmt = (
-            sa.select(
-                self.relpath_ulid_table.c.relpath,
-                self.relpath_ulid_table.c.keytype,
-                sa.func.max(self.relpath_ulid_table.c.serial).label("serial"))
-            .where(
-                sa.tuple_(
-                    self.relpath_ulid_table.c.relpath,
-                    self.relpath_ulid_table.c.keytype,
-                ).in_(
-                    {sa.tuple_(x.key.relpath, x.key.key_name) for x in records}))
-            .group_by(
-                self.relpath_ulid_table.c.relpath,
-                self.relpath_ulid_table.c.keytype,
-            ))
-        latest_serial_sq = latest_serial_stmt.subquery("latest_serial_sq")
-        stmt = (
-            sa.select(
-                self.relpath_ulid_table.c.relpath,
-                self.relpath_ulid_table.c.keytype,
-                self.relpath_ulid_table.c.ulid)
-            .join(
-                latest_serial_sq,
-                sa.and_(
-                    self.relpath_ulid_table.c.relpath == latest_serial_sq.c.relpath,
-                    self.relpath_ulid_table.c.keytype == latest_serial_sq.c.keytype,
-                    self.relpath_ulid_table.c.serial == latest_serial_sq.c.serial)))
-        relpath_ulid_map = {(x.keytype, x.relpath): x.ulid for x in execute(stmt).all()}
-        append = ulid_changelog.append
-        for record in records:
-            ulid = relpath_ulid_map[(record.key.key_name, record.key.relpath)]
-            if record.value is deleted:
-                append((ulid, serial, record.back_serial, None))
-            else:
-                append((ulid, serial, record.back_serial, dumps(record.value)))
+        ulid_changelog = [
+            dict(
+                ulid=int(record.ulid),
+                serial=serial, back_serial=record.back_serial,
+                value=None if record.value is deleted else dumps(record.value))
+            for record in records]
         if ulid_changelog:
             execute(
                 sa.insert(self.ulid_changelog_table)
@@ -532,15 +453,15 @@ class Writer:
             if record.back_serial is None:
                 raise RuntimeError
             assert not isinstance(record.value, ReadonlyView), record.value
-            if record.back_serial == -1 or record.old_value is absent:
+            if record.ulid != record.old_ulid:
                 new_typedkeys.append(dict(
                     relpath=record.key.relpath,
-                    ulid=make_ulid(),
+                    ulid=int(record.ulid),
                     keytype=record.key.key_name,
-                    serial=commit_serial))
+                    added_at_serial=commit_serial))
             else:
                 updated_typedkeys.append(dict(
-                    b_relpath=record.key.relpath,
+                    b_ulid=int(record.ulid),
                     b_keytype=record.key.key_name,
                     b_serial=commit_serial,
                     b_back_serial=record.back_serial))
@@ -594,14 +515,14 @@ class BaseStorage:
         self.last_commit_timestamp = time.time()
 
     def define_tables(self, metadata_obj: sa.MetaData, binary_type: sa._Binary) -> dict:
-        return dict(
+        tables = dict(
             relpath_ulid_table=sa.Table(
                 "relpath_ulid",
                 metadata_obj,
-                sa.Column("relpath", sa.String, index=True, nullable=False),
-                sa.Column("ulid", sa.BigInteger, nullable=False),
+                sa.Column("ulid", sa.BigInteger, primary_key=True),
+                sa.Column("relpath", sa.String, nullable=False),
                 sa.Column("keytype", sa.String, index=True, nullable=False),
-                sa.Column("serial", sa.Integer, nullable=False)),
+                sa.Column("added_at_serial", sa.Integer, nullable=False)),
             renames_table=sa.Table(
                 "renames",
                 metadata_obj,
@@ -611,14 +532,25 @@ class BaseStorage:
                 "ulid_changelog",
                 metadata_obj,
                 sa.Column("ulid", sa.BigInteger, index=True, nullable=False),
-                sa.Column("serial", sa.Integer, index=True, nullable=False),
+                sa.Column("serial", sa.Integer, nullable=False),
                 sa.Column("back_serial", sa.Integer, nullable=False),
                 sa.Column("value", binary_type, nullable=True)),
             ulid_latest_serial_table=sa.Table(
                 "ulid_latest_serial",
                 metadata_obj,
                 sa.Column("ulid", sa.BigInteger, primary_key=True),
-                sa.Column("serial", sa.Integer, nullable=False)))
+                sa.Column("latest_serial", sa.Integer, nullable=False)))
+        relpath_ulid_table = tables["relpath_ulid_table"]
+        sa.Index(
+            "ix_relpath_keytype",
+            relpath_ulid_table.c.relpath,
+            relpath_ulid_table.c.keytype)
+        ulid_changelog_table = tables["ulid_changelog_table"]
+        sa.Index(
+            "ix_ulid_serial",
+            ulid_changelog_table.c.ulid,
+            ulid_changelog_table.c.serial)
+        return tables
 
     @classmethod
     def process_settings(cls, settings: dict[str, Any]) -> dict[str, Any]:
