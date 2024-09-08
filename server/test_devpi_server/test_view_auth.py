@@ -12,6 +12,8 @@ class TestCredentialPlugin:
     @pytest.fixture
     def plugin(self):
         class Plugin:
+            results: list
+
             @hookimpl
             def devpiserver_get_credentials(self, request):  # noqa: ARG002
                 return self.results.pop()
@@ -37,6 +39,8 @@ class TestCredentialPlugins:
     @pytest.fixture
     def plugin1(self):
         class Plugin:
+            results: list
+
             @hookimpl
             def devpiserver_get_credentials(self, request):  # noqa: ARG002
                 return self.results.pop()
@@ -45,6 +49,8 @@ class TestCredentialPlugins:
     @pytest.fixture
     def plugin2(self):
         class Plugin:
+            results: list
+
             @hookimpl
             def devpiserver_get_credentials(self, request):  # noqa: ARG002
                 return self.results.pop()

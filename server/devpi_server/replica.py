@@ -29,7 +29,6 @@ from .filestore import FileEntry
 from .fileutil import buffered_iterator
 from .fileutil import dumps, load, loads
 from .keyfs_types import KeyData
-from .keyfs_types import ULID
 from .log import thread_push_log, threadlog
 from .main import Fatal
 from .markers import deleted
@@ -42,6 +41,8 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .keyfs import KeyChangeEvent
+    from .keyfs_types import KeyFSTypesRO
+    from collections.abc import Sequence
 
 
 devpiweb_hookimpl = HookimplMarker("devpiweb")
@@ -68,10 +69,10 @@ notset = object()
 
 class IndexType:
     # class for the index type to get correct sort order
-    def __init__(self, index_type):
+    def __init__(self, index_type: IndexType | str | None):
         if isinstance(index_type, IndexType):
             index_type = index_type._index_type
-        self._index_type = index_type
+        self._index_type: str | None = index_type
 
     def __repr__(self):
         return f"<IndexType {self._index_type!r}>"
@@ -335,7 +336,7 @@ class PrimaryChangelogRequest:
             raise HTTPNotFound("can only wait for next serial")
         elif serial == next_serial:
             if 'initial_fetch' in self.request.params:
-                timeout = 1
+                timeout = 1.0
             else:
                 timeout = self.MAX_REPLICA_BLOCK_TIME
             arrived = keyfs.wait_tx_serial(serial, timeout=timeout)
@@ -351,6 +352,7 @@ class ReplicaThread:
     H_REPLICA_UUID = H_REPLICA_UUID
     REPLICA_REQUEST_TIMEOUT = REPLICA_REQUEST_TIMEOUT
     ERROR_SLEEP = 50
+    thread: mythread.MyThread
 
     def __init__(self, xom):
         self.xom = xom
@@ -518,7 +520,7 @@ class ReplicaThread:
 
     def handler_single(self, response, serial):
         changes, rel_renames = loads(response.content)
-        self.xom.keyfs.import_changes(serial, self.iter_changes(serial, changes))
+        self.xom.keyfs.import_changes(serial, self.get_changes(serial, changes))
 
     def fetch_single(self, serial):
         url = self.primary_url.joinpath("+changelog", str(serial)).url
@@ -536,7 +538,7 @@ class ReplicaThread:
                     while True:
                         serial = load(stream)
                         (changes, rel_renames) = load(stream)
-                        self.xom.keyfs.import_changes(serial, self.iter_changes(serial, changes))
+                        self.xom.keyfs.import_changes(serial, self.get_changes(serial, changes))
                         self.update_primary_serial(serial, update_sync=False, ignore_lower=True)
                 except StopIteration:
                     pass
@@ -545,19 +547,23 @@ class ReplicaThread:
         else:
             all_changes = loads(response.content)
             for serial, changes in all_changes:
-                self.xom.keyfs.import_changes(serial, self.iter_changes(serial, changes))
+                self.xom.keyfs.import_changes(serial, self.get_changes(serial, changes))
                 self.update_primary_serial(serial, update_sync=False, ignore_lower=True)
 
     def fetch_multi(self, serial):
         url = self.primary_url.joinpath("+changelog", "%s-" % serial).url
         return self.fetch(self.handler_multi, url)
 
-    def iter_changes(self, serial, changes):
+    def get_changes(self, serial: int, changes: list[tuple]) -> Sequence[KeyData]:
+        result = []
+        get_key_instance = self.xom.keyfs.get_key_instance
         for (keyname, relpath, ulid, back_serial, val) in changes:
-            yield KeyData(
-                relpath=relpath, keyname=keyname, ulid=ULID(ulid),
+            key = get_key_instance(keyname, relpath).make_ulid_key(ulid)
+            result.append(KeyData(
+                key=key,
                 serial=serial, back_serial=back_serial,
-                value=deleted if val is None else val)
+                value=deleted if val is None else val))
+        return result
 
     def tick(self):
         self.thread.exit_if_shutdown()
@@ -610,13 +616,14 @@ class FileReplicationSharedData(object):
     ERROR_QUEUE_DELAY_MULTIPLIER = 1.5
     ERROR_QUEUE_REPORT_DELAY = 2 * 60
     ERROR_QUEUE_MAX_DELAY = 60 * 60
+    num_threads: int
 
     def __init__(self, xom):
         from queue import Empty, PriorityQueue
         self.Empty = Empty
         self.xom = xom
-        self.queue = PriorityQueue()
-        self.error_queue = PriorityQueue()
+        self.queue: PriorityQueue[tuple[str, int, str, str, KeyFSTypesRO, int]] = PriorityQueue()
+        self.error_queue: PriorityQueue[tuple[int, int, str, int, None, str, KeyFSTypesRO, int]] = PriorityQueue()
         self.deleted = LRUCache(100)
         self.index_types = LRUCache(1000)
         self.errors = ReplicationErrors()
@@ -777,7 +784,7 @@ class FileReplicationSharedData(object):
 
 @hookimpl
 def devpiserver_metrics(request):
-    result = []
+    result: list[tuple[str, str, object]] = []
     xom = request.registry["xom"]
     replica_thread = getattr(xom, 'replica_thread', None)
     if not isinstance(replica_thread, ReplicaThread):
@@ -846,11 +853,13 @@ def devpiweb_get_status_info(request):
 
 
 class FileReplicationThread:
+    thread: mythread.MyThread
+
     def __init__(self, xom, shared_data):
         self.xom = xom
         self.shared_data = shared_data
         self.session = self.xom.new_http_session("replica")
-        self.file_search_path = None
+        self.file_search_path: str | None = None
         if self.xom.config.replica_file_search_path is not None:
             search_path = os.path.join(
                 self.xom.config.replica_file_search_path, '+files')
@@ -900,7 +909,7 @@ class FileReplicationThread:
         threadlog.info("using matching existing file: %s", path)
         f.seek(0)
         if self.use_hard_links:
-            f.devpi_srcpath = path
+            f.devpi_srcpath = path  # type: ignore[attr-defined]
         return (f, entry.hashes)
 
     def importer(self, serial, key, val, back_serial, session):
@@ -925,7 +934,7 @@ class FileReplicationThread:
                     entry.file_delete(is_last_of_hash=is_last_of_hash)
             self.shared_data.errors.remove(entry)
             return
-        if entry.last_modified is None:
+        if entry.deleted_or_never_fetched:
             # there is no remote file
             self.shared_data.errors.remove(entry)
             return
@@ -1091,6 +1100,8 @@ class FileReplicationThread:
 
 
 class InitialQueueThread(object):
+    thread: mythread.MyThread
+
     def __init__(self, xom, shared_data):
         self.xom = xom
         self.shared_data = shared_data
@@ -1125,7 +1136,7 @@ class InitialQueueThread(object):
                         "Processed a total of %s files (serial %s/%s) and queued %s so far.",
                         processed, tx.at_serial - item.serial, tx.at_serial, queued)
                 processed = processed + 1
-                key = keyfs.get_key_instance(item.keyname, item.relpath)
+                key = item.key
                 entry = FileEntry(key, item.value)
                 if entry.file_exists() or not entry.last_modified:
                     continue
@@ -1148,12 +1159,12 @@ class SimpleLinksChanged:
         self.xom = xom
 
     def handler(self, ev: KeyChangeEvent) -> None:
-        threadlog.debug("SimpleLinksChanged %s", ev.key)
+        threadlog.debug("SimpleLinksChanged %s", ev.data.key)
         cache = ev.data.value
         # get the normalized project (PYPILINKS uses it)
-        username = ev.key.params["user"]
-        index = ev.key.params["index"]
-        project = ev.key.params["project"]
+        username = ev.data.key.params["user"]
+        index = ev.data.key.params["index"]
+        project = ev.data.key.params["project"]
         if not project:
             threadlog.error("project %r missing", project)
             return
