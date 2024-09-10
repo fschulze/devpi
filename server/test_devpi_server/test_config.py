@@ -242,8 +242,8 @@ class TestConfig:
         config = make_config(("devpi-server", *opts))
         assert opts[1] in config.args.storage
         xom = makexom(opts=opts)
-        _large_cache = xom.keyfs._storage._large_cache
-        _small_cache = xom.keyfs._storage._small_cache
+        _large_cache = xom.keyfs._storage._cache._large_cache
+        _small_cache = xom.keyfs._storage._cache._small_cache
         assert (_large_cache.size + _small_cache.size) == 200
 
     @pytest.mark.no_storage_option
