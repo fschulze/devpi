@@ -287,9 +287,8 @@ class XOM:
             # the replica thread replays keyfs changes
             # and project-specific changes are discovered
             # and replayed through the PypiProjectChange event
-            if not self.config.requests_only:
-                self.replica_thread = ReplicaThread(self)
-                self.thread_pool.register(self.replica_thread)
+            self.replica_thread = ReplicaThread(self)
+            self.thread_pool.register(self.replica_thread)
 
     def create_future(self) -> asyncio.Future:
         return self.async_thread.loop.create_future()
