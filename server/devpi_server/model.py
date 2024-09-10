@@ -795,10 +795,6 @@ class BaseStage:
     def delete(self):
         self.model.delete_stage(self.username, self.index)
 
-    def key_projsimplelinks(self, project):
-        return self.keyfs.PROJSIMPLELINKS(user=self.username,
-            index=self.index, project=normalize_name(project))
-
     def get_releaselinks(self, project):
         # compatibility access method used by devpi-web and tests
         project = normalize_name(project)
@@ -1324,9 +1320,7 @@ class PrivateStage(BaseStage):
         versions = {x.name for x in self.key_version(project).iter_ulidkeys()}
         for version in versions:
             self.del_versiondata(project, version, cleanup=False)
-        self._regen_simplelinks(project)
         threadlog.info("deleting project %s", project)
-        self.key_projsimplelinks(project).delete()
         self.key_projectname(project).delete()
 
     def del_versiondata(self, project, version, cleanup=True):
@@ -1352,10 +1346,8 @@ class PrivateStage(BaseStage):
         linkstore = self.get_mutable_linkstore_perstage(project, version)
         linkstore.remove_links(basename=entry.basename)
         entry.delete()
-        if cleanup:
-            if not linkstore.get_links():
-                self.del_versiondata(project, version)
-            self._regen_simplelinks(project)
+        if cleanup and not linkstore.get_links():
+            self.del_versiondata(project, version)
 
     def list_versions_perstage(self, project):
         project = normalize_name(project)
@@ -1412,26 +1404,23 @@ class PrivateStage(BaseStage):
         return ensure_deeply_readonly(verdata)
 
     def get_simplelinks_perstage(self, project):
-        data = self.key_projsimplelinks(project).get()
-        links = data.get("links", [])
-        requires_python = data.get("requires_python", [])
-        yanked: list = []  # PEP 592 isn't supported for private stages yet
-        return self.SimpleLinks(
-            join_links_data(links, requires_python, yanked))
-
-    def _regen_simplelinks(self, project_input):
-        project = normalize_name(project_input)
-        links: list = []
-        requires_python = []
-        for version in self.list_versions_perstage(project):
-            linkstore = self.get_linkstore_perstage(project, version)
-            releases = linkstore.get_links(Rel.ReleaseFile)
-            links.extend(map(make_key_and_href, releases))
-            require_python = self.get_versiondata_perstage(
-                project, version, with_elinks=False).get('requires_python')
-            requires_python.extend([require_python] * len(releases))
-        data_dict = {u"links":links, u"requires_python":requires_python}
-        self.key_projsimplelinks(project).set(data_dict)
+        version_keys = []
+        versions = {}
+        for k, v in self.key_version(project).iter_ulidkey_values():
+            version_keys.append(self.key_versionfile(project=project, version=k.name))
+            versions[k.ulid] = v
+        links = self.SimpleLinks([])
+        for k, v in self.keyfs.tx.iter_ulidkey_values_for(version_keys):
+            version = versions[k.parent_ulid]
+            href = v['entrypath']
+            if (hash_spec := Digests(v['hashes']).best_available_spec):
+                href += "#" + hash_spec
+            links.append(SimplelinkMeta((
+                k.name,
+                href,
+                version.get("requires_python"),
+                None)))
+        return links
 
     def list_projects_perstage(self):
         return {x.name for x in self.key_projectname.iter_ulidkeys()}
@@ -1464,7 +1453,6 @@ class PrivateStage(BaseStage):
             content_or_file=content_or_file,
             hashes=hashes,
             last_modified=last_modified)
-        self._regen_simplelinks(project)
         return link
 
     def store_doczip(self, project, version, content_or_file,
@@ -1902,15 +1890,6 @@ class SimplelinkMeta:
             f"yanked={self.yanked!r}>")
 
 
-def make_key_and_href(entry):
-    # entry is either an ELink or a filestore.FileEntry instance.
-    # both provide a "relpath" attribute which points to a file entry.
-    href = entry.relpath
-    if (hash_spec := entry.best_available_hash_spec):
-        href += "#" + hash_spec
-    return entry.basename, href
-
-
 def normalize_bases(model, bases):
     # check and normalize base indices
     messages = []
@@ -1934,14 +1913,15 @@ def register_keys(xom, keyfs):
     # users and index configuration
     user_key = keyfs.register_named_key("USER", "{user}", None, dict)
     index_key = keyfs.register_named_key("INDEX", "{index}", user_key, dict)
+    project_key = keyfs.register_named_key("PROJECTNAME", "{project}", index_key, NormalizedName)
 
     # mirror related data
     keyfs.register_named_key("FILE_NOHASH", "+e/{dirname}/{basename}", index_key, dict)
+    keyfs.register_anonymous_key("PROJECTCACHEINFO", project_key, dict)
+    keyfs.register_named_key("MIRRORFILE", "{filename}", project_key, dict)
     keyfs.register_anonymous_key("MIRRORNAMESINIT", index_key, int)
 
     # "stage" related
-    project_key = keyfs.register_named_key("PROJECTNAME", "{project}", index_key, NormalizedName)
-    keyfs.register_anonymous_key("PROJSIMPLELINKS", project_key, dict)
     version_key = keyfs.register_named_key("VERSION", "{version}", project_key, dict)
     keyfs.register_named_key("DOCZIP", "{version}", project_key, dict)
     keyfs.register_named_key("TOXRESULT", "{filename}", version_key, dict)
