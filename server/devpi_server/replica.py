@@ -29,6 +29,7 @@ from .filestore import FileEntry
 from .fileutil import buffered_iterator
 from .fileutil import dumps, load, loads
 from .keyfs_types import KeyData
+from .keyfs_types import ULID
 from .log import thread_push_log, threadlog
 from .main import Fatal
 from .markers import deleted
@@ -557,8 +558,9 @@ class ReplicaThread:
     def get_changes(self, serial: int, changes: list[tuple]) -> Sequence[KeyData]:
         result = []
         get_key_instance = self.xom.keyfs.get_key_instance
-        for (keyname, relpath, ulid, back_serial, val) in changes:
-            key = get_key_instance(keyname, relpath).make_ulid_key(ulid)
+        for (keyname, relpath, ulid, parent_ulid, back_serial, val) in changes:
+            key = get_key_instance(keyname, relpath).make_ulid_key(
+                ULID(ulid), parent_ulid=None if parent_ulid is None else ULID(parent_ulid))
             result.append(KeyData(
                 key=key,
                 serial=serial, back_serial=back_serial,
