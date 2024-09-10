@@ -155,14 +155,14 @@ class IStorageConnection(Interface):
     def iter_changes_at(serial: int) -> Iterator[KeyData]:
         """ Returns deserialized readonly changes for given serial. """
 
-    def iter_keys_at_serial(typedkeys: Iterable[LocatedKey | PatternedKey], at_serial: int, *, skip_ulid_keys: set[ULIDKey], with_deleted: bool) -> Iterator[KeyData]:
+    def iter_keys_at_serial(typedkeys: Iterable[LocatedKey | PatternedKey], at_serial: int, *, skip_ulid_keys: set[ULIDKey], fill_cache: bool, with_deleted: bool) -> Iterator[KeyData]:
         """ Iterate over all relpaths of the given typed keys starting
             from at_serial until the first serial in the database. """
 
     def iter_rel_renames(serial: int) -> Iterable | None:
         """ Returns deserialized rel_renames for given serial. """
 
-    def iter_ulidkeys_at_serial(keys: Iterable[LocatedKey | PatternedKey], at_serial: int, *, skip_ulid_keys: set[ULIDKey], with_deleted: bool) -> Iterator[ULIDKey]:
+    def iter_ulidkeys_at_serial(keys: Iterable[LocatedKey | PatternedKey], at_serial: int, *, skip_ulid_keys: set[ULIDKey], fill_cache: bool, with_deleted: bool) -> Iterator[ULIDKey]:
         """ Get ULIDKey for given LocatedKeys. """
 
     def write_transaction(io_file: IIOFile | None) -> IWriter:
