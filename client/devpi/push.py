@@ -1,5 +1,6 @@
-from devpi_common.metadata import parse_requirement, splitbasename
 from . import pypirc
+from devpi_common.metadata import parse_requirement
+from devpi_common.metadata import splitbasename
 from pathlib import Path
 import traceback
 
@@ -10,7 +11,7 @@ class PyPIPush:
         self.user = user
         self.password = password
 
-    def execute(self, hub, name, version):
+    def execute(self, hub, name, version, docs_option=None):  # noqa: ARG002
         password = hub.derive_token(self.password, name)
         req = dict(name=name, version=str(version), posturl=self.posturl,
                    username=self.user, password=password)
@@ -23,9 +24,21 @@ class DevpiPush:
         self.targetindex = targetindex
         self.index = index
 
-    def execute(self, hub, name, version):
+    def execute(self, hub, name, version, docs_option=None):
         req = dict(name=name, version=str(version),
                    targetindex=self.targetindex)
+        if docs_option is not None:
+            features = hub.current.features or set()
+            if docs_option == 'no_docs':
+                if 'push-no-docs' not in features:
+                    hub.fatal("The server doesn't support the '--no-docs' option, 6.14.0 or newer required.")
+                req["no_docs"] = True
+            elif docs_option == 'only_docs':
+                if 'push-only-docs' not in features:
+                    hub.fatal("The server doesn't support the '--only-docs' option, 6.14.0 or newer required.")
+                req["only_docs"] = True
+            else:
+                raise RuntimeError
         return hub.http_api("push", self.index, kvdict=req, fatal=True)
 
 
@@ -81,7 +94,16 @@ def main(hub, args):
         hub.warn(
             "Old style package specification is deprecated, "
             "use this form: your-pkg-name==your.version.specifier")
-    r = pusher.execute(hub, name, version)
+    docs_option = None
+    no_docs = args.no_docs
+    only_docs = args.only_docs
+    if no_docs and only_docs:
+        hub.fatal("Can't use '--no-docs' and '--only-docs' together.")
+    elif no_docs:
+        docs_option = 'no_docs'
+    elif only_docs:
+        docs_option = 'only_docs'
+    r = pusher.execute(hub, name, version, docs_option=docs_option)
     failed = r.status_code not in (200, 201)
     if r.type == "actionlog":
         for action in r["result"]:
