@@ -27,6 +27,7 @@ def test_macros(dummyrequest, pyramidconfig):
     macros = dummyrequest.registry["macros"]
     assert sorted(macros.get_groups()) == [
         "html_head",
+        "index",
         "main_footer",
         "main_header",
         "main_header_top",
@@ -57,6 +58,15 @@ def test_macros(dummyrequest, pyramidconfig):
     ]
     assert macros.get_group("user") == [
         "user_index_list",
+    ]
+    assert macros.get_group("index") == [
+        "title",
+        "subnavigation",
+        "index_packages",
+        "index_description",
+        "index_permissions",
+        "index_bases",
+        "index_whitelist",
     ]
 
 

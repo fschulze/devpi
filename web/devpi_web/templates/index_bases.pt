@@ -1,0 +1,8 @@
+<tal:bases condition="bases">
+<h2>inherited bases</h2>
+<ul>
+    <li tal:repeat="base bases">
+        <a href="${base.url}">${base.title}</a> (<a href="${base.simple_url}">simple</a>)
+    </li>
+</ul>
+</tal:bases>
