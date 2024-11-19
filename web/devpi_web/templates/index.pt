@@ -7,9 +7,7 @@
     <body>
         <metal:header use-macro="macros.header" />
         <div id="content">
-        <h1 class="index_title">
-            ${index_name} <span tal:condition="index_title">${index_title}</span> index
-        </h1>
+        <metal:title use-macro="macros.title" />
 
         <metal:subnavigation use-macro="macros.subnavigation" />
 
