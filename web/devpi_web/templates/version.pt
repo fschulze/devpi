@@ -7,7 +7,7 @@
     <body>
         <metal:header use-macro="macros.header" />
         <div id="content">
-        <h1>${title}</h1>
+        <metal:title use-macro="macros.title" />
 
         <metal:subnavigation use-macro="macros.subnavigation" />
 

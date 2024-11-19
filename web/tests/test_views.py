@@ -232,8 +232,8 @@ def test_title_description(mapp, testapp):
     assert [x.attrs.get('title') for x in links] == [None, None, None, 'indexdescription']
     r = testapp.xget(200, api.index, headers=dict(accept="text/html"))
     (content,) = r.html.select('#content')
-    (indextitle,) = content.select('.index_title')
-    assert compareable_text(indextitle.text) == "user1/dev indextitle index"
+    (indextitle,) = content.select('.title')
+    assert compareable_text(indextitle.text) == "user1/dev (indextitle) index"
     (p,) = content.select('.index_description')
     assert compareable_text(p.text) == "indexdescription"
 

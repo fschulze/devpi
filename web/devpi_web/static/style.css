@@ -189,13 +189,11 @@ form#search .help {
     right: 1em;
 }
 
-h1.index_title span:before,
 div.user_index_list dt span:before,
 div.user_index_list ul a span:before {
     content: "(";
 }
 
-h1.index_title span:after,
 div.user_index_list dt span:after,
 div.user_index_list ul a span:after {
     content: ")";
