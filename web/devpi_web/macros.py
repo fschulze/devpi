@@ -19,6 +19,11 @@ def footer_versions(request):
         version_infos=request.registry.get('devpi_version_info'))
 
 
+@macro_config(template='templates/header_search.pt', groups='main_header_top')
+def header_search(request):  # noqa: ARG001
+    return dict()
+
+
 @macro_config(template='templates/header_status.pt', groups='main_header')
 def header_status(request):
     return dict(status_info=status_info(request))
@@ -41,6 +46,7 @@ def html_head_css(request):
 def html_head_scripts(request):
     request.add_static_script('devpi_web:static/jquery-3.6.0.min.js')
     request.add_static_script('devpi_web:static/common.js')
+    request.add_static_script('devpi_web:static/search.js')
     scripts = request.environ.setdefault('devpiweb.head_scripts', [])
     return dict(scripts=scripts)
 
