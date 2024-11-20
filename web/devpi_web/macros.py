@@ -1,4 +1,5 @@
 from .macroregistry import macro_config
+from .main import navigation_info
 from .main import status_info
 import os
 
@@ -17,6 +18,11 @@ def footer(request):  # noqa: ARG001
 def footer_versions(request):
     return dict(
         version_infos=request.registry.get('devpi_version_info'))
+
+
+@macro_config(template='templates/header_breadcrumbs.pt', groups='main_navigation')
+def header_breadcrumbs(request):
+    return dict(path=navigation_info(request)['path'])
 
 
 @macro_config(template='templates/header_search.pt', groups='main_header_top')
@@ -65,6 +71,6 @@ def query_doc(request):
     return dict(query_docs_html=query_docs_html)
 
 
-@macro_config(template='templates/status_badge.pt')
+@macro_config(template='templates/status_badge.pt', groups='main_navigation')
 def status_badge(request):
     return dict(status_info=status_info(request))

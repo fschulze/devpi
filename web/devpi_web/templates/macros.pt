@@ -2,10 +2,7 @@
     <div class="header">
         <metal:macros use-macro="macros.render_group('main_header_top')" />
         <div id="navigation">
-            <span tal:repeat="part request.navigation_info.path">
-                <a href="${part.url}">${part.title}</a>
-            </span>
-            <metal:statusbadge use-macro="macros.status_badge" />
+            <metal:macros use-macro="macros.render_group('main_navigation')" />
         </div>
         <metal:headerstatus use-macro="macros.header_status" />
         <metal:endofheader define-slot="endofheader" />
