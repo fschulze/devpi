@@ -1,12 +1,6 @@
-<!doctype html>
-<html>
-    <head>
-        <title>${title}</title>
-        <metal:macros use-macro="macros.render_group('html_head')" />
-    </head>
-    <body>
-        <metal:header use-macro="macros.header" />
-        <div id="content">
+<metal:block use-macro="main_template" tal:define="main_class 'toxresults'">
+    <metal:title fill-slot="title">devpi - ${title}</metal:title>
+    <metal:content fill-slot="content">
         <h1>${title}</h1>
 
         <table class="toxresults">
@@ -44,7 +38,5 @@
                 </tr>
             </tbody>
         </table>
-        </div>
-        <metal:footer use-macro="macros.footer" />
-    </body>
-</html>
+    </metal:content>
+</metal:block>

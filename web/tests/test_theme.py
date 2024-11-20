@@ -19,6 +19,19 @@ def xom(request, xom, themedir):
     return xom
 
 
+def test_macro_overwrite_reuse(testapp, themedir):
+    themedir.join('templates', 'html_head_css.pt').write("""
+<metal:footer use-macro="macros.original_html_head_css">
+    <metal:mycss fill-slot="headcss">
+        <mycss />
+    </metal:mycss>
+</metal:footer>
+    """)
+    r = testapp.get('/')
+    assert '<mycss />' in r.text
+    assert 'type="text/css"' in r.text
+
+
 def test_macro_overwrite(testapp, themedir):
     themedir.join('templates', 'root.pt').write("""
         <metal:head use-macro="macros.footer_versions" />

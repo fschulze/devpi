@@ -5,6 +5,7 @@ from pyramid.events import BeforeRender
 from pyramid.exceptions import ConfigurationError
 from pyramid.interfaces import IRendererFactory
 from pyramid.renderers import RendererHelper
+from pyramid.renderers import get_renderer
 from pyramid.util import TopologicalSorter
 from pyramid.util import is_nonstr_iter
 import attrs
@@ -203,6 +204,8 @@ def add_macro(config, obj=None, name=None, template=None, attr=None, deprecated=
 
 def add_renderer_globals(event):
     request = event.get('request')
+    renderer = get_renderer('templates/main_template.pt')
+    event['main_template'] = renderer.template
     if request is None:
         return
     event['macros'] = request.registry["macros"]

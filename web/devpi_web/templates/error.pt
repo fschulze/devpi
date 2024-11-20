@@ -1,16 +1,8 @@
-<!doctype html>
-<html>
-    <head>
-        <title>devpi - ${title}</title>
-        <metal:macros use-macro="macros.render_group('html_head')" />
-    </head>
-    <body>
-        <metal:header use-macro="macros.header" />
-        <div id="content">
-            <h1>Error</h1>
-            <p>An error has occurred: <strong>${status}</strong></p>
-            <p>${msg}</p>
-        </div>
-        <metal:footer use-macro="macros.footer" />
-    </body>
-</html>
+<metal:block use-macro="main_template" tal:define="main_class 'error'">
+    <metal:title fill-slot="title">devpi - ${title}</metal:title>
+    <metal:content fill-slot="content">
+        <h1>Error</h1>
+        <p>An error has occurred: <strong>${status}</strong></p>
+        <p>${msg}</p>
+    </metal:content>
+</metal:block>

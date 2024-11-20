@@ -1,4 +1,5 @@
 <footer>
-    <metal:footer define-slot="footer" />
+    <metal:footerstart define-slot="footerstart" />
     <metal:macros use-macro="macros.render_group('main_footer')" />
+    <metal:footerend define-slot="footerend" />
 </footer>
