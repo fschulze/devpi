@@ -5,7 +5,7 @@
         <metal:macros use-macro="macros.render_group('html_head')" />
     </head>
     <body>
-        <metal:search use-macro="request.macros['navigation']" />
+        <metal:header use-macro="macros.header" />
         <div id="content">
             <h1>Not Found</h1>
             <p>The following resource could not be found:</p>

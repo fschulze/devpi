@@ -1,13 +1,3 @@
-<metal:search define-macro="navigation">
-    <div class="header">
-        <metal:macros use-macro="macros.render_group('main_header_top')" />
-        <div id="navigation">
-            <metal:macros use-macro="macros.render_group('main_navigation')" />
-        </div>
-        <metal:headerstatus use-macro="macros.header_status" />
-        <metal:endofheader define-slot="endofheader" />
-    </div>
-</metal:search>
 <metal:rootaboveuserindexlist define-macro="rootaboveuserindexlist">
 </metal:rootaboveuserindexlist>
 <metal:rootbelowuserindexlist define-macro="rootbelowuserindexlist">
