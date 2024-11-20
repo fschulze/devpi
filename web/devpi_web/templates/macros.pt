@@ -1,6 +1,3 @@
-<metal:head define-macro="head">
-    <metal:macros use-macro="macros.render_group('html_head')" />
-</metal:head>
 <metal:search define-macro="search">
     <form method="get" id="search" action="${request.route_url('search')}">
         <metal:logo use-macro="macros.logo" />

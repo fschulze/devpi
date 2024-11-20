@@ -2,7 +2,7 @@
 <html>
     <head>
         <title>${title}</title>
-        <metal:head use-macro="request.macros['head']" />
+        <metal:macros use-macro="macros.render_group('html_head')" />
         <script src="${request.static_url('devpi_web:static/docview.js')}"></script>
     </head>
     <body>
