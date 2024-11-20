@@ -347,6 +347,11 @@ def macro_config(
 
 def macros(request):
     # returns macros which may partially be overwritten in a theme
+    warnings.warn(
+        "Using request.macros is deprecated, use macros instead.",
+        DeprecationWarning,
+        stacklevel=5,
+    )
     return request.registry["macros"]
 
 
