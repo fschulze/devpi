@@ -1,4 +1,5 @@
 from .macroregistry import macro_config
+from .main import status_info
 
 
 @macro_config(template='templates/footer.pt')
@@ -15,3 +16,8 @@ def footer_versions(request):
 @macro_config(template='templates/logo.pt')
 def logo(request):  # noqa: ARG001
     return dict()
+
+
+@macro_config(template='templates/status_badge.pt')
+def status_badge(request):
+    return dict(status_info=status_info(request))
