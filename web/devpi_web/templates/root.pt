@@ -7,9 +7,7 @@
     <body>
         <metal:header use-macro="macros.header" />
         <div id="content">
-        <metal:rootaboveuserindexlist use-macro="request.macros['rootaboveuserindexlist']" />
-        <metal:macros tal:repeat="name request.registry['macros'].get_group('root')" use-macro="macros[name]" />
-        <metal:rootbelowuserindexlist use-macro="request.macros['rootbelowuserindexlist']" />
+            <metal:macros tal:repeat="name request.registry['macros'].get_group('root')" use-macro="macros[name]" />
         </div>
         <metal:footer use-macro="macros.footer" />
     </body>

@@ -286,14 +286,12 @@ class TestStatusView:
 
     @pytest.fixture
     def statusview(self, dummyrequest, pyramidconfig):
-        from devpi_web.main import macros
         pyramidconfig.include('pyramid_chameleon')
         pyramidconfig.include('devpi_web.macroregistry')
         pyramidconfig.add_static_view('+static', 'devpi_web:static')
         pyramidconfig.add_route("/+status", "/+status")
         pyramidconfig.scan('devpi_web.macros')
         pyramidconfig.scan('devpi_web.views', ignore=lambda n: 'statusview' not in n)
-        dummyrequest.macros = macros(dummyrequest)
         dummyrequest.add_static_css = lambda _href: None
         dummyrequest.add_static_script = lambda _src: None
         return _getViewCallable(
@@ -416,14 +414,12 @@ class TestReplicaStatusView:
 
     @pytest.fixture
     def statusview(self, dummyrequest, pyramidconfig):
-        from devpi_web.main import macros
         pyramidconfig.include('pyramid_chameleon')
         pyramidconfig.include('devpi_web.macroregistry')
         pyramidconfig.add_static_view('+static', 'devpi_web:static')
         pyramidconfig.add_route("/+status", "/+status")
         pyramidconfig.scan('devpi_web.macros')
         pyramidconfig.scan('devpi_web.views', ignore=lambda n: 'statusview' not in n)
-        dummyrequest.macros = macros(dummyrequest)
         dummyrequest.add_static_css = lambda _href: None
         dummyrequest.add_static_script = lambda _src: None
         return _getViewCallable(
