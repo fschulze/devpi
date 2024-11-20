@@ -2,7 +2,7 @@
 <html>
     <head>
         <title>devpi</title>
-        <metal:head use-macro="request.macros['head']" />
+        <metal:macros use-macro="macros.render_group('html_head')" />
     </head>
     <body>
         <metal:search use-macro="request.macros['navigation']" />

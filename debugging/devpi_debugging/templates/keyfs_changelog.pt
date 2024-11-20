@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
     <head>
-        <metal:head use-macro="request.macros['head']" />
+        <metal:macros use-macro="macros.render_group('html_head')" />
         <title>Serial ${serial}/${last_changelog_serial}</title>
         <style>
             body {

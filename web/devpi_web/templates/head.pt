@@ -1,0 +1,1 @@
+<metal:macros use-macro="macros.render_group('html_head')" />
