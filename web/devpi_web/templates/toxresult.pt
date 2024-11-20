@@ -38,6 +38,6 @@
                 <pre>${command.output}</pre>
             </div>
         </div>
-        <metal:footer use-macro="request.macros['footer']" />
+        <metal:footer use-macro="macros.footer" />
     </body>
 </html>
