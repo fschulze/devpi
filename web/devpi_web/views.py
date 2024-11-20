@@ -1,3 +1,4 @@
+from .main import status_info
 from defusedxml.xmlrpc import DefusedExpatParser
 from devpi_common.metadata import Version
 from devpi_common.metadata import get_pyversion_filetype
@@ -907,7 +908,7 @@ def statusview(request):
     primary_serial_ts = status.get('primary-serial-timestamp', status.get('master-serial-timestamp'))
     update_from_primary_at = status.get('update-from-primary-at', status.get('update-from-master-at'))
     return dict(
-        msgs=request.status_info['msgs'],
+        msgs=status_info(request)['msgs'],
         info=dict(
             uuid=status.get('uuid', 'unknown'),
             role=status.get('role', 'unknown'),

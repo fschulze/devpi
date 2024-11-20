@@ -10,6 +10,7 @@ from devpi_web.doczip import remove_docs
 from devpi_web.indexing import ProjectIndexingInfo
 from devpi_web.indexing import is_project_cached
 from devpi_server.log import threadlog
+from functools import wraps
 from pluggy import HookimplMarker
 from pyramid.renderers import get_renderer
 from pyramid_chameleon.renderer import ChameleonRendererLookup
@@ -20,6 +21,21 @@ import warnings
 
 hookimpl = HookimplMarker("devpiweb")
 devpiserver_hookimpl = HookimplMarker("devpiserver")
+
+
+def cached_on_request(func):
+    name = f"__devpiweb_{func.__name__}"
+    notset = object()
+
+    @wraps(func)
+    def wrapped(request):
+        cached = getattr(request, name, notset)
+        if cached is notset:
+            cached = func(request)
+            setattr(request, name, cached)
+        return cached
+
+    return wrapped
 
 
 def theme_static_url(request, path):
@@ -102,6 +118,7 @@ def navigation_info(request):
     return result
 
 
+@cached_on_request
 def status_info(request):
     msgs = []
     pm = request.registry['devpiweb-pluginmanager']
