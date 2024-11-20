@@ -35,6 +35,7 @@ def test_macros(dummyrequest, pyramidconfig):
         "project",
         "root",
         "user",
+        "version",
     ]
     assert macros.get_group("html_head") == [
         "favicon",
@@ -76,6 +77,16 @@ def test_macros(dummyrequest, pyramidconfig):
         "project_refresh",
         "project_latest_version",
         "project_versions",
+    ]
+    assert macros.get_group("version") == [
+        "title",
+        "subnavigation",
+        "version_summary",
+        "version_metadata",
+        "blocked_indexes",
+        "version_files",
+        "version_description",
+        "version_docs",
     ]
 
 

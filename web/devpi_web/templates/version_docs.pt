@@ -1,0 +1,3 @@
+<p tal:condition="docs">
+    Download documentation as zip-file: <a href="${docs.zip_url}">${docs.title}</a>
+</p>

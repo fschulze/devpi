@@ -1,0 +1,1 @@
+<p id="summary" tal:condition="summary" tal:content="summary" />
