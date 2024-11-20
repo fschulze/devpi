@@ -31,6 +31,6 @@
         </div>
         <metal:rootbelowuserindexlist use-macro="request.macros['rootbelowuserindexlist']" />
         </div>
-        <metal:footer use-macro="request.macros['footer']" />
+        <metal:footer use-macro="macros.footer" />
     </body>
 </html>

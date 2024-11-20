@@ -32,16 +32,19 @@ def macros(request):
     warnings.warn(
         "Using request.macros is deprecated, use macros instead.",
         DeprecationWarning, stacklevel=5)
-    result = {}
+    result = request.registry["macros"].get_macros()
     paths = [
         "devpi_web:templates/macros.pt",
         "templates/macros.pt"]
     for path in paths:
-        renderer = get_renderer(path)
+        try:
+            renderer = get_renderer(path)
+        except ValueError:
+            continue
         macros = renderer.implementation().macros
         for name in macros.names:
             if name in result:
-                result['original-%s' % name] = result[name]
+                result[f'original-{name}'] = result[name]
             result[name] = macros[name]
     return result
 

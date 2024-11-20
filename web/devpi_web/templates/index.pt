@@ -91,6 +91,6 @@
         </ul>
         <p tal:condition="not whitelist">No packages whitelisted.</p>
         </div>
-        <metal:footer use-macro="request.macros['footer']" />
+        <metal:footer use-macro="macros.footer" />
     </body>
 </html>

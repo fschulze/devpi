@@ -23,7 +23,7 @@
                 scrolling="no">
             </iframe>
         </div>
-        <metal:footer use-macro="request.macros['footer']" />
+        <metal:footer use-macro="macros.footer" />
         <script type="text/javascript">
         //<![CDATA[
             $('iframe#devpi-doc').on('load', onIFrameLoad);

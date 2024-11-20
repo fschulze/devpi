@@ -114,6 +114,6 @@
             </dl>
         </tal:pollingreplicas>
         </div>
-        <metal:footer use-macro="request.macros['footer']" />
+        <metal:footer use-macro="macros.footer" />
     </body>
 </html>
