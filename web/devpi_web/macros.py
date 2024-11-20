@@ -1,8 +1,9 @@
 from .macroregistry import macro_config
 from .main import status_info
+import os
 
 
-@macro_config(template='templates/favicon.pt')
+@macro_config(template='templates/favicon.pt', groups='html_head')
 def favicon(request):  # noqa: ARG001
     return dict()
 
@@ -23,7 +24,20 @@ def header_status(request):
     return dict(status_info=status_info(request))
 
 
-@macro_config(template='templates/html_head_scripts.pt')
+@macro_config(template='templates/html_head_css.pt', groups='html_head')
+def html_head_css(request):
+    request.add_static_css('devpi_web:static/style.css')
+    theme_path = request.registry.get('theme_path')
+    if theme_path:
+        style_css = os.path.join(theme_path, 'static', 'style.css')
+        if os.path.exists(style_css):
+            request.add_href_css(
+                request.theme_static_url(style_css))
+    css = request.environ.setdefault('devpiweb.head_css', [])
+    return dict(css=css)
+
+
+@macro_config(template='templates/html_head_scripts.pt', groups='html_head')
 def html_head_scripts(request):
     request.add_static_script('devpi_web:static/jquery-3.6.0.min.js')
     request.add_static_script('devpi_web:static/common.js')
