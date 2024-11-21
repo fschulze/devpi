@@ -5,7 +5,7 @@
         <metal:macros use-macro="macros.render_group('html_head')" />
     </head>
     <body>
-        <metal:search use-macro="request.macros['navigation']" />
+        <metal:header use-macro="macros.header" />
         <div id="content">
         <metal:rootaboveuserindexlist use-macro="request.macros['rootaboveuserindexlist']" />
         <div class="user_index_list">

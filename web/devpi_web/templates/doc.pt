@@ -6,7 +6,7 @@
         <script src="${request.static_url('devpi_web:static/docview.js')}"></script>
     </head>
     <body>
-        <metal:search use-macro="request.macros['navigation']">
+        <metal:header use-macro="macros.header">
             <tal:endofheader metal:fill-slot="endofheader">
                 <div class="infonote" tal:condition="version_mismatch">
                     The latest available documentation (version ${doc_version}) isn't for the latest available package version.
@@ -15,7 +15,7 @@
                     <tal:link repeat="link version_links"><a tal:attributes="class link.get('css_class')" href="${link.url}">${link.title}</a><tal:sep condition="not repeat.link.end"> | </tal:sep></tal:link>
                 </div>
             </tal:endofheader>
-        </metal:search>
+        </metal:header>
         <div class="iframe">
             <iframe
                 id="devpi-doc"

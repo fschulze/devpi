@@ -25,6 +25,11 @@ def head(request):  # noqa: ARG001
     return dict()
 
 
+@macro_config(template='templates/header.pt')
+def header(request):  # noqa: ARG001
+    return dict()
+
+
 @macro_config(template='templates/header_breadcrumbs.pt', groups='main_navigation')
 def header_breadcrumbs(request):
     return dict(path=navigation_info(request)['path'])
@@ -64,6 +69,11 @@ def html_head_scripts(request):
 
 @macro_config(template='templates/logo.pt')
 def logo(request):  # noqa: ARG001
+    return dict()
+
+
+@macro_config(template='templates/header.pt', deprecated=True)
+def navigation(request):  # noqa: ARG001
     return dict()
 
 

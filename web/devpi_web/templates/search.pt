@@ -4,7 +4,7 @@
         <metal:macros use-macro="macros.render_group('html_head')" />
     </head>
     <body>
-        <metal:search use-macro="request.macros['navigation']" />
+        <metal:header use-macro="macros.header" />
         <div class="searchresults" tal:condition="result|None">
             <dl>
                 <tal:item tal:repeat="item result['items']">
