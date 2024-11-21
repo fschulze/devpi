@@ -32,6 +32,7 @@ def test_macros(dummyrequest, pyramidconfig):
         "main_header",
         "main_header_top",
         "main_navigation",
+        "project",
         "root",
         "user",
     ]
@@ -67,6 +68,14 @@ def test_macros(dummyrequest, pyramidconfig):
         "index_permissions",
         "index_bases",
         "index_whitelist",
+    ]
+    assert macros.get_group("project") == [
+        "title",
+        "subnavigation",
+        "blocked_indexes",
+        "project_refresh",
+        "project_latest_version",
+        "project_versions",
     ]
 
 
