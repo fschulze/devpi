@@ -94,13 +94,15 @@ def navigation_version(context):
     return version
 
 
+@cached_on_request
 def navigation_info(request):
     context = request.context
+    matchdict = request.matchdict
     path = [dict(
         url=request.route_url("root"),
         title="devpi")]
     result = dict(path=path)
-    if context.matchdict and 'user' in context.matchdict:
+    if matchdict and 'user' in matchdict:
         user = context.username
         path.append(dict(
             url=request.route_url(
@@ -108,14 +110,14 @@ def navigation_info(request):
             title="%s" % user))
     else:
         return result
-    if 'index' in context.matchdict:
+    if 'index' in matchdict:
         index = context.index
         path.append(dict(
             url=request.stage_url(user, index),
             title="%s" % index))
     else:
         return result
-    if 'project' in context.matchdict:
+    if 'project' in matchdict:
         project = context.matchdict['project']
         name = normalize_name(project)
         path.append(dict(
@@ -124,7 +126,7 @@ def navigation_info(request):
             title=name))
     else:
         return result
-    if 'version' in context.matchdict:
+    if 'version' in matchdict:
         version = navigation_version(context)
         path.append(dict(
             url=request.route_url(
@@ -218,7 +220,6 @@ def includeme(config):
     config.add_request_method(add_static_css)
     config.add_request_method(add_static_script)
     config.add_request_method(macros, reify=True)
-    config.add_request_method(navigation_info, reify=True)
     config.scan()
 
 

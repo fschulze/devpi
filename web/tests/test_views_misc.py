@@ -282,7 +282,6 @@ class TestStatusView:
         dummyrequest.registry['xom'] = xom
         dummyrequest.accept = 'text/html'
         dummyrequest.route_url = lambda r, **kw: "#"
-        dummyrequest.navigation_info = {'path': ''}
         return dummyrequest
 
     @pytest.fixture
