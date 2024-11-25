@@ -1,20 +1,29 @@
 :root {
   --main-bg-color: white;
   --main-fg-color: black;
+  --main-bg-color-dark: #0e0e0e;
+  --main-fg-color-dark: white;
   --main-alternate-bg-color: #efefef;
+  --main-alternate-fg-color: #0a0a0a;
   --main-margin: 2em;
   --text-shadow: 0 0 2px black, 0 0 2px black, 0 0 2px black;
   --text-shadow-color: white;
   --muted-bg-color: #707173;
+  --muted-bg-color-dark: #131313;
   --muted-bg-color-darkened: #555;
   --muted-fg-color: white;
-  --poppy-bg-color: #1f99d2;
+  --poppy-primary-color: #1f99d2;
+  --poppy-primary-color-alt: #2fc2e3;
+  --poppy-secondary-color: #d87d28;
+  --poppy-secondary-color-alt: #d89a28;
+  --poppy-bg-color: var(--poppy-primary-color);
   --poppy-fg-color: white;
   --header-bg-color: var(--poppy-bg-color);
   --header-fg-color: var(--poppy-fg-color);
-  --dl-dt-bg-color: var(--header-bg-color);
+  --dl-dt-bg-color: var(--poppy-secondary-color);
   --dl-dt-fg-color: var(--header-fg-color);
-  --dl-border-color: var(--muted-bg-color);
+  --dl-dt-header-color: var(--main-fg-color);
+  --dl-border-color: var(--main-alternate-bg-color);
   --table-th-bg-color: var(--header-bg-color);
   --table-th-fg-color: var(--header-fg-color);
   --table-border-color: var(--muted-bg-color);
@@ -95,6 +104,7 @@ header .search input[type=search] {
 }
 
 header .search input[type=submit] {
+    appearance: button;
     -moz-appearance: button;
     -webkit-appearance: button;
 }
@@ -224,6 +234,13 @@ a.logo {
     font-size: 0.75rem;
 }
 
+.user_index_list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, 20em);
+    justify-content: space-around;
+    grid-gap: 1em;
+}
+
 .user_index_list dt span:before,
 .user_index_list ul a span:before {
     content: "(";
@@ -234,36 +251,29 @@ a.logo {
     content: ")";
 }
 
-.user_index_list {
-    display: flex;
-    flex-flow: row wrap;
-    gap: 1em;
-}
-
 .user_index_list dl {
-    flex: 1 1 20em;
     border: 1px solid var(--dl-border-color);
+    box-shadow: rgba(0, 0, 0, 0.15) 1.95px 1.95px 2.6px;
     border-radius: 5px;
 }
 
 .user_index_list dt {
-    background-color: var(--dl-dt-bg-color);
-    color: var(--text-shadow-color);
+    color: var(--main-fg-color);
     font-weight: bold;
     margin: 0;
-    padding: 0.25em 0.5em;
-    text-shadow: var(--text-shadow);
+    padding: 0.5em 0.5em;
+    border-bottom: var(--poppy-secondary-color) solid 3px;
     -webkit-font-smoothing: antialiased;
     font-smoothing: antialiased;
 }
 
 .user_index_list dt a {
-    color: var(--dl-dt-fg-color);
+    color: var(--dl-dt-header-color);
 }
 
 .user_index_list dd {
+    padding: 1em 0.5em 0.5em 1em;
     margin: 0;
-    padding: 0;
 }
 
 .user_index_list dd.user_description {
@@ -279,8 +289,13 @@ a.logo {
 }
 
 .user_index_list li {
-    margin: 0.25em 0.5em;
-    padding: 0;
+    margin: 0.5em 0.5em;
+    padding: 0.1em;
+}
+
+.user_index_list li span {
+    font-size: 0.8em;
+    font-weight: bold;
 }
 
 table > caption {
@@ -778,4 +793,25 @@ footer li {
     table td.status {
         text-align: left;
     }
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --main-bg-color: var(--main-bg-color-dark);
+        --main-fg-color: var(--main-fg-color-dark);
+        --poppy-bg-color: var(--poppy-secondary-color);
+        --poppy-fg-color: var(--main-bg-color-dark);
+        --header-bg-color: var(--poppy-fg-color);
+        --header-fg-color: var(--poppy-bg-color);
+        --muted-bg-color: var(--muted-bg-color-dark);
+        --dl-dt-header-color: var(--main-fg-color);
+        --dl-border-color: var(--muted-bg-color-darkened);
+    }
+    main a {
+        color: var(--poppy-primary-color);
+    }
+    main a:visited {
+        color: var(--poppy-primary-color-alt);
+    }
+    
 }
