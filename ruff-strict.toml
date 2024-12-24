@@ -7,7 +7,6 @@ target-version = "py37"
 
 [format]
 exclude = [
-    "postgresql/setup.py",
     "server/devpi_server/filestore.py",
     "server/devpi_server/interfaces.py",
     "server/devpi_server/keyfs.py",
