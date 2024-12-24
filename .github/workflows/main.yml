@@ -425,9 +425,9 @@ jobs:
       matrix:
         include:
           - project: "postgresql"
-            python-version: "3.7"
-            os: "ubuntu-22.04"
-            tox-envs: "py37-server680"
+            python-version: "3.9"
+            os: "ubuntu-latest"
+            tox-envs: "py39-server680"
 
     env:
       PY_COLORS: 1
