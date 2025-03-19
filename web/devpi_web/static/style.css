@@ -36,6 +36,7 @@
   --fatal-contrast-color: white;
   --warning-contrast-color: white;
   --success-contrast-color: black;
+  --card-box-shadow-color: rgba(40, 40, 49, 0.06);
 }
 
 body, html {
@@ -252,19 +253,22 @@ a.logo {
 }
 
 .user_index_list dl {
-    border: 1px solid var(--dl-border-color);
-    box-shadow: rgba(0, 0, 0, 0.15) 1.95px 1.95px 2.6px;
     border-radius: 5px;
+    border: 2px solid var(--main-alternate-bg-color);
+    border-top-width: 2px;
+    border-top-style: solid;
+    border-top-color: rgb(232, 232, 232);
+    border-top: var(--poppy-secondary-color) solid 5px;
+    box-shadow: var(--card-box-shadow-color) 0px 4px 16px, var(--card-box-shadow-color) 0px 8px 32px;
 }
 
 .user_index_list dt {
     color: var(--main-fg-color);
     font-weight: bold;
-    margin: 0;
+    margin: 0 1em;
     padding: 0.5em 0.5em;
-    border-bottom: var(--poppy-secondary-color) solid 3px;
-    -webkit-font-smoothing: antialiased;
     font-smoothing: antialiased;
+    border-bottom: 1px solid var(--main-alternate-bg-color);
 }
 
 .user_index_list dt a {
@@ -272,8 +276,8 @@ a.logo {
 }
 
 .user_index_list dd {
-    padding: 1em 0.5em 0.5em 1em;
-    margin: 0;
+    padding: 0.5em 0.5em 0em 0.5em;
+    margin-left: 1em;
 }
 
 .user_index_list dd.user_description {
