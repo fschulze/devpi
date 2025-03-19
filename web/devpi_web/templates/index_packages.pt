@@ -1,5 +1,6 @@
 <aside class="index_packages">
     <h2>in-stage latest packages, at least as recent as bases</h2>
+    <a class="permissions-skip" href="#permissions">Skip to permissions</a>
     <table class="main packages" tal:condition="packages">
         <caption>Packages</caption>
         <thead>
