@@ -1,5 +1,6 @@
 <aside class="index_packages">
     <h2>in-stage latest packages, at least as recent as bases</h2>
+    <a class="skip-link skip-index-packages" href="#end-of-index-packages">Skip past package list</a>
     <table class="main packages" tal:condition="packages">
         <caption>Packages</caption>
         <thead>
@@ -42,3 +43,4 @@
     </table>
     <p tal:condition="not packages">No packages uploaded.</p>
 </aside>
+<div id="end-of-index-packages"></div>

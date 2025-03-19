@@ -70,7 +70,8 @@ def test_index_view_root_pypi(testapp):
     assert r.status_code == 200
     links = r.html.select("main a")
     assert [(l.text, l.attrs["href"]) for l in links] == [
-        ("Simple index", "http://localhost/root/pypi/+simple/")
+        ("Simple index", "http://localhost/root/pypi/+simple/"),
+        ("Skip past package list", "#end-of-index-packages"),
     ]
 
 
@@ -81,6 +82,7 @@ def test_index_view(mapp, testapp):
     links = r.html.select("main a")
     assert [(l.text, l.attrs["href"]) for l in links] == [
         ("Simple index", "http://localhost/%s/+simple/" % api.stagename),
+        ("Skip past package list", "#end-of-index-packages"),
         ("root/pypi", "http://localhost/root/pypi"),
         ("simple", "http://localhost/root/pypi/+simple/"),
     ]
@@ -101,6 +103,7 @@ def test_index_view_project_info(mapp, testapp):
     links = r.html.select("main a")
     assert [(l.text, l.attrs["href"]) for l in links] == [
         ("Simple index", "http://localhost/%s/+simple/" % api.stagename),
+        ("Skip past package list", "#end-of-index-packages"),
         ("pkg1", "http://localhost/%s/pkg1" % api.stagename),
         ("2.6", "http://localhost/%s/pkg1/2.6" % api.stagename),
         ("root/pypi", "http://localhost/root/pypi"),
@@ -118,6 +121,7 @@ def test_index_view_project_files(mapp, testapp):
 
     assert [(l.text, l.attrs["href"]) for l in links] == [
         ("Simple index", "http://localhost/%s/+simple/" % api.stagename),
+        ("Skip past package list", "#end-of-index-packages"),
         ("pkg1", "http://localhost/%s/pkg1" % api.stagename),
         ("2.6", "http://localhost/%s/pkg1/2.6" % api.stagename),
         ("pkg1-2.6.tar.gz", tar_url),
@@ -132,6 +136,7 @@ def test_index_view_project_files(mapp, testapp):
     links = r.html.select("main a")
     assert [(l.text, l.attrs["href"]) for l in links] == [
         ("Simple index", "http://localhost/%s/+simple/" % api.stagename),
+        ("Skip past package list", "#end-of-index-packages"),
         ("pkg1", "http://localhost/%s/pkg1" % api.stagename),
         ("2.6", "http://localhost/%s/pkg1/2.6" % api.stagename),
         ("pkg1-2.6.tar.gz", tar_url),
@@ -155,6 +160,7 @@ def test_index_view_project_docs(keep_docs_packed, mapp, testapp):
     links = r.html.select("main a")
     assert [(l.text, l.attrs["href"]) for l in links] == [
         ("Simple index", "http://localhost/%s/+simple/" % api.stagename),
+        ("Skip past package list", "#end-of-index-packages"),
         ("pkg1", "http://localhost/%s/pkg1" % api.stagename),
         ("2.6", "http://localhost/%s/pkg1/2.6" % api.stagename),
         ("pkg1 2.6", "http://localhost/%s/pkg1/2.6/+d/index.html" % api.stagename),
@@ -646,6 +652,7 @@ def test_complex_name(mapp, testapp):
     links = r.html.select("main a")
     assert [(compareable_text(l.text), l.attrs["href"]) for l in links] == [
         ("Simple index", "http://localhost/user1/dev/+simple/"),
+        ("Skip past package list", "#end-of-index-packages"),
         (pkgname, "http://localhost/user1/dev/%s" % pkgname),
         ("0.9", "http://localhost/user1/dev/%s/0.9" % pkgname),
         (
