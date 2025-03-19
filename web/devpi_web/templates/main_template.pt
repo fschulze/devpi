@@ -6,7 +6,7 @@
         <title><metal:title define-slot="title">devpi</metal:title></title>
         <metal:macros use-macro="macros.render_group('html_head')" />
     </head>
-    <body>
+    <body id="body">
         <header>
             <div class="headertop">
                 <metal:macros use-macro="macros.render_group('main_header_top')" />

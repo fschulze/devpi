@@ -603,6 +603,21 @@ table.projectinfos .opened td:after {
     color: var(--warning-contrast-color);
 }
 
+.jumptotop {
+    position: fixed;
+    right: 1em;
+    bottom: 1em;
+    font-size: 2em;
+    text-shadow: 1px 1px 1px #8e8e8e;
+    color: #000;
+}
+
+.jumptotop:hover {
+    text-decoration: none;
+    color: #2a2a2a;
+    content: "🡡"
+}
+
 details.toxresult {
     border: 1px solid transparent;
     margin: 2em calc(-0.5em + 1px);
@@ -638,6 +653,10 @@ footer {
     margin: 0;
     padding: 0 var(--main-margin) var(--main-margin) var(--main-margin);
     font-size: 0.9rem;
+}
+
+footer h4 {
+    font-size: 1.2em;
 }
 
 footer a {
@@ -812,6 +831,15 @@ footer li {
     }
     main a:visited {
         color: var(--poppy-primary-color-alt);
+    }
+
+    .jumptotop {
+        position: fixed;
+        right: 1em;
+        bottom: 1em;
+        font-size: 2em;
+        text-shadow: 1px 1px 1px #8e8e8e;
+        color: #fff;
     }
     
 }
