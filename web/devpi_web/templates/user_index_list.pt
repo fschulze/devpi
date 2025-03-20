@@ -1,5 +1,8 @@
-<article class="user_index_list" tal:define="show_user_link show_user_link | True">
-    <tal:items repeat="user users">
-        <metal:userindexlist use-macro="macros.user_index_list_item(user, show_user_link=show_user_link)" />
-    </tal:items>
+<article tal:define="show_user_link show_user_link | True">
+    <h2>Overview of users and their indexes</h2>
+    <div class="user_index_list">
+        <tal:items repeat="user users">
+            <metal:userindexlist use-macro="macros.user_index_list_item(user, show_user_link=show_user_link)" />
+        </tal:items>
+    </div>
 </article>
