@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
     <head>
         <title><metal:title define-slot="title">devpi</metal:title></title>
         <metal:macros use-macro="macros.render_group('html_head')" />
