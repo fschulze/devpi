@@ -19,7 +19,7 @@
                     <tal:tests condition="toxresults_state is not None">
                         (<a href="${package.make_toxresults_url(basename=file.basename)}" class="${toxresults_state}">tests</a>)
                     </tal:tests>
-                    <br tal:condition="not repeat.file.end" />
+                    <br tal:condition="not repeat.file.end">
                 </tal:file>
             </tal:files>
         </td>
