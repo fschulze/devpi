@@ -10,13 +10,15 @@ def test_macros(dummyrequest, pyramidconfig):
             "html_head_scripts",
         ],
         "index": [
-            "title",
-            "subnavigation",
             "index_packages",
             "index_description",
             "index_permissions",
             "index_bases",
             "index_whitelist",
+        ],
+        "index_header": [
+            "title",
+            "subnavigation",
         ],
         "main_footer": [
             "footer_about",
@@ -34,12 +36,14 @@ def test_macros(dummyrequest, pyramidconfig):
             "status_badge",
         ],
         "project": [
-            "title",
-            "subnavigation",
             "blocked_indexes",
             "project_refresh",
             "project_latest_version",
             "project_versions",
+        ],
+        "project_header": [
+            "title",
+            "subnavigation",
         ],
         "root": [
             "user_index_list",
@@ -48,13 +52,15 @@ def test_macros(dummyrequest, pyramidconfig):
             "user_index_list",
         ],
         "version": [
-            "title",
-            "subnavigation",
-            "version_summary",
             "version_metadata",
             "blocked_indexes",
             "version_files",
             "version_description",
             "version_docs",
+        ],
+        "version_header": [
+            "title",
+            "subnavigation",
+            "version_summary",
         ],
     }

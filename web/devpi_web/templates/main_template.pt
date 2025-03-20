@@ -19,7 +19,12 @@
         </header>
         <metal:contentwrapper define-slot="content-wrapper">
             <main tal:attributes="class main_class | None">
-                <metal:content define-slot="content"></metal:content>
+                <div class="content_header">
+                    <metal:contentheader define-slot="content_header"></metal:contentheader>
+                </div>
+                <div class="content">
+                    <metal:content define-slot="content"></metal:content>
+                </div>
             </main>
         </metal:contentwrapper>
         <metal:footer use-macro="macros.footer" />

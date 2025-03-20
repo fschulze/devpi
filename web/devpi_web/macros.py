@@ -6,7 +6,7 @@ import os
 @macro_config(
     template="templates/blocked_indexes.pt",
     groups=(
-        GroupDef("project", after="subnavigation"),
+        GroupDef("project"),
         GroupDef("version", after="version_metadata"),
     ),
 )
@@ -114,7 +114,7 @@ def index_description(request):  # noqa: ARG001
 
 @macro_config(
     template="templates/index_packages.pt",
-    groups=GroupDef("index", after="subnavigation"),
+    groups=GroupDef("index"),
 )
 def index_packages(request):  # noqa: ARG001
     return dict()
@@ -186,16 +186,19 @@ def status_badge(request):
 @macro_config(
     template="templates/subnavigation.pt",
     groups=(
-        GroupDef("index", after="title"),
-        GroupDef("project", after="title"),
-        GroupDef("version", after="title"),
+        GroupDef("index_header", after="title"),
+        GroupDef("project_header", after="title"),
+        GroupDef("version_header", after="title"),
     ),
 )
 def subnavigation(request):  # noqa: ARG001
     return dict()
 
 
-@macro_config(template="templates/title.pt", groups=("index", "project", "version"))
+@macro_config(
+    template="templates/title.pt",
+    groups=("index_header", "project_header", "version_header"),
+)
 def title(request):  # noqa: ARG001
     return dict()
 
@@ -236,7 +239,7 @@ def version_files(request):  # noqa: ARG001
 
 @macro_config(
     template="templates/version_metadata.pt",
-    groups=GroupDef("version", after="version_summary"),
+    groups=GroupDef("version"),
 )
 def version_metadata(request):  # noqa: ARG001
     return dict()
@@ -244,7 +247,7 @@ def version_metadata(request):  # noqa: ARG001
 
 @macro_config(
     template="templates/version_summary.pt",
-    groups=GroupDef("version", after="subnavigation"),
+    groups=GroupDef("version_header", after="subnavigation"),
 )
 def version_summary(request):  # noqa: ARG001
     return dict()

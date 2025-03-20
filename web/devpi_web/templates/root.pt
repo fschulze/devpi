@@ -1,4 +1,7 @@
 <metal:block use-macro="main_template" tal:define="main_class 'root'">
+    <metal:contentheader fill-slot="content_header">
+        <h1 class="title">Overview of users and their indexes</h1>
+    </metal:contentheader>
     <metal:content fill-slot="content">
         <metal:macros use-macro="macros.render_group('root')" />
     </metal:content>

@@ -1,5 +1,8 @@
 <metal:block use-macro="main_template" tal:define="main_class 'index'">
     <metal:title fill-slot="title">devpi - ${title}</metal:title>
+    <metal:contentheader fill-slot="content_header">
+        <metal:macros tal:repeat="name request.registry['macros'].get_group('index_header')" use-macro="macros[name]" />
+    </metal:contentheader>
     <metal:content fill-slot="content">
         <metal:macros tal:repeat="name request.registry['macros'].get_group('index')" use-macro="macros[name]" />
     </metal:content>
