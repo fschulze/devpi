@@ -1,4 +1,5 @@
 from .main import status_info
+from attrs import define
 from defusedxml.xmlrpc import DefusedExpatParser
 from devpi_common.metadata import Version
 from devpi_common.metadata import get_latest_version
@@ -12,6 +13,7 @@ from devpi_server.readonly import SeqViewReadonly
 from devpi_server.views import StatusView, url_for_entrypath
 from devpi_server.views import PyPIView
 from devpi_web.compat import get_entry_hash_spec
+from devpi_web.compat import get_entry_hash_type
 from devpi_web.compat import get_entry_hash_value
 from devpi_web.description import get_description
 from devpi_web.doczip import Docs
@@ -23,7 +25,6 @@ from devpi_web.indexing import is_project_cached
 from devpi_web.main import navigation_version
 from email.utils import parsedate
 from io import TextIOWrapper
-from html import escape
 from operator import attrgetter, itemgetter
 from pyramid.decorator import reify
 from pyramid.httpexceptions import HTTPBadGateway, HTTPError
@@ -34,6 +35,7 @@ from pyramid.interfaces import IRoutesMapper
 from pyramid.response import FileResponse, Response
 from pyramid.view import notfound_view_config, view_config
 from time import gmtime
+from typing import Any
 from xmlrpc.client import Fault, Unmarshaller, dumps
 import functools
 import json
@@ -362,6 +364,14 @@ class FileInfo:
         return get_entry_hash_spec(self.entry)
 
     @cached_property
+    def hash_type(self):
+        return get_entry_hash_type(self.entry)
+
+    @cached_property
+    def hash_value(self):
+        return get_entry_hash_value(self.entry)
+
+    @cached_property
     def history(self):
         try:
             return [
@@ -406,10 +416,7 @@ class FileInfo:
 
     @cached_property
     def url(self):
-        url = url_for_entrypath(self.request, self.entry.relpath)
-        if self.hash_spec:
-            url = f"{url}#{self.hash_spec}"
-        return url
+        return url_for_entrypath(self.request, self.entry.relpath)
 
 
 def get_files_info(request, linkstore, *, show_toxresults=False):
@@ -769,6 +776,14 @@ def project_get(context, request):
         versions=versions)
 
 
+@define
+class MetadataItem:
+    name: str
+    value: Any
+    is_list: bool
+    count: int
+
+
 @view_config(
     route_name="/{user}/{index}/{project}/{version}",
     accept="text/html", request_method="GET",
@@ -784,7 +799,7 @@ def version_get(context, request):
     except stage.UpstreamError as e:
         log.error(e.msg)
         raise HTTPBadGateway(e.msg)
-    infos = []
+    metadata = []
     skipped_keys = frozenset(
         ("description", "home_page", "name", "summary", "version"))
     for key, in_value in sorted(verdata.items()):
@@ -793,12 +808,14 @@ def version_get(context, request):
         if isinstance(in_value, seq_types):
             if not len(in_value):
                 continue
-            out_value = "<ul>\n%s\n</ul>" % "\n".join(f"  <li>{x}</li>" for x in in_value)
+            out_value = list(in_value)
+            metadata.append(MetadataItem(
+                name=key, value=out_value, is_list=True, count=len(out_value)))
         else:
             if not in_value:
                 continue
-            out_value = escape(in_value)
-        infos.append((escape(key), out_value))
+            metadata.append(MetadataItem(
+                name=key, value=in_value, is_list=False, count=1))
     show_toxresults = (stage.ixconfig['type'] != 'mirror')
     linkstore = stage.get_linkstore_perstage(name, version)
     files = get_files_info(request, linkstore, show_toxresults=show_toxresults)
@@ -845,10 +862,7 @@ def version_get(context, request):
         summary=verdata.get("summary"),
         resolved_version=version,
         nav_links=nav_links,
-        infos=infos,
-        metadata_list_fields=frozenset(
-            escape(x)
-            for x in getattr(stage, 'metadata_list_fields', ())),
+        metadata=metadata,
         files=files,
         blocked_by_mirror_whitelist=whitelist_info['blocked_by_mirror_whitelist'],
         show_toxresults=show_toxresults,

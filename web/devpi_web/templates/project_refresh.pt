@@ -1,1 +1,3 @@
-<p tal:condition="not blocked_by_mirror_whitelist" tal:content="structure refresh_form"></p>
+<aside class="project_refresh" tal:condition="refresh_form">
+    <p tal:content="structure refresh_form"></p>
+</aside>

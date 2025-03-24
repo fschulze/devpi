@@ -1,4 +1,6 @@
-<a class="statusbadge ${status_info.status}"
-   href="${status_info.url}">
-    ${status_info.short_msg}
-</a>
+<aside role="status" class="statusbadge ${status_info.status}">
+    <label for="statusbadge-state"><a href="${status_info.url}">server status</a></label>
+    <output id="statusbadge-state">
+        <a href="${status_info.url}">${status_info.short_msg}</a>
+    </output>
+</aside>

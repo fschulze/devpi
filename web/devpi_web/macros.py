@@ -24,6 +24,11 @@ def footer(request):  # noqa: ARG001
     return dict()
 
 
+@macro_config(template='templates/footer_about.pt', groups='main_footer')
+def footer_about(request):  # noqa: ARG001
+    return dict()
+
+
 @macro_config(template='templates/footer_versions.pt', groups='main_footer')
 def footer_versions(request):
     return dict(
@@ -45,7 +50,9 @@ def header_breadcrumbs(request):
     return dict(path=navigation_info(request)['path'])
 
 
-@macro_config(template='templates/header_search.pt', groups='main_header_top')
+@macro_config(
+    template='templates/header_search.pt',
+    groups=GroupDef('main_header_top', after='logo'))
 def header_search(request):  # noqa: ARG001
     return dict()
 
@@ -112,7 +119,7 @@ def index_whitelist(request):  # noqa: ARG001
     return dict()
 
 
-@macro_config(template='templates/logo.pt')
+@macro_config(template='templates/logo.pt', groups='main_header_top')
 def logo(request):  # noqa: ARG001
     return dict()
 

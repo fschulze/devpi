@@ -46,13 +46,13 @@ def test_docs_raw_view(mapp, testapp):
     assert r.cache_control.max_age == 60
     r = testapp.xget(304, url, headers={"If-None-Match": r.etag})
     r = testapp.xget(404, "/blubber/blubb/pkg1/2.6/+doc/index.html")
-    content, = r.html.select('#content')
+    content, = r.html.select('main')
     assert 'The stage blubber/blubb could not be found.' in compareable_text(content.text)
     r = testapp.xget(404, api.index + "/pkg1/2.7/+doc/index.html")
-    content, = r.html.select('#content')
+    content, = r.html.select('main')
     assert 'No documentation available.' in compareable_text(content.text)
     r = testapp.xget(404, api.index + "/pkg1/2.6/+doc/foo.html")
-    content, = r.html.select('#content')
+    content, = r.html.select('main')
     assert 'File foo.html not found in documentation.' in compareable_text(content.text)
 
 
@@ -68,13 +68,13 @@ def test_docs_view(mapp, testapp):
     iframe, = r.html.find_all('iframe')
     assert iframe.attrs['src'] == api.index + "/pkg1/2.6/+doc/index.html"
     r = testapp.xget(404, "/blubber/blubb/pkg1/2.6/+d/index.html")
-    content, = r.html.select('#content')
+    content, = r.html.select('main')
     assert 'The stage blubber/blubb could not be found.' in compareable_text(content.text)
     r = testapp.xget(404, api.index + "/pkg1/2.7/+d/index.html")
-    content, = r.html.select('#content')
+    content, = r.html.select('main')
     assert 'No documentation available.' in compareable_text(content.text)
     r = testapp.xget(404, api.index + "/pkg1/2.6/+d/foo.html")
-    content, = r.html.select('#content')
+    content, = r.html.select('main')
     assert 'File foo.html not found in documentation.' in compareable_text(content.text)
     r = testapp.xget(200, api.index + "/pkg1/2.6/+d/index.html?foo=bar")
     (iframe,) = r.html.select('iframe')
@@ -132,7 +132,7 @@ def test_docs_latest(mapp, testapp):
     iframe, = r.html.find_all('iframe')
     assert iframe.attrs['src'] == api.index + "/pkg1/latest/+doc/index.html"
     # navigation shows latest registered version
-    navigation_links = r.html.select("#navigation a")
+    navigation_links = r.html.select("nav a")
     assert navigation_links[4].text == '2.6'
     # there is no warning
     assert r.html.select('.infonote') == []
@@ -145,7 +145,7 @@ def test_docs_latest(mapp, testapp):
     iframe, = r.html.find_all('iframe')
     assert iframe.attrs['src'] == api.index + "/pkg1/latest/+doc/index.html"
     # navigation shows latest registered version
-    navigation_links = r.html.select("#navigation a")
+    navigation_links = r.html.select("nav a")
     assert navigation_links[4].text == '2.7'
     # there is a warning
     assert [x.text.strip() for x in r.html.select('.infonote')] == [
@@ -161,7 +161,7 @@ def test_docs_latest(mapp, testapp):
     iframe, = r.html.find_all('iframe')
     assert iframe.attrs['src'] == api.index + "/pkg1/latest/+doc/index.html"
     # navigation shows latest registered version
-    navigation_links = r.html.select("#navigation a")
+    navigation_links = r.html.select("nav a")
     assert navigation_links[4].text == '2.7'
     # there is no warning anymore
     assert r.html.select('.infonote') == []
@@ -181,7 +181,7 @@ def test_docs_stable(mapp, testapp):
     iframe, = r.html.find_all('iframe')
     assert iframe.attrs['src'] == api.index + "/pkg1/stable/+doc/index.html"
     # navigation shows stable registered version
-    navigation_links = r.html.select("#navigation a")
+    navigation_links = r.html.select("nav a")
     assert navigation_links[4].text == '2.6'
     # there is no warning
     assert r.html.select('.infonote') == []
@@ -194,7 +194,7 @@ def test_docs_stable(mapp, testapp):
     iframe, = r.html.find_all('iframe')
     assert iframe.attrs['src'] == api.index + "/pkg1/stable/+doc/index.html"
     # navigation shows stable registered version
-    navigation_links = r.html.select("#navigation a")
+    navigation_links = r.html.select("nav a")
     assert navigation_links[4].text == '2.6'
     # there is no warning
     assert r.html.select('.infonote') == []
@@ -209,7 +209,7 @@ def test_docs_stable(mapp, testapp):
     iframe, = r.html.find_all('iframe')
     assert iframe.attrs['src'] == api.index + "/pkg1/stable/+doc/index.html"
     # navigation shows stable registered version
-    navigation_links = r.html.select("#navigation a")
+    navigation_links = r.html.select("nav a")
     assert navigation_links[4].text == '2.6'
     # showing latest available version
     assert [x.text.strip() for x in r.html.select('.infonote')] == [
@@ -223,7 +223,7 @@ def test_docs_stable(mapp, testapp):
     iframe, = r.html.find_all('iframe')
     assert iframe.attrs['src'] == api.index + "/pkg1/stable/+doc/index.html"
     # navigation shows latest registered stable version
-    navigation_links = r.html.select("#navigation a")
+    navigation_links = r.html.select("nav a")
     assert navigation_links[4].text == '2.7'
     # there is a warning
     assert [x.text.strip() for x in r.html.select('.infonote')] == [
@@ -240,7 +240,7 @@ def test_docs_stable(mapp, testapp):
     iframe, = r.html.find_all('iframe')
     assert iframe.attrs['src'] == api.index + "/pkg1/stable/+doc/index.html"
     # navigation shows latest registered stable version
-    navigation_links = r.html.select("#navigation a")
+    navigation_links = r.html.select("nav a")
     assert navigation_links[4].text == '2.7'
     # no warning anymore
     assert r.html.select('.infonote') == []

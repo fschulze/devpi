@@ -32,16 +32,14 @@ def compareable_text(text):
 def test_search_nothing(testapp):
     r = testapp.get('/+search?query=')
     assert r.status_code == 200
-    assert r.html.select('.searchresults') == []
-    content, = r.html.select('#content')
+    (content,) = r.html.select('main')
     assert compareable_text(content.text) == 'Your search did not match anything.'
 
 
 def test_search_no_results(testapp):
     r = testapp.get('/+search?query=blubber')
     assert r.status_code == 200
-    assert r.html.select('.searchresults') == []
-    content, = r.html.select('#content')
+    (content,) = r.html.select('main')
     assert compareable_text(content.text) == 'Your search blubber did not match anything.'
 
 
@@ -67,9 +65,9 @@ def test_search_docs(keep_docs_packed, mapp, testapp):
     indexer_thread.wait()
     r = testapp.get('/+search?query=bar')
     assert r.status_code == 200
-    highlight = r.html.select('.searchresults dd dd')
+    highlight = r.html.select('main dd dd')
     assert [compareable_text(x.text) for x in highlight] == ["Bar"]
-    links = r.html.select('.searchresults a')
+    links = r.html.select('main a')
     assert [(compareable_text(l.text), l.attrs['href']) for l in links] == [
         ("pkg_hello-2.6", "http://localhost/%s/pkg-hello/2.6" % api.stagename),
         ("Foo", "http://localhost/%s/pkg-hello/2.6/+d/index.html" % api.stagename)]
@@ -84,7 +82,7 @@ def test_search_deleted_stage(mapp, testapp):
         "description": "foo"})
     mapp.delete_index(api.stagename, waithooks=True)
     r = testapp.xget(200, '/+search?query=pkg')
-    content = compareable_text(r.html.select('#content')[0].text)
+    content = compareable_text(r.html.select('main')[0].text)
     assert content == 'Your search pkg did not match anything.'
 
 
@@ -97,7 +95,7 @@ def test_search_deleted_package(mapp, testapp):
         "description": "foo"})
     mapp.delete_project('pkg1', waithooks=True)
     r = testapp.xget(200, '/+search?query=pkg')
-    content = compareable_text(r.html.select('#content')[0].text)
+    content = compareable_text(r.html.select('main')[0].text)
     assert content == 'Your search pkg did not match anything.'
 
 
@@ -117,7 +115,7 @@ def test_search_deleted_version(mapp, testapp):
     indexer_thread = get_indexer(mapp.xom).indexer_thread
     indexer_thread.wait()
     r = testapp.xget(200, '/+search?query=bar%20OR%20foo')
-    search_results = r.html.select('.searchresults > dl')
+    search_results = r.html.select('main > dl')
     assert len(search_results) == 1
     links = search_results[0].find_all('a')
     assert [(compareable_text(l.text), l.attrs['href']) for l in links] == [
@@ -139,10 +137,10 @@ def test_search_deleted_all_versions(mapp, testapp):
     mapp.delete_project("pkg1/2.6")
     mapp.delete_project("pkg1/2.7", waithooks=True)
     r = testapp.xget(200, '/+search?query=bar%20OR%20foo')
-    content = compareable_text(r.html.select('#content')[0].text)
+    content = compareable_text(r.html.select('main')[0].text)
     assert content == 'Your search bar OR foo did not match anything.'
     r = testapp.xget(200, '/+search?query=pkg')
-    content = compareable_text(r.html.select('#content')[0].text)
+    content = compareable_text(r.html.select('main')[0].text)
     assert content == 'Your search pkg did not match anything.'
 
 
@@ -158,7 +156,7 @@ def test_search_root_pypi(mapp, testapp, pypistage):
             ProjectIndexingInfo(stage=stage, name=u'pkg2')], clear=True)
     indexer.indexer_thread.wait()
     r = testapp.xget(200, '/+search?query=pkg')
-    search_results = r.html.select('.searchresults > dl > dt a')
+    search_results = r.html.select('main > dl > dt a')
     assert len(search_results) == 2
     assert sorted((compareable_text(l.text), l.attrs['href']) for l in search_results) == [
         ("pkg1", "http://localhost/root/pypi/pkg1"),
@@ -176,7 +174,7 @@ def test_indexing_doc_with_missing_title(mapp, testapp):
     indexer_thread = get_indexer(mapp.xom).indexer_thread
     indexer_thread.wait()
     r = testapp.xget(200, '/+search?query=Foo')
-    search_results = r.html.select('.searchresults > dl > dt')
+    search_results = r.html.select('main > dl > dt')
     assert len(search_results) == 1
     links = search_results[0].find_all('a')
     assert sorted((compareable_text(l.text), l.attrs['href']) for l in links) == [
@@ -194,7 +192,7 @@ def test_indexing_doc_with_unicode(mapp, testapp):
     indexer_thread = get_indexer(mapp.xom).indexer_thread
     indexer_thread.wait()
     r = testapp.xget(200, '/+search?query=F%C3%B6%C3%B6')
-    search_results = r.html.select('.searchresults > dl > dt')
+    search_results = r.html.select('main > dl > dt')
     assert len(search_results) == 1
 
 

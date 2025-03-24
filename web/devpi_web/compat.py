@@ -23,6 +23,13 @@ def get_entry_hash_spec(entry):
         entry.hash_spec)
 
 
+def get_entry_hash_type(entry):
+    return (
+        entry.best_available_hash_type
+        if hasattr(entry, 'best_available_hash_type') else
+        entry.hash_type)
+
+
 def get_entry_hash_value(entry):
     return (
         entry.best_available_hash_value

@@ -27,16 +27,15 @@ $(function() {
     }
     $('.toxresult.passed').each(function() {
         if (this === anchor) {
-            $(this).addClass('opened');
+            $(this).attr('open', '');
         } else {
-            $(this).addClass('closed');
+            $(this).attr('open', null);
         }
     });
-    $('.toxresult.failed').addClass('opened');
-    $('table.projectinfos .is_list').addClass('closed');
-    $('.toxresult h2, table.projectinfos .is_list .value').click(function () {
+    $('table.projectinfos .closed td').click(function () {
         $(this).parent().toggleClass('closed opened');
     });
+    $('.toxresult.failed, .toxresult .failed details').attr('open', '');
     $('.timestamp').each(function() {
         var element = $(this);
         var time = new Date(element.text());
