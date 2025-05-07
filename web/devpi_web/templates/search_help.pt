@@ -1,16 +1,7 @@
-<!doctype html>
-<html>
-    <head>
-        <title>devpi</title>
-        <metal:macros use-macro="macros.render_group('html_head')" />
-    </head>
-    <body>
-        <metal:header use-macro="macros.header" />
-        <div id="content">
-            <div class="query_doc">
-                <metal:query_doc use-macro="macros.query_doc" />
-            </div>
+<metal:block use-macro="main_template" tal:define="main_class 'search_help'">
+    <metal:content fill-slot="content">
+        <div class="query_doc">
+            <metal:query_doc use-macro="macros.query_doc" />
         </div>
-        <metal:footer use-macro="macros.footer" />
-    </body>
-</html>
+    </metal:content>
+</metal:block>

@@ -1,14 +1,5 @@
-<!doctype html>
-<html>
-    <head>
-        <title>devpi</title>
-        <metal:macros use-macro="macros.render_group('html_head')" />
-    </head>
-    <body>
-        <metal:header use-macro="macros.header" />
-        <div id="content">
-            <metal:macros use-macro="macros.render_group('root')" />
-        </div>
-        <metal:footer use-macro="macros.footer" />
-    </body>
-</html>
+<metal:block use-macro="main_template" tal:define="main_class 'root'">
+    <metal:content fill-slot="content">
+        <metal:macros use-macro="macros.render_group('root')" />
+    </metal:content>
+</metal:block>
