@@ -1,14 +1,7 @@
-<!doctype html>
-<html>
-    <head>
-        <title>${title}</title>
-        <metal:macros use-macro="macros.render_group('html_head')" />
-    </head>
-    <body>
-        <metal:header use-macro="macros.header" />
-        <div id="content">
+<metal:block use-macro="main_template" tal:define="main_class 'version'">
+    <metal:title fill-slot="title">${title}</metal:title>
+    <metal:content fill-slot="content">
         <metal:macros tal:repeat="name request.registry['macros'].get_group('version')" use-macro="macros[name]" />
-        </div>
-        <metal:footer use-macro="macros.footer" />
-    </body>
-</html>
+    </metal:content>
+</metal:block>
+

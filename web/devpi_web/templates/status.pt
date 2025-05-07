@@ -1,12 +1,6 @@
-<!doctype html>
-<html>
-    <head>
-        <title>Status</title>
-        <metal:macros use-macro="macros.render_group('html_head')" />
-    </head>
-    <body>
-        <metal:header use-macro="macros.header" />
-        <div id="content">
+<metal:block use-macro="main_template" tal:define="main_class 'status'">
+    <metal:title fill-slot="title">devpi - Status</metal:title>
+    <metal:content fill-slot="content">
         <h1>Status</h1>
 
         <tal:msgs condition="msgs">
@@ -113,7 +107,5 @@
                 </tal:replica>
             </dl>
         </tal:pollingreplicas>
-        </div>
-        <metal:footer use-macro="macros.footer" />
-    </body>
-</html>
+    </metal:content>
+</metal:block>

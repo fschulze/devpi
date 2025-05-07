@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title><metal:title define-slot="title">devpi</metal:title></title>
+        <metal:macros use-macro="macros.render_group('html_head')" />
+    </head>
+    <body>
+        <div class="header">
+            <metal:macros use-macro="macros.render_group('main_header_top')" />
+            <div id="navigation">
+                <metal:macros use-macro="macros.render_group('main_navigation')" />
+            </div>
+            <metal:macros use-macro="macros.render_group('main_header')" />
+            <metal:endofheader define-slot="endofheader"></metal:endofheader>
+        </div>
+        <metal:content define-slot="content-wrapper">
+            <div id="content" tal:attributes="class main_class | None">
+                <metal:content define-slot="content"></metal:content>
+            </div>
+        </metal:content>
+        <metal:footer use-macro="macros.footer" />
+    </body>
+</html>

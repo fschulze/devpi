@@ -1,10 +1,5 @@
-<!doctype html>
-<html>
-    <head>
-        <metal:macros use-macro="macros.render_group('html_head')" />
-    </head>
-    <body>
-        <metal:header use-macro="macros.header" />
+<metal:block use-macro="main_template" tal:define="main_class 'search'">
+    <metal:content fill-slot="content-wrapper">
         <div class="searchresults" tal:condition="result|None">
             <dl>
                 <tal:item tal:repeat="item result['items']">
@@ -42,6 +37,5 @@
         <div id="content" tal:condition="not result|None">
             <p>Your search <strong>${query}</strong> did not match anything.</p>
         </div>
-        <metal:footer use-macro="macros.footer" />
-    </body>
-</html>
+    </metal:content>
+</metal:block>
