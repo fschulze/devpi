@@ -12,9 +12,8 @@ dependencies = [
     "beautifulsoup4>=4.3.2,!=4.12.1",
     "defusedxml",
     "devpi-server>=6.13.0",
-    "devpi-common>=3.2.0",
+    "devpi-common>=4.0.0",
     "docutils>=0.11",
-    "py",
     "pygments>=1.6",
     "pyramid>=2",
     "pyramid-chameleon",
@@ -111,7 +110,6 @@ extend-ignore = [
     "C401", # maybe cleanup later - rewrite as set comprehension
     "C402", # maybe cleanup later - rewrite as dict comprehension
     "C405", # cleanup soon - set literal instead of set call
-    "COM812", # cleanup later
     "ERA001", # cleanup soon
     "FBT002", # cleanup soon - boolean positional argument
     "FIX002", # cleanup later - todo
@@ -137,9 +135,7 @@ extend-ignore = [
     "RUF100", # after soon to cleanup
     "RSE102", # maybe cleanup later
     "SIM102", # maybe cleanup later
-    "SIM105", # cleanup soon
     "SIM108", # cleanup later
-    "SIM117", # cleanup later
     "UP004", # cleanup later - inherit from 'object'
     "UP012", # false positives (bug in ruff?) - unnecessary utf-8 encode
     "UP025", # maybe cleanup later - unicode literals
