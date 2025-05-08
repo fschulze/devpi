@@ -4,7 +4,7 @@
         <metal:head use-macro="request.macros['head']" />
     </head>
     <body>
-        <metal:search use-macro="request.macros['navigation']" />
+        <metal:header use-macro="macros.header" />
         <div class="searchresults" tal:condition="result|None">
             <dl>
                 <tal:item tal:repeat="item result['items']">
@@ -42,6 +42,6 @@
         <div id="content" tal:condition="not result|None">
             <p>Your search <strong>${query}</strong> did not match anything.</p>
         </div>
-        <metal:footer use-macro="request.macros['footer']" />
+        <metal:footer use-macro="macros.footer" />
     </body>
 </html>

@@ -1,9 +1,9 @@
 <div class="header">
-    <metal:search use-macro="request.macros['search']" />
+    <metal:search use-macro="macros.header_search" />
     <div id="navigation">
-        <metal:breadcrumbs use-macro="request.macros['header_breadcrumbs']" />
-        <metal:statusbadge use-macro="request.macros['statusbadge']" />
+        <metal:breadcrumbs use-macro="macros.header_breadcrumbs" />
+        <metal:statusbadge use-macro="macros.status_badge" />
     </div>
-    <metal:status use-macro="request.macros['status']" />
+    <metal:status use-macro="macros.header_status" />
     <metal:endofheader define-slot="endofheader" />
 </div>
