@@ -5,7 +5,7 @@
         <metal:head use-macro="request.macros['head']" />
     </head>
     <body>
-        <metal:search use-macro="request.macros['navigation']" />
+        <metal:header use-macro="macros.header" />
         <div id="content">
         <metal:rootaboveuserindexlist use-macro="request.macros['rootaboveuserindexlist']" />
         <div class="user_index_list">
@@ -31,6 +31,6 @@
         </div>
         <metal:rootbelowuserindexlist use-macro="request.macros['rootbelowuserindexlist']" />
         </div>
-        <metal:footer use-macro="request.macros['footer']" />
+        <metal:footer use-macro="macros.footer" />
     </body>
 </html>

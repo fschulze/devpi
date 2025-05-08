@@ -5,7 +5,7 @@
         <metal:head use-macro="request.macros['head']" />
     </head>
     <body>
-        <metal:search use-macro="request.macros['navigation']" />
+        <metal:header use-macro="macros.header" />
         <div id="content">
         <h1 class="index_title">
             ${index_name} <span tal:condition="index_title">${index_title}</span> index
@@ -91,6 +91,6 @@
         </ul>
         <p tal:condition="not whitelist">No packages whitelisted.</p>
         </div>
-        <metal:footer use-macro="request.macros['footer']" />
+        <metal:footer use-macro="macros.footer" />
     </body>
 </html>

@@ -5,12 +5,12 @@
         <metal:head use-macro="request.macros['head']" />
     </head>
     <body>
-        <metal:search use-macro="request.macros['navigation']" />
+        <metal:header use-macro="macros.header" />
         <div id="content">
             <h1>Error</h1>
             <p>An error has occurred: <strong>${status}</strong></p>
             <p>${msg}</p>
         </div>
-        <metal:footer use-macro="request.macros['footer']" />
+        <metal:footer use-macro="macros.footer" />
     </body>
 </html>

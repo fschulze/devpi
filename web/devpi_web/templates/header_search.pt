@@ -1,5 +1,5 @@
 <form method="get" id="search" action="${request.route_url('search')}">
-    <metal:logo use-macro="request.macros['logo']" />
+    <metal:logo use-macro="macros.logo" />
     <input type="text" size="60" name="query" autofocus tal:attributes="value query|None" />
     <input type="submit" value="Search" />
     <span class="help">
@@ -9,6 +9,6 @@
         <span class="help">
             <a href="#">Close help</a>
         </span>
-        <metal:query_doc use-macro="request.macros['query_doc']" />
+        <metal:query_doc use-macro="macros.query_doc" />
     </div>
 </form>
