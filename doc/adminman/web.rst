@@ -98,19 +98,17 @@ templates, see the `chameleon documentation <http://chameleon.readthedocs.org>`_
 
 For everything common in templates, macros are used. The only exception are the
 ``rootaboveuserindexlist`` and ``rootbelowuserindexlist`` macros which are only
-used on the devpi-server root page and are empty by default. They are provided
+used on the devpi-web root page and are empty by default. They are provided
 as convenience, so you don't have to overwrite the whole root template to add
 some infos.
 
 To change the logo, you
 would put your ``logo.gif`` into the ``static`` folder and create a
-``macros.pt`` template with the following content:
+``logo.pt`` template with the following content:
 
-.. code-block:: xml
+.. code-block:: html
 
-  <metal:logo define-macro="logo">
-      <h1><a href="${request.route_url('root')}"><img src="${request.theme_static_url('logo.gif')}" /></a></h1>
-  </metal:logo>
+  <h1><a href="${request.route_url('root')}"><img src="${request.theme_static_url('logo.gif')}" /></a></h1>
 
 To add your own CSS you would create a ``style.css`` in your ``static`` folder
 and add the following macro in ``macros.pt``:
@@ -130,12 +128,9 @@ The folder structure should now look like this::
   │   ├── logo.gif
   │   └── style.css
   └── templates
-      └── macros.pt
+      └── logo.pt
 
-In this example we reuse the original ``headcss`` macro, which is available as
-``original-headcss`` and only fill it's predefined ``headcss`` slot.
-
-To add some information on the devpi frontpage, you can overwrite the
+To add some information on the devpi-web frontpage, you can overwrite the
 ``rootaboveuserindexlist`` and ``rootbelowuserindexlist`` macros.
 
 .. code-block:: xml
@@ -149,7 +144,8 @@ To add some information on the devpi frontpage, you can overwrite the
 Any other template has to be copied verbatim and then modified. If they change
 in a future devpi-web release, you have to adjust your modified copy accordingly.
 
-For reference you can see the whole ``macro.pt`` file here:
+For reference you can see all current template files here:
+https://github.com/devpi/devpi/tree/main/web/devpi_web/templates
 
-.. literalinclude:: ../../web/devpi_web/templates/macros.pt
-  :language: html
+For a specific version you can use tags, for example:
+https://github.com/devpi/devpi/tree/web-5.0.0/web/devpi_web/templates
