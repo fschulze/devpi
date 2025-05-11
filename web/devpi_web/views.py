@@ -9,8 +9,6 @@ from devpi_server.log import threadlog as log
 from devpi_server.readonly import SeqViewReadonly
 from devpi_server.views import StatusView, url_for_entrypath
 from devpi_server.views import PyPIView
-from devpi_web.compat import get_entry_hash_spec
-from devpi_web.compat import get_entry_hash_value
 from devpi_web.description import get_description
 from devpi_web.doczip import Docs
 from devpi_web.doczip import docs_exist
@@ -153,7 +151,7 @@ def get_doc_info(context, request, version=None, check_content=True):
         if not relpath_exists:
             raise HTTPNotFound("File %s not found in documentation." % relpath)
     result = dict(
-        etag=get_entry_hash_value(entry),
+        etag=entry.best_available_hash_value,
         relpath=relpath,
         doc_version=doc_version,
         version_mismatch=doc_version != navigation_version(context))
@@ -355,7 +353,7 @@ class FileInfo:
 
     @cached_property
     def hash_spec(self):
-        return get_entry_hash_spec(self.entry)
+        return self.entry.best_available_hash_spec
 
     @cached_property
     def history(self):
