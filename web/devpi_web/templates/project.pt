@@ -11,10 +11,8 @@
 
         <metal:subnavigation use-macro="macros.subnavigation" />
 
-        <p class="infonote" tal:condition="blocked_by_mirror_whitelist">
-            Because this project isn't in the <code>mirror_whitelist</code>,
-            no releases from <strong>${blocked_by_mirror_whitelist}</strong> are included.
-        </p>
+        <metal:blockedindexes use-macro="macros.blocked_indexes" />
+
         <p tal:condition="not blocked_by_mirror_whitelist" tal:content="structure refresh_form"></p>
 
         <p tal:condition="latest_version">Latest version on stage is: <a href="${latest_url}">${latest_version}</a></p>
