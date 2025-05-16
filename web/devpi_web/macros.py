@@ -95,24 +95,6 @@ def query_doc(request):
 
 
 @macro_config(
-    template="templates/root_above_user_index_list.pt",
-    groups=GroupDef("root", before="user_index_list"),
-    legacy_name="rootaboveuserindexlist",
-)
-def root_above_user_index_list(request):  # noqa: ARG001
-    return dict()
-
-
-@macro_config(
-    template="templates/root_below_user_index_list.pt",
-    groups=GroupDef("root", after="user_index_list"),
-    legacy_name="rootbelowuserindexlist",
-)
-def root_below_user_index_list(request):  # noqa: ARG001
-    return dict()
-
-
-@macro_config(
     template="templates/status_badge.pt",
     groups="main_navigation",
     legacy_name="statusbadge",
