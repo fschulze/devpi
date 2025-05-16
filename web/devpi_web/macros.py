@@ -85,6 +85,46 @@ def html_head_scripts(request):
     return dict(scripts=scripts)
 
 
+@macro_config(
+    template="templates/index_bases.pt",
+    groups=GroupDef("index", after="index_permissions"),
+)
+def index_bases(request):  # noqa: ARG001
+    return dict()
+
+
+@macro_config(
+    template="templates/index_description.pt",
+    groups=GroupDef("index", after="index_packages"),
+)
+def index_description(request):  # noqa: ARG001
+    return dict()
+
+
+@macro_config(
+    template="templates/index_packages.pt",
+    groups=GroupDef("index", after="subnavigation"),
+)
+def index_packages(request):  # noqa: ARG001
+    return dict()
+
+
+@macro_config(
+    template="templates/index_permissions.pt",
+    groups=GroupDef("index", after="index_description"),
+)
+def index_permissions(request):  # noqa: ARG001
+    return dict()
+
+
+@macro_config(
+    template="templates/index_whitelist.pt",
+    groups=GroupDef("index", after="index_bases"),
+)
+def index_whitelist(request):  # noqa: ARG001
+    return dict()
+
+
 @macro_config(template="templates/logo.pt", groups="main_header_top")
 def logo(request):  # noqa: ARG001
     return dict()
@@ -108,12 +148,14 @@ def status_badge(request):
     return dict(status_info=request.status_info)
 
 
-@macro_config(template="templates/subnavigation.pt")
+@macro_config(
+    template="templates/subnavigation.pt", groups=GroupDef("index", after="title")
+)
 def subnavigation(request):  # noqa: ARG001
     return dict()
 
 
-@macro_config(template="templates/title.pt")
+@macro_config(template="templates/title.pt", groups="index")
 def title(request):  # noqa: ARG001
     return dict()
 

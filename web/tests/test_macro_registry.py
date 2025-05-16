@@ -9,6 +9,15 @@ def test_macros(dummyrequest, pyramidconfig):
             "html_head_css",
             "html_head_scripts",
         ],
+        "index": [
+            "title",
+            "subnavigation",
+            "index_packages",
+            "index_description",
+            "index_permissions",
+            "index_bases",
+            "index_whitelist",
+        ],
         "main_footer": [
             "footer_versions",
         ],
