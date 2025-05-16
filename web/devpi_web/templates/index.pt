@@ -11,9 +11,7 @@
             ${index_name} <span tal:condition="index_title">${index_title}</span> index
         </h1>
 
-        <ul>
-            <li><a href="${simple_index_url}">simple index</a></li>
-        </ul>
+        <metal:subnavigation use-macro="macros.subnavigation" />
 
         <tal:packages condition="packages">
         <h2>in-stage latest packages, at least as recent as bases</h2>
