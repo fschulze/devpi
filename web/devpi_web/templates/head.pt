@@ -1,3 +1,1 @@
-<metal:favicon use-macro="macros.favicon" />
-<metal:headcss use-macro="macros.html_head_css" />
-<metal:headscript use-macro="macros.html_head_scripts" />
+<metal:macros use-macro="macros.render_group('html_head')" />

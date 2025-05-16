@@ -22,7 +22,7 @@ def footer_versions(request):
     return dict(version_infos=request.registry.get("devpi_version_info"))
 
 
-@macro_config(template="templates/head.pt")
+@macro_config(template="templates/head.pt", deprecated=True)
 def head(request):  # noqa: ARG001
     return dict()
 
