@@ -13,6 +13,28 @@ def xom(xom, theme_path):
 @pytest.mark.usefixtures("theme_path")
 @pytest.mark.theme_files(
     {
+        ("templates", "root.pt"): """
+            <!DOCTYPE html>
+            <html lang="en">
+            <head><title>Root</title></head>
+            <body>
+              <metal:head use-macro="request.macros['versions']" />
+            </body>
+            </html>
+        """
+    }
+)
+def test_deprecated_name(testapp):
+    with pytest.warns(
+        DeprecationWarning,
+        match="The 'versions' macro name is deprecated, use 'footer_versions' instead.",
+    ):
+        testapp.get("/")
+
+
+@pytest.mark.usefixtures("theme_path")
+@pytest.mark.theme_files(
+    {
         ("templates", "macros.pt"): """
             <metal:versions define-macro="versions">
                 MyVersions

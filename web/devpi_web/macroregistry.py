@@ -95,6 +95,13 @@ class Macro:
 
     @cached_property
     def template(self):
+        if self.new_name is not None:
+            msg = (
+                f"The {self.name!r} macro name is deprecated, use {self.new_name!r} instead."
+                if self.new_name
+                else f"The {self.name!r} macro is deprecated, check theming documentation for replacement."
+            )
+            warnings.warn(msg, DeprecationWarning, stacklevel=5)
         if self._template is not None:
             return self._template
         return self.renderer.renderer.template
