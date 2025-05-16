@@ -24,9 +24,7 @@ def test_macros(dummyrequest, pyramidconfig):
             "status_badge",
         ],
         "root": [
-            "root_above_user_index_list",
             "user_index_list",
-            "root_below_user_index_list",
         ],
         "user": [
             "user_index_list",
