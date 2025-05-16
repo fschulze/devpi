@@ -1,7 +1,7 @@
 <!doctype html>
 <html>
     <head>
-        <metal:head use-macro="request.macros['head']" />
+        <metal:macros use-macro="macros.render_group('html_head')" />
     </head>
     <body>
         <metal:header use-macro="macros.header" />
