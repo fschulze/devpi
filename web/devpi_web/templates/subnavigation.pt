@@ -1,0 +1,3 @@
+<p class="subnavigation" tal:condition="nav_links">
+    <span tal:repeat="link nav_links"><a tal:attributes="class link.get('css_class')" href="${link.url}">${link.title}</a></span>
+</p>

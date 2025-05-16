@@ -508,32 +508,32 @@ a.unknown:after {
     content: "+";
 }
 
-.projectnavigation span + span::before {
+.subnavigation span + span::before {
     content: " | ";
 }
 
-.projectnavigation a {
+.subnavigation a {
     display: inline-block;
 }
 
-.projectnavigation .warning:before,
-.projectnavigation .severe:before {
+.subnavigation .warning:before,
+.subnavigation .severe:before {
     content: " ⚠️ ";
 }
 
-.projectnavigation .warning,
-.projectnavigation .severe {
+.subnavigation .warning,
+.subnavigation .severe {
     padding: 2px 4px;
     margin: -2px;
     border-radius: 3px;
 }
 
-.projectnavigation .severe {
+.subnavigation .severe {
     background-color: #bf4545;
     color: white;
 }
 
-.projectnavigation .warning {
+.subnavigation .warning {
     background-color: #bfa047;
     color: white;
 }

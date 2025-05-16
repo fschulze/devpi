@@ -93,8 +93,8 @@ def test_docs_raw_projectname(mapp, testapp):
     location = '%s/pkg_hello/1.0/' % api.index
     r = testapp.xget(200, location, headers=dict(accept="text/html"))
     navlinks = dict(
-        (l.text, l.attrs['href'])
-        for l in r.html.select('.projectnavigation a'))
+        (l.text, l.attrs["href"]) for l in r.html.select(".subnavigation a")
+    )
     assert 'Documentation' in navlinks
     # the regular name should work
     location = '%s/pkg_hello/1.0/+doc/index.html' % api.index
