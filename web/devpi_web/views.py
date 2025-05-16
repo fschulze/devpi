@@ -534,7 +534,9 @@ def user_get(context, request):
     user = context.user.get()
     return dict(
         _context=context,
-        user=get_user_info(context, request, user))
+        users=[get_user_info(context, request, user)],
+        show_user_link=False,
+    )
 
 
 @view_config(

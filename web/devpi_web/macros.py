@@ -96,7 +96,7 @@ def query_doc(request):
 
 @macro_config(
     template="templates/root_above_user_index_list.pt",
-    groups="root",
+    groups=GroupDef("root", before="user_index_list"),
     legacy_name="rootaboveuserindexlist",
 )
 def root_above_user_index_list(request):  # noqa: ARG001
@@ -105,7 +105,7 @@ def root_above_user_index_list(request):  # noqa: ARG001
 
 @macro_config(
     template="templates/root_below_user_index_list.pt",
-    groups="root",
+    groups=GroupDef("root", after="user_index_list"),
     legacy_name="rootbelowuserindexlist",
 )
 def root_below_user_index_list(request):  # noqa: ARG001
@@ -119,3 +119,13 @@ def root_below_user_index_list(request):  # noqa: ARG001
 )
 def status_badge(request):
     return dict(status_info=request.status_info)
+
+
+@macro_config(template="templates/user_index_list.pt", groups=("root", "user"))
+def user_index_list(request):  # noqa: ARG001
+    return dict()
+
+
+@macro_config(template="templates/user_index_list_item.pt")
+def user_index_list_item(request, user, *, show_user_link=True):  # noqa: ARG001
+    return dict(user, show_user_link=show_user_link)
