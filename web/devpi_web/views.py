@@ -549,16 +549,20 @@ def index_get(context, request):
     bases = []
     packages = []
     whitelist = []
+    index_title = stage.ixconfig.get("title", None)
+    title = (
+        f"{stage.name} ({index_title}) index" if index_title else f"{stage.name} index"
+    )
     result = dict(
         _context=context,
-        title="%s index" % stage.name,
+        title=title,
         nav_links=[dict(title="Simple index", url=request.simpleindex_url(stage))],
         permissions=permissions,
         bases=bases,
         packages=packages,
         whitelist=whitelist,
         index_name=stage.name,
-        index_title=stage.ixconfig.get("title", None),
+        index_title=index_title,
         index_description=stage.ixconfig.get("description", None),
     )
     if stage.ixconfig['type'] == 'mirror':

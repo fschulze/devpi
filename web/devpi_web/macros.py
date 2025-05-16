@@ -113,6 +113,11 @@ def subnavigation(request):  # noqa: ARG001
     return dict()
 
 
+@macro_config(template="templates/title.pt")
+def title(request):  # noqa: ARG001
+    return dict()
+
+
 @macro_config(template="templates/user_index_list.pt", groups=("root", "user"))
 def user_index_list(request):  # noqa: ARG001
     return dict()
