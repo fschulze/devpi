@@ -3,7 +3,10 @@ from .macroregistry import macro_config
 import os
 
 
-@macro_config(template="templates/blocked_indexes.pt")
+@macro_config(
+    template="templates/blocked_indexes.pt",
+    groups=GroupDef("project", after="subnavigation"),
+)
 def blocked_indexes(request):  # noqa: ARG001
     return dict()
 
@@ -130,6 +133,30 @@ def logo(request):  # noqa: ARG001
     return dict()
 
 
+@macro_config(
+    template="templates/project_latest_version.pt",
+    groups=GroupDef("project", after="project_refresh"),
+)
+def project_latest_version(request):  # noqa: ARG001
+    return dict()
+
+
+@macro_config(
+    template="templates/project_refresh.pt",
+    groups=GroupDef("project", after="blocked_indexes"),
+)
+def project_refresh(request):  # noqa: ARG001
+    return dict()
+
+
+@macro_config(
+    template="templates/project_versions.pt",
+    groups=GroupDef("project", after="project_latest_version"),
+)
+def project_versions(request):  # noqa: ARG001
+    return dict()
+
+
 @macro_config(template="templates/query_docs.pt")
 def query_doc(request):
     query_docs_html = None
@@ -149,13 +176,14 @@ def status_badge(request):
 
 
 @macro_config(
-    template="templates/subnavigation.pt", groups=GroupDef("index", after="title")
+    template="templates/subnavigation.pt",
+    groups=(GroupDef("index", after="title"), GroupDef("project", after="title")),
 )
 def subnavigation(request):  # noqa: ARG001
     return dict()
 
 
-@macro_config(template="templates/title.pt", groups="index")
+@macro_config(template="templates/title.pt", groups=("index", "project"))
 def title(request):  # noqa: ARG001
     return dict()
 
