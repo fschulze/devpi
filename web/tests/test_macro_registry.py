@@ -25,6 +25,10 @@ def test_macros(dummyrequest, pyramidconfig):
         ],
         "root": [
             "root_above_user_index_list",
+            "user_index_list",
             "root_below_user_index_list",
+        ],
+        "user": [
+            "user_index_list",
         ],
     }

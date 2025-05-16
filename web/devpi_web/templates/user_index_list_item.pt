@@ -1,0 +1,19 @@
+<dl>
+    <dt>
+        <a tal:omit-tag="not show_user_link" href="${user_url}">
+            ${user_name} <span tal:condition="user_title">${user_title}</span>
+        </a>
+    </dt>
+    <dd class="user_description" tal:condition="user_description">
+        ${user_description}
+    </dd>
+    <dd tal:condition="indexes">
+        <ul>
+            <li tal:repeat="index indexes">
+                <a tal:attributes="title index.index_description" href="${index.url}">
+                    ${user_name}/${index.index_name} <span tal:condition="index.index_title">${index.index_title}</span>
+                </a>
+            </li>
+        </ul>
+    </dd>
+</dl>
