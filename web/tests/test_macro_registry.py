@@ -31,6 +31,14 @@ def test_macros(dummyrequest, pyramidconfig):
             "header_breadcrumbs",
             "status_badge",
         ],
+        "project": [
+            "title",
+            "subnavigation",
+            "merge_info",
+            "project_refresh",
+            "project_latest_version",
+            "project_versions",
+        ],
         "root": [
             "user_index_list",
         ],

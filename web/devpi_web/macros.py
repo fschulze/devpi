@@ -117,13 +117,35 @@ def logo(request):  # noqa: ARG001
     return dict()
 
 
-@macro_config(template="templates/merge_info.pt")
+@macro_config(
+    template="templates/merge_info.pt",
+    groups=GroupDef("project", after="subnavigation"),
+)
 def merge_info(request):  # noqa: ARG001
     return dict()
 
 
-@macro_config(template="templates/project_refresh.pt")
+@macro_config(
+    template="templates/project_latest_version.pt",
+    groups=GroupDef("project", after="project_refresh"),
+)
+def project_latest_version(request):  # noqa: ARG001
+    return dict()
+
+
+@macro_config(
+    template="templates/project_refresh.pt",
+    groups=GroupDef("project", after="merge_info"),
+)
 def project_refresh(request):  # noqa: ARG001
+    return dict()
+
+
+@macro_config(
+    template="templates/project_versions.pt",
+    groups=GroupDef("project", after="project_latest_version"),
+)
+def project_versions(request):  # noqa: ARG001
     return dict()
 
 
@@ -146,13 +168,14 @@ def status_badge(request):
 
 
 @macro_config(
-    template="templates/subnavigation.pt", groups=GroupDef("index", after="title")
+    template="templates/subnavigation.pt",
+    groups=(GroupDef("index", after="title"), GroupDef("project", after="title")),
 )
 def subnavigation(request):  # noqa: ARG001
     return dict()
 
 
-@macro_config(template="templates/title.pt", groups="index")
+@macro_config(template="templates/title.pt", groups=("index", "project"))
 def title(request):  # noqa: ARG001
     return dict()
 

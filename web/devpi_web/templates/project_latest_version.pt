@@ -1,0 +1,4 @@
+<p tal:condition="latest_version">Latest version on stage is: <a href="${latest_url}">${latest_version}</a></p>
+
+<p tal:define="summary latest_version_data.get('summary')"
+   tal:condition="summary">${summary}</p>
