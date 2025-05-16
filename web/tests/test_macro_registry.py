@@ -46,4 +46,14 @@ def test_macros(dummyrequest, pyramidconfig):
         "user": [
             "user_index_list",
         ],
+        "version": [
+            "title",
+            "subnavigation",
+            "version_summary",
+            "version_metadata",
+            "blocked_indexes",
+            "version_files",
+            "version_description",
+            "version_docs",
+        ],
     }
