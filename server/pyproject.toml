@@ -129,7 +129,6 @@ exclude = [
     "devpi_server/readonly.py",
     "devpi_server/replica.py",
     "devpi_server/sizeof.py",
-    "devpi_server/vendor/_pip.py",
     "devpi_server/view_auth.py",
     "devpi_server/views.py",
     "pytest_devpi_server/__init__.py",
@@ -191,7 +190,6 @@ extend-ignore = [
     "DTZ001", # cleanup soon
     "ERA001", # cleanup soon
     "FBT002", # cleanup soon - boolean positional argument
-    "FIX001", # cleanup later - fixme
     "FIX003", # cleanup later - xxx
     "FLY002", # maybe cleanup later - f-string instead of join
     "G002", # cleanup soon - logging statement uses %
@@ -277,9 +275,6 @@ extend-ignore = [
 "devpi_server/sizeof.py" = [
     "I001", # maybe cleanup later - import block unsorted
 ]
-"devpi_server/vendor/_pip.py" = [
-    "I001", # maybe cleanup later - import block unsorted
-]
 "devpi_server/view_auth.py" = [
     "I001", # maybe cleanup later - import block unsorted
 ]
@@ -349,7 +344,6 @@ extend-ignore = [
 packages = [
     'devpi_server',
     'devpi_server.cfg',
-    'devpi_server.vendor',
     'pytest_devpi_server',
     'test_devpi_server',
 ]

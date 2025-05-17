@@ -21,6 +21,7 @@ from html.parser import HTMLParser
 from .config import hookimpl
 from .exceptions import lazy_format_exception
 from .filestore import key_from_link
+from .htmlpage import HTMLPage
 from .markers import unknown
 from .model import BaseStageCustomizer
 from .model import BaseStage
@@ -28,7 +29,6 @@ from .model import ensure_boolean
 from .model import join_links_data
 from .readonly import ensure_deeply_readonly
 from .log import threadlog
-from .vendor._pip import HTMLPage
 from .views import SIMPLE_API_V1_JSON
 from pyramid.authentication import b64encode
 import json
