@@ -71,7 +71,6 @@ exclude = [
     "server/devpi_server/readonly.py",
     "server/devpi_server/replica.py",
     "server/devpi_server/sizeof.py",
-    "server/devpi_server/vendor/_pip.py",
     "server/devpi_server/view_auth.py",
     "server/devpi_server/views.py",
     "server/pytest_devpi_server/__init__.py",
