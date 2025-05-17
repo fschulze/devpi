@@ -550,7 +550,7 @@ devpi command reference (server)
                             replication protocol you have to explicitly set the
                             'primary' role. The 'master' role is the deprecated
                             variant of 'primary'. [auto]
-      --version             show devpi_version (6.18.0) [False]
+      --version             show devpi_version (7.0.0) [False]
       --passwd USER         (DEPRECATED, use devpi-passwd command) set password
                             for user USER (interactive) [None]
 
