@@ -160,7 +160,6 @@ exclude = [
     "test_devpi_server/test_permissions.py",
     "test_devpi_server/test_replica.py",
     "test_devpi_server/test_replica_functional.py",
-    "test_devpi_server/test_reqmock.py",
     "test_devpi_server/test_stage_customizer.py",
     "test_devpi_server/test_streaming.py",
     "test_devpi_server/test_streaming_nginx.py",

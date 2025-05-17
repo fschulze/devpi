@@ -102,7 +102,6 @@ exclude = [
     "server/test_devpi_server/test_permissions.py",
     "server/test_devpi_server/test_replica.py",
     "server/test_devpi_server/test_replica_functional.py",
-    "server/test_devpi_server/test_reqmock.py",
     "server/test_devpi_server/test_stage_customizer.py",
     "server/test_devpi_server/test_streaming.py",
     "server/test_devpi_server/test_streaming_nginx.py",
@@ -198,6 +197,9 @@ order-by-type = false
     "INP001", # ignore - implicit namespace package
     "S603", # ignore - subprocess untrusted input
     "T201", # ignore - print found
+]
+"client/testing/test_reqmock.py" = [
+    "COM812", # ignore - ruff format
 ]
 "server/devpi_server/hookspecs.py" = [
     "ARG001", # unused function argument on hookspecs https://github.com/astral-sh/ruff/issues/9803
