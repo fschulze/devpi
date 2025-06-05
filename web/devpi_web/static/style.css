@@ -139,13 +139,14 @@ main .content {
 }
 
 .content_header .subnavigation {
-    padding: 0.5em 1em;
-    margin: 0 2em;
+    padding: 0 0 0 3em;
 }
 
 .content_header .summary {
     font-style: oblique;
-    padding: 1em 2em;
+    padding: 1em;
+    margin: 0 2em;
+    border-top: 1px solid var(--poppy-fg-color);
 }
 
 a.logo {
@@ -596,7 +597,6 @@ table.projectinfos .opened td:after {
 
 .subnavigation {
     padding: 0.5em;
-    border-bottom: 1px solid var(--poppy-fg-color);
 }
 
 .subnavigation span + span::before {
