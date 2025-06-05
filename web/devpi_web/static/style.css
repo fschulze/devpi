@@ -12,6 +12,7 @@
   --muted-bg-color-dark: #131313;
   --muted-bg-color-darkened: #555;
   --muted-fg-color: white;
+  /* The poppy colors are colors that 'pop' in the theme */
   --poppy-primary-color: #1f99d2;
   --poppy-primary-color-alt: #2fc2e3;
   --poppy-secondary-color: #d87d28;
@@ -50,10 +51,6 @@ body, html {
 
 body {
     min-height: 100vh;
-}
-
-body > main {
-    margin: 0 var(--main-margin);
 }
 
 code, pre, .docutils.literal {
@@ -123,6 +120,16 @@ header > nav {
 
 header > nav :first-child {
     flex: 1 1 auto;
+}
+
+main.version .content {
+    margin: 0 var(--main-margin);
+}
+
+.content_header { 
+    background: var(--poppy-primary-color);
+    color: var(--poppy-fg-color);
+    padding: 0.3em var(--main-margin);
 }
 
 a.logo {
@@ -572,7 +579,6 @@ table.projectinfos .opened td:after {
 }
 
 .subnavigation {
-    background: var(--main-alternate-bg-color);
     padding: 0.5em;
 }
 
@@ -582,6 +588,8 @@ table.projectinfos .opened td:after {
 }
 
 .subnavigation a {
+    color: var(--poppy-fg-color-alt);
+    font-weight: bold;
     display: inline-block;
 }
 
@@ -753,7 +761,7 @@ footer li {
 
 @media (min-width:1200px) {
     main.index,
-    main.version {
+    main.version .content {
         display: grid;
         column-gap: 1rem;
         grid-template-columns: 1fr 2fr;
@@ -775,21 +783,21 @@ footer li {
         grid-column: 1 / 3;
     }
 
-    main > .summary {
+    .content > .summary {
         grid-column: 1 / 3;
     }
 
-    main > .description {
-        grid-column: 2 / 2;
-        grid-row: 4 / 10;
+    .content > .description {
+        grid-column: 2 / 4;
+        grid-row: 1 / 10;
     }
 
-    main > .index_packages {
-        grid-column: 2 / 2;
-        grid-row: 3 / 10;
+    .content > .index_packages {
+        grid-column: 2 / 4;
+        grid-row: 1 / 10;
     }
 
-    main > .files {
+    .content > .files {
         grid-column: 1 / 3;
     }
 }
@@ -827,15 +835,18 @@ footer li {
 
 @media (prefers-color-scheme: dark) {
     :root {
-        --main-bg-color: var(--main-bg-color-dark);
+        --main-bg-color: var(--main-alternate-fg-color);
         --main-fg-color: var(--main-fg-color-dark);
-        --poppy-bg-color: var(--poppy-secondary-color);
+        --poppy-bg-color: var(--poppy-primary-color-alt);
         --poppy-fg-color: var(--main-bg-color-dark);
         --header-bg-color: var(--poppy-fg-color);
         --header-fg-color: var(--poppy-bg-color);
         --muted-bg-color: var(--muted-bg-color-dark);
         --dl-dt-header-color: var(--main-fg-color);
         --dl-border-color: var(--muted-bg-color-darkened);
+    }
+    body {
+        background: var(--main-bg-color)
     }
     main a {
         color: var(--poppy-primary-color);
@@ -844,8 +855,21 @@ footer li {
         color: var(--poppy-primary-color-alt);
     }
 
+    footer {
+        background: var(--poppy-primary-color)
+    }
+
     .jumptotop {
         text-shadow: 1px 3px 5px #484848;
     }
     
+    .user_index_list dl {
+        background: var(--muted-bg-color-dark);
+        border: 2px solid var(--muted-bg-color);
+        border-top-width: 2px;
+        border-top-style: solid;
+        border-top-color: rgb(232, 232, 232);
+        border-top: var(--poppy-bg-color) solid 5px;
+        box-shadow: var(--card-box-shadow-color) 0px 4px 16px, var(--card-box-shadow-color) 0px 8px 32px;
+    }
 }
