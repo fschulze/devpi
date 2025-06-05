@@ -14,6 +14,7 @@
   --muted-fg-color: white;
   /* The poppy colors are colors that 'pop' in the theme */
   --poppy-primary-color: #1f99d2;
+  --poppy-primary-color-darker: #068BCB;
   --poppy-primary-color-alt: #2fc2e3;
   --poppy-secondary-color: #d87d28;
   --poppy-secondary-color-alt: #d89a28;
@@ -122,14 +123,29 @@ header > nav :first-child {
     flex: 1 1 auto;
 }
 
-main.version .content {
+main .content {
     margin: 0 var(--main-margin);
 }
 
 .content_header { 
     background: var(--poppy-primary-color);
     color: var(--poppy-fg-color);
-    padding: 0.3em var(--main-margin);
+}
+
+.content_header .title {
+    padding: 0.5em 1em;
+    margin: 0;
+    background: var(--poppy-primary-color-darker);
+}
+
+.content_header .subnavigation {
+    padding: 0.5em 1em;
+    margin: 0 2em;
+}
+
+.content_header .summary {
+    font-style: oblique;
+    padding: 1em 2em;
 }
 
 a.logo {
@@ -580,6 +596,7 @@ table.projectinfos .opened td:after {
 
 .subnavigation {
     padding: 0.5em;
+    border-bottom: 1px solid var(--poppy-fg-color);
 }
 
 .subnavigation span + span::before {
