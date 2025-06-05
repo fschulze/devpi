@@ -872,4 +872,16 @@ footer li {
         border-top: var(--poppy-bg-color) solid 5px;
         box-shadow: var(--card-box-shadow-color) 0px 4px 16px, var(--card-box-shadow-color) 0px 8px 32px;
     }
+
+    table.projectinfos .closed td ul:after {
+        content: "";
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        height: 3em;
+        background: -moz-linear-gradient(top, var(--main-bg-color), rgba(0,0,0,1));
+        background: -webkit-linear-gradient(top, var(--main-bg-color), rgba(0,0,0,1));
+        background: linear-gradient(top, var(--main-bg-color), rgba(0,0,0,1));
+    }
 }
