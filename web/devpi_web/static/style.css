@@ -1,6 +1,7 @@
 :root {
   --main-bg-color: white;
   --main-fg-color: black;
+  --main-bg-color-half: #e6e6e6;
   --main-bg-color-dark: #0e0e0e;
   --main-fg-color-dark: white;
   --main-alternate-bg-color: #fafafa;
@@ -35,6 +36,9 @@
   --fatal-color: #c12a1c;
   --warning-color: #d87d28;
   --success-color: #c7d32c;
+  --fatal-bg-color: #DD4E3F;
+  --warning-bg-color: #E99950;
+  --success-bg-color: #DBE652;
   --fatal-contrast-color: white;
   --warning-contrast-color: white;
   --success-contrast-color: black;
@@ -399,6 +403,11 @@ td.file dd {
     padding: 0;
 }
 
+.toxresults > caption {
+    font-size: 2em;
+    padding: 0.5em;
+}
+
 table.main > tbody > tr > td.toxresults,
 table.main > tbody > tr > td.releases {
     padding: 0;
@@ -479,17 +488,17 @@ a.unknown {
 }
 
 a.passed {
-    background-color: var(--success-color);
+    background-color: var(--success-bg-color);
     color: var(--text-shadow-color);
 }
 
 a.failed {
-    background-color: var(--fatal-color);
+    background-color: var(--fatal-bg-color);
     color: var(--text-shadow-color);
 }
 
 a.unknown {
-    background-color: var(--warning-color);
+    background-color: var(--warning-bg-color);
     color: var(--text-shadow-color);
 }
 
@@ -664,30 +673,64 @@ table.projectinfos .opened td:after {
     padding: 0 4px 1px;
 }
 
-details.toxresult {
-    border: 1px solid transparent;
-    margin: 2em calc(-0.5em + 1px);
-    padding: 0.5em 0.5em 0.5em 2em;
+details.toxresult:first-of-type {
+    border-top: 1px solid var(--table-border-color);
+    padding-top: 1em;
 }
 
-details.toxresult div details {
-    padding-left: 2em;
+details.toxresult {
+    padding-left: 1em;
+    border: 1px solid transparent;
+    margin: 0.1em 0;
+}
+
+details.toxresult .steps {
+    margin-left: 2em;
+    background: var(--main-bg-color-half);
+    padding: 1em;
+    border-radius: 0.2em;
 }
 
 details.toxresult summary {
-    margin: 0 -1.5em 1em 0;
+    cursor: pointer;
+    padding: 0 0 1em 0;
     font-weight: bold;
+}
+
+details.toxresult summary > span {
+    color: var(--text-shadow-color);
+    text-shadow: var(--text-shadow);
+    font-size: 0.85rem;
+    font-weight: bold;
+    padding: 3px 6px 4px 5px;
+    margin: 0 0 0 5px;
+    border-radius: 3px;
+    -webkit-font-smoothing: antialiased;
+    font-smoothing: antialiased;
+    line-height: 1em;
+    border: 1px solid;
+}
+
+details.toxresult summary:hover {
+    box-shadow: var(--card-box-shadow-color-lighter) 0px 4px 16px, var(--card-box-shadow-color-lighter) 0px 8px 32px;
 }
 
 details.toxresult summary * {
     font-weight: initial;
 }
 
-details.toxresult.failed {
+details.toxresult.unknown summary > span {
+    background: var(--warning-bg-color);
+    border-color: var(--warning-color);
+}
+
+details.toxresult.failed summary > span {
+    background: var(--fatal-bg-color);
     border-color: var(--fatal-color);
 }
 
-details.toxresult.passed {
+details.toxresult.passed summary > span {
+    background: var(--success-bg-color);
     border-color: var(--success-color);
 }
 
