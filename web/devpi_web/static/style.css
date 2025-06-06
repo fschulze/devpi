@@ -134,7 +134,7 @@ main .content {
     padding-bottom: 0.1em;
 }
 
-.content_header .title {
+.content_header .title,.content_header > h1,.content_header > h2 {
     padding: 0.5em 1em;
     margin: 0;
     background: var(--poppy-primary-color-darker);
