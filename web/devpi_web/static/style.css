@@ -285,7 +285,7 @@ a.logo {
     border-top-width: 2px;
     border-top-style: solid;
     border-top-color: rgb(232, 232, 232);
-    border-top: var(--poppy-secondary-color-lighter) solid 5px;
+    border-top: var(--poppy-secondary-color) solid 5px;
     box-shadow: var(--card-box-shadow-color-lighter) 0px 4px 16px, var(--card-box-shadow-color-lighter) 0px 8px 32px;
 }
 
