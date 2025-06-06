@@ -39,6 +39,7 @@
   --warning-contrast-color: white;
   --success-contrast-color: black;
   --card-box-shadow-color: rgba(40, 40, 49, 0.06);
+  --card-box-shadow-color-lighter: rgba(255, 255, 255, 0.18) ;
 }
 
 body, html {
@@ -265,6 +266,7 @@ a.logo {
     grid-template-columns: repeat(auto-fill, 20em);
     justify-content: space-around;
     grid-gap: 1em;
+    margin: var(--main-margin);
 }
 
 .user_index_list dt span:before,
@@ -283,8 +285,8 @@ a.logo {
     border-top-width: 2px;
     border-top-style: solid;
     border-top-color: rgb(232, 232, 232);
-    border-top: var(--poppy-secondary-color) solid 5px;
-    box-shadow: var(--card-box-shadow-color) 0px 4px 16px, var(--card-box-shadow-color) 0px 8px 32px;
+    border-top: var(--poppy-secondary-color-lighter) solid 5px;
+    box-shadow: var(--card-box-shadow-color-lighter) 0px 4px 16px, var(--card-box-shadow-color-lighter) 0px 8px 32px;
 }
 
 .user_index_list dt {
@@ -363,7 +365,14 @@ table.main > tbody > tr.odd {
 
 td.file a {
     display: block;
+    color: var(--main-fg-color);
+    text-decoration: underline;
 }
+
+td.file a:hover {
+    color: var(--poppy-primary-color-alt);
+}
+
 td.file dl {
     margin: 0 0 0 1em;
     padding: 0;
@@ -889,7 +898,11 @@ footer li {
         border-top-style: solid;
         border-top-color: rgb(232, 232, 232);
         border-top: var(--poppy-bg-color) solid 5px;
-        box-shadow: var(--card-box-shadow-color) 0px 4px 16px, var(--card-box-shadow-color) 0px 8px 32px;
+        box-shadow: var(--card-box-shadow-color-lighter) 0px 4px 16px, var(--card-box-shadow-color-lighter) 0px 8px 32px;
+    }
+
+    .statusbadge {
+        box-shadow: var(--card-box-shadow-color-lighter) 0px 4px 16px, var(--card-box-shadow-color-lighter) 0px 8px 32px;
     }
 
     table.projectinfos .closed td ul:after {
