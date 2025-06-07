@@ -14,8 +14,7 @@
             <h2 class="toxresult_title" id="${toxresult._key}">
                 ${toxresult.host} ${toxresult.platform} ${toxresult.envname} ${toxresult.get('pyversion')}
             </h2>
-            <a name="${toxresult._key}-setup"></a>
-            <div class="command" tal:condition="not toxresult.setup.commands">No setup performed</div>
+            <div id="${toxresult._key}-setup" class="command" tal:condition="not toxresult.setup.commands">No setup performed</div>
             <div
                 tal:condition="toxresult.setup.commands"
                 tal:repeat="command toxresult.setup.commands"
@@ -26,8 +25,7 @@
                 <h3>Setup output:</h3>
                 <pre>${command.output}</pre>
             </div>
-            <a name="${toxresult._key}-test"></a>
-            <div class="command" tal:condition="not toxresult.test.commands">No test run</div>
+            <div id="${toxresult._key}-test" class="command" tal:condition="not toxresult.test.commands">No test run</div>
             <div
                 tal:condition="toxresult.test.commands"
                 tal:repeat="command toxresult.test.commands"
