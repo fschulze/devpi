@@ -909,7 +909,7 @@ footer li {
         --poppy-fg-color: #0e0e0e;
         --header-bg-color: var(--poppy-fg-color);
         --header-fg-color: var(--poppy-bg-color);
-        --muted-bg-color: #131313;
+        --muted-bg-color: #232323;
         --dl-dt-header-color: var(--main-fg-color);
         --dl-border-color: var(--muted-bg-color-darkened);
         --table-border-color: var(--dl-border-color);
