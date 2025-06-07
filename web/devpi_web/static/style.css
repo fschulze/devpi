@@ -147,10 +147,6 @@ main .content {
     background: var(--poppy-primary-color-darker);
 }
 
-.content_header .subnavigation {
-    padding: 0 0 0 3em;
-}
-
 .content_header .summary {
     font-style: oblique;
     padding: 1em;
@@ -618,7 +614,8 @@ table.projectinfos .opened td:after {
 }
 
 .subnavigation {
-    padding: 0.5em;
+    padding: 0 0 0 3em;
+    margin: 1em 0;
 }
 
 .subnavigation span + span::before {
@@ -846,10 +843,10 @@ footer li {
         margin-bottom: 0;
     }
 
-    main > .subnavigation {
+/*    main > .subnavigation {
         grid-column: 1 / 3;
     }
-
+*/
     .content > .summary {
         grid-column: 1 / 3;
     }
