@@ -15,7 +15,7 @@
                 src="${url}" data-base_url="${base_url}" data-baseview_url="${baseview_url}">
             </iframe>
         </div>
-        <script type="text/javascript">
+        <script>
         //<![CDATA[
             $('iframe#devpi-doc').on('load', onIFrameLoad);
         //]]>
