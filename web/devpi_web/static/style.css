@@ -2,16 +2,14 @@
   --main-bg-color: white;
   --main-fg-color: black;
   --main-bg-color-half: #e6e6e6;
-  --main-bg-color-dark: #0e0e0e;
-  --main-fg-color-dark: white;
-  --main-alternate-bg-color: #fafafa;
+/*  --main-alternate-bg-color: #fafafa;*/
+  --main-alternate-bg-color: #efefef;
   --main-alternate-bg-color-half: #202020;
   --main-alternate-fg-color: #0a0a0a;
   --main-margin: 2em;
   --text-shadow: 0 0 2px black, 0 0 2px black, 0 0 2px black;
   --text-shadow-color: white;
   --muted-bg-color: #707173;
-  --muted-bg-color-dark: #131313;
   --muted-bg-color-darkened: #555;
   --muted-fg-color: white;
   /* The poppy colors are colors that 'pop' in the theme */
@@ -34,7 +32,8 @@
   --table-alternate-border-color: var(--main-alternate-bg-color);
   --table-bg-color: var(--main-bg-color);
   --table-alternate-bg-color: var(--main-alternate-bg-color);
-  --code-text-color-dark: #0bfd0b;
+  --code-bg-color: var(--main-alternate-bg-color);
+  --code-fg-color: var(--main-fg-color);
   --fatal-color: #c12a1c;
   --warning-color: #d87d28;
   --success-color: #c7d32c;
@@ -62,6 +61,8 @@ body {
 }
 
 code, pre, .docutils.literal {
+    background-color: var(--code-bg-color);
+    color: var(--code-fg-color);
     font-size: inherit;
     font-family: ui-monospace, SFMono-Regular, SF Mono, JetBrainsMono, Consolas, monospace;
 }
@@ -668,9 +669,7 @@ table.projectinfos .opened td:after {
 }
 
 .docutils.literal {
-    background-color: var(--main-alternate-bg-color);
     border: 1px solid var(--muted-bg-color);
-    color: var(--muted-bg-color-darkened);
     font-size: .85rem;
     padding: 0 4px 1px;
 }
@@ -905,18 +904,21 @@ footer li {
 @media (prefers-color-scheme: dark) {
     :root {
         --main-bg-color: var(--main-alternate-fg-color);
-        --main-fg-color: var(--main-fg-color-dark);
+        --main-fg-color: white;
         --poppy-bg-color: var(--poppy-primary-color-alt);
-        --poppy-fg-color: var(--main-bg-color-dark);
+        --poppy-fg-color: #0e0e0e;
         --header-bg-color: var(--poppy-fg-color);
         --header-fg-color: var(--poppy-bg-color);
-        --muted-bg-color: var(--muted-bg-color-dark);
+        --muted-bg-color: #131313;
         --dl-dt-header-color: var(--main-fg-color);
         --dl-border-color: var(--muted-bg-color-darkened);
         --table-border-color: var(--dl-border-color);
         --table-th-bg-color: var(--poppy-primary-color-darker);
         --text-shadow: var(--main-bg-color-half);
         --text-shadow-color: var(--main-alternate-bg-color);
+        --table-bg-color: var(--main-bg-color);
+        --code-bg-color: var(--main-bg-color);
+        --code-fg-color: #0bfd0b;
     }
     body {
         background: var(--main-bg-color);
@@ -967,11 +969,6 @@ footer li {
 
     details.toxresult .steps {
         background: var(--main-alternate-bg-color-half);
-    }
-
-    pre {
-        background: var(--main-bg-color);
-        color: var(--code-text-color-dark);
     }
 
     tr.even table.inlinetoxresults tr:nth-child(2n+1) {
