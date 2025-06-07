@@ -26,7 +26,11 @@ def test_docs_raw_view(mapp, testapp):
     from devpi_server.filestore import get_hashes
 
     api = mapp.create_and_use()
-    content = zip_dict({"index.html": "<html/>"})
+    content = zip_dict(
+        {
+            "index.html": '<!DOCTYPE html><html lang="en"><head><title>Docs</title></head></html>'
+        }
+    )
     etag = get_hashes(content).get_default_value()
     mapp.set_versiondata({"name": "pkg1", "version": "2.6"})
     mapp.upload_doc("pkg1.zip", content, "pkg1", "2.6", code=200,
@@ -85,7 +89,11 @@ def test_docs_view(mapp, testapp):
 @pytest.mark.with_notifier
 def test_docs_raw_projectname(mapp, testapp):
     api = mapp.create_and_use()
-    content = zip_dict({"index.html": "<html><body>foo</body></html>"})
+    content = zip_dict(
+        {
+            "index.html": '<!DOCTYPE html><html lang="en"><head><title>Docs</title></head><body>foo</body></html>'
+        }
+    )
     mapp.set_versiondata({
         "name": "pkg_hello", "version": "1.0"})
     mapp.upload_doc(
@@ -98,12 +106,18 @@ def test_docs_raw_projectname(mapp, testapp):
     location = '%s/pkg_hello/1.0/+doc/index.html' % api.index
     r = testapp.xget(200, location, headers=dict(accept="text/html"))
     html = r.html.decode_contents()
-    assert html.strip() == '<html><body>foo</body></html>'
+    assert (
+        html.strip()
+        == '<!DOCTYPE html>\n<html lang="en"><head><title>Docs</title></head><body>foo</body></html>'
+    )
     # as well as the normalized name
     location = '%s/pkg-hello/1.0/+doc/index.html' % api.index
     r = testapp.xget(200, location, headers=dict(accept="text/html"))
     html = r.html.decode_contents()
-    assert html.strip() == '<html><body>foo</body></html>'
+    assert (
+        html.strip()
+        == '<!DOCTYPE html>\n<html lang="en"><head><title>Docs</title></head><body>foo</body></html>'
+    )
 
 
 @pytest.mark.with_notifier
@@ -123,7 +137,11 @@ def test_docs_show_projectname(mapp, testapp):
 @pytest.mark.with_notifier
 def test_docs_latest(mapp, testapp):
     api = mapp.create_and_use()
-    content = zip_dict({"index.html": "<html><body>2.6</body></html>"})
+    content = zip_dict(
+        {
+            "index.html": '<!DOCTYPE html><html lang="en"><head><title>Docs</title></head><body>2.6</body></html>'
+        }
+    )
     mapp.set_versiondata({"name": "pkg1", "version": "2.6"})
     mapp.upload_doc("pkg1.zip", content, "pkg1", "2.6", code=200,
                     waithooks=True)
@@ -137,7 +155,10 @@ def test_docs_latest(mapp, testapp):
     assert r.html.select('.infonote') == []
     # and the content matches
     r = testapp.xget(200, iframe.attrs['src'])
-    assert r.text == "<html><body>2.6</body></html>"
+    assert (
+        r.text
+        == '<!DOCTYPE html><html lang="en"><head><title>Docs</title></head><body>2.6</body></html>'
+    )
     # now we register a newer version, but docs should still be 2.6
     mapp.set_versiondata({"name": "pkg1", "version": "2.7"}, waithooks=True)
     r = testapp.xget(200, api.index + "/pkg1/latest/+d/index.html")
@@ -151,9 +172,16 @@ def test_docs_latest(mapp, testapp):
         "The latest available documentation (version 2.6) isn't for the latest available package version."]
     # and the content is from older uploaded docs
     r = testapp.xget(200, iframe.attrs['src'])
-    assert r.text == "<html><body>2.6</body></html>"
+    assert (
+        r.text
+        == '<!DOCTYPE html><html lang="en"><head><title>Docs</title></head><body>2.6</body></html>'
+    )
     # now we upload newer docs
-    content = zip_dict({"index.html": "<html><body>2.7</body></html>"})
+    content = zip_dict(
+        {
+            "index.html": '<!DOCTYPE html><html lang="en"><head><title>Docs</title></head><body>2.7</body></html>'
+        }
+    )
     mapp.upload_doc("pkg1.zip", content, "pkg1", "2.7", code=200,
                     waithooks=True)
     r = testapp.xget(200, api.index + "/pkg1/latest/+d/index.html")
@@ -166,13 +194,20 @@ def test_docs_latest(mapp, testapp):
     assert r.html.select('.infonote') == []
     # and the content is from newest docs
     r = testapp.xget(200, iframe.attrs['src'])
-    assert r.text == "<html><body>2.7</body></html>"
+    assert (
+        r.text
+        == '<!DOCTYPE html><html lang="en"><head><title>Docs</title></head><body>2.7</body></html>'
+    )
 
 
 @pytest.mark.with_notifier
 def test_docs_stable(mapp, testapp):
     api = mapp.create_and_use()
-    content = zip_dict({"index.html": "<html><body>2.6</body></html>"})
+    content = zip_dict(
+        {
+            "index.html": '<!DOCTYPE html><html lang="en"><head><title>Docs</title></head><body>2.6</body></html>'
+        }
+    )
     mapp.set_versiondata({"name": "pkg1", "version": "2.6"})
     mapp.upload_doc("pkg1.zip", content, "pkg1", "2.6", code=200,
                     waithooks=True)
@@ -186,7 +221,10 @@ def test_docs_stable(mapp, testapp):
     assert r.html.select('.infonote') == []
     # and the content matches
     r = testapp.xget(200, iframe.attrs['src'])
-    assert r.text == "<html><body>2.6</body></html>"
+    assert (
+        r.text
+        == '<!DOCTYPE html><html lang="en"><head><title>Docs</title></head><body>2.6</body></html>'
+    )
     # now we register a newer version, but docs should still be 2.6
     mapp.set_versiondata({"name": "pkg1", "version": "2.7.a1"}, waithooks=True)
     r = testapp.xget(200, api.index + "/pkg1/stable/+d/index.html")
@@ -199,9 +237,16 @@ def test_docs_stable(mapp, testapp):
     assert r.html.select('.infonote') == []
     # and the content is also from stable docs
     r = testapp.xget(200, iframe.attrs['src'])
-    assert r.text == "<html><body>2.6</body></html>"
+    assert (
+        r.text
+        == '<!DOCTYPE html><html lang="en"><head><title>Docs</title></head><body>2.6</body></html>'
+    )
     # now we upload newer docs
-    content = zip_dict({"index.html": "<html><body>2.7.a1</body></html>"})
+    content = zip_dict(
+        {
+            "index.html": '<!DOCTYPE html><html lang="en"><head><title>Docs</title></head><body>2.7.a1</body></html>'
+        }
+    )
     mapp.upload_doc("pkg1.zip", content, "pkg1", "2.7.a1", code=200,
                     waithooks=True)
     r = testapp.xget(200, api.index + "/pkg1/stable/+d/index.html")
@@ -215,7 +260,10 @@ def test_docs_stable(mapp, testapp):
         "Latest documentation"]
     # and the content is also still from stable docs
     r = testapp.xget(200, iframe.attrs['src'])
-    assert r.text == "<html><body>2.6</body></html>"
+    assert (
+        r.text
+        == '<!DOCTYPE html><html lang="en"><head><title>Docs</title></head><body>2.6</body></html>'
+    )
     # now we register a newer stable version, but docs should still be 2.6
     mapp.set_versiondata({"name": "pkg1", "version": "2.7"}, waithooks=True)
     r = testapp.xget(200, api.index + "/pkg1/stable/+d/index.html")
@@ -230,9 +278,16 @@ def test_docs_stable(mapp, testapp):
         "Latest documentation"]
     # and the content is from older stable upload
     r = testapp.xget(200, iframe.attrs['src'])
-    assert r.text == "<html><body>2.6</body></html>"
+    assert (
+        r.text
+        == '<!DOCTYPE html><html lang="en"><head><title>Docs</title></head><body>2.6</body></html>'
+    )
     # now we upload newer docs
-    content = zip_dict({"index.html": "<html><body>2.7</body></html>"})
+    content = zip_dict(
+        {
+            "index.html": '<!DOCTYPE html><html lang="en"><head><title>Docs</title></head><body>2.7</body></html>'
+        }
+    )
     mapp.upload_doc("pkg1.zip", content, "pkg1", "2.7", code=200,
                     waithooks=True)
     r = testapp.xget(200, api.index + "/pkg1/stable/+d/index.html")
@@ -245,4 +300,7 @@ def test_docs_stable(mapp, testapp):
     assert r.html.select('.infonote') == []
     # the content is now latest stable docs
     r = testapp.xget(200, iframe.attrs['src'])
-    assert r.text == "<html><body>2.7</body></html>"
+    assert (
+        r.text
+        == '<!DOCTYPE html><html lang="en"><head><title>Docs</title></head><body>2.7</body></html>'
+    )

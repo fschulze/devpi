@@ -331,9 +331,22 @@ jobs:
       - uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
         with:
           persist-credentials: false
+      - uses: "actions/setup-node@7c12f8017d5436eb855f1ed4399f037a36fbd9e8" # v2.5.2
       - uses: "actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405" # v6.2.0
         with:
           python-version: "${{ matrix.python-version }}"
+      - name: "Setup vnu"
+        run: |
+          set -xe -o nounset
+          mkdir -p /home/runner/.local/bin
+          npm install vnu-jar
+          cat <<EOF > /home/runner/.local/bin/vnu
+          #!/bin/sh
+          exec java -jar `pwd`/node_modules/vnu-jar/build/dist/vnu.jar "\$@"
+          EOF
+          cat /home/runner/.local/bin/vnu
+          chmod +x /home/runner/.local/bin/vnu
+          vnu --version
       - name: "Install dependencies"
         run: |
           set -xe -o nounset
@@ -346,7 +359,7 @@ jobs:
           source .ci/set-index-env.sh
           cd $PROJECT
           python -m tox -a -vv
-          PIP_PRE=1 python -m tox -v -e ${{ matrix.tox-envs }} -- -v --color=yes
+          PIP_PRE=1 python -m tox -v -e ${{ matrix.tox-envs }} -- -v --color=yes --html-validation
 
   debugging-tests:
     if: ${{ true && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'actions')) }}
