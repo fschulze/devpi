@@ -43,9 +43,12 @@ def test_inheritance(xom):
 def test_doc_unpack_cleanup(mapp, testapp):
     from devpi_web.doczip import get_unpack_path
     api = mapp.create_and_use()
-    content = zip_dict({
-        "index.html": "<html><body>2.6</body></html>",
-        "foo.html": "<html><body>Foo</body></html>"})
+    content = zip_dict(
+        {
+            "index.html": '<!DOCTYPE html><html lang="en"><head><title>Docs</title></head><body>2.6</body></html>',
+            "foo.html": '<!DOCTYPE html><html lang="en"><head><title>Docs</title></head><body>Foo</body></html>',
+        }
+    )
     mapp.set_versiondata({"name": "pkg1", "version": "2.6"})
     mapp.upload_doc("pkg1.zip", content, "pkg1", "2.6", code=200,
                     waithooks=True)
@@ -54,8 +57,11 @@ def test_doc_unpack_cleanup(mapp, testapp):
         path = get_unpack_path(stage, 'pkg1', '2.6')
     testapp.xget(200, api.index + '/pkg1/2.6/+doc/foo.html')
     assert path.joinpath("foo.html").exists()
-    content = zip_dict({
-        "index.html": "<html><body>2.6</body></html>"})
+    content = zip_dict(
+        {
+            "index.html": '<!DOCTYPE html><html lang="en"><head><title>Docs</title></head><body>2.6</body></html>'
+        }
+    )
     mapp.upload_doc("pkg1.zip", content, "pkg1", "2.6", code=200,
                     waithooks=True)
     with mapp.xom.keyfs.read_transaction():

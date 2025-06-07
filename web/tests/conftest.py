@@ -8,6 +8,59 @@ pytest_plugins = ["pytest_devpi_server", "test_devpi_server.plugin"]
 def pytest_addoption(parser):
     parser.addoption("--fast", help="skip functional/slow tests", default=False,
                      action="store_true")
+    parser.addoption(
+        "--html-validation",
+        help="run HTML validation using vnu",
+        default=False,
+        action="store_true",
+    )
+
+
+@pytest.fixture
+def maketestapp(maketestapp, request):
+    import subprocess
+    import tempfile
+
+    def do_request(self, *args, **kw):
+        resp = self._original_do_request(*args, **kw)
+        if resp.content_type in {
+            "application/json",
+            "text/css",
+            "text/plain",
+            "text/xml",
+        }:
+            return resp
+        if resp.content_type is None and not resp.body:
+            return resp
+        if (ct := resp.content_type) in {"text/html"}:
+            if not resp.body or resp.status_code in {302}:
+                return resp
+            with tempfile.NamedTemporaryFile(suffix=f".{ct.split('/')[-1]}") as f:
+                f.write(resp.body)
+                f.flush()
+                try:
+                    subprocess.check_call(  # noqa: S603 - testing
+                        ["vnu", "--Werror", "--format", "text", f.name],  # noqa: S607 - testing
+                    )
+                except subprocess.CalledProcessError:
+                    print(  # noqa: T201 - testing
+                        "\n".join(
+                            f"{i}:{l}"
+                            for i, l in enumerate(resp.text.splitlines(), start=1)
+                        )
+                    )
+                    raise
+            return resp
+        raise ValueError(resp.content_type)
+
+    def _maketestapp(xom):
+        testapp = maketestapp(xom)
+        if request.config.getoption("--html-validation"):
+            testapp._original_do_request = testapp.do_request
+            testapp.do_request = do_request.__get__(testapp)
+        return testapp
+
+    return _maketestapp
 
 
 @pytest.fixture
