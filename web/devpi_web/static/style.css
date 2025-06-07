@@ -5,6 +5,7 @@
   --main-bg-color-dark: #0e0e0e;
   --main-fg-color-dark: white;
   --main-alternate-bg-color: #fafafa;
+  --main-alternate-bg-color-half: #202020;
   --main-alternate-fg-color: #0a0a0a;
   --main-margin: 2em;
   --text-shadow: 0 0 2px black, 0 0 2px black, 0 0 2px black;
@@ -33,6 +34,7 @@
   --table-alternate-border-color: var(--main-alternate-bg-color);
   --table-bg-color: var(--main-bg-color);
   --table-alternate-bg-color: var(--main-alternate-bg-color);
+  --code-text-color-dark: #0bfd0b;
   --fatal-color: #c12a1c;
   --warning-color: #d87d28;
   --success-color: #c7d32c;
@@ -681,11 +683,11 @@ details.toxresult:first-of-type {
 details.toxresult {
     padding-left: 1em;
     border: 1px solid transparent;
-    margin: 0.1em 0;
+    margin-bottom: 0.1em;
 }
 
 details.toxresult .steps {
-    margin-left: 2em;
+    margin: 0 0 1em 2em;
     background: var(--main-bg-color-half);
     padding: 1em;
     border-radius: 0.2em;
@@ -709,10 +711,6 @@ details.toxresult summary > span {
     font-smoothing: antialiased;
     line-height: 1em;
     border: 1px solid;
-}
-
-details.toxresult summary:hover {
-    box-shadow: var(--card-box-shadow-color-lighter) 0px 4px 16px, var(--card-box-shadow-color-lighter) 0px 8px 32px;
 }
 
 details.toxresult summary * {
@@ -915,9 +913,14 @@ footer li {
         --muted-bg-color: var(--muted-bg-color-dark);
         --dl-dt-header-color: var(--main-fg-color);
         --dl-border-color: var(--muted-bg-color-darkened);
+        --table-border-color: var(--dl-border-color);
+        --table-th-bg-color: var(--poppy-primary-color-darker);
+        --text-shadow: var(--main-bg-color-half);
+        --text-shadow-color: var(--main-alternate-bg-color);
     }
     body {
-        background: var(--main-bg-color)
+        background: var(--main-bg-color);
+        color: var(--main-bg-color-half);
     }
     main a {
         color: var(--poppy-primary-color);
@@ -930,10 +933,20 @@ footer li {
         background: var(--poppy-primary-color)
     }
 
+    .content_header {
+        color: var(--text-shadow-color);
+    }
+    .content_header a {
+        color: var(--text-shadow-color);
+    }
+    .content_header a:visited {
+        color: var(--text-shadow);
+    }
+
     .jumptotop {
         text-shadow: 1px 3px 5px #484848;
     }
-    
+
     .user_index_list dl {
         background: var(--muted-bg-color-dark);
         border: 2px solid var(--muted-bg-color);
@@ -946,6 +959,27 @@ footer li {
 
     .statusbadge {
         box-shadow: var(--card-box-shadow-color-lighter) 0px 4px 16px, var(--card-box-shadow-color-lighter) 0px 8px 32px;
+    }
+
+    table.main {
+        box-shadow: var(--card-box-shadow-color-lighter) 0px 4px 16px, var(--card-box-shadow-color-lighter) 0px 8px 32px;
+    }
+
+    details.toxresult .steps {
+        background: var(--main-alternate-bg-color-half);
+    }
+
+    pre {
+        background: var(--main-bg-color);
+        color: var(--code-text-color-dark);
+    }
+
+    tr.even table.inlinetoxresults tr:nth-child(2n+1) {
+        background: var(--muted-bg-color);
+    }
+    
+    td.status a:visited {
+        color: var(--text-shadow);
     }
 
     table.projectinfos .closed td ul:after {
