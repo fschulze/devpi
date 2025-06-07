@@ -21,7 +21,7 @@
                                     ${sub_hit.title}
                                 </a>
                             </dt>
-                            <dd condition="sub_hit.highlight">
+                            <dd tal:condition="sub_hit.highlight">
                                 <span tal:replace="structure sub_hit.highlight" />
                             </dd>
                         </dl>
