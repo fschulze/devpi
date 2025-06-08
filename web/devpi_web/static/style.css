@@ -1,7 +1,6 @@
 :root {
     --main-bg-color: white;
     --main-fg-color: black;
-    --main-bg-color-half: #e6e6e6;
     --main-bg-color-alt: #efefef;
     --main-margin: 2em;
     --text-shadow: 0 0 2px black, 0 0 2px black, 0 0 2px black;
@@ -29,6 +28,7 @@
     --subnavigation-fg-color: white;
     --main-link-color: LinkText;
     --main-link-color-visited: VisitedText;
+    --card-bg-color: var(--main-bg-color);
     --card-header-color: var(--main-fg-color);
     --card-border-color: var(--main-bg-color-alt);
     --card-poppy-border-color: var(--poppy-secondary-color);
@@ -46,6 +46,7 @@
     --table-bg-color-alt: var(--main-bg-color-alt);
     --table-shadow-color: transparent;
     --table-shadow: var(--table-shadow-color) 0px 4px 16px, var(--table-shadow-color) 0px 8px 32px;
+    --toxresult-steps-bg-color: var(--main-bg-color-alt);
     --fatal-color: #c12a1c;
     --warning-color: #d87d28;
     --success-color: #c7d32c;
@@ -84,8 +85,7 @@ code, pre, .docutils.literal {
 
 pre {
     overflow-x: auto;
-    background: var(--main-bg-color-alt);
-    padding: 0.5em;
+    padding: calc(var(--main-margin) / 4);
 }
 
 a {
@@ -106,7 +106,7 @@ header .headertop {
     display: flex;
     flex-flow: column nowrap;
     align-items: center;
-    margin: 0 0 0.5em 0;
+    margin: 0 0 calc(var(--main-margin) / 4) 0;
 }
 
 header .search {
@@ -136,10 +136,10 @@ header > nav {
     color: var(--nav-fg-color);
     display: flex;
     flex-flow: column wrap;
-    gap: 1em;
+    gap: calc(var(--main-margin) / 2);
     align-items: flex-start;
     align-content: flex-start;
-    padding: 0.5em var(--main-margin);
+    padding: calc(var(--main-margin) / 4) var(--main-margin);
 }
 
 header > nav :first-child {
@@ -165,15 +165,15 @@ main .content {
 }
 
 .content_header .title,.content_header > h1,.content_header > h2 {
-    padding: 0.5em 1em;
+    padding: calc(var(--main-margin) / 4) calc(var(--main-margin) / 2);
     margin: 0;
     background: var(--header-bg-color-alt);
 }
 
 .content_header .summary {
     font-style: oblique;
-    padding: 1em;
-    margin: 0 2em;
+    padding: calc(var(--main-margin) / 2);
+    margin: 0 var(--main-margin);
     border-top: 1px solid var(--header-fg-color);
 }
 
@@ -187,7 +187,7 @@ a.logo {
 }
 
 .breadcrumb a {
-    padding: 3px 0.5em;
+    padding: 3px calc(var(--main-margin) / 4);
     border-radius: 5px;
     color: var(--muted-fg-color);
 }
@@ -248,10 +248,10 @@ a.logo {
 }
 
 .serverstatus {
-    padding: 0.5em;
+    padding: calc(var(--main-margin) / 4);
     border: 2px solid var(--muted-bg-color-alt);
     border-radius: 5px;
-    margin: 1em var(--main-margin) 0 var(--main-margin);
+    margin: calc(var(--main-margin) / 2) var(--main-margin) 0 var(--main-margin);
     box-sizing: border-box;
 }
 
@@ -263,7 +263,7 @@ a.logo {
 
 .serverstatus li {
     padding: 0;
-    margin: 0.25em 0;
+    margin: calc(var(--main-margin) / 8) 0;
 }
 
 .serverstatus.fatal {
@@ -297,6 +297,7 @@ a.logo {
 }
 
 .user_index_list dl {
+    background: var(--card-bg-color);
     border-radius: 5px;
     border: 2px solid var(--card-border-color);
     border-top: var(--card-poppy-border-color) solid 5px;
@@ -306,11 +307,11 @@ a.logo {
 .user_index_list dt {
     color: var(--main-fg-color);
     font-weight: bold;
-    margin: 0 1em;
-    padding: 0.5em 0.5em;
+    margin: 0 calc(var(--main-margin) / 2);
+    padding: calc(var(--main-margin) / 4);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    border-bottom: 1px solid var(--main-bg-color-alt);
+    border-bottom: 1px solid var(--card-border-color);
 }
 
 .user_index_list dt a {
@@ -318,13 +319,13 @@ a.logo {
 }
 
 .user_index_list dd {
-    padding: 0.5em 0.5em 0em 0.5em;
+    padding: calc(var(--main-margin) / 4) calc(var(--main-margin) / 4) 0em calc(var(--main-margin) / 4);
     margin-left: 1em;
 }
 
 .user_index_list dd.user_description {
     margin: 0;
-    padding: 0.5em;
+    padding: calc(var(--main-margin) / 4);
     border-bottom: 1px solid var(--card-border-color);
 }
 
@@ -407,11 +408,6 @@ td.file dt:after {
 td.file dd {
     margin: 0;
     padding: 0;
-}
-
-.toxresults > caption {
-    font-size: 2em;
-    padding: 0.5em;
 }
 
 table.main > tbody > tr > td.toxresults,
@@ -545,12 +541,12 @@ iframe.devpidoc {
 
 .packageinfo dt {
     margin: 0;
-    padding: 0.125em;
+    padding: calc(var(--main-margin) / 16);
 }
 
 .packageinfo dd {
     margin: 0;
-    padding: 0.125em 0.125em 0.125em 0.125em;
+    padding: calc(var(--main-margin) / 16);
     line-height: 1.25em;
     height: 2.5em;
     overflow: hidden;
@@ -611,12 +607,12 @@ table.projectinfos .opened td:after {
 }
 
 .projectinfos > details > p {
-    margin: 0.5em 0 0.5em 1em;
+    margin: calc(var(--main-margin) / 4) 0 calc(var(--main-margin) / 4) calc(var(--main-margin) / 2);
 }
 
 .projectinfos > details > ul {
-    padding: 0 0 0 1em;
-    margin: 0.5em 0 0.5em 1em;
+    padding: 0 0 0 calc(var(--main-margin) / 2);
+    margin: calc(var(--main-margin) / 4) 0 calc(var(--main-margin) / 4) calc(var(--main-margin) / 2);
 }
 
 .projectinfos > details > ul > li {
@@ -625,13 +621,13 @@ table.projectinfos .opened td:after {
 }
 
 .subnavigation {
-    padding: 0 0 0 3em;
-    margin: 1em 0;
+    padding: 0 0 0 calc(var(--main-margin) * 1.5);
+    margin: calc(var(--main-margin) / 2) 0;
 }
 
 .subnavigation span + span::before {
     content: " | ";
-    margin: 0 0.25em;
+    margin: 0 calc(var(--main-margin) / 8);
 }
 
 .subnavigation a {
@@ -680,7 +676,7 @@ table.projectinfos .opened td:after {
     color: var(--main-fg-color);
 }
 
-code, .docutils.literal {
+.docutils.literal {
     border: 1px solid var(--code-border-color);
     border-radius: 3px;
     font-size: .85rem;
@@ -689,25 +685,25 @@ code, .docutils.literal {
 
 details.toxresult:first-of-type {
     border-top: 1px solid var(--table-border-color);
-    padding-top: 1em;
+    padding-top: calc(var(--main-margin) / 2);
 }
 
 details.toxresult {
-    padding-left: 1em;
+    padding-left: calc(var(--main-margin) / 2);
     border: 1px solid transparent;
     margin-bottom: 0.1em;
 }
 
 details.toxresult .steps {
-    margin: 0 0 1em 2em;
-    background: var(--main-bg-color-half);
-    padding: 1em;
+    margin: 0 0 calc(var(--main-margin) / 2) var(--main-margin);
+    background: var(--toxresult-steps-bg-color);
+    padding: calc(var(--main-margin) / 2);
     border-radius: 0.2em;
 }
 
 details.toxresult summary {
     cursor: pointer;
-    padding: 0 0 1em 0;
+    padding: 0 0 calc(var(--main-margin) / 2) 0;
     font-weight: bold;
 }
 
@@ -885,18 +881,18 @@ footer li {
     }
 
     table.main > tbody > tr > td, table.main > thead > tr > th {
-        padding-top: 0.5em;
-        padding-bottom: 0.5em;
+        padding-top: calc(var(--main-margin) / 4);
+        padding-bottom: calc(var(--main-margin) / 4);
     }
 
     table.main > tbody > tr > td,
     table.main > tbody > tr > td.toxresults,
     table.main > tbody > tr > td.releases {
-        padding-left: 2em;
+        padding-left: var(--main-margin);
     }
 
     table.main > tbody > tr >  td:first-child {
-        padding-left: .5em;
+        padding-left: calc(var(--main-margin) / 4);
     }
 
     table.inlinetoxresults tr {
@@ -929,6 +925,7 @@ footer li {
         --table-bg-color-alt: var(--muted-bg-color);
         --table-border-color: var(--muted-bg-color-alt);
 /*        --table-shadow-color: rgba(255, 255, 255, 0.1);*/
+        --toxresult-steps-bg-color: #202020;
         --jumptotop-shadow-color: #484848;
         --footer-fg-color: #0e0e0e;
 
@@ -950,24 +947,8 @@ footer li {
   --card-box-shadow-color-lighter: rgba(255, 255, 255, 0.18) ;
 */    }
 /*
-    .content_header {
-        color: var(--text-shadow-color);
-    }
-    .content_header a {
-        color: var(--text-shadow-color);
-    }
-    .content_header a:visited {
-        color: var(--text-shadow);
-    }
-
     .user_index_list dl {
         background: var(--muted-bg-color-dark);
-        border: 2px solid var(--muted-bg-color);
-        border-top-width: 2px;
-        border-top-style: solid;
-        border-top-color: rgb(232, 232, 232);
-        border-top: var(--poppy-bg-color) solid 5px;
-        box-shadow: var(--card-box-shadow-color-lighter) 0px 4px 16px, var(--card-box-shadow-color-lighter) 0px 8px 32px;
     }
 
     table.main {
