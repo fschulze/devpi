@@ -23,6 +23,7 @@
     --header-fg-color: var(--poppy-fg-color);
     --card-header-color: var(--main-fg-color);
     --card-border-color: var(--main-alternate-bg-color);
+    --card-poppy-border-color: var(--poppy-secondary-color);
     --table-th-bg-color: var(--header-bg-color);
     --table-th-fg-color: var(--header-fg-color);
     --table-border-color: var(--muted-bg-color);
@@ -279,7 +280,7 @@ a.logo {
 .user_index_list dl {
     border-radius: 5px;
     border: 2px solid var(--card-border-color);
-    border-top: var(--poppy-secondary-color) solid 5px;
+    border-top: var(--card-poppy-border-color) solid 5px;
     box-shadow: var(--card-box-shadow-color) 0px 4px 16px, var(--card-box-shadow-color) 0px 8px 32px;
 }
 
@@ -884,9 +885,11 @@ footer li {
         --main-fg-color: white;
         --main-link-color: var(--poppy-primary-color);
         --main-link-color-visited: var(--poppy-primary-color-lighter);
+        --muted-bg-color: #232323;
         --poppy-fg-color: #0e0e0e;
-        --card-border-color: #555;
-        --card-box-shadow-color: rgba(255, 255, 255, 0.18);
+        --card-border-color: var(--muted-bg-color);
+        --card-box-shadow-color: rgba(255, 255, 255, 0.1);
+        --card-poppy-border-color: var(--poppy-primary-color-lighter);
 
 /*  --main-alternate-bg-color-half: #202020;*/
 
