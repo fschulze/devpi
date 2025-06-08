@@ -4,8 +4,6 @@
   --main-bg-color-half: #e6e6e6;
 /*  --main-alternate-bg-color: #fafafa;*/
   --main-alternate-bg-color: #efefef;
-  --main-alternate-bg-color-half: #202020;
-  --main-alternate-fg-color: #0a0a0a;
   --main-margin: 2em;
   --text-shadow: 0 0 2px black, 0 0 2px black, 0 0 2px black;
   --text-shadow-color: white;
@@ -20,6 +18,8 @@
   --poppy-secondary-color-alt: #d89a28;
   --poppy-bg-color: var(--poppy-primary-color);
   --poppy-fg-color: white;
+  --main-link-color: LinkText;
+  --main-link-color-visited: VisitedText;
   --header-bg-color: var(--poppy-bg-color);
   --header-fg-color: var(--poppy-fg-color);
   --dl-dt-bg-color: var(--poppy-secondary-color);
@@ -129,6 +129,14 @@ header > nav {
 
 header > nav :first-child {
     flex: 1 1 auto;
+}
+
+main a {
+    color: var(--main-link-color);
+}
+
+main a:visited {
+    color: var(--main-link-color-visited);
 }
 
 main .content {
@@ -900,7 +908,14 @@ footer li {
 
 @media (prefers-color-scheme: dark) {
     :root {
-        --main-bg-color: var(--main-alternate-fg-color);
+        --main-bg-color: #0a0a0a;
+        --main-fg-color: white;
+        --main-link-color: var(--poppy-primary-color);
+        --main-link-color-visited: var(--poppy-primary-color-alt);
+
+/*  --main-alternate-bg-color-half: #202020;*/
+
+/*        --main-bg-color: var(--main-alternate-fg-color);
         --main-fg-color: white;
         --poppy-bg-color: var(--poppy-primary-color-alt);
         --poppy-fg-color: #0e0e0e;
@@ -916,22 +931,8 @@ footer li {
         --table-bg-color: var(--main-bg-color);
         --code-bg-color: var(--main-bg-color);
         --code-fg-color: #0bfd0b;
-    }
-    body {
-        background: var(--main-bg-color);
-        color: var(--main-bg-color-half);
-    }
-    main a {
-        color: var(--poppy-primary-color);
-    }
-    main a:visited {
-        color: var(--poppy-primary-color-alt);
-    }
-
-    footer {
-        background: var(--poppy-primary-color)
-    }
-
+*/    }
+/*
     .content_header {
         color: var(--text-shadow-color);
     }
@@ -987,4 +988,4 @@ footer li {
         background: -webkit-linear-gradient(top, var(--main-bg-color), rgba(0,0,0,1));
         background: linear-gradient(top, var(--main-bg-color), rgba(0,0,0,1));
     }
-}
+*/}
