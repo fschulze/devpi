@@ -34,14 +34,18 @@
     --card-poppy-border-color: var(--poppy-secondary-color);
     --card-box-shadow-color: rgba(40, 40, 49, 0.06);
     --card-box-shadow: var(--card-box-shadow-color) 0px 4px 16px, var(--card-box-shadow-color) 0px 8px 32px;
+    --code-bg-color: var(--main-bg-color-alt);
+    --code-fg-color: var(--main-fg-color);
+    --code-border-color: var(--muted-bg-color);
+    --metadata-fade: linear-gradient(to bottom, rgba(from var(--main-bg-color) r g b / 0), rgba(from var(--main-bg-color) r g b / 1));
     --table-th-bg-color: var(--header-bg-color);
     --table-th-fg-color: var(--header-fg-color);
     --table-border-color: var(--muted-bg-color);
     --table-alternate-border-color: var(--main-bg-color-alt);
     --table-bg-color: var(--main-bg-color);
     --table-bg-color-alt: var(--main-bg-color-alt);
-    --code-bg-color: var(--main-bg-color-alt);
-    --code-fg-color: var(--main-fg-color);
+    --table-shadow-color: transparent;
+    --table-shadow: var(--table-shadow-color) 0px 4px 16px, var(--table-shadow-color) 0px 8px 32px;
     --fatal-color: #c12a1c;
     --warning-color: #d87d28;
     --success-color: #c7d32c;
@@ -351,6 +355,7 @@ table.main {
     border: 1px solid var(--table-border-color);
     border-radius: 5px;
     width: 100%;
+    box-shadow: var(--table-shadow);
 }
 
 table.main > * > tr > th {
@@ -581,7 +586,7 @@ table.projectinfos .closed td ul:after {
     bottom: 0;
     left: 0;
     height: 3em;
-    background: linear-gradient(to top, rgba(255,255,255,0), rgba(255,255,255,1));
+    background: var(--metadata-fade);
 }
 
 table.projectinfos .opened td:after,
@@ -675,8 +680,9 @@ table.projectinfos .opened td:after {
     color: var(--main-fg-color);
 }
 
-.docutils.literal {
-    border: 1px solid var(--muted-bg-color);
+code, .docutils.literal {
+    border: 1px solid var(--code-border-color);
+    border-radius: 3px;
     font-size: .85rem;
     padding: 0 4px 1px;
 }
@@ -913,12 +919,16 @@ footer li {
         --muted-bg-color: #232323;
         --header-fg-color: #0e0e0e;
         --statusbadge-shadow-color: rgba(255, 255, 255, 0.18);
-        --statusbadge-shadow: var(--statusbadge-shadow-color) 0px 4px 16px, var(--statusbadge-shadow-color) 0px 8px 32px;
         --subnavigation-fg-color: var(--muted-bg-color);
         --card-border-color: var(--muted-bg-color);
         --card-box-shadow-color: rgba(255, 255, 255, 0.1);
         --card-poppy-border-color: var(--poppy-primary-color-lighter);
+        --code-bg-color: var(--main-bg-color);
+        --code-fg-color: #0bfd0b;
+        --code-border-color: var(--muted-bg-color-alt);
         --table-bg-color-alt: var(--muted-bg-color);
+        --table-border-color: var(--muted-bg-color-alt);
+/*        --table-shadow-color: rgba(255, 255, 255, 0.1);*/
         --jumptotop-shadow-color: #484848;
         --footer-fg-color: #0e0e0e;
 
@@ -937,8 +947,6 @@ footer li {
         --text-shadow: var(--main-bg-color-half);
         --text-shadow-color: var(--main-bg-color-alt);
         --table-bg-color: var(--main-bg-color);
-        --code-bg-color: var(--main-bg-color);
-        --code-fg-color: #0bfd0b;
   --card-box-shadow-color-lighter: rgba(255, 255, 255, 0.18) ;
 */    }
 /*
@@ -976,15 +984,5 @@ footer li {
     
     td.status a:visited {
         color: var(--text-shadow);
-    }
-
-    table.projectinfos .closed td ul:after {
-        content: "";
-        position: absolute;
-        right: 0;
-        bottom: 0;
-        left: 0;
-        height: 3em;
-        background: linear-gradient(to top, var(--main-bg-color), rgba(0,0,0,1));
     }
 */}
