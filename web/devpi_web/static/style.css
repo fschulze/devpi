@@ -16,14 +16,19 @@
     --poppy-secondary-color: #d87d28;
     --poppy-bg-color: var(--poppy-primary-color);
     --poppy-fg-color: white;
+
+
+    --header-bg-color: var(--poppy-bg-color);
+    --header-bg-color-alt: var(--poppy-primary-color-darker);
+    --header-fg-color: var(--poppy-fg-color);
     --nav-bg-color: var(--muted-bg-color);
     --nav-bg-color-hover: var(--muted-bg-color-alt);
     --nav-fg-color: var(--muted-fg-color);
-    --header-bg-color-alt: var(--poppy-primary-color-darker);
+    --statusbadge-shadow-color: rgba(40, 40, 49, 0.06);
+    --statusbadge-shadow: var(--statusbadge-shadow-color) 0px 4px 16px, var(--statusbadge-shadow-color) 0px 8px 32px;
+    --subnavigation-fg-color: white;
     --main-link-color: LinkText;
     --main-link-color-visited: VisitedText;
-    --header-bg-color: var(--poppy-bg-color);
-    --header-fg-color: var(--poppy-fg-color);
     --card-header-color: var(--main-fg-color);
     --card-border-color: var(--main-bg-color-alt);
     --card-poppy-border-color: var(--poppy-secondary-color);
@@ -46,6 +51,8 @@
     --fatal-contrast-color: white;
     --warning-contrast-color: white;
     --success-contrast-color: black;
+    --footer-bg-color: var(--poppy-bg-color);
+    --footer-fg-color: var(--poppy-fg-color);
     --jumptotop-color: var(--main-fg-color);
     --jumptotop-shadow-color: #acacac;
     --jumptotop-shadow: 1px 3px 5px var(--jumptotop-shadow-color);
@@ -148,8 +155,8 @@ main .content {
 }
 
 .content_header {
-    background: var(--poppy-primary-color);
-    color: var(--poppy-fg-color);
+    background: var(--header-bg-color);
+    color: var(--header-fg-color);
     padding-bottom: 0.1em;
 }
 
@@ -163,7 +170,7 @@ main .content {
     font-style: oblique;
     padding: 1em;
     margin: 0 2em;
-    border-top: 1px solid var(--poppy-fg-color);
+    border-top: 1px solid var(--header-fg-color);
 }
 
 a.logo {
@@ -191,6 +198,7 @@ a.logo {
     white-space: nowrap;
     font-size: 0.75rem;
     margin: 0;
+    box-shadow: var(--statusbadge-shadow);
 }
 
 .statusbadge label {
@@ -480,17 +488,23 @@ a.unknown {
     line-height: 1em;
 }
 
-a.passed {
+a.passed,
+a.passed:active,
+a.passed:visited {
     background-color: var(--success-bg-color);
     color: var(--text-shadow-color);
 }
 
-a.failed {
+a.failed,
+a.failed:active,
+a.failed:visited {
     background-color: var(--fatal-bg-color);
     color: var(--text-shadow-color);
 }
 
-a.unknown {
+a.unknown,
+a.unknown:active,
+a.unknown:visited {
     background-color: var(--warning-bg-color);
     color: var(--text-shadow-color);
 }
@@ -616,9 +630,13 @@ table.projectinfos .opened td:after {
 }
 
 .subnavigation a {
-    color: var(--poppy-fg-color-alt);
+    color: var(--subnavigation-fg-color);
     font-weight: bold;
     display: inline-block;
+}
+
+.subnavigation a:visited {
+    color: var(--subnavigation-fg-color);
 }
 
 .subnavigation .warning:before,
@@ -723,8 +741,8 @@ details.toxresult.passed summary > span {
 footer {
     position: sticky;
     top: 100vh;
-    background: var(--poppy-bg-color);
-    color: var(--poppy-fg-color);
+    background: var(--footer-bg-color);
+    color: var(--footer-fg-color);
     margin: 0;
     padding: 0 var(--main-margin) var(--main-margin) var(--main-margin);
     font-size: 0.9rem;
@@ -735,7 +753,7 @@ footer h4 {
 }
 
 footer a {
-    color: var(--poppy-fg-color);
+    color: var(--footer-fg-color);
 }
 
 footer ul {
@@ -890,15 +908,19 @@ footer li {
     :root {
         --main-bg-color: #0a0a0a;
         --main-fg-color: white;
-        --main-link-color: var(--poppy-primary-color);
-        --main-link-color-visited: var(--poppy-primary-color-lighter);
+        --main-link-color: var(--poppy-primary-color-lighter);
+        --main-link-color-visited: #f87ce8;
         --muted-bg-color: #232323;
-        --poppy-fg-color: #0e0e0e;
+        --header-fg-color: #0e0e0e;
+        --statusbadge-shadow-color: rgba(255, 255, 255, 0.18);
+        --statusbadge-shadow: var(--statusbadge-shadow-color) 0px 4px 16px, var(--statusbadge-shadow-color) 0px 8px 32px;
+        --subnavigation-fg-color: var(--muted-bg-color);
         --card-border-color: var(--muted-bg-color);
         --card-box-shadow-color: rgba(255, 255, 255, 0.1);
         --card-poppy-border-color: var(--poppy-primary-color-lighter);
         --table-bg-color-alt: var(--muted-bg-color);
         --jumptotop-shadow-color: #484848;
+        --footer-fg-color: #0e0e0e;
 
 /*  --main-bg-color-alt-half: #202020;*/
 
@@ -937,10 +959,6 @@ footer li {
         border-top-style: solid;
         border-top-color: rgb(232, 232, 232);
         border-top: var(--poppy-bg-color) solid 5px;
-        box-shadow: var(--card-box-shadow-color-lighter) 0px 4px 16px, var(--card-box-shadow-color-lighter) 0px 8px 32px;
-    }
-
-    .statusbadge {
         box-shadow: var(--card-box-shadow-color-lighter) 0px 4px 16px, var(--card-box-shadow-color-lighter) 0px 8px 32px;
     }
 
