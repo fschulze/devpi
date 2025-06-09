@@ -8,7 +8,7 @@ import json
 from devpi_common.metadata import get_latest_version
 from devpi_common.metadata import splitbasename, parse_version
 from devpi_common.url import URL
-from devpi_common.validation import validate_metadata, normalize_name
+from devpi_common.validation import validate_metadata
 from devpi_common.types import ensure_unicode, cached_property
 from functools import total_ordering
 from itertools import zip_longest
@@ -22,6 +22,7 @@ from .log import threadlog
 from .markers import absent
 from .markers import deleted
 from .markers import unknown
+from .normalized import normalize_name
 from .readonly import DictViewReadonly
 from .readonly import ensure_deeply_readonly
 from .readonly import get_mutable_deepcopy

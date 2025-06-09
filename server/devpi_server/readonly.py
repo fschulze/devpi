@@ -5,6 +5,7 @@ into a readonly view.
 """
 from __future__ import annotations
 
+from .normalized import NormalizedName
 from abc import ABC
 from abc import abstractmethod
 from collections.abc import Hashable
@@ -27,7 +28,7 @@ if TYPE_CHECKING:
     from typing import Any
 
 
-_immutable = (bool, bytes, float, frozenset, int, str, type(None))
+_immutable = (NormalizedName, bool, bytes, float, frozenset, int, str, type(None))
 
 
 class ReadonlyView(ABC):
@@ -59,9 +60,19 @@ class ReadonlyView(ABC):
 
 
 Readonly = Union[
-    None, bool, bytes, float, frozenset, int, str,
-    'DictViewReadonly', 'ListViewReadonly',
-    'SetViewReadonly', 'TupleViewReadonly']
+    None,
+    NormalizedName,
+    bool,
+    bytes,
+    float,
+    frozenset,
+    int,
+    str,
+    "DictViewReadonly",
+    "ListViewReadonly",
+    "SetViewReadonly",
+    "TupleViewReadonly",
+]
 
 
 K = TypeVar("K", bound=Hashable)
@@ -185,6 +196,11 @@ def _(val: None) -> None:
 
 
 @ensure_deeply_readonly.register
+def _(val: NormalizedName) -> NormalizedName:
+    return val
+
+
+@ensure_deeply_readonly.register
 def _(val: bool) -> bool:  # noqa: FBT001
     return val
 
@@ -248,6 +264,11 @@ def _(val: ReadonlyView) -> ReadonlyView:
 
 @get_mutable_deepcopy.register
 def _(val: None) -> None:
+    return val
+
+
+@get_mutable_deepcopy.register
+def _(val: NormalizedName) -> NormalizedName:
     return val
 
 
