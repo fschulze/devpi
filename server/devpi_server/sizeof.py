@@ -1,7 +1,13 @@
+from .markers import Absent
+from .markers import Deleted
 from .readonly import DictViewReadonly
 from .readonly import SeqViewReadonly
 from .readonly import SetViewReadonly
 from sys import getsizeof
+
+
+_DEFAULT_SIZE = getsizeof(0)
+_NONE_TYPE = type(None)
 
 
 def _iter_dict(d):
@@ -12,11 +18,13 @@ def _iter_dict(d):
 
 try:
     def gettotalsizeof(
-            obj, maxlen=None,
-            _default_size=getsizeof(0),
-            _sequences=(frozenset, list, set, tuple, SetViewReadonly, SeqViewReadonly),
-            _singles=(bytes, complex, float, int, str, type(None)),
-            _dicts=(dict, DictViewReadonly)):
+        obj,
+        maxlen=None,
+        _default_size=_DEFAULT_SIZE,
+        _sequences=(frozenset, list, set, tuple, SetViewReadonly, SeqViewReadonly),
+        _singles=(Absent, Deleted, bytes, complex, float, int, str, _NONE_TYPE),
+        _dicts=(dict, DictViewReadonly),
+    ):
         stack = [iter((obj,))]
         result = 0
         seen = set()
@@ -31,14 +39,14 @@ try:
             seen.add(id(item))
             result += getsizeof(item, _default_size)
             if maxlen and result >= maxlen:
-                return
+                return None
             if isinstance(item, _singles):
                 continue
-            elif isinstance(item, _sequences):
+            if isinstance(item, _sequences):
                 if len(item):
                     stack.append(iter(item))
                 continue
-            elif isinstance(item, _dicts):
+            if isinstance(item, _dicts):
                 if len(item):
                     stack.append(_iter_dict(item))
                 continue
