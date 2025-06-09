@@ -884,7 +884,7 @@ class MirrorStage(BaseStage):
                 elinks.append(dict(
                     rel="releasefile",
                     entrypath=sm.path,
-                    hash_spec=sm.hash_spec))
+                    hashes=sm.hashes))
         if readonly:
             return ensure_deeply_readonly(verdata)
         return verdata

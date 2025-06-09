@@ -340,13 +340,15 @@ class TestExtPYPIDB:
 
     @pytest.mark.parametrize("hash_type", ["md5", "sha256"])
     def test_parse_project_replaced_md5(self, pypistage, hash_type):
-        x = pypistage.mock_simple("pytest", pypiserial=10, hash_type=hash_type,
-                                   pkgver="pytest-1.0.zip")
+        x = pypistage.mock_simple(
+            "pytest", pypiserial=10, hash_type=hash_type,
+            pkgver="pytest-1.0.zip")
         links = pypistage.get_releaselinks("pytest")
         assert links[0].best_available_hash_spec == x.hash_spec
 
-        y = pypistage.mock_simple("pytest", pypiserial=11, hash_type=hash_type,
-                                   pkgver="pytest-1.0.zip")
+        y = pypistage.mock_simple(
+            "pytest", pypiserial=11, hash_type=hash_type,
+            pkgver="pytest-1.0.zip")
         links = pypistage.get_releaselinks("pytest")
         assert links[0].best_available_hash_spec == y.hash_spec
         assert x.hash_spec != y.hash_spec
@@ -371,7 +373,7 @@ class TestExtPYPIDB:
         data = pypistage.get_versiondata("Pytest", "1.0")
         (elink,) = pypistage.get_linkstore_perstage("pytest", "1.0").get_links()
         assert elink.rel == "releasefile"
-        assert elink.best_available_hash_spec == "sha256=53ebe3d9e4253a63b3cd26f817eec3f5aeb606bcc8264b2b9b6f104d7d267205"
+        assert elink.hashes.best_available_spec == "sha256=53ebe3d9e4253a63b3cd26f817eec3f5aeb606bcc8264b2b9b6f104d7d267205"
         assert data["name"] == "Pytest"
         assert data["version"] == "1.0"
         assert pypistage.has_project_perstage("pytest")

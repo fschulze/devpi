@@ -558,8 +558,8 @@ class TestUseExistingFiles:
         assert len(caplog.getrecords('checking existing file')) == 1
 
     @pytest.mark.storage_with_filesystem
-    @pytest.mark.skipif(not hasattr(os, 'link'),
-                        reason="OS doesn't support hard links")
+    @pytest.mark.skipif(
+        not hasattr(os, 'link'), reason="OS doesn't support hard links")
     def test_hardlink(self, caplog, make_replica_xom, mapp, tmpdir, xom):
         # this will be the folder to find existing files in the replica
         existing_base = tmpdir.join('existing').ensure_dir()
@@ -708,7 +708,7 @@ class TestFileReplication:
             assert r_entry.meta
 
         with xom.keyfs.write_transaction():
-            entry.file_set_content(content1)
+            entry.file_set_content(content1, hashes=get_hashes(content1))
             assert entry.file_exists()
             assert entry.last_modified is not None
 
@@ -757,7 +757,7 @@ class TestFileReplication:
 
         # first we create
         with xom.keyfs.write_transaction():
-            entry.file_set_content(content1)
+            entry.file_set_content(content1, hashes=get_hashes(content1))
 
         # then we delete
         with xom.keyfs.write_transaction():
@@ -787,17 +787,17 @@ class TestFileReplication:
         with xom.keyfs.write_transaction():
             entry = xom.filestore.maplink(link, "root", "pypi", "some")
             assert not entry.file_exists()
-            assert entry.best_available_hash_spec is None
+            assert not entry.hashes
 
         replay(xom, replica_xom)
         with replica_xom.keyfs.read_transaction():
             r_entry = replica_xom.filestore.get_file_entry(entry.relpath)
             assert not r_entry.file_exists()
             assert r_entry.meta
-            assert r_entry.best_available_hash_spec is None
+            assert not r_entry.hashes
 
         with xom.keyfs.write_transaction():
-            entry.file_set_content(content1)
+            entry.file_set_content(content1, hashes=get_hashes(content1))
 
         primary_url = replica_xom.config.primary_url
         primary_file_path = primary_url.joinpath(entry.relpath).url
@@ -842,7 +842,7 @@ class TestFileReplication:
         with xom.keyfs.write_transaction():
             link = gen.pypi_package_link("pytest-1.8.zip", md5=True)
             entry = xom.filestore.maplink(link, "root", "pypi", "pytest")
-            assert entry.best_available_hash_value is not None
+            assert entry.hashes
             assert not entry.file_exists()
         replay(xom, replica_xom)
         with replica_xom.keyfs.read_transaction():
@@ -861,13 +861,12 @@ class TestFileReplication:
         l = []
         monkeypatch.setattr(xom.keyfs, "wait_tx_serial",
                             lambda x: l.append(x))
+        content = b'123'
         with xom.keyfs.write_transaction():
-            md5 = hashlib.md5()  # noqa: S324 - testing
-            md5.update(b'123')
-            link = gen.pypi_package_link(
-                "pytest-1.8.zip", md5=md5.hexdigest())
+            md5_1 = get_hashes(content, hash_types=('md5',))['md5']
+            link = gen.pypi_package_link("pytest-1.8.zip", md5=md5_1)
             entry = xom.filestore.maplink(link, "root", "pypi", "pytest")
-            assert entry.best_available_hash_value is not None
+            assert entry.best_available_hash_spec == f"md5={md5_1}"
             assert not entry.file_exists()
         replay(xom, replica_xom)
         with replica_xom.keyfs.read_transaction():
@@ -879,7 +878,7 @@ class TestFileReplication:
             url = replica_xom.config.primary_url.joinpath(entry.relpath).url
             pypistage.xom.httpget.mockresponse(url, status_code=500)
             pypistage.xom.httpget.mockresponse(
-                entry.url, headers=headers, content=b'123')
+                entry.url, headers=headers, content=content)
             stage = replica_xom.model.getstage('root/pypi')
             result = iter_remote_file_replica(stage, entry, entry.url)
             headers = next(result)
@@ -892,7 +891,7 @@ class TestFileReplication:
             # and UUID header
             assert call_log_entry['extra_headers'][H_REPLICA_UUID]
             assert headers['content-length'] == '3'
-            assert b''.join(result) == b'123'
+            assert b''.join(result) == content
 
     def test_checksum_mismatch(self, xom, replica_xom, maketestapp,
                                makemapp, patch_reqsessionmock):
