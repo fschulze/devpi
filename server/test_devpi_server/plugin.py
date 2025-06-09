@@ -37,6 +37,9 @@ pytest_plugins = ["test_devpi_server.reqmock"]
 
 def pytest_configure(config):
     config.addinivalue_line(
+        "markers", "mock_frt_session: mock FileReplicationThread.session"
+    )
+    config.addinivalue_line(
         "markers",
         "no_storage_option: do not set the --storage option in fixtures")
     config.addinivalue_line(
@@ -380,7 +383,7 @@ def maketestapp():
 
 
 @pytest.fixture
-def makemapp(request, maketestapp, makexom):
+def makemapp(maketestapp, makexom):
     def makemapp(testapp=None, options=()):
         if testapp is None:
             testapp = maketestapp(makexom(options))
@@ -391,7 +394,7 @@ def makemapp(request, maketestapp, makexom):
 
 
 @pytest.fixture
-def http(pypiurls):
+def makehttp(pypiurls):
     from .simpypi import make_simple_pkg_info
 
     class MockHTTPClient:
@@ -440,6 +443,23 @@ def http(pypiurls):
                 timeout=timeout,
             )
 
+        def stream(
+            self,
+            _cstack,
+            _method,
+            url,
+            *,
+            allow_redirects,
+            timeout=None,
+            extra_headers=None,
+        ):
+            return self.__call__(
+                url,
+                allow_redirects=allow_redirects,
+                extra_headers=extra_headers,
+                timeout=timeout,
+            )
+
         def __call__(self, url, *, allow_redirects=False, extra_headers=None, **kw):
             class mockresponse:
                 def __init__(xself, url):
@@ -485,6 +505,9 @@ def http(pypiurls):
 
                 def close(xself):
                     return
+
+                def iter_raw(xself, chunk_size):
+                    yield xself.raw.read(chunk_size)
 
                 def json(xself):
                     return json.loads(xself.text)
@@ -545,7 +568,12 @@ def http(pypiurls):
             self.mockresponse(text=text, **kw)
             return ret
 
-    return MockHTTPClient()
+    return MockHTTPClient
+
+
+@pytest.fixture
+def http(makehttp):
+    return makehttp()
 
 
 @pytest.fixture
