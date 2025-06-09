@@ -32,8 +32,8 @@ from .keyfs_types import ULID
 from .log import thread_push_log, threadlog
 from .main import Fatal
 from .markers import deleted
+from .mirror import FileStreamer
 from .normalized import normalize_name
-from .views import FileStreamer
 from .views import H_PRIMARY_UUID
 from .model import UpstreamError
 from typing import TYPE_CHECKING
