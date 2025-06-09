@@ -8,7 +8,7 @@ dynamic = ["version", "readme"]
 name = "devpi-postgresql"
 description = "devpi-postgresql: a PostgreSQL storage backend for devpi-server"
 dependencies = [
-    'devpi-server>=6.8.0',
+    'devpi-server>=7dev',
     'pg8000>=1.17.0',
 ]
 license = {file = "LICENSE"}
@@ -65,12 +65,8 @@ extend-ignore = [
     "I001", # maybe cleanup later - import block unsorted
     "PLR0912", # maybe cleanup later
     "PLW2901", # maybe cleanup later
-    "RET504", # maybe cleanup later - unnecessary assignment before return
-    "RET506", # maybe cleanup later - unnecessary elif after raise
     "RUF012", # cleanup later
-    "RSE102", # maybe cleanup later
     "S608", # cleanup soon - possible sql injection
-    "UP024", # maybe cleanup later - aliased errors
     "UP032", # cleanup later - f-string instead of format
 ]
 
