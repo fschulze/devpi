@@ -36,9 +36,7 @@ pytest_plugins = ["test_devpi_server.reqmock"]
 
 
 def pytest_configure(config):
-    config.addinivalue_line(
-        "markers", "mock_frt_session: mock FileReplicationThread.session"
-    )
+    config.addinivalue_line("markers", "mock_frt_http: mock FileReplicationThread.http")
     config.addinivalue_line(
         "markers",
         "no_storage_option: do not set the --storage option in fixtures")

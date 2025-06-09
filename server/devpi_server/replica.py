@@ -350,6 +350,49 @@ class PrimaryChangelogRequest:
         return serial
 
 
+class HTTPClient:
+    def __init__(self, xom):
+        self.config = xom.config
+        self.http = xom.new_http_client("replica")
+        self.outside_url = xom.config.outside_url
+
+    @cached_property
+    def auth_serializer(self):
+        return get_auth_serializer(self.config)
+
+    def close(self):
+        self.http.close()
+
+    def get(self, url, *, allow_redirects, timeout=None, extra_headers=None):
+        extra_headers = self.get_extra_headers(extra_headers)
+        return self.http.get(
+            URL(url).url, allow_redirects=allow_redirects, timeout=timeout,
+            extra_headers=extra_headers)
+
+    def get_extra_headers(self, extra_headers):
+        # make a copy of extra_headers
+        extra_headers = {} if extra_headers is None else dict(extra_headers)
+        # we call it each time, as the primary_uuid will be updated as
+        # requests come in with the info in their headers
+        (uuid, primary_uuid) = self.config.nodeinfo.make_uuid_headers()
+        assert uuid != primary_uuid
+        extra_headers[H_REPLICA_UUID] = uuid
+        if primary_uuid is not None:
+            extra_headers[H_EXPECTED_MASTER_ID] = primary_uuid
+            extra_headers[H_EXPECTED_PRIMARY_ID] = primary_uuid
+        if self.outside_url is not None:
+            extra_headers[H_REPLICA_OUTSIDE_URL] = self.outside_url
+        token = self.auth_serializer.dumps(uuid)
+        extra_headers['Authorization'] = f'Bearer {token}'
+        return extra_headers
+
+    def stream(self, cstack, method, url, *, allow_redirects, timeout=None, extra_headers=None):
+        extra_headers = self.get_extra_headers(extra_headers)
+        return self.http.stream(
+            cstack, method, URL(url).url, allow_redirects=allow_redirects,
+            timeout=timeout, extra_headers=extra_headers)
+
+
 class ReplicaThread:
     H_REPLICA_FILEREPL = H_REPLICA_FILEREPL
     H_REPLICA_UUID = H_REPLICA_UUID
@@ -383,12 +426,8 @@ class ReplicaThread:
         self.update_from_primary_at = None
         # set whenever the primary serial and current replication serial match
         self.replica_in_sync_at = None
-        self.session = self.xom.new_http_client("replica")
+        self.http = HTTPClient(xom)
         self.initial_fetch = True
-
-    @cached_property
-    def auth_serializer(self):
-        return get_auth_serializer(self.xom.config)
 
     def get_primary_serial(self):
         return self._primary_serial
@@ -425,20 +464,10 @@ class ReplicaThread:
         log = self.log
         config = self.xom.config
         log.info("fetching %s", url)
-        uuid, primary_uuid = config.nodeinfo.make_uuid_headers()
-        assert uuid != primary_uuid
         try:
             self.primary_contacted_at = time.time()
-            token = self.auth_serializer.dumps(uuid)
-            headers = {
-                H_REPLICA_UUID: uuid,
-                H_EXPECTED_MASTER_ID: primary_uuid,
-                H_EXPECTED_PRIMARY_ID: primary_uuid,
-                H_REPLICA_OUTSIDE_URL: config.args.outside_url,
-                'Authorization': 'Bearer %s' % token}
-            if self.use_streaming:
-                headers["Accept"] = REPLICA_ACCEPT_STREAMING
-            r = self.session.get(
+            headers = {"Accept": REPLICA_ACCEPT_STREAMING} if self.use_streaming else {}
+            r = self.http.get(
                 url,
                 allow_redirects=False,
                 extra_headers=headers,
@@ -588,7 +617,7 @@ class ReplicaThread:
                 self.thread.sleep(1.0)
 
     def thread_shutdown(self):
-        self.session.close()
+        self.http.close()
 
     def wait(self, error_queue=False):
         self.shared_data.wait(error_queue=error_queue)
@@ -845,7 +874,7 @@ class FileReplicationThread:
     def __init__(self, xom, shared_data):
         self.xom = xom
         self.shared_data = shared_data
-        self.session = self.xom.new_http_client("replica")
+        self.http = HTTPClient(xom)
         self.file_search_path: str | None = None
         if self.xom.config.replica_file_search_path is not None:
             search_path = os.path.join(
@@ -860,12 +889,6 @@ class FileReplicationThread:
                     f"{self.xom.config.replica_file_search_path}")
                 raise Fatal(msg)
         self.use_hard_links = self.xom.config.hard_links
-        self.uuid, primary_uuid = xom.config.nodeinfo.make_uuid_headers()
-        assert self.uuid != primary_uuid
-
-    @cached_property
-    def auth_serializer(self):
-        return get_auth_serializer(self.xom.config)
 
     def find_pre_existing_file(self, entry):
         if self.file_search_path is None:
@@ -899,7 +922,7 @@ class FileReplicationThread:
             f.devpi_srcpath = path  # type: ignore[attr-defined]
         return (f, entry.hashes)
 
-    def importer(self, serial, key, val, back_serial, session):
+    def importer(self, serial, key, val, back_serial):  # noqa: PLR0911, PLR0912
         threadlog.debug("FileReplicationThread.importer for %s, %s", key, val)
         keyfs = self.xom.keyfs
         relpath = key.relpath
@@ -948,14 +971,11 @@ class FileReplicationThread:
         url = self.xom.config.primary_url.joinpath(relpath).url
         # we perform the request with a special header so that
         # the primary can avoid getting "volatile" links
-        token = self.auth_serializer.dumps(self.uuid)
         with contextlib.ExitStack() as cstack:
-            r = session.stream(
+            r = self.http.stream(
                 cstack, "GET", url, allow_redirects=False,
                 extra_headers={
-                    H_REPLICA_FILEREPL: "YES",
-                    H_REPLICA_UUID: self.uuid,
-                    'Authorization': f'Bearer {token}'},
+                    H_REPLICA_FILEREPL: "YES"},
                 timeout=self.xom.config.args.request_timeout)
             if r.status_code == 302:
                 r.close()
@@ -1041,8 +1061,7 @@ class FileReplicationThread:
                 else:
                     self.shared_data.deleted.invalidate(key)
         typedkey = keyfs.get_key_instance(keyname, key)
-        self.importer(
-            serial, typedkey, value, back_serial, self.session)
+        self.importer(serial, typedkey, value, back_serial)
         entry = self.xom.filestore.get_file_entry_from_key(typedkey, meta=value)
         if not entry.project or not entry.version:
             return
