@@ -125,16 +125,24 @@ class Connection:
         latest_serial_stmt = (
             sa.select(
                 relpath_ulid_table.c.relpath,
+                relpath_ulid_table.c.keytype,
                 sa.func.max(relpath_ulid_table.c.serial).label("serial"),
             )
-            .where(relpath_ulid_table.c.relpath == key.relpath)
-            .group_by(relpath_ulid_table.c.relpath)
+            .where(
+                sa.tuple_(
+                    relpath_ulid_table.c.relpath,
+                    relpath_ulid_table.c.keytype,
+                )
+                == sa.tuple_(key.relpath, key.key_name)
+            )
+            .group_by(relpath_ulid_table.c.relpath, relpath_ulid_table.c.keytype)
         )
         latest_serial_sq = latest_serial_stmt.subquery("latest_serial_sq")
         stmt = sa.select(relpath_ulid_table.c.serial).join(
             latest_serial_sq,
             sa.and_(
                 relpath_ulid_table.c.relpath == latest_serial_sq.c.relpath,
+                relpath_ulid_table.c.keytype == latest_serial_sq.c.keytype,
                 relpath_ulid_table.c.serial == latest_serial_sq.c.serial,
             ),
         )
@@ -209,7 +217,10 @@ class Connection:
             )
             .where(ulid_changelog_table.c.serial == serial)
         )
-        relpaths_stmt = stmt.with_only_columns(relpath_ulid_table.c.relpath)
+        relpaths_stmt = stmt.with_only_columns(
+            relpath_ulid_table.c.relpath,
+            relpath_ulid_table.c.keytype,
+        )
         yield from self._iter_relpaths_at(relpaths_stmt, serial)
 
     def get_raw_changelog_entry(self, serial: int) -> bytes | None:
@@ -219,14 +230,15 @@ class Connection:
         if data is None:
             return None
         renames = loads(data)
-        changes = {
-            c.relpath: (
+        changes = [
+            (
                 c.keyname,
+                c.relpath,
                 c.back_serial,
                 None if c.value is deleted else c.value,
             )
             for c in self.iter_changes_at(serial)
-        }
+        ]
         return dumps((changes, renames))
 
     def iter_rel_renames(self, serial: int) -> Iterator[str]:
@@ -240,7 +252,10 @@ class Connection:
     def _iter_relpaths_at(self, relpaths, serial):
         execute = self._sqlaconn.execute
         relpaths_stmt = sa.select(relpath_ulid_table).where(
-            relpath_ulid_table.c.relpath.in_(relpaths)
+            sa.tuple_(
+                relpath_ulid_table.c.relpath,
+                relpath_ulid_table.c.keytype,
+            ).in_(relpaths)
         )
         deleted_at_stmt = (
             sa.select(
@@ -328,7 +343,9 @@ class Connection:
             )
 
     def get_key_at_serial(self, key: LocatedKey, serial: int) -> KeyData:
-        results = list(self._iter_relpaths_at((key.relpath,), serial))
+        results = list(
+            self._iter_relpaths_at((sa.tuple_(key.relpath, key.key_name),), serial)
+        )
         if not results:
             raise KeyError(key)
         (result,) = results
@@ -351,7 +368,10 @@ class Connection:
                 relpath_ulid_table.c.keytype.in_(keytypes),
             )
         )
-        relpaths_stmt = stmt.with_only_columns(relpath_ulid_table.c.relpath)
+        relpaths_stmt = stmt.with_only_columns(
+            relpath_ulid_table.c.relpath,
+            relpath_ulid_table.c.keytype,
+        )
         yield from self._iter_relpaths_at(relpaths_stmt, at_serial)
 
     @cached_property
@@ -368,23 +388,37 @@ class Connection:
         latest_serial_stmt = (
             sa.select(
                 relpath_ulid_table.c.relpath,
+                relpath_ulid_table.c.keytype,
                 sa.func.max(relpath_ulid_table.c.serial).label("serial"),
             )
-            .where(relpath_ulid_table.c.relpath.in_({x.key.relpath for x in records}))
-            .group_by(relpath_ulid_table.c.relpath)
+            .where(
+                sa.tuple_(
+                    relpath_ulid_table.c.relpath,
+                    relpath_ulid_table.c.keytype,
+                ).in_({sa.tuple_(x.key.relpath, x.key.key_name) for x in records})
+            )
+            .group_by(
+                relpath_ulid_table.c.relpath,
+                relpath_ulid_table.c.keytype,
+            )
         )
         latest_serial_sq = latest_serial_stmt.subquery("latest_serial_sq")
-        stmt = sa.select(relpath_ulid_table.c.relpath, relpath_ulid_table.c.ulid).join(
+        stmt = sa.select(
+            relpath_ulid_table.c.relpath,
+            relpath_ulid_table.c.keytype,
+            relpath_ulid_table.c.ulid,
+        ).join(
             latest_serial_sq,
             sa.and_(
                 relpath_ulid_table.c.relpath == latest_serial_sq.c.relpath,
+                relpath_ulid_table.c.keytype == latest_serial_sq.c.keytype,
                 relpath_ulid_table.c.serial == latest_serial_sq.c.serial,
             ),
         )
-        relpath_ulid_map = dict(execute(stmt).all())
+        relpath_ulid_map = {(x.keytype, x.relpath): x.ulid for x in execute(stmt).all()}
         append = ulid_changelog.append
         for record in records:
-            ulid = relpath_ulid_map[record.key.relpath]
+            ulid = relpath_ulid_map[(record.key.key_name, record.key.relpath)]
             if record.value is deleted:
                 append((ulid, serial, record.back_serial, None))
             else:
