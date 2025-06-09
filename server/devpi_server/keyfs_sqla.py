@@ -8,7 +8,7 @@ from .interfaces import IStorage
 from .interfaces import IStorageConnection
 from .interfaces import IWriter
 from .keyfs import KeyfsTimeoutError
-from .keyfs_types import RelpathInfo
+from .keyfs_types import KeyData
 from .keyfs_types import StorageInfo
 from .log import thread_pop_log
 from .log import thread_push_log
@@ -17,7 +17,6 @@ from .markers import absent
 from .mythread import current_thread
 from .readonly import ReadonlyView
 from .readonly import ensure_deeply_readonly
-from collections import Counter
 from contextlib import suppress
 from devpi_common.types import cached_property
 from typing import TYPE_CHECKING
@@ -34,7 +33,6 @@ if TYPE_CHECKING:
     from .keyfs_types import IKeyFSKey
     from collections.abc import Iterable
     from collections.abc import Iterator
-    from typing import Any
 
 
 warnings.simplefilter("error", sa.exc.SADeprecationWarning)
@@ -197,7 +195,6 @@ class Connection:
             self._sqlaconn.execute(stmt, ulid_serials)
 
     def _get_changes_at(self, serial):
-        execute = self._sqlaconn.execute
         stmt = (
             sa.select(
                 relpath_ulid_table.c.relpath,
@@ -210,21 +207,14 @@ class Connection:
             )
             .where(ulid_changelog_table.c.serial == serial)
         )
-        relpath_infos = {x.relpath: x for x in execute(stmt)}
-        counts = Counter(relpath_infos.keys())
-        if (v := counts.values()) and set(v) != {1}:
-            raise RuntimeError
         relpaths_stmt = stmt.with_only_columns(relpath_ulid_table.c.relpath)
         results = {}
-        for relpath, info in self._get_relpaths_at(relpaths_stmt, serial).items():
-            results[relpath] = (
-                relpath_infos[relpath].keytype,
-                info["back_serial"],
-                info["value"],
+        for keydata in self._iter_relpaths_at(relpaths_stmt, serial):
+            results[keydata.relpath] = (
+                keydata.keyname,
+                keydata.back_serial,
+                keydata.value,
             )
-        for relpath in set(relpath_infos).difference(results):
-            relpath_info = relpath_infos[relpath]
-            results[relpath] = (relpath_info.keytype, relpath_info.back_serial, None)
         return results
 
     def get_changes(self, serial: int) -> dict:
@@ -243,7 +233,7 @@ class Connection:
         ).scalar()
         return None if data is None else loads(data)
 
-    def _get_relpaths_at(self, relpaths, serial):
+    def _iter_relpaths_at(self, relpaths, serial):
         execute = self._sqlaconn.execute
         relpaths_stmt = sa.select(relpath_ulid_table).where(
             relpath_ulid_table.c.relpath.in_(relpaths)
@@ -263,6 +253,7 @@ class Connection:
         deleted_at_sq = deleted_at_stmt.subquery("deleted_at_sq")
         relpaths_info_stmt = sa.select(
             relpaths_sq.c.relpath,
+            relpaths_sq.c.keytype,
             relpaths_sq.c.ulid,
             sa.func.coalesce(deleted_at_sq.c.deleted_serial, -1).label(
                 "deleted_serial"
@@ -274,10 +265,13 @@ class Connection:
             isouter=True,
         )
         relpaths_info_sq = relpaths_info_stmt.subquery("relpaths_info_sq")
-        ulid_relpath_map = {x.ulid: x.relpath for x in execute(relpaths_info_stmt)}
-        result = {}
+        ulid_relpath_map = {}
+        ulid_keytype_map = {}
+        for info in execute(relpaths_info_stmt):
+            ulid_relpath_map[info.ulid] = info.relpath
+            ulid_keytype_map[info.ulid] = info.keytype
         if not ulid_relpath_map:
-            return result
+            return
         ulid_changelog_stmt = (
             sa.select(ulid_changelog_table)
             .join_from(
@@ -307,8 +301,6 @@ class Connection:
             )
             .order_by(ulid_changelog_sq.c.ulid)
         )
-        current_obj = None
-        current_ulid = None
         ulid_serials_stmt = sa.select(
             ulid_changelog_sq.c.ulid,
             sa.func.max(ulid_changelog_sq.c.back_serial),
@@ -321,32 +313,24 @@ class Connection:
             ulid_serial_map[ulid] = ulid_serial
         rows = execute(stmt).all()
         for ulid, value in rows:
-            if current_ulid != ulid:
-                current_ulid = ulid
-                current_obj = None if value is None else loads(value)
-                result[ulid_relpath_map[ulid]] = dict(
-                    last_serial=ulid_serial_map[ulid],
-                    back_serial=ulid_back_serial_map[ulid],
-                    value=current_obj,
-                )
-        return result
+            yield KeyData(
+                relpath=ulid_relpath_map[ulid],
+                keyname=ulid_keytype_map[ulid],
+                serial=ulid_serial_map[ulid],
+                back_serial=ulid_back_serial_map[ulid],
+                value=None if value is None else ensure_deeply_readonly(loads(value)),
+            )
 
-    def get_relpath_at(self, relpath: str, serial: int) -> Any:
-        result = self._get_relpaths_at((relpath,), serial)
-        if relpath not in result:
+    def get_relpath_at(self, relpath: str, serial: int) -> KeyData:
+        results = list(self._iter_relpaths_at((relpath,), serial))
+        if not results:
             raise KeyError(relpath)
-        assert len(result) == 1
-        result = result[relpath]
-        return (
-            result["last_serial"],
-            result["back_serial"],
-            ensure_deeply_readonly(result["value"]),
-        )
+        (result,) = results
+        return result
 
     def iter_relpaths_at(
         self, typedkeys: Iterable[IKeyFSKey], at_serial: int
-    ) -> Iterator[RelpathInfo]:
-        execute = self._sqlaconn.execute
+    ) -> Iterator[KeyData]:
         keytypes = frozenset(k.key_name for k in typedkeys)
         stmt = (
             sa.select(
@@ -361,17 +345,8 @@ class Connection:
                 relpath_ulid_table.c.keytype.in_(keytypes),
             )
         )
-        relpath_keytype_map = dict(execute(stmt).all())
         relpaths_stmt = stmt.with_only_columns(relpath_ulid_table.c.relpath)
-        for relpath, info in self._get_relpaths_at(relpaths_stmt, at_serial).items():
-            keytype = relpath_keytype_map[relpath]
-            yield RelpathInfo(
-                relpath=relpath,
-                keyname=keytype,
-                serial=info["last_serial"],
-                back_serial=info["back_serial"],
-                value=info["value"],
-            )
+        yield from self._iter_relpaths_at(relpaths_stmt, at_serial)
 
     @cached_property
     def last_changelog_serial(self) -> int:

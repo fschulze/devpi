@@ -19,17 +19,24 @@ if TYPE_CHECKING:
     from .interfaces import IStorage
     from .interfaces import IStorageConnection
     from .interfaces import IWriter
+    from .readonly import DictViewReadonly
+    from .readonly import ListViewReadonly
+    from .readonly import SetViewReadonly
+    from .readonly import TupleViewReadonly
     from pathlib import Path
-    from typing import Any
     from typing import Callable
+    from typing import Union
+
+    KeyFSTypesRO = Union[bool, bytes, DictViewReadonly, float, frozenset, int, ListViewReadonly, SetViewReadonly, str, TupleViewReadonly]
+    KeyFSTypes = Union[bool, bytes, dict, float, frozenset, int, list, set, str, tuple]
 
 
 @frozen
 class Record:
     key: LocatedKey
-    value: Any
+    value: KeyFSTypes | None
     back_serial: int
-    old_value: Any
+    old_value: KeyFSTypesRO | Absent
 
     def __attrs_post_init__(self):
         if (
@@ -41,13 +48,17 @@ class Record:
             raise TypeError(msg)
 
 
-@define
-class RelpathInfo:
+@frozen
+class KeyData:
     relpath: str
     keyname: str
     serial: int
     back_serial: int
-    value: Any
+    value: KeyFSTypesRO | None
+
+    @property
+    def last_serial(self):
+        return self.serial
 
 
 @frozen
