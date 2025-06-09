@@ -456,13 +456,6 @@ class Connection:
             ON changelog.serial=serial.serial;"""
         return self.fetchscalar(q, serial=serial)
 
-    def get_rel_renames(self, serial):
-        if serial == -1:
-            return None
-        data = self.get_raw_changelog_entry(serial)
-        (changes, rel_renames) = loads(data)
-        return rel_renames
-
     def iter_changes_at(self, serial) -> Iterator[KeyData]:
         changes = self._changelog_cache.get(serial, absent)
         if changes is absent:
@@ -483,6 +476,13 @@ class Connection:
                 back_serial=back_serial,
                 value=deleted if val is None else val,
             )
+
+    def iter_rel_renames(self, serial) -> Iterator[str]:
+        if serial == -1:
+            return
+        data = self.get_raw_changelog_entry(serial)
+        (changes, rel_renames) = loads(data)
+        yield from rel_renames
 
     def write_transaction(self, io_file):
         return Writer(self.storage, self, io_file)
