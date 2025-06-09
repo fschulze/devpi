@@ -390,6 +390,8 @@ class BaseConnection:
         return result
 
     def iter_changes_at(self, serial: int) -> Iterator[KeyData]:
+        if 0 > serial > self.db_read_last_changelog_serial():
+            return
         stmt = (
             sa.select(
                 self.ulid_info_table.c.keytype,
@@ -425,27 +427,18 @@ class BaseConnection:
                 self._cache.add_keydata(serial, keydata)
             yield keydata
 
-    def get_raw_changelog_entry(self, serial: int) -> bytes | None:
-        data = self._sqlaconn.execute(
-            sa.select(self.renames_table.c.data).where(
-                self.renames_table.c.serial == serial
-            )
-        ).scalar()
-        if data is None:
-            return None
-        renames = loads(data)
-        changes = [
+    def iter_serializable_changes(self, serial: int) -> Iterator[tuple]:
+        yield from (
             (
-                c.key.key_name,
-                c.key.relpath,
-                int(c.key.ulid),
-                None if c.key.parent_ulid is None else int(c.key.parent_ulid),
+                (k := c.key).key_name,
+                k.relpath,
+                int(k.ulid),
+                None if k.parent_ulid is None else int(k.parent_ulid),
                 c.back_serial,
                 None if c.value is deleted else c.value,
             )
             for c in self.iter_changes_at(serial)
-        ]
-        return dumps((changes, renames))
+        )
 
     def iter_rel_renames(self, serial: int) -> Iterator[str]:
         data = self._sqlaconn.execute(
