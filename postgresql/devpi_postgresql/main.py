@@ -154,20 +154,15 @@ class FileOut(RawIOBase):
         source_f.seek(0)
         encoded_path = path.encode("utf-8")
         self.header_f = BytesIO(
-            b"".join(
-                (
-                    SIGNATURE,
-                    b"\x00\x00\x00\x00",  # flags
-                    b"\x00\x00\x00\x00",  # header extension
-                    b"\x00\x03",  # num fields in tuple
-                    len(encoded_path).to_bytes(4, "big"),
-                    encoded_path,
-                    b"\x00\x00\x00\x04",  # size of INTEGER for "size" field
-                    size.to_bytes(4, "big"),
-                    size.to_bytes(4, "big"),  # size of binary file field
-                )
-            )
-        )
+            SIGNATURE + b"\x00\x00\x00\x00"  # flags
+            b"\x00\x00\x00\x00"  # header extension
+            b"\x00\x03"  # num fields in tuple
+            + len(encoded_path).to_bytes(4, "big")
+            + encoded_path
+            + b"\x00\x00\x00\x04"  # size of INTEGER for "size" field
+            + size.to_bytes(4, "big")
+            + size.to_bytes(4, "big")
+        )  # size of binary file field
         self.footer_f = BytesIO(b"\xff\xff")
 
     def readinto(self, buffer: Buffer) -> int:
@@ -417,19 +412,9 @@ class Storage(BaseStorage):
     poolclass: type[sa.Pool] = sa.QueuePool
 
     def __init__(
-        self,
-        basedir: Path,
-        *,
-        notify_on_commit: Callable,
-        cache_size: int,
-        settings: dict,
+        self, basedir: Path, *, notify_on_commit: Callable, settings: dict
     ) -> None:
-        super().__init__(
-            basedir,
-            notify_on_commit=notify_on_commit,
-            cache_size=cache_size,
-            settings=settings,
-        )
+        super().__init__(basedir, notify_on_commit=notify_on_commit, settings=settings)
 
         for key in ("database", "host", "port", "unix_sock", "user", "password"):
             if key in settings:
@@ -530,6 +515,7 @@ def devpiserver_describe_storage_backend(settings: dict) -> StorageInfo:
         connection_cls=Connection,
         writer_cls=Writer,
         storage_factory=Storage,
+        process_settings=Storage.process_settings,
         settings=settings,
     )
 
