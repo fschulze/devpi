@@ -619,7 +619,7 @@ class Storage:
     def perform_crash_recovery(self):
         pass
 
-    def add_key(self, key):
+    def register_key(self, key):
         pass
 
     def get_connection(self, *, closing=True, write=False, timeout=30):  # noqa: ARG002
