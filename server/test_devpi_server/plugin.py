@@ -29,6 +29,7 @@ from pyramid.httpexceptions import status_map
 from queue import Queue as BaseQueue
 from webtest import TestApp as TApp
 from webtest import TestResponse
+import warnings
 
 
 pytest_plugins = ["test_devpi_server.reqmock"]
@@ -277,8 +278,8 @@ def storage_io_file_factory(storage_info):
 
 
 @pytest.fixture
-def makexom(request, gen_path, httpget, monkeypatch, storage_args, storage_plugin):
-    def makexom(opts=(), httpget=httpget, plugins=()):  # noqa: PLR0912
+def makexom(request, gen_path, http, monkeypatch, storage_args, storage_plugin):
+    def makexom(opts=(), http=http, plugins=()):  # noqa: PLR0912
         from devpi_server import auth_basic
         from devpi_server import auth_devpi
         from devpi_server import model
@@ -325,10 +326,10 @@ def makexom(request, gen_path, httpget, monkeypatch, storage_args, storage_plugi
         if request.node.get_closest_marker("nomocking"):
             xom = XOM(config)
         else:
-            xom = XOM(config, httpget=httpget)
-            add_pypistage_mocks(monkeypatch, httpget)
+            xom = XOM(config, http=http)
+            add_pypistage_mocks(monkeypatch, http)
         request.addfinalizer(xom.thread_pool.kill)
-        request.addfinalizer(xom._close_sessions)
+        request.addfinalizer(lambda: xom.http.close())
         if not request.node.get_closest_marker("no_storage_option"):
             assert storage_plugin.__name__ in {
                 x.__module__ for x in xom.keyfs._storage.__class__.__mro__}
@@ -390,18 +391,31 @@ def makemapp(request, maketestapp, makexom):
 
 
 @pytest.fixture
-def httpget(pypiurls):
+def http(pypiurls):
     from .simpypi import make_simple_pkg_info
 
-    class MockHTTPGet:
+    class MockHTTPClient:
         def __init__(self):
             self.url2response = {}
             self.call_log = []
 
-        async def async_httpget(self, url, *, allow_redirects, timeout=None, extra_headers=None):
+        async def async_get(
+            self, url, *, allow_redirects, timeout=None, extra_headers=None
+        ):
             response = self.__call__(url, allow_redirects=allow_redirects, extra_headers=extra_headers, timeout=timeout)
             text = response.text if response.status_code < 300 else None
             return (response, text)
+
+        def close(self):
+            pass
+
+        def get(self, url, *, allow_redirects, timeout=None, extra_headers=None):
+            return self.__call__(
+                url,
+                allow_redirects=allow_redirects,
+                extra_headers=extra_headers,
+                timeout=timeout,
+            )
 
         def __call__(self, url, *, allow_redirects=False, extra_headers=None, **kw):
             class mockresponse:
@@ -498,7 +512,17 @@ def httpget(pypiurls):
             self.mockresponse(text=text, **kw)
             return ret
 
-    return MockHTTPGet()
+    return MockHTTPClient()
+
+
+@pytest.fixture
+def httpget(http):
+    warnings.warn(
+        "The httpget fixture is deprecated, use http instead",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return http
 
 
 @pytest.fixture
@@ -531,11 +555,11 @@ def pypistage(devpiserver_makepypistage, xom):
     return devpiserver_makepypistage(xom)
 
 
-def add_pypistage_mocks(monkeypatch, httpget):
+def add_pypistage_mocks(monkeypatch, http):
     _projects = set()
 
     # add some mocking helpers
-    mirror.MirrorStage.url2response = httpget.url2response
+    mirror.MirrorStage.url2response = http.url2response
 
     def mock_simple(self, name, text=None, pypiserial=10000, **kw):
         cache_expire = kw.pop("cache_expire", True)
@@ -546,8 +570,7 @@ def add_pypistage_mocks(monkeypatch, httpget):
         if add_to_projects:
             self.mock_simple_projects(
                 _projects.union([name]), cache_expire=cache_expire)
-        return self.xom.httpget.mock_simple(
-            name, text=text, pypiserial=pypiserial, **kw)
+        return self.xom.http.mock_simple(name, text=text, pypiserial=pypiserial, **kw)
     monkeypatch.setattr(
         mirror.MirrorStage, "mock_simple", mock_simple, raising=False)
 
@@ -560,7 +583,8 @@ def add_pypistage_mocks(monkeypatch, httpget):
             '<a href="%s">%s</a>\n' % (normalize_name(name), name)
             for name in projectlist)
         threadlog.debug("patching simple page with: %s" % t)
-        self.xom.httpget.mockresponse(self.mirror_url, code=200, text=t)
+        self.xom.http.mockresponse(self.mirror_url, code=200, text=t)
+
     monkeypatch.setattr(
         mirror.MirrorStage, "mock_simple_projects",
         mock_simple_projects, raising=False)
@@ -570,8 +594,9 @@ def add_pypistage_mocks(monkeypatch, httpget):
                    "content-type": mimetypes.guess_type(path),
                    "last-modified": "today"}
         url = URL(self.mirror_url).joinpath(path)
-        return self.xom.httpget.mockresponse(
-            url.url, content=content, headers=headers, **kw)
+        return self.xom.http.mockresponse(
+            url.url, content=content, headers=headers, **kw
+        )
     monkeypatch.setattr(
         mirror.MirrorStage, "mock_extfile", mock_extfile, raising=False)
 

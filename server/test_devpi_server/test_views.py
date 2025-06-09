@@ -45,19 +45,23 @@ def get_pypi_project_names(testapp):
 
 
 @pytest.mark.parametrize("kind", ["user", "index"])
-@pytest.mark.parametrize(("name", "status"), [
-    ("foo_bar", 'ok'),
-    ("foo-bar", 'ok'),
-    ("foo.bar", 'ok'),
-    ("foo.bar42", 'ok'),
-    ("foo@bar42", 'ok'),
-    ("foo:bar42", 'fatal'),
-    ("foo!bar42", 'fatal'),
-    ("foo~bar42", 'fatal'),
-    (":foobar", 'fatal'),
-    (":foobar:", 'fatal'),
-    ("föö", 'ok'),
-    ("😀", 'ok')])
+@pytest.mark.parametrize(
+    ("name", "status"),
+    [
+        ("foo_bar", "ok"),
+        ("foo-bar", "ok"),
+        ("foo.bar", "ok"),
+        ("foo.bar42", "ok"),
+        ("foo@bar42", "ok"),
+        ("foo:bar42", "fatal"),
+        ("foo!bar42", "fatal"),
+        ("foo~bar42", "fatal"),
+        (":foobar", "fatal"),
+        (":foobar:", "fatal"),
+        ("föö", "ok"),
+        ("�", "ok"),
+    ],
+)
 def test_invalid_name(testapp, name, status, kind):
     from urllib.parse import quote as urlquote
     reqdict = dict(password="123")  # noqa: S106
@@ -333,7 +337,7 @@ def test_projects_pep_691(pypistage, testapp, url):
                 {"name": "Django"},
                 {"name": "ploy_ansible"}
             ]}""")
-    pypistage.xom.httpget.mockresponse(pypistage.mirror_url, **mockkw)
+    pypistage.xom.http.mockresponse(pypistage.mirror_url, **mockkw)
     content_types = [
         "application/vnd.pypi.simple.v1+json",
         "application/vnd.pypi.simple.v1+html;q=0.2",
@@ -742,8 +746,8 @@ def test_indexroot_root_pypi(testapp, xom):
     '/root/pypi/+simple/{name}/',
 ])
 @pytest.mark.parametrize("code", [-1, 500, 501, 502, 503])
-def test_upstream_not_reachable(reqmock, pypistage, testapp, code, url):
-    name = "whatever{code}".format(code=code+100)
+def test_upstream_not_reachable(pypistage, testapp, code, url):
+    name = f"whatever{code + 100}"
     pypistage.mock_simple(name, '', status_code=code)
     r = testapp.get_json(url.format(name=name))
     assert r.status_code == 502
@@ -1840,14 +1844,14 @@ def test_delete_mirror(mapp, monkeypatch, simpypi, testapp, xom):
         assert not getentry(testapp, path).file_exists()
         assert not getentry(testapp, path).key.exists()
 
-    # patch async_httpget to simulate broken PyPI
-    async def async_httpget(url, **kwargs):  # noqa: ARG001 - testing
+    # patch async_get to simulate broken PyPI
+    async def async_get(url, **kwargs):  # noqa: ARG001 - testing
         class Response:
             status_code = 503
             reason = "Service Unavailable"
         return (Response(), None)
 
-    monkeypatch.setattr(xom, "async_httpget", async_httpget)
+    monkeypatch.setattr(xom.http, "async_get", async_get)
 
     # to prove that all metadata is gone when deleting the stage,
     # we recreate the stage, block access to PyPI

@@ -267,7 +267,7 @@ def test_get_updated(pypistage):
 class TestExtPYPIDB:
     def test_parse_pep691(self, pypistage):
         pypistage.mock_simple_projects(["devpi"])
-        pypistage.xom.httpget.mockresponse(
+        pypistage.xom.http.mockresponse(
             URL(pypistage.mirror_url).joinpath("devpi").asdir().url, code=200,
             content_type="application/vnd.pypi.simple.v1+json",
             text="""{
@@ -288,7 +288,7 @@ class TestExtPYPIDB:
 
     def test_parse_pep691_data(self, pypistage):
         pypistage.mock_simple_projects(["devpi"])
-        pypistage.xom.httpget.mockresponse(
+        pypistage.xom.http.mockresponse(
             URL(pypistage.mirror_url).joinpath("devpi").asdir().url, code=200,
             content_type="application/vnd.pypi.simple.v1+json",
             text="""{
@@ -310,7 +310,7 @@ class TestExtPYPIDB:
 
     def test_parse_pep691_md5(self, pypistage):
         pypistage.mock_simple_projects(["devpi"])
-        pypistage.xom.httpget.mockresponse(
+        pypistage.xom.http.mockresponse(
             URL(pypistage.mirror_url).joinpath("devpi").asdir().url, code=200,
             content_type="application/vnd.pypi.simple.v1+json",
             text="""{
@@ -512,7 +512,7 @@ class TestExtPYPIDB:
     @pytest.mark.asyncio
     async def test_basic_auth_mirror(self, pypistage):
         pypistage.ixconfig["mirror_url"] = "https://foo:bar@example.com/simple/"
-        pypistage.xom.httpget.mockresponse(
+        pypistage.xom.http.mockresponse(
             pypistage.mirror_url_without_auth, code=200, text="""
             <html><head><title>Simple Index</title>
             <meta name="api-version" value="2" /></head>
@@ -529,7 +529,7 @@ class TestExtPYPIDB:
         # https://pypi.org/simple/hello-world because of the
         # new pypi normalization code
         pypistage.mock_simple_projects(["Hello_World"])
-        pypistage.xom.httpget.mock_simple(
+        pypistage.xom.http.mock_simple(
             "Hello_World",
             '<a href="Hello_World-1.0.tar.gz" /a>',
             code=200,
@@ -549,7 +549,7 @@ class TestExtPYPIDB:
             (link,) = pypistage.get_releaselinks("foo")
         assert link.require_python == '<3'
         # make sure we get the cached data, if not throw an error
-        pypistage.httpget = None
+        pypistage.http = None
         with pypistage.keyfs.read_transaction():
             (link,) = pypistage.get_releaselinks("foo")
         assert link.require_python == '<3'
@@ -561,7 +561,7 @@ class TestExtPYPIDB:
             (link,) = pypistage.get_releaselinks("foo")
         assert link.yanked == ""
         # make sure we get the cached data, if not throw an error
-        pypistage.httpget = None
+        pypistage.http = None
         with pypistage.keyfs.read_transaction():
             (link,) = pypistage.get_releaselinks("foo")
         assert link.yanked == ""
@@ -625,10 +625,10 @@ class TestExtPYPIDB:
             # call twice
             pypistage.get_simplelinks_perstage("foo")
         # the second call has the etag from the persistent cache info in the transaction
-        call2 = pypistage.xom.httpget.call_log.pop()
+        call2 = pypistage.xom.http.call_log.pop()
         assert call2["url"] == "https://pypi.org/simple/foo/"
         assert call2['extra_headers']['If-None-Match'] == '"foo"'
-        call1 = pypistage.xom.httpget.call_log.pop()
+        call1 = pypistage.xom.http.call_log.pop()
         assert call1["url"] == "https://pypi.org/simple/foo/"
         assert 'If-None-Match' not in call1['extra_headers']
         assert pypistage.cache_retrieve_times.get_etag("foo") == '"foo"'
@@ -637,7 +637,7 @@ class TestExtPYPIDB:
             pypistage.get_simplelinks_perstage("foo")
             # call twice
             pypistage.get_simplelinks_perstage("foo")
-        call = pypistage.xom.httpget.call_log.pop()
+        call = pypistage.xom.http.call_log.pop()
         assert pypistage.cache_retrieve_times.get_etag("foo") == '"foo"'
         assert call['extra_headers']['If-None-Match'] == '"foo"'
         pypistage.mock_simple(
@@ -648,13 +648,13 @@ class TestExtPYPIDB:
             pypistage.get_simplelinks_perstage("foo")
             # call twice
             pypistage.get_simplelinks_perstage("foo")
-        call = pypistage.xom.httpget.call_log.pop()
+        call = pypistage.xom.http.call_log.pop()
         assert call['extra_headers']['If-None-Match'] == '"foo"'
         assert pypistage.cache_retrieve_times.get_etag("foo") == '"bar"'
         del pypistage.cache_retrieve_times._project2time["foo"]
         with pypistage.keyfs.read_transaction():
             pypistage.get_simplelinks_perstage("foo")
-        call = pypistage.xom.httpget.call_log.pop()
+        call = pypistage.xom.http.call_log.pop()
         assert call['extra_headers']['If-None-Match'] == '"foo"'
 
     @pytest.mark.notransaction
@@ -688,7 +688,7 @@ class TestExtPYPIDB:
 class TestMirrorStageprojects:
     @pytest.mark.asyncio
     async def test_get_remote_projects(self, pypistage):
-        pypistage.xom.httpget.mockresponse(
+        pypistage.xom.http.mockresponse(
             pypistage.mirror_url, code=200, text="""
             <html><head><title>Simple Index</title>
             <meta name="api-version" value="2" /></head>
@@ -712,7 +712,7 @@ class TestMirrorStageprojects:
 
     @pytest.mark.asyncio
     async def test_get_remote_projects_pep691_json(self, pypistage):
-        pypistage.xom.httpget.mockresponse(
+        pypistage.xom.http.mockresponse(
             pypistage.mirror_url, code=200,
             content_type="application/vnd.pypi.simple.v1+json",
             text="""{
@@ -737,7 +737,7 @@ class TestMirrorStageprojects:
 
     @pytest.mark.asyncio
     async def test_get_remote_projects_doctype(self, pypistage):
-        pypistage.xom.httpget.mockresponse(
+        pypistage.xom.http.mockresponse(
             pypistage.mirror_url, code=200, text="""
             <!DOCTYPE html>
             <html><head><title>Simple Index</title>
@@ -754,7 +754,7 @@ class TestMirrorStageprojects:
     async def test_get_remote_projects_etag(self, pypistage):
         orig_etag = '"foo"'
         changed_etag = '"bar"'
-        pypistage.xom.httpget.add(
+        pypistage.xom.http.add(
             pypistage.mirror_url, status_code=200, text="""
             <html><head><title>Simple Index</title>
             <meta name="api-version" value="2" /></head>
@@ -763,10 +763,10 @@ class TestMirrorStageprojects:
                 <a href='django'>Django</a><br/>
                 <a href='ploy-ansible/'>ploy_ansible</a><br/>
             </body></html>""", headers={"ETag": orig_etag})
-        pypistage.xom.httpget.add(
+        pypistage.xom.http.add(
             pypistage.mirror_url, status_code=304,
             text="", headers={"ETag": orig_etag})
-        pypistage.xom.httpget.add(
+        pypistage.xom.http.add(
             pypistage.mirror_url, status_code=200, text="""
             <html><head><title>Simple Index</title>
             <meta name="api-version" value="2" /></head>
@@ -784,14 +784,14 @@ class TestMirrorStageprojects:
             normalize_name("ploy_ansible"),
             normalize_name("devpi-server"),
             normalize_name("Django")}
-        call = pypistage.xom.httpget.call_log.pop()
+        call = pypistage.xom.http.call_log.pop()
         assert 'If-None-Match' not in call['extra_headers']
         projects_future = pypistage.xom.create_future()
         with pytest.raises(pypistage.UpstreamNotModified) as e:
             await pypistage._get_remote_projects(projects_future)
         pypistage.cache_projectnames.mark_current(e.value.etag)
         assert etag == orig_etag
-        call = pypistage.xom.httpget.call_log.pop()
+        call = pypistage.xom.http.call_log.pop()
         assert call['extra_headers']['If-None-Match'] == orig_etag
         projects_future = pypistage.xom.create_future()
         await pypistage._get_remote_projects(projects_future)
@@ -802,7 +802,7 @@ class TestMirrorStageprojects:
             normalize_name("ploy"),
             normalize_name("devpi-server"),
             normalize_name("Django")}
-        (call,) = pypistage.xom.httpget.call_log
+        (call,) = pypistage.xom.http.call_log
         assert call['extra_headers']['If-None-Match'] == orig_etag
 
     def test_no_mirror_access_for_invalid_packages(self, pypistage):
@@ -821,18 +821,18 @@ class TestMirrorStageprojects:
                 name, text="", status_code=500, add_to_projects=False)
 
         assert set(pypistage.list_projects_perstage()) == VALID
-        call = pypistage.xom.httpget.call_log.pop()
+        call = pypistage.xom.http.call_log.pop()
         assert call['url'] == pypistage.mirror_url
 
         for p in VALID:
             pypistage.get_simplelinks_perstage(p)
-            call = pypistage.xom.httpget.call_log.pop()
+            call = pypistage.xom.http.call_log.pop()
             assert call['url'] == pypistage.mirror_url.joinpath(p).asdir()
         for p in INVALID:
             with pytest.raises(pypistage.UpstreamNotFoundError):
                 pypistage.get_simplelinks_perstage(p)
             # make sure there was no http fetch
-            assert len(pypistage.xom.httpget.call_log) == 0
+            assert len(pypistage.xom.http.call_log) == 0
 
     @pytest.mark.notransaction
     def test_single_project_access_updates_projects(self, pypistage):
@@ -853,7 +853,7 @@ class TestMirrorStageprojects:
                 "proj1": "proj1", "proj2": "proj2", "django": "Django"}
 
     def test_name_cache_expiration_updated_when_no_names_changed(self, pypistage):
-        pypistage.xom.httpget.mockresponse(
+        pypistage.xom.http.mockresponse(
             pypistage.mirror_url, code=200, text="""
             <body>
                 <a href='django'>Django</a><br/>
@@ -878,11 +878,11 @@ class TestMirrorStageprojects:
         import asyncio
         # release files should be updated in background in case of timeout
         pypistage.timeout = 0.1
-        orig_async_httpget = pypistage.xom.async_httpget
+        orig_async_get = pypistage.xom.http.async_get
 
-        async def sleeping_async_httpget(*args, **kw):
+        async def sleeping_async_get(*args, **kw):
             await asyncio.sleep(0.2)
-            return await orig_async_httpget(*args, **kw)
+            return await orig_async_get(*args, **kw)
 
         # first we need some releases in the db
         pypistage.mock_simple("pkg", text='<a href="pkg-1.0.zip"</a>')
@@ -897,7 +897,7 @@ class TestMirrorStageprojects:
         # now expire the cache, add a version on the mirror and fetch again with a timeout
         pypistage.cache_retrieve_times.expire("pkg")
         pypistage.mock_simple("pkg", text='<a href="pkg-1.0.zip"</a><a href="pkg-2.0.zip"</a>')
-        monkeypatch.setattr(pypistage.xom, 'async_httpget', sleeping_async_httpget)
+        monkeypatch.setattr(pypistage.xom.http, 'async_get', sleeping_async_get)
         # we should get stale results
         with pypistage.keyfs.read_transaction() as tx:
             assert initial_serial == tx.at_serial
@@ -1062,22 +1062,22 @@ def raise_ValueError():
 def test_requests_httpget_negative_status_code(xom, monkeypatch):
     l = []
 
-    def r(*a, **k):
+    def r(*_a, **_k):
         l.append(1)
-        raise requests.exceptions.RequestException()
+        raise requests.exceptions.RequestException
 
-    monkeypatch.setattr(xom._httpsession, "get", r)
+    monkeypatch.setattr(xom.http.session, "get", r)
 
 
 @pytest.mark.nomocking
 def test_requests_httpget_timeout(xom, monkeypatch):
-    def httpget(url, **kw):
+    def httpget(_url, **kw):
         assert kw["timeout"] == 1.2
-        raise requests.exceptions.Timeout()
+        raise requests.exceptions.Timeout
 
-    monkeypatch.setattr(xom._httpsession, "get", httpget)
-    r = xom.httpget("http://notexists.qwe", allow_redirects=False,
-                              timeout=1.2)
+    monkeypatch.setattr(xom.http.session, "get", httpget)
+    r = xom.httpget(
+        "http://notexists.qwe", allow_redirects=False, timeout=1.2)
     assert r.status_code == -1
 
 
@@ -1086,10 +1086,10 @@ def test_requests_httpget_timeout(xom, monkeypatch):
     OSError,
     requests.exceptions.ConnectionError])
 def test_requests_httpget_error(exc, xom, monkeypatch):
-    def httpget(url, **kw):
+    def httpget(_url, **_kw):
         raise exc()
 
-    monkeypatch.setattr(xom._httpsession, "get", httpget)
+    monkeypatch.setattr(xom.http.session, "get", httpget)
     r = xom.httpget("http://notexists.qwe", allow_redirects=False)
     assert r.status_code == -1
 
@@ -1101,7 +1101,7 @@ def test_requests_httpget_error(exc, xom, monkeypatch):
     httpx.RequestError(message="fail")])
 async def test_async_httpget_error(exc, xom, monkeypatch):
 
-    async def async_httpget(self, url, **kw):
+    async def async_httpget(_self, _url, **_kw):
         raise exc
 
     monkeypatch.setattr(httpx.AsyncClient, "get", async_httpget)

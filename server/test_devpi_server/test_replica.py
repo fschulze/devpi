@@ -235,7 +235,8 @@ class TestReplicaThread:
         msgs = [x.msg for x in caplog.getrecords(r".*http://localhost/\+changelog/0")]
         assert msgs == [
             '[REP] fetching %s',
-            '[REP] error fetching %s: %s',
+            '[REP] OS error during http.get of %s at %s: %s',
+            '[REP] %s %s: failed fetching %s',
             '[REP] fetching %s']
 
     def test_thread_run_ok(self, rt, mockchangelog, caplog, xom):
@@ -742,7 +743,7 @@ class TestFileReplication:
             assert not entry.file_exists()
 
         # and simulate what the primary will respond
-        xom.httpget.mockresponse(primary_file_path, status_code=410)
+        xom.http.mockresponse(primary_file_path, status_code=410)
 
         # and then we try to see if we can replicate the create and del changes
         replay(xom, replica_xom)
@@ -824,7 +825,7 @@ class TestFileReplication:
         with replica_xom.keyfs.read_transaction():
             entry = replica_xom.filestore.get_file_entry(entry.relpath)
             url = replica_xom.config.primary_url.joinpath(entry.relpath).url
-            pypistage.xom.httpget.mockresponse(url, status_code=500)
+            pypistage.xom.http.mockresponse(url, status_code=500)
             stage = replica_xom.model.getstage('root/pypi')
             with pytest.raises(BadGateway) as e:
                 list(iter_remote_file_replica(stage, entry, entry.url))
@@ -852,15 +853,15 @@ class TestFileReplication:
                 "content-type": ("application/zip", None)}
             entry = replica_xom.filestore.get_file_entry(entry.relpath)
             url = replica_xom.config.primary_url.joinpath(entry.relpath).url
-            pypistage.xom.httpget.mockresponse(url, status_code=500)
-            pypistage.xom.httpget.mockresponse(
+            pypistage.xom.http.mockresponse(url, status_code=500)
+            pypistage.xom.http.mockresponse(
                 entry.url, headers=headers, content=content)
             stage = replica_xom.model.getstage('root/pypi')
             result = iter_remote_file_replica(stage, entry, entry.url)
             headers = next(result)
             # there should be one get
             (call_log_entry,) = [
-                x for x in pypistage.xom.httpget.call_log
+                x for x in pypistage.xom.http.call_log
                 if x['url'] == url]
             # and it should have an authorization header
             assert call_log_entry['extra_headers']['Authorization'].startswith('Bearer')
@@ -901,7 +902,7 @@ class TestFileReplication:
                    "last-modified": "Thu, 25 Nov 2010 20:00:27 GMT",
                    "content-type": "application/zip",
                    "X-DEVPI-SERIAL": str(xom.keyfs.get_current_serial())}
-        replica_xom.httpget.mockresponse(primary_file_url, code=200, content=content1, headers=headers)
+        replica_xom.http.mockresponse(primary_file_url, code=200, content=content1, headers=headers)
         with replica_xom.keyfs.read_transaction() as tx:
             assert not tx.io_file.exists(file_path_info)
         r = r_app.get(path)
@@ -927,7 +928,7 @@ def test_get_simplelinks_perstage(monkeypatch, pypistage, replica_pypistage,
 
     # replicate the state
     replay(xom, replica_xom)
-    replica_pypistage.xom.httpget.call_log.clear()
+    replica_pypistage.xom.http.call_log.clear()
 
     # now check
     pypiurls.simple = 'http://localhost:3111/root/pypi/+simple/'
@@ -942,7 +943,7 @@ def test_get_simplelinks_perstage(monkeypatch, pypistage, replica_pypistage,
     assert ret[0].relpath == 'root/pypi/+e/https_pypi.org_pytest/pytest-1.0.zip'
     # there should be one get
     (call_log_entry,) = [
-        x for x in replica_pypistage.xom.httpget.call_log
+        x for x in replica_pypistage.xom.http.call_log
         if x['url'].startswith(pypiurls.simple)]
     # and it should have an authorization header
     assert call_log_entry['extra_headers']['Authorization'].startswith('Bearer')

@@ -14,6 +14,7 @@ from devpi_common.url import URL
 from devpi_common.metadata import BasenameMeta
 from devpi_common.metadata import is_archive_of_project
 from devpi_common.metadata import parse_version
+from devpi_common.types import cached_property
 from functools import partial
 from html.parser import HTMLParser
 from .config import hookimpl
@@ -115,7 +116,7 @@ def iter_cache_remote_file(stage, entry, url):
     # we get and cache the file and some http headers from remote
     xom = stage.xom
     url = URL(url)
-    r = stage.httpget(url, allow_redirects=True)
+    r = stage.http.get(url, allow_redirects=True)
     if r.status_code != 200:
         r.close()
         msg = "error %s getting %r" % (r.status_code, url)
@@ -174,7 +175,7 @@ def iter_remote_file_replica(stage, entry, url):
         threadlog.warn("missing private file: %s" % entry.relpath)
     else:
         threadlog.info("replica doesn't have file: %s", entry.relpath)
-    r = stage.httpget(
+    r = stage.http.get(
         primary_url, allow_redirects=True,
         extra_headers={xom.replica_thread.H_REPLICA_FILEREPL: "YES"})
     if r.status_code != 200:
@@ -192,7 +193,7 @@ def iter_remote_file_replica(stage, entry, url):
             url = url.replace(username=None, password=None)
             auth = f"{username}:{password}".encode()
             headers["Authorization"] = f"Basic {b64encode(auth).decode()}"
-        r = xom.httpget(url, allow_redirects=True, extra_headers=headers)
+        r = xom.http.get(url, allow_redirects=True, extra_headers=headers)
         if r.status_code != 200:
             r.close()
             msg = "%s\n%s: received %s" % (msg, url, r.status_code)
@@ -369,6 +370,43 @@ def parse_index_v1_json(disturl, text):
     return result
 
 
+class HTTPClient:
+    def __init__(self, http, get_extra_headers, update_auth_candidates):
+        self.http = http
+        self.get_extra_headers = get_extra_headers
+        self.update_auth_candidates = update_auth_candidates
+
+    async def async_get(self, url, *, allow_redirects, timeout=None, extra_headers=None):
+        extra_headers = self.get_extra_headers(extra_headers)
+        response, text = await self.http.async_get(
+            url=URL(url).url, allow_redirects=allow_redirects, timeout=timeout,
+            extra_headers=extra_headers)
+        # if we get an auth problem, see if we can try an alternative credential
+        # to access the resource
+        if response.status_code in (401, 403) and self.update_auth_candidates(
+            response.headers.get("WWW-Authenticate", ""),
+        ):
+            return await self.async_get(
+                url, allow_redirects=allow_redirects, timeout=timeout,
+                extra_headers=extra_headers)
+        return response, text
+
+    def get(self, url, *, allow_redirects, timeout=None, extra_headers=None):
+        extra_headers = self.get_extra_headers(extra_headers)
+        response = self.http.get(
+            url=URL(url).url, allow_redirects=allow_redirects, timeout=timeout,
+            extra_headers=extra_headers)
+        # if we get an auth problem, see if we can try an alternative credential
+        # to access the resource
+        if response.status_code in (401, 403) and self.update_auth_candidates(
+            response.headers.get("WWW-Authenticate", ""),
+        ):
+            return self.get(
+                url, allow_redirects=allow_redirects, timeout=timeout,
+                extra_headers=extra_headers)
+        return response
+
+
 class MirrorStage(BaseStage):
     def __init__(self, xom, username, index, ixconfig, customizer_cls):
         super().__init__(
@@ -398,48 +436,29 @@ class MirrorStage(BaseStage):
         return self.keyfs.PROJECTCACHEINFO(
             user=self.username, index=self.index, **kw)
 
-    def _get_extra_headers(self, extra_headers):
-        # make a copy of extra_headers
-        extra_headers = {} if extra_headers is None else dict(extra_headers)
+    @cached_property
+    def http(self):
         if self.xom.is_replica():
             (uuid, primary_uuid) = self.xom.config.nodeinfo.make_uuid_headers()
             rt = self.xom.replica_thread
-            token = rt.auth_serializer.dumps(uuid)
-            extra_headers[rt.H_REPLICA_UUID] = uuid
-            extra_headers['Authorization'] = 'Bearer %s' % token
+            dumps = rt.auth_serializer.dumps
+
+            def get_extra_headers(extra_headers):
+                # make a copy of extra_headers
+                extra_headers = {} if extra_headers is None else dict(extra_headers)
+                token = dumps(uuid)
+                extra_headers[rt.H_REPLICA_UUID] = uuid
+                extra_headers['Authorization'] = f'Bearer {token}'
+                return extra_headers
         else:
-            auth = self.mirror_url_authorization_header
-            if auth:
-                extra_headers["Authorization"] = auth
-        return extra_headers
-
-    async def async_httpget(self, url, allow_redirects, timeout=None, extra_headers=None):
-        extra_headers = self._get_extra_headers(extra_headers)
-        response, text = await self.xom.async_httpget(
-            url=URL(url).url, allow_redirects=allow_redirects, timeout=timeout,
-            extra_headers=extra_headers)
-        # if we get an auth problem, see if we can try an alternative credential
-        # to access the resource
-        if response.status_code in (401, 403) and self._update_auth_candidates(
-            response.headers.get("WWW-Authenticate", ""),
-        ):
-            return await self.async_httpget(
-                url, allow_redirects, timeout, extra_headers)
-        return response, text
-
-    def httpget(self, url, allow_redirects, timeout=None, extra_headers=None):
-        extra_headers = self._get_extra_headers(extra_headers)
-        response = self.xom.httpget(
-            url=URL(url).url, allow_redirects=allow_redirects, timeout=timeout,
-            extra_headers=extra_headers)
-        # if we get an auth problem, see if we can try an alternative credential
-        # to access the resource
-        if response.status_code in (401, 403) and self._update_auth_candidates(
-            response.headers.get("WWW-Authenticate", ""),
-        ):
-            return self.httpget(
-                url, allow_redirects, timeout, extra_headers)
-        return response
+            def get_extra_headers(extra_headers):
+                # make a copy of extra_headers
+                extra_headers = {} if extra_headers is None else dict(extra_headers)
+                auth = self.mirror_url_authorization_header
+                if auth:
+                    extra_headers["Authorization"] = auth
+                return extra_headers
+        return HTTPClient(self.xom.http, get_extra_headers, self._update_auth_candidates)
 
     def _update_auth_candidates(self, auth_header):
         # if we have any auth candidates, the first one has just failed, so
@@ -623,7 +642,7 @@ class MirrorStage(BaseStage):
         if etag is not None:
             headers["If-None-Match"] = etag
         threadlog.debug("fetching remote projects from %r with etag %r", self.mirror_url, etag)
-        (response, text) = await self.async_httpget(
+        (response, text) = await self.http.async_get(
             self.mirror_url_without_auth, allow_redirects=True,
             extra_headers=headers)
         if response.status_code == 304:
@@ -832,7 +851,7 @@ class MirrorStage(BaseStage):
         etag = self.cache_retrieve_times.get_etag(project) or etag
         if etag is not None:
             headers["If-None-Match"] = etag
-        (response, text) = await self.async_httpget(
+        (response, text) = await self.http.async_get(
             get_url, allow_redirects=True, extra_headers=headers)
         if response.status_code == 304:
             raise self.UpstreamNotModified(

@@ -6,25 +6,20 @@ recursive cache of pypi.org packages.
 from __future__ import annotations
 
 import functools
-import httpx
-import inspect
 import os
 import os.path
 import asyncio
-import ssl
 import sys
 import threading
 import time
 
 from collections import defaultdict
-from requests import Response, exceptions
-from requests.utils import DEFAULT_CA_BUNDLE_PATH
 from devpi_common.terminal import TerminalWriter
 from devpi_common.types import cached_property
-from devpi_common.request import new_requests_session
 from .config import MyArgumentParser
 from .config import parseoptions, get_pluginmanager
-from .exceptions import lazy_format_exception_only
+from .httpclient import HTTPClient
+from .httpclient import OfflineHTTPClient
 from .log import configure_cli_logging
 from .log import configure_logging
 from .log import threadlog
@@ -36,6 +31,7 @@ from . import mythread
 from . import __version__ as server_version
 from operator import iconcat
 from typing import TYPE_CHECKING
+import warnings
 
 
 if TYPE_CHECKING:
@@ -219,18 +215,6 @@ def wsgi_run(xom, app):
     return 0
 
 
-def get_caller_location(stacklevel=2):
-    frame = inspect.currentframe()
-    if frame is None:
-        return 'unknown (no current frame)'
-    while frame and stacklevel:
-        frame = frame.f_back
-        stacklevel -= 1
-    if frame is None:
-        return f"unknown (stacklevel {stacklevel})"
-    return f"{frame.f_code.co_filename}:{frame.f_lineno}::{frame.f_code.co_name}"
-
-
 class AsyncioLoopThread:
     _loop: asyncio.AbstractEventLoop
     _started: threading.Event
@@ -278,15 +262,14 @@ class XOM:
     class Exiting(SystemExit):
         pass
 
-    def __init__(self, config, httpget=None):
+    def __init__(self, config, http=None):
         self.config = config
         self.thread_pool = mythread.ThreadPool()
         self.async_thread = AsyncioLoopThread(self)
         self.async_tasks = set()
         self.thread_pool.register(self.async_thread)
-        if httpget is not None:
-            self.httpget = httpget  # type: ignore[method-assign]
-            self.async_httpget = httpget.async_httpget  # type: ignore[method-assign]
+        if http is not None:
+            self.http = http
         self.log = threadlog
         self.polling_replicas = {}
         self._stagecache = {}
@@ -458,93 +441,48 @@ class XOM:
             self.thread_pool.register(keyfs.notifier)
         return keyfs
 
-    def new_http_session(self, component_name):
-        return new_requests_session(agent=(component_name, server_version))
-
-    @cached_property
-    def _httpsession(self):
-        return self.new_http_session("server")
-
-    @cached_property
-    def _ssl_context(self):
-        # create an SSLContext object that uses the same CA certs as requests
-        cafile = (
-            os.environ.get("REQUESTS_CA_BUNDLE")
-            or os.environ.get("CURL_CA_BUNDLE")
-            or DEFAULT_CA_BUNDLE_PATH
+    def new_http_client(self, component_name):
+        if self.config.offline_mode:
+            return OfflineHTTPClient()
+        return HTTPClient(
+            component_name=component_name,
+            timeout=getattr(self.config.args, "request_timeout", None),
         )
-        if cafile and not os.path.exists(cafile):
-            threadlog.warning(
-                "Could not find a suitable TLS CA certificate bundle, invalid path: %s",
-                cafile
-            )
-            cafile = None
 
-        return ssl.create_default_context(cafile=cafile)
+    @cached_property
+    def _http(self):
+        return self.new_http_client("server")
 
-    def _close_sessions(self):
-        self._httpsession.close()
+    @cached_property
+    def http(self):
+        # this is overwritten for tests, while _http is not
+        return self._http
 
     async def async_httpget(self, url, allow_redirects, timeout=None, extra_headers=None):
-        try:
-            async with httpx.AsyncClient(
-                    timeout=timeout,
-                    verify=self._ssl_context,
-                    follow_redirects=allow_redirects,
-            ) as client:
-                response = await client.get(url, headers=extra_headers)
-                if response.status_code < 300:
-                    text = response.text
-                else:
-                    text = None
-                return response, text
-        except OSError as e:
-            location = get_caller_location()
-            threadlog.warn(
-                "OS error during async_httpget of %s at %s: %s",
-                url, location, lazy_format_exception_only(e))
-            return FatalResponse(url, repr(sys.exc_info()[1]))
-        except httpx.RequestError as e:
-            location = get_caller_location()
-            threadlog.warn(
-                "OS error during async_httpget of %s at %s: %s",
-                url, location, lazy_format_exception_only(e))
-            return FatalResponse(url, repr(sys.exc_info()[1]))
+        warnings.warn(
+            "The async_httpget method is deprecated, use http.async_get instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return await self.http.async_get(
+            url,
+            allow_redirects=allow_redirects,
+            timeout=timeout,
+            extra_headers=extra_headers,
+        )
 
     def httpget(self, url, allow_redirects, timeout=None, extra_headers=None):
-        if self.config.offline_mode:
-            resp = Response()
-            resp.status_code = 503  # service unavailable
-            return resp
-        headers = {}
-        if extra_headers:
-            headers.update(extra_headers)
-        try:
-            resp = self._httpsession.get(
-                url, stream=True,
-                allow_redirects=allow_redirects,
-                headers=headers,
-                timeout=timeout or self.config.args.request_timeout)
-        except OSError as e:
-            location = get_caller_location()
-            threadlog.warn(
-                "OS error during httpget of %s at %s: %s",
-                url, location, lazy_format_exception_only(e))
-            return FatalResponse(url, repr(sys.exc_info()[1]))
-        except exceptions.ConnectionError as e:
-            location = get_caller_location()
-            threadlog.warn(
-                "Connection error during httpget of %s at %s: %s",
-                url, location, lazy_format_exception_only(e))
-            return FatalResponse(url, repr(sys.exc_info()[1]))
-        except self._httpsession.Errors as e:
-            location = get_caller_location()
-            threadlog.warn(
-                "HTTPError during httpget of %s at %s: %s",
-                url, location, lazy_format_exception_only(e))
-            return FatalResponse(url, repr(sys.exc_info()[1]))
-        else:
-            return resp
+        warnings.warn(
+            "The httpget method is deprecated, use http.get instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.http.get(
+            url,
+            allow_redirects=allow_redirects,
+            timeout=timeout,
+            extra_headers=extra_headers,
+        )
 
     def view_deriver(self, view, info):
         if self.is_replica():
@@ -706,26 +644,6 @@ class XOM:
 
     def is_replica(self):
         return self.config.role == "replica"
-
-
-class FatalResponse:
-    status_code = -1
-
-    def __init__(self, url, reason):
-        self.url = url
-        self.reason = reason
-        self.status = self.status_code
-
-    def __repr__(self):
-        return "%s(%r)" % (self.__class__.__name__, self.reason)
-
-    # an adapter to allow this to be used in async_httpget
-    def __iter__(self):
-        yield self
-        yield self.reason
-
-    def close(self):
-        pass
 
 
 def get_remote_ip(request):
