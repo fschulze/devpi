@@ -220,9 +220,9 @@ class TestFileStore:
         link = gen.pypi_package_link("pytest-3.0.zip", hash_spec=False)
         entry = filestore.maplink(link, "root", "pypi", "pytest")
         assert not entry.hashes
-        headers = ResponseHeaders({
-            "last-modified": "Thu, 25 Nov 2010 20:00:27 GMT",
-            "content-length": None})
+        headers = ResponseHeaders(
+            {"last-modified": "Thu, 25 Nov 2010 20:00:27 GMT", "content-length": ""}
+        )
         assert entry.file_size() is None
         httpget.url2response[link.url] = dict(
             status_code=200, headers=headers, raw=BytesIO(b"1"))
