@@ -66,7 +66,7 @@ class HTTPClient:
     )
 
     def __init__(self, *, component_name: str, timeout: int | None) -> None:
-        self.headers = {"User-Agent": f"{component_name}/{server_version}"}
+        self.headers = {"User-Agent": f"devpi-{component_name}/{server_version}"}
         self.client = httpx.Client(headers=self.headers, verify=self._ssl_context)
         self.session = new_requests_session(agent=(component_name, server_version))
         self.timeout = timeout
