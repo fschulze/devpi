@@ -895,7 +895,7 @@ class MirrorStage(BaseStage):
                 if with_elinks:
                     elinks = verdata.setdefault("+elinks", [])
                     elinks.append(dict(
-                        rel="releasefile",
+                        rel=Rel.ReleaseFile,
                         entrypath=sm.path,
                         hashes=sm.hashes))
         return ensure_deeply_readonly(verdata)
