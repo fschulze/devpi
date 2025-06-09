@@ -24,6 +24,7 @@ from .main import Fatal
 from .main import init_default_indexes
 from .main import set_state_version
 from .main import xom_from_config
+from .model import Rel
 from .readonly import get_mutable_deepcopy, ReadonlyView
 from pathlib import Path
 
@@ -259,7 +260,7 @@ class IndexDump:
         self.exporter.completed("index %r" % self.stage.name)
 
     def dump_docfiles(self, linkstore):
-        links = linkstore.get_links(rel="doczip")
+        links = linkstore.get_links(rel=Rel.DocZip)
         if len(links) > 1:
             threadlog.warning(
                 "Multiple documentation files for %s-%s, only exporting newest",
@@ -273,7 +274,7 @@ class IndexDump:
                 entry, self.basedir / f"{linkstore.project}-{link.version}.doc.zip"
             )
             self.add_filedesc(
-                "doczip",
+                Rel.DocZip,
                 linkstore.project,
                 relpath,
                 version=link.version,
@@ -632,7 +633,7 @@ class Importer:
                     yanked.append(is_yanked)
                 stage._save_cache_links(
                     project, links, requires_python, yanked, serial, None)
-        elif filedesc["type"] == "doczip":
+        elif filedesc["type"] == Rel.DocZip:
             version = filedesc["version"]
             # docs didn't always have entrymapping in export dump
             last_modified = mapping.get("last_modified")

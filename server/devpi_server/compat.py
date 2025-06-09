@@ -1,4 +1,10 @@
 try:
+    from enum import StrEnum
+except ImportError:
+    from strenum import StrEnum  # noqa: F401
+
+
+try:
     from inspect import get_annotations
 except ImportError:
 
