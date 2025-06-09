@@ -16,6 +16,7 @@ import inspect
 import os
 import ssl
 import sys
+import warnings
 
 
 if TYPE_CHECKING:
@@ -41,6 +42,7 @@ class FatalResponse:
     def __init__(self, url: URL | str, reason: str):
         self.url = url
         self.reason = reason
+        self.reason_phrase = reason
         self.status = self.status_code
 
     def __repr__(self) -> str:
@@ -138,6 +140,11 @@ class HTTPClient:
         timeout: int | None = None,
         extra_headers: dict | None = None,
     ) -> Response | FatalResponse:
+        warnings.warn(
+            "The http.get method is deprecated, use one of the other methods instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         headers = {}
         if extra_headers:
             headers.update(extra_headers)
@@ -186,32 +193,11 @@ class HTTPClient:
         data: dict | None = None,
         files: dict | None = None,
         extra_headers: dict | None = None,
-    ) -> Response:
+    ) -> httpx.Response:
         headers = {}
         if extra_headers:
             headers.update(extra_headers)
-        return self.session.post(url, data=data, files=files, headers=headers)
-
-    def request(
-        self,
-        method: str,
-        url: str,
-        *,
-        data: dict | None,
-        headers: dict | None,
-        stream: bool,
-        allow_redirects: bool,
-        timeout: int | None,
-    ) -> Response:
-        return self.session.request(
-            method,
-            url,
-            data=data,
-            headers=headers,
-            stream=stream,
-            allow_redirects=allow_redirects,
-            timeout=timeout or self.timeout,
-        )
+        return self.client.post(url, data=data, files=files, headers=headers)
 
     def stream(
         self,
@@ -220,6 +206,7 @@ class HTTPClient:
         url: URL | str,
         *,
         allow_redirects: bool,
+        content: bytes | None = None,
         timeout: int | None = None,
         extra_headers: dict | None = None,
     ) -> httpx.Response | FatalResponse:
@@ -230,6 +217,7 @@ class HTTPClient:
             gen = self.client.stream(
                 method,
                 url.url if isinstance(url, URL) else url,
+                content=content,
                 follow_redirects=allow_redirects,
                 headers=headers,
                 timeout=timeout or self.timeout,
@@ -273,19 +261,6 @@ class OfflineHTTPClient:
         allow_redirects: bool,  # noqa: ARG002
         timeout: int | None = None,  # noqa: ARG002
         extra_headers: dict | None = None,  # noqa: ARG002
-    ) -> Response:
-        return self._resp()
-
-    def request(
-        self,
-        method: str,  # noqa: ARG002
-        url: str,  # noqa: ARG002
-        *,
-        data: dict | None,  # noqa: ARG002
-        headers: dict | None,  # noqa: ARG002
-        stream: bool,  # noqa: ARG002
-        allow_redirects: bool,  # noqa: ARG002
-        timeout: int | None,  # noqa: ARG002
     ) -> Response:
         return self._resp()
 

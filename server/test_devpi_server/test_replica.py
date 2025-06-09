@@ -325,7 +325,7 @@ class TestReplicaThread:
                       headers={"x-devpi-serial": None})
         with pytest.raises(ZeroDivisionError):
             rt.thread_run()
-        assert caplog.getrecords("error fetching.*x-devpi-serial")
+        assert caplog.getrecords("error fetching.*X-DEVPI-SERIAL")
 
     @pytest.mark.slow
     def test_thread_run_try_again(self, rt, mockchangelog, caplog):

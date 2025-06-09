@@ -7,7 +7,6 @@ import mimetypes
 import subprocess
 
 import pytest
-import requests
 import shutil
 import socket
 import sys
@@ -20,6 +19,7 @@ from devpi_server.config import get_pluginmanager
 from devpi_server.main import XOM, parseoptions
 from devpi_server.normalized import normalize_name
 from devpi_common.terminal import TerminalWriter
+from devpi_common.types import cached_property
 from devpi_common.url import URL
 from devpi_server.log import threadlog, thread_clear_log
 from io import BytesIO
@@ -394,17 +394,13 @@ def makemapp(maketestapp, makexom):
 @pytest.fixture
 def makehttp(pypiurls):
     from .simpypi import make_simple_pkg_info
+    import httpx
 
     class MockHTTPClient:
         def __init__(self):
-            import urllib3.exceptions
-
             self.url2response = {}
             self.call_log = []
-            self.Errors = (
-                requests.exceptions.RequestException,
-                urllib3.exceptions.HTTPError,
-            )
+            self.Errors = (httpx.HTTPError, httpx.StreamError)
 
         async def async_get(
             self, url, *, allow_redirects, timeout=None, extra_headers=None
@@ -448,12 +444,14 @@ def makehttp(pypiurls):
             url,
             *,
             allow_redirects,
+            content=None,
             timeout=None,
             extra_headers=None,
         ):
             return self.__call__(
                 url,
                 allow_redirects=allow_redirects,
+                content=content,
                 extra_headers=extra_headers,
                 timeout=timeout,
             )
@@ -476,8 +474,13 @@ def makehttp(pypiurls):
                     if "exception" in fakeresponse:
                         assert set(fakeresponse.keys()) == {"exception"}
                         raise fakeresponse["exception"]
-                    fakeresponse["headers"] = requests.structures.CaseInsensitiveDict(
-                        fakeresponse.setdefault("headers", {}))
+                    fakeresponse["headers"] = httpx.Headers(
+                        {
+                            k: str(v)
+                            for k, v in fakeresponse.setdefault("headers", {}).items()
+                            if v is not None
+                        }
+                    )
                     xself.__dict__.update(fakeresponse)
                     if "url" not in fakeresponse:
                         xself.url = url
@@ -509,6 +512,10 @@ def makehttp(pypiurls):
 
                 def json(xself):
                     return json.loads(xself.text)
+
+                @cached_property
+                def reason_phrase(xself):
+                    return xself.reason
 
                 @property
                 def status(xself):
@@ -1121,8 +1128,11 @@ class FunctionalResponseWrapper(object):
 class MyFunctionalTestApp(MyTestApp):
     def __init__(self, host_port):
         import json
+        import requests
+
         self.base_url = "http://%s:%s" % host_port
         self.headers = {}
+        self.requests = requests
         self.JSONEncoder = json.JSONEncoder
 
     def _gen_request(self, method, url, params=None,
@@ -1143,9 +1153,9 @@ class MyFunctionalTestApp(MyTestApp):
                 kw['data'] = params
             else:
                 kw['params'] = params
-        meth = getattr(requests, method.lower())
         if '://' not in url:
             url = self.base_url + url
+        meth = getattr(self.requests, method.lower())
         r = meth(url, **kw)
         return FunctionalResponseWrapper(r)
 

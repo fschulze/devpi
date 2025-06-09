@@ -5,10 +5,10 @@ import contextlib
 import io
 import itsdangerous
 import secrets
+import sys
 import threading
 import time
 import traceback
-from contextlib import suppress
 from pluggy import HookimplMarker
 from pyramid.httpexceptions import HTTPNotFound, HTTPAccepted, HTTPBadRequest
 from pyramid.httpexceptions import HTTPForbidden
@@ -482,11 +482,11 @@ class ReplicaThread:
             if r.status_code in (301, 302):
                 log.error(
                     "%s %s: redirect detected at %s to %s",
-                    r.status_code, r.reason, url, r.headers.get('Location'))
+                    r.status_code, r.reason_phrase, url, r.headers.get('Location'))
                 return False
 
             if r.status_code not in (200, 202):
-                log.error("%s %s: failed fetching %s", r.status_code, r.reason, url)
+                log.error("%s %s: failed fetching %s", r.status_code, r.reason_phrase, url)
                 return False
 
             # we check that the remote instance
@@ -1012,11 +1012,11 @@ class FileReplicationThread:
                 r.close()
                 threadlog.error(
                     "error downloading '%s' from primary, will be retried later: %s",
-                    relpath, r.reason)
+                    relpath, r.reason_phrase)
                 # add the error for the UI
                 self.shared_data.errors.add(dict(
                     url=r.url,
-                    message=r.reason,
+                    message=r.reason_phrase,
                     relpath=entry.relpath))
                 # and raise for retrying later
                 raise FileReplicationError(r, relpath)
@@ -1035,7 +1035,7 @@ class FileReplicationThread:
                 if isinstance(err, ChecksumError):
                     threadlog.error(
                         "checksum mismatch for '%s', will be retried later: %s",
-                        relpath, r.reason)
+                        relpath, r.reason_phrase)
                 self.shared_data.errors.add(dict(
                     url=r.url,
                     message=str(err),
@@ -1222,7 +1222,7 @@ class BodyFileWrapper:
         self.len = length
 
 
-def proxy_request_to_primary(xom, request):
+def proxy_request_to_primary(xom, request, cstack):
     primary_url = xom.config.primary_url
     request_url = URL(request.url)
     url = (
@@ -1232,42 +1232,38 @@ def proxy_request_to_primary(xom, request):
         .url)
     assert url.startswith(primary_url.url)
     http = xom._http
-    with threadlog.around("info", "relaying: %s %s", request.method, url):
-        try:
-            headers = clean_request_headers(request)
-            length = None
-            with suppress(ValueError, TypeError):
-                length = int(headers.get('Content-Length'))
-            if length:
-                body = BodyFileWrapper(request.body_file, length)
-            else:
-                body = request.body
-            return http.request(request.method, url,
-                                data=body,
-                                headers=headers,
-                                stream=True,
-                                allow_redirects=False,
-                                timeout=xom.config.args.proxy_timeout)
-        except http.Errors as e:
-            msg = f"proxy-write-to-primary {url}: {e}"
-            raise UpstreamError(msg) from e
+    cstack.enter_context(threadlog.around(
+        "info", "relaying: %s %s", request.method, url))
+    try:
+        headers = clean_request_headers(request)
+
+        def body():
+            yield request.body_file.read(65536)
+        return http.stream(
+            cstack, request.method, url,
+            content=body(),
+            extra_headers=headers,
+            allow_redirects=False,
+            timeout=xom.config.args.proxy_timeout)
+    except http.Errors as e:
+        msg = f"proxy-write-to-primary {url}: {e}"
+        raise UpstreamError(msg) from e
 
 
 def proxy_write_to_primary(xom, request):
     """ relay modifying http requests to primary and wait until
     the change is replicated back.
     """
-    r = proxy_request_to_primary(xom, request)
-    # for redirects, the body is already read and stored in the ``next``
-    # attribute (see requests.sessions.send)
-    if r.raw.closed and r.next:
-        def app_iter():
-            with contextlib.closing(r):
-                yield r.next.body
-    else:
-        def app_iter():
-            with contextlib.closing(r):
-                yield from r.raw.stream()
+    cstack = contextlib.ExitStack().__enter__()
+    r = proxy_request_to_primary(xom, request, cstack)
+
+    def app_iter():
+        try:
+            yield from r.iter_raw()
+        except Exception:  # noqa: BLE001
+            cstack.__exit__(*sys.exc_info())
+        else:
+            cstack.__exit__(None, None, None)
     if r.status_code < 400:
         commit_serial = int(r.headers["X-DEVPI-SERIAL"])
         xom.keyfs.wait_tx_serial(commit_serial)
@@ -1279,9 +1275,10 @@ def proxy_write_to_primary(xom, request):
         outside_url = request.application_url
         headers["location"] = str(
             primary_location.replace(xom.config.primary_url.url, outside_url))
-    return Response(status="%s %s" % (r.status_code, r.reason),
-                    app_iter=app_iter(),
-                    headers=headers)
+    return Response(
+        status=f"{r.status_code} {r.reason_phrase}",
+        app_iter=app_iter(),
+        headers=headers)
 
 
 def proxy_view_to_primary(_context, request):
@@ -1307,10 +1304,10 @@ class FileReplicationError(Exception):
     def __init__(self, response, relpath, message=None):
         self.url = response.url
         self.status_code = response.status_code
-        self.reason = response.reason
+        self.reason_phrase = response.reason_phrase
         self.relpath = relpath
         self.message = message or "failed"
 
     def __str__(self):
         return "FileReplicationError with %s, code=%s, reason=%s, relpath=%s, message=%s" % (
-               self.url, self.status_code, self.reason, self.relpath, self.message)
+               self.url, self.status_code, self.reason_phrase, self.relpath, self.message)
