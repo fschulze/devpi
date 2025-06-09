@@ -422,7 +422,7 @@ class BaseFileEntry:
 
     @property
     def file_path_info(self):
-        return FilePathInfo(f"+files/{self.relpath}")
+        return FilePathInfo(f"+files/{self.relpath}", self.hashes.get_default_value(None))
 
     @property
     def index(self):
@@ -559,7 +559,9 @@ class BaseFileEntry:
         if missing_hash_types:
             msg = f"Missing hash types: {missing_hash_types!r}"
             raise RuntimeError(msg)
-        self.tx.io_file.set_content(self.file_path_info, content_or_file)
+        file_path_info = self.file_path_info
+        file_path_info.hash_digest = hashes[DEFAULT_HASH_TYPE]
+        self.tx.io_file.set_content(file_path_info, content_or_file)
 
     def gethttpheaders(self):
         assert self.file_exists()
