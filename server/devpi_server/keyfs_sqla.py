@@ -334,10 +334,10 @@ class Connection:
         (result,) = results
         return result
 
-    def iter_relpaths_at(
-        self, typedkeys: Iterable[IKeyFSKey], at_serial: int
+    def iter_keys_at_serial(
+        self, keys: Iterable[IKeyFSKey], at_serial: int
     ) -> Iterator[KeyData]:
-        keytypes = frozenset(k.key_name for k in typedkeys)
+        keytypes = frozenset(k.key_name for k in keys)
         stmt = (
             sa.select(
                 relpath_ulid_table.c.relpath.distinct(), relpath_ulid_table.c.keytype
