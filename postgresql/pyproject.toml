@@ -64,7 +64,6 @@ extend-ignore = [
     "FLY002", # maybe cleanup later - f-string instead of join
     "I001", # maybe cleanup later - import block unsorted
     "PLR0912", # maybe cleanup later
-    "PLW2901", # maybe cleanup later
     "RUF012", # cleanup later
     "S608", # cleanup soon - possible sql injection
     "UP032", # cleanup later - f-string instead of format
