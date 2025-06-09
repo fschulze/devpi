@@ -9,6 +9,7 @@ from requests import Response
 from requests import exceptions
 from requests.utils import DEFAULT_CA_BUNDLE_PATH
 from typing import TYPE_CHECKING
+from urllib3.exceptions import HTTPError
 import httpx
 import inspect
 import os
@@ -54,6 +55,8 @@ class FatalResponse:
 
 
 class HTTPClient:
+    Errors = (exceptions.RequestException, HTTPError)
+
     def __init__(self, *, component_name: str, timeout: int | None) -> None:
         self.headers = {"User-Agent": f"{component_name}/{server_version}"}
         self.session = new_requests_session(agent=(component_name, server_version))
@@ -181,10 +184,36 @@ class HTTPClient:
             headers.update(extra_headers)
         return self.session.post(url, data=data, files=files, headers=headers)
 
+    def request(
+        self,
+        method: str,
+        url: str,
+        *,
+        data: dict | None,
+        headers: dict | None,
+        stream: bool,
+        allow_redirects: bool,
+        timeout: int | None,
+    ) -> Response:
+        return self.session.request(
+            method,
+            url,
+            data=data,
+            headers=headers,
+            stream=stream,
+            allow_redirects=allow_redirects,
+            timeout=timeout or self.timeout,
+        )
+
 
 class OfflineHTTPClient:
     def close(self) -> None:
         pass
+
+    def _resp(self) -> Response:
+        resp = Response()
+        resp.status_code = 503  # service unavailable
+        return resp
 
     def get(
         self,
@@ -194,6 +223,17 @@ class OfflineHTTPClient:
         timeout: int | None = None,  # noqa: ARG002
         extra_headers: dict | None = None,  # noqa: ARG002
     ) -> Response:
-        resp = Response()
-        resp.status_code = 503  # service unavailable
-        return resp
+        return self._resp()
+
+    def request(
+        self,
+        method: str,  # noqa: ARG002
+        url: str,  # noqa: ARG002
+        *,
+        data: dict | None,  # noqa: ARG002
+        headers: dict | None,  # noqa: ARG002
+        stream: bool,  # noqa: ARG002
+        allow_redirects: bool,  # noqa: ARG002
+        timeout: int | None,  # noqa: ARG002
+    ) -> Response:
+        return self._resp()

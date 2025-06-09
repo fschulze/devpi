@@ -249,12 +249,21 @@ def test_offline_mode_httpget_returns_server_error(makexom, url, allowRedirect):
     {'timeout': 123, 'arg': [], 'kwarg': 123}
 ])
 def test_request_args_timeout_handover(makexom, monkeypatch, input_set):
-    def mock_http_get(*args, **kwargs):  # noqa: ARG001 - testing
+    def http_request(*_args, **kwargs):
         assert kwargs["timeout"] == input_set['timeout']
-    xom = makexom(input_set['arg'])
-    monkeypatch.setattr(xom.http.session, "get", mock_http_get)
 
-    xom.httpget("http://whatever", allow_redirects=False, timeout=input_set['kwarg'])
+    xom = makexom(input_set["arg"])
+    monkeypatch.setattr(xom.http.session, "request", http_request)
+
+    xom.http.request(
+        "GET",
+        "http://whatever",
+        data=b"",
+        headers={},
+        stream=False,
+        allow_redirects=False,
+        timeout=input_set["kwarg"],
+    )
 
 
 def test_no_root_pypi_option(gen_path, makexom, storage_args):
