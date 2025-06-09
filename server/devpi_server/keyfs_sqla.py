@@ -18,8 +18,10 @@ from .markers import deleted
 from .mythread import current_thread
 from .readonly import ReadonlyView
 from .readonly import ensure_deeply_readonly
+from .sizeof import gettotalsizeof
 from contextlib import suppress
 from devpi_common.types import cached_property
+from repoze.lru import LRUCache
 from typing import TYPE_CHECKING
 from zope.interface import implementer
 import contextlib
@@ -93,6 +95,8 @@ class Connection:
         self._sqlaconn = sqlaconn
         self.storage = storage
         self.dirty_files = {}
+        self._changelog_cache = storage._changelog_cache
+        self._relpath_cache = storage._relpath_cache
 
     def _dump(self):
         # for debugging
@@ -343,12 +347,27 @@ class Connection:
             )
 
     def get_key_at_serial(self, key: LocatedKey, serial: int) -> KeyData:
-        results = list(
-            self._iter_relpaths_at((sa.tuple_(key.relpath, key.key_name),), serial)
-        )
-        if not results:
-            raise KeyError(key)
-        (result,) = results
+        cache_key = (key.key_name, key.relpath)
+        result = self._relpath_cache.get((serial, cache_key), absent)
+        if result is absent:
+            result = self._changelog_cache.get((serial, cache_key), absent)
+        if result is absent:
+            results = list(
+                self._iter_relpaths_at((sa.tuple_(key.relpath, key.key_name),), serial)
+            )
+            if not results:
+                raise KeyError(key)
+            (result,) = results
+        if (
+            result.value is not deleted
+            and gettotalsizeof(result.value, maxlen=100000) is None
+        ):
+            # result is big, put it in the changelog cache,
+            # which has fewer entries to preserve memory
+            self._changelog_cache.put((serial, cache_key), result)
+        else:
+            # result is small
+            self._relpath_cache.put((serial, cache_key), result)
         return result
 
     def iter_keys_at_serial(
@@ -532,6 +551,14 @@ class Storage:
         self.ro_engine = sa.create_engine(self._url(mode="ro"), echo=False)
         self.rw_engine = sa.create_engine(self._url(mode="rw"), echo=False)
         self._notify_on_commit = notify_on_commit
+        if gettotalsizeof(0) is None:
+            # old devpi_server version doesn't have a working gettotalsizeof
+            changelog_cache_size = cache_size
+        else:
+            changelog_cache_size = max(1, cache_size // 20)
+        relpath_cache_size = max(1, cache_size - changelog_cache_size)
+        self._changelog_cache = LRUCache(changelog_cache_size)  # is thread safe
+        self._relpath_cache = LRUCache(relpath_cache_size)  # is thread safe
         self.last_commit_timestamp = time.time()
         self.ensure_tables_exist()
 
@@ -595,3 +622,88 @@ def devpiserver_describe_storage_backend(settings):
         storage_factory=Storage,
         settings=settings,
     )
+
+
+@hookimpl
+def devpiserver_metrics(request):
+    result = []
+    xom = request.registry["xom"]
+    storage = xom.keyfs._storage
+    if not isinstance(storage, Storage):
+        return result
+    changelog_cache = getattr(storage, "_changelog_cache", None)
+    relpath_cache = getattr(storage, "_relpath_cache", None)
+    if changelog_cache is None and relpath_cache is None:
+        return result
+    # get sizes for changelog_cache
+    evictions = changelog_cache.evictions if changelog_cache else 0
+    hits = changelog_cache.hits if changelog_cache else 0
+    lookups = changelog_cache.lookups if changelog_cache else 0
+    misses = changelog_cache.misses if changelog_cache else 0
+    size = changelog_cache.size if changelog_cache else 0
+    # add sizes for relpath_cache
+    evictions += relpath_cache.evictions if relpath_cache else 0
+    hits += relpath_cache.hits if relpath_cache else 0
+    lookups += relpath_cache.lookups if relpath_cache else 0
+    misses += relpath_cache.misses if relpath_cache else 0
+    size += relpath_cache.size if relpath_cache else 0
+    result.extend(
+        [
+            ("devpi_server_storage_cache_evictions", "counter", evictions),
+            ("devpi_server_storage_cache_hits", "counter", hits),
+            ("devpi_server_storage_cache_lookups", "counter", lookups),
+            ("devpi_server_storage_cache_misses", "counter", misses),
+            ("devpi_server_storage_cache_size", "gauge", size),
+        ]
+    )
+    if changelog_cache:
+        result.extend(
+            [
+                (
+                    "devpi_server_changelog_cache_evictions",
+                    "counter",
+                    changelog_cache.evictions,
+                ),
+                ("devpi_server_changelog_cache_hits", "counter", changelog_cache.hits),
+                (
+                    "devpi_server_changelog_cache_lookups",
+                    "counter",
+                    changelog_cache.lookups,
+                ),
+                (
+                    "devpi_server_changelog_cache_misses",
+                    "counter",
+                    changelog_cache.misses,
+                ),
+                ("devpi_server_changelog_cache_size", "gauge", changelog_cache.size),
+                (
+                    "devpi_server_changelog_cache_items",
+                    "gauge",
+                    len(changelog_cache.data) if changelog_cache.data else 0,
+                ),
+            ]
+        )
+    if relpath_cache:
+        result.extend(
+            [
+                (
+                    "devpi_server_relpath_cache_evictions",
+                    "counter",
+                    relpath_cache.evictions,
+                ),
+                ("devpi_server_relpath_cache_hits", "counter", relpath_cache.hits),
+                (
+                    "devpi_server_relpath_cache_lookups",
+                    "counter",
+                    relpath_cache.lookups,
+                ),
+                ("devpi_server_relpath_cache_misses", "counter", relpath_cache.misses),
+                ("devpi_server_relpath_cache_size", "gauge", relpath_cache.size),
+                (
+                    "devpi_server_relpath_cache_items",
+                    "gauge",
+                    len(relpath_cache.data) if relpath_cache.data else 0,
+                ),
+            ]
+        )
+    return result
