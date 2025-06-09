@@ -880,13 +880,13 @@ class BaseStage(object):
         tx = self.keyfs.tx
         if at_serial is None:
             at_serial = tx.at_serial
-        (last_serial, projects) = tx.get_last_serial_and_value_at(
+        (last_serial, projects_ulid, projects) = tx.get_last_serial_and_value_at(
             self.key_projects,
             at_serial)
         if projects in (absent, deleted):
             # the whole index never existed or was deleted
             return -1
-        (versions_serial, versions) = tx.get_last_serial_and_value_at(
+        (versions_serial, versions_ulid, versions) = tx.get_last_serial_and_value_at(
             self.key_projversions(project),
             at_serial)
         if versions is absent:
@@ -900,7 +900,7 @@ class BaseStage(object):
             return last_serial
         last_serial = versions_serial
         for version in versions:
-            (version_serial, version_info) = tx.get_last_serial_and_value_at(
+            (version_serial, version_info_ulid, version_info) = tx.get_last_serial_and_value_at(
                 self.key_projversion(project, version),
                 at_serial)
             if version_info in (absent, deleted):
@@ -908,7 +908,7 @@ class BaseStage(object):
             last_serial = max(last_serial, version_serial)
             if last_serial >= at_serial:
                 return last_serial
-            (versionfiles_serial, versionfiles_info) = tx.get_last_serial_and_value_at(
+            (versionfiles_serial, versionfiles_info_ulid, versionfiles_info) = tx.get_last_serial_and_value_at(
                 self.key_versionfilelist(project, version),
                 at_serial)
             if versionfiles_info in (absent, deleted):
@@ -917,7 +917,7 @@ class BaseStage(object):
             if last_serial >= at_serial:
                 return last_serial
             for filename in versionfiles_info:
-                (versionfile_serial, versionfile_info) = tx.get_last_serial_and_value_at(
+                (versionfile_serial, versionfile_info_ulid, versionfile_info) = tx.get_last_serial_and_value_at(
                     self.key_versionfile(project, version, filename),
                     at_serial)
                 if versionfile_info in (absent, deleted):
