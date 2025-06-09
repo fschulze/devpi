@@ -1359,9 +1359,6 @@ class PrivateStage(BaseStage):
         return [
             v for k, v in self.key_versionfile(project, version).iter_ulidkey_values()]
 
-    def get_has_versiondata_perstage(self, project, version):
-        return self.key_version(project, version).exists()
-
     def get_versiondata_perstage(self, project, version, *, with_elinks=True):
         project = normalize_name(project)
         verdata = self.key_version(project, version).get()
@@ -1401,18 +1398,21 @@ class PrivateStage(BaseStage):
     def has_project_perstage(self, project):
         return self.key_projectname(project).exists()
 
+    def has_version_perstage(self, project: str, version: str) -> bool:
+        return self.key_version(project, version).exists()
+
     def store_releasefile(self, project, version, filename, content_or_file,
                           *, hashes, last_modified=None):
         if self.customizer.readonly:
             raise ReadonlyIndex("index is marked read only")
         project = normalize_name(project)
         filename = ensure_unicode(filename)
-        if not self.get_has_versiondata_perstage(project, version):
+        if not self.has_version_perstage(project, version):
             # There's a chance the version was guessed from the
             # filename, which might have swapped dashes to underscores
             if '_' in version:
                 version = version.replace('_', '-')
-                if not self.get_has_versiondata_perstage(project, version):
+                if not self.has_version_perstage(project, version):
                     raise MissesRegistration("%s-%s", project, version)
             else:
                 raise MissesRegistration("%s-%s", project, version)
@@ -1440,7 +1440,7 @@ class PrivateStage(BaseStage):
             threadlog.info("store_doczip: derived version of %s is %s",
                            project, version)
         basename = "%s-%s.doc.zip" % (project, version)
-        if not self.get_has_versiondata_perstage(project, version):
+        if not self.has_version_perstage(project, version):
             self.set_versiondata({'name': project, 'version': version})
         linkstore = self.get_mutable_linkstore_perstage(project, version)
         return linkstore.create_linked_entry(
@@ -1620,8 +1620,7 @@ class LinkStore:
         self.filestore = stage.filestore
         self.project = normalize_name(project)
         self.version = version
-        self.verdata = stage.get_versiondata_perstage(self.project, version)
-        if not self.verdata:
+        if not self.stage.has_version_perstage(project, version):
             raise MissesRegistration(
                 "%s-%s on stage %s at %s",
                 project, version, stage.name, stage.keyfs.tx.at_serial)
@@ -1636,6 +1635,8 @@ class LinkStore:
         elif for_entrypath is not None:
             assert "#" not in for_entrypath
 
+        elinks = self.stage._get_elinks(self.project, self.version)
+
         def fil(link):
             return (not rel or rel == link.rel) and \
                    (not basename or basename == link.basename) and \
@@ -1643,22 +1644,19 @@ class LinkStore:
                    (not for_entrypath or for_entrypath == link.for_entrypath)
         return [
             elink
-            for linkdict in self.verdata.get('+elinks', [])
+            for linkdict in elinks
             if fil(elink := ELink(self.filestore, linkdict, self.project, self.version))]
 
     @property
     def metadata(self):
+        verdata = self.stage.get_versiondata_perstage(self.project, self.version, with_elinks=False)
         return ensure_deeply_readonly({
             k: v
-            for k, v in self.verdata.items()
+            for k, v in verdata.items()
             if not k.startswith("+")})
 
 
 class MutableLinkStore(LinkStore):
-    def __init__(self, stage, project, version):
-        super().__init__(stage, project, version)
-        self.verdata = get_mutable_deepcopy(self.verdata)
-
     def create_linked_entry(self, rel, basename, content_or_file, *, hashes, last_modified=None):
         overwrite = None
         for link in self.get_links(rel=rel, basename=basename):
@@ -1706,7 +1704,6 @@ class MutableLinkStore(LinkStore):
         if del_links:
             for link in del_links:
                 filename = link.entry.basename
-                self.verdata['+elinks'].remove(link.linkdict)
                 link.entry.delete()
                 key_versionfile(filename).delete()
                 was_deleted.append(link.relpath)
@@ -1737,7 +1734,6 @@ class MutableLinkStore(LinkStore):
         if self.stage.key_versionfile(self.project, self.version, file_entry.basename).exists():
             raise RuntimeError
         self.stage.key_versionfile(self.project, self.version, file_entry.basename).set(new_linkdict)
-        self.verdata.setdefault('+elinks', []).append(new_linkdict)
         threadlog.info("added %r link %s", rel, file_entry.relpath)
         return ELink(
             self.filestore, new_linkdict, self.project, self.version)
