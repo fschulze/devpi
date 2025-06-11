@@ -417,6 +417,11 @@ def http(pypiurls):
                 timeout=timeout,
             )
 
+        def post(self, url, *, data=None, files=None, extra_headers=None):
+            return self.__call__(
+                url, data=data, files=files, extra_headers=extra_headers
+            )
+
         def __call__(self, url, *, allow_redirects=False, extra_headers=None, **kw):
             class mockresponse:
                 def __init__(xself, url):
@@ -432,6 +437,9 @@ def http(pypiurls):
                         fakeresponse = dict(
                             status_code=404,
                             reason="Not Found")
+                    if "exception" in fakeresponse:
+                        assert set(fakeresponse.keys()) == {"exception"}
+                        raise fakeresponse["exception"]
                     fakeresponse["headers"] = requests.structures.CaseInsensitiveDict(
                         fakeresponse.setdefault("headers", {}))
                     xself.__dict__.update(fakeresponse)
@@ -476,6 +484,8 @@ def http(pypiurls):
             return r
 
         def _prepare_kw(self, kw):
+            if "exception" in kw:
+                return
             kw.setdefault("status_code", kw.pop("code", 200))
             kw.setdefault("reason", getattr(
                 status_map.get(kw["status_code"]),
@@ -571,6 +581,7 @@ def add_pypistage_mocks(monkeypatch, http):
             self.mock_simple_projects(
                 _projects.union([name]), cache_expire=cache_expire)
         return self.xom.http.mock_simple(name, text=text, pypiserial=pypiserial, **kw)
+
     monkeypatch.setattr(
         mirror.MirrorStage, "mock_simple", mock_simple, raising=False)
 
@@ -597,6 +608,7 @@ def add_pypistage_mocks(monkeypatch, http):
         return self.xom.http.mockresponse(
             url.url, content=content, headers=headers, **kw
         )
+
     monkeypatch.setattr(
         mirror.MirrorStage, "mock_extfile", mock_extfile, raising=False)
 
