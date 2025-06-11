@@ -1207,7 +1207,13 @@ class PrivateStage(BaseStage):
         'project_urls', 'provides_dist', 'obsoletes_dist',
         'requires_dist', 'requires_external', 'requires_python',
         # Metadata 2.1
-        'description_content_type', 'provides_extras')
+        'description_content_type', 'provides_extras',
+        # Metadata 2.2
+        "dynamic",
+        # Metadata 2.4
+        "license_expression",
+        "license_file",
+    )
     metadata_list_fields = (
         'platform', 'classifiers', 'obsoletes',
         'requires', 'provides', 'obsoletes_dist',
