@@ -1,14 +1,4 @@
-<form method="get" id="search" action="${request.route_url('search')}">
-    <metal:logo use-macro="macros.logo" />
-    <input type="text" size="60" name="query" autofocus tal:attributes="value query|None">
+<form method="get" class="search" action="${request.route_url('search')}">
+    <input type="search" name="query" autofocus tal:attributes="value query|None">
     <input type="submit" value="Search">
-    <span class="help">
-        <a href="${request.route_url('search_help')}">How to<br> search?</a>
-    </span>
-    <div class="query_doc inline" style="display: none">
-        <span class="help">
-            <a href="#">Close help</a>
-        </span>
-        <metal:query_doc use-macro="macros.query_doc" />
-    </div>
 </form>

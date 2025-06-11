@@ -24,6 +24,11 @@ def footer(request):  # noqa: ARG001
     return dict()
 
 
+@macro_config(template="templates/footer_about.pt", groups="main_footer")
+def footer_about(request):  # noqa: ARG001
+    return dict()
+
+
 @macro_config(
     template="templates/footer_versions.pt",
     groups="main_footer",

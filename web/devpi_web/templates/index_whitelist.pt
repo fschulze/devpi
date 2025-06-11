@@ -1,5 +1,7 @@
-<h2>whitelisted packages</h2>
-<ul class="whitelist" tal:condition="whitelist">
-    <li tal:repeat="name whitelist">${name}</li>
-</ul>
-<p tal:condition="not whitelist">No packages whitelisted.</p>
+<aside class="index_whitelist">
+    <h2>whitelisted packages</h2>
+    <ul class="whitelist" tal:condition="whitelist">
+        <li tal:repeat="name whitelist">${name}</li>
+    </ul>
+    <p tal:condition="not whitelist">No packages whitelisted.</p>
+</aside>

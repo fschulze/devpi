@@ -1,3 +1,5 @@
-<span tal:repeat="part path">
-    <a href="${part.url}">${part.title}</a>
-</span>
+<div class="breadcrumbs">
+    <span class="breadcrumb" tal:repeat="part path">
+        <a href="${part.url}">${part.title}</a>
+    </span>
+</div>

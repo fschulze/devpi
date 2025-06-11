@@ -94,7 +94,7 @@ def test_root_pypi_upstream_error(url, mapp, testapp, pypistage):
     pypistage.mock_simple("someproject", status_code=502)
     r = testapp.get(url, accept="text/html")
     assert r.status_code == 502
-    content, = r.html.select('#content')
+    (content,) = r.html.select("main")
     text = compareable_text(content.text)
     assert text.startswith('Error An error has occurred: 502 Bad Gateway 502 status on GET')
     assert 'https://' in text
@@ -131,51 +131,92 @@ def test_refresh_button(pypistage, testapp):
     assert r.headers['X-PYPI-LAST-SERIAL'] == '10001'
 
 
-@pytest.mark.parametrize("url, headers, selector, expected", [
-    (
-        "http://localhost:80/{stage}",
-        {},
-        'form h1 a',
-        [('devpi', 'http://localhost/')]),
-    (
-        "http://localhost:80/{stage}",
-        {'x-outside-url': 'http://example.com/foo'},
-        'form h1 a',
-        [('devpi', 'http://example.com/foo/')]),
-    (
-        "http://localhost:80/{stage}",
-        {'host': 'example.com'},
-        'form h1 a',
-        [('devpi', 'http://example.com/')]),
-    (
-        "http://localhost:80/{stage}",
-        {'host': 'example.com:3141'},
-        'form h1 a',
-        [('devpi', 'http://example.com:3141/')]),
-    (
-        "http://localhost:80/{stage}/pkg1/2.6",
-        {},
-        '.files td:nth-of-type(1) a',
-        [('pkg1-2.6.tgz', partial(make_file_url, 'pkg1-2.6.tgz', b'123'))]),
-    (
-        "http://localhost:80/{stage}/pkg1/2.6",
-        {'x-outside-url': 'http://example.com/foo'},
-        '.files td:nth-of-type(1) a',
-        [('pkg1-2.6.tgz',
-          partial(make_file_url, 'pkg1-2.6.tgz', b'123', baseurl='http://example.com/foo/'))]),
-    (
-        "http://localhost:80/{stage}/pkg1/2.6",
-        {'host': 'example.com'},
-        '.files td:nth-of-type(1) a',
-        [('pkg1-2.6.tgz',
-         partial(make_file_url, 'pkg1-2.6.tgz', b'123', baseurl='http://example.com/'))]),
-    (
-        "http://localhost:80/{stage}/pkg1/2.6",
-        {'host': 'example.com:3141'},
-        '.files td:nth-of-type(1) a',
-        [('pkg1-2.6.tgz',
-         partial(make_file_url, 'pkg1-2.6.tgz', b'123', baseurl='http://example.com:3141/'))]),
-])
+@pytest.mark.parametrize(
+    ("url", "headers", "selector", "expected"),
+    [
+        ("http://localhost:80/{stage}", {}, ".logo", [("", "http://localhost/")]),
+        (
+            "http://localhost:80/{stage}",
+            {"x-outside-url": "http://example.com/foo"},
+            ".logo",
+            [("", "http://example.com/foo/")],
+        ),
+        (
+            "http://localhost:80/{stage}",
+            {"host": "example.com"},
+            ".logo",
+            [("", "http://example.com/")],
+        ),
+        (
+            "http://localhost:80/{stage}",
+            {"host": "example.com:3141"},
+            ".logo",
+            [("", "http://example.com:3141/")],
+        ),
+        (
+            "http://localhost:80/{stage}/pkg1/2.6",
+            {},
+            ".files td:nth-of-type(1) a",
+            [
+                (
+                    "pkg1-2.6.tgz",
+                    partial(make_file_url, "pkg1-2.6.tgz", b"123", add_hash=False),
+                )
+            ],
+        ),
+        (
+            "http://localhost:80/{stage}/pkg1/2.6",
+            {"x-outside-url": "http://example.com/foo"},
+            ".files td:nth-of-type(1) a",
+            [
+                (
+                    "pkg1-2.6.tgz",
+                    partial(
+                        make_file_url,
+                        "pkg1-2.6.tgz",
+                        b"123",
+                        baseurl="http://example.com/foo/",
+                        add_hash=False,
+                    ),
+                )
+            ],
+        ),
+        (
+            "http://localhost:80/{stage}/pkg1/2.6",
+            {"host": "example.com"},
+            ".files td:nth-of-type(1) a",
+            [
+                (
+                    "pkg1-2.6.tgz",
+                    partial(
+                        make_file_url,
+                        "pkg1-2.6.tgz",
+                        b"123",
+                        baseurl="http://example.com/",
+                        add_hash=False,
+                    ),
+                )
+            ],
+        ),
+        (
+            "http://localhost:80/{stage}/pkg1/2.6",
+            {"host": "example.com:3141"},
+            ".files td:nth-of-type(1) a",
+            [
+                (
+                    "pkg1-2.6.tgz",
+                    partial(
+                        make_file_url,
+                        "pkg1-2.6.tgz",
+                        b"123",
+                        baseurl="http://example.com:3141/",
+                        add_hash=False,
+                    ),
+                )
+            ],
+        ),
+    ],
+)
 def test_url_rewriting(url, headers, selector, expected, mapp, testapp):
     api = mapp.create_and_use()
     mapp.upload_file_pypi("pkg1-2.6.tgz", b"123", "pkg1", "2.6")
@@ -232,9 +273,10 @@ def test_redirects_outside_url(mapp, testapp):
 def test_static_404(testapp):
     from devpi_web import __version__
     r = testapp.xget(404, '/+static-%s/foo.png' % __version__)
-    assert [x.text for x in r.html.select('#content p')] == [
-        u'The following resource could not be found:',
-        u'http://localhost/+static-%s/foo.png' % __version__]
+    assert [x.text for x in r.html.select("main p")] == [
+        "The following resource could not be found:",
+        "http://localhost/+static-%s/foo.png" % __version__,
+    ]
 
 
 def _getRouteRequestIface(config, name):
@@ -350,9 +392,12 @@ class TestStatusView:
         dummyrequest.status_info = status_info(dummyrequest)
         result = statusview(None, dummyrequest)
         html = BeautifulSoup(result.body, 'html.parser')
-        assert html.select('.statusbadge')[0].text.strip() == 'ok'
+        assert list(html.select(".statusbadge")[0].stripped_strings) == [
+            "server status",
+            "ok",
+        ]
         assert 'ok' in html.select('.statusbadge')[0].attrs['class']
-        assert html.select('#serverstatus') == []
+        assert html.select(".serverstatus") == []
 
     def test_status_macros_warn(self, dummyrequest, plugin, statusview):
         from devpi_web.main import status_info
@@ -360,9 +405,12 @@ class TestStatusView:
         dummyrequest.status_info = status_info(dummyrequest)
         result = statusview(None, dummyrequest)
         html = BeautifulSoup(result.body, 'html.parser')
-        assert html.select('.statusbadge')[0].text.strip() == 'degraded'
+        assert list(html.select(".statusbadge")[0].stripped_strings) == [
+            "server status",
+            "degraded",
+        ]
         assert 'warn' in html.select('.statusbadge')[0].attrs['class']
-        assert html.select('#serverstatus') == []
+        assert html.select(".serverstatus") == []
 
     def test_status_macros_fatal(self, dummyrequest, plugin, statusview):
         from devpi_web.main import status_info
@@ -370,9 +418,12 @@ class TestStatusView:
         dummyrequest.status_info = status_info(dummyrequest)
         result = statusview(None, dummyrequest)
         html = BeautifulSoup(result.body, 'html.parser')
-        assert html.select('.statusbadge')[0].text.strip() == 'fatal'
+        assert list(html.select(".statusbadge")[0].stripped_strings) == [
+            "server status",
+            "fatal",
+        ]
         assert 'fatal' in html.select('.statusbadge')[0].attrs['class']
-        assert 'Foo' in html.select('#serverstatus')[0].text
+        assert "Foo" in html.select(".serverstatus")[0].text
 
     @pytest.mark.parametrize("msgs", [
         [dict(status="warn", msg="Bar"), dict(status="fatal", msg="Foo")],
@@ -383,10 +434,13 @@ class TestStatusView:
         dummyrequest.status_info = status_info(dummyrequest)
         result = statusview(None, dummyrequest)
         html = BeautifulSoup(result.body, 'html.parser')
-        assert html.select('.statusbadge')[0].text.strip() == 'fatal'
+        assert list(html.select(".statusbadge")[0].stripped_strings) == [
+            "server status",
+            "fatal",
+        ]
         assert 'fatal' in html.select('.statusbadge')[0].attrs['class']
-        assert 'Bar' not in html.select('#serverstatus')[0].text
-        assert 'Foo' in html.select('#serverstatus')[0].text
+        assert "Bar" not in html.select(".serverstatus")[0].text
+        assert "Foo" in html.select(".serverstatus")[0].text
 
 
 class TestReplicaStatusView:

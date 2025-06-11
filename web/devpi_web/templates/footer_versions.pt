@@ -1,3 +1,6 @@
-<ul class="footer-versions" tal:condition="version_infos">
-    <li tal:repeat="vi version_infos">${vi[0]}-${vi[1]}</li>
-</ul>
+<section class="versions" tal:condition="version_infos">
+    <h4>Versions</h4>
+    <ul>
+        <li tal:repeat="vi version_infos">${vi[0]} ${vi[1]}</li>
+    </ul>
+</section>

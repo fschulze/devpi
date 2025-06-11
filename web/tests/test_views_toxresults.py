@@ -29,23 +29,23 @@ def test_testdata(mapp, testapp, tox_result_data):
         '/user1/dev/pkg1/2.6/+toxresults/pkg1-2.6.tgz')
     r = testapp.xget(200, api.index + '/pkg1/2.6', headers=dict(accept="text/html"))
     toxresult, = r.html.select('tbody .toxresults')
-    links = toxresult.select('a')
-    assert len(links) == 2
-    assert 'passed' in links[0].attrs['class']
-    assert 'foo linux2 py27' in links[0].text
-    assert 'All toxresults' in links[1].text
-    r = testapp.xget(200, links[0].attrs['href'])
+    (link1, link2, all_link) = toxresult.select("a")
+    assert "foo linux2 py27" in link1.text
+    assert "passed" in link2.attrs["class"]
+    assert "Tests passed" in link2.text
+    assert "All toxresults" in all_link.text
+    r = testapp.xget(200, link1.attrs["href"])
     content = "\n".join([compareable_text(x.text) for x in r.html.select('.toxresult')])
     assert "No setup performed" in content
     assert "everything fine" in content
-    r = testapp.xget(200, links[1].attrs['href'])
+    r = testapp.xget(200, all_link.attrs["href"])
     (row,) = [
         tuple(
             compareable_text(t.text) if len(t.text.split()) < 2 else " ".join(t.text.split())
             for t in x.find_all('td'))
         for x in r.html.select('tbody tr')]
     assert row[0].startswith("pkg1-2.6.tgz.toxresult")
-    assert row[1:] == ("foo", "linux2", "py27", "", "No setup performed Tests")
+    assert row[1:] == ("foo", "linux2", "py27", "", "No setup performed Tests passed")
 
 
 @pytest.mark.with_notifier
@@ -110,10 +110,10 @@ def test_testdata_latest_version(mapp, testapp, tox_result_data):
     r = testapp.post(path, json.dumps(tox_result_data))
     assert r.status_code == 200
     r = testapp.xget(200, api.index + '/pkg1/latest', headers=dict(accept="text/html"))
-    links = r.html.select('td.toxresults a')
-    assert len(links) == 2
-    assert links[0].attrs['href'].startswith(api.index + '/pkg1/2.6')
-    assert links[1].attrs['href'].startswith(api.index + '/pkg1/2.6')
+    (link1, link2, all_link) = r.html.select("td.toxresults a")
+    assert link1.attrs["href"].startswith(api.index + "/pkg1/2.6")
+    assert link2.attrs["href"].startswith(api.index + "/pkg1/2.6")
+    assert all_link.attrs["href"].startswith(api.index + "/pkg1/2.6")
 
 
 def test_toxresults_state():
