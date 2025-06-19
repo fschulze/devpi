@@ -1136,8 +1136,8 @@ def test_primary_url_auth(makexom):
 
 def test_replica_user_auth_before_other_plugins(makexom):
     from devpi_server import replica
-    from devpi_server.config import hookimpl
     from devpi_server.auth import Auth
+    from devpi_server.config import hookimpl
     from pyramid.httpexceptions import HTTPForbidden
 
     class Plugin:
@@ -1145,19 +1145,13 @@ def test_replica_user_auth_before_other_plugins(makexom):
         def devpiserver_auth_request(self, request, userdict, username, password):  # noqa: ARG002
             raise RuntimeError("Shouldn't be called")
 
-        @hookimpl
-        def devpiserver_auth_user(self, userdict, username, password):  # noqa: ARG002
-            raise RuntimeError("Shouldn't be called")
-
     plugin = Plugin()
     # register both plugins, so the above plugin would normally be called first
-    with pytest.warns(DeprecationWarning, match='new devpiserver_auth_request hook instead'):
-        xom = makexom(plugins=[replica, plugin])
+    xom = makexom(plugins=[replica, plugin])
     auth = Auth(xom, "qweqwe")
-    with xom.keyfs.read_transaction():
+    with xom.keyfs.read_transaction(), pytest.raises(HTTPForbidden):
         # because the replica auth has tryfirst our plugin shouldn't be called
-        with pytest.raises(HTTPForbidden):
-            auth._get_auth_status(replica.REPLICA_USER_NAME, '')
+        auth._get_auth_status(replica.REPLICA_USER_NAME, "")
 
 
 class TestFileReplicationSharedData:
