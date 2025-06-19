@@ -1873,8 +1873,7 @@ def test_delete_mirror(mapp, monkeypatch, simpypi, testapp, xom):
         stage = testapp.xom.model.getstage(api.stagename)
         assert stage is None
         assert not getentry(testapp, path).file_exists()
-        key = testapp.xom.filestore.get_key_from_relpath(path.strip("/"))
-        assert not key.exists()
+        assert not getentry(testapp, path).key.exists()
 
     # patch async_get to simulate broken PyPI
     async def async_get(url, **kwargs):  # noqa: ARG001 - testing
@@ -1898,8 +1897,7 @@ def test_delete_mirror(mapp, monkeypatch, simpypi, testapp, xom):
         stage = testapp.xom.model.getstage(api.stagename)
         assert stage.key_projects.get() == set()
         assert not getentry(testapp, path).file_exists()
-        key = testapp.xom.filestore.get_key_from_relpath(path.strip("/"))
-        assert not key.exists()
+        assert not getentry(testapp, path).key.exists()
 
 
 def test_delete_from_mirror(mapp, pypistage, testapp):
@@ -1943,8 +1941,7 @@ def test_delete_from_mirror(mapp, pypistage, testapp):
     with testapp.xom.keyfs.read_transaction():
         assert get_pypi_project_names(testapp) == set()
         assert not getentry(testapp, path).file_exists()
-        key = testapp.xom.filestore.get_key_from_relpath(path.strip("/"))
-        assert not key.exists()
+        assert not getentry(testapp, path).key.exists()
         assert not getentry(testapp, other_path).file_exists()
 
 
@@ -2003,8 +2000,7 @@ def test_delete_version_from_mirror(mapp, pypistage, testapp):
     with testapp.xom.keyfs.read_transaction():
         assert not getentry(testapp, path26).file_exists()
         # only the file is deleted, the key for it still exists
-        key = testapp.xom.filestore.get_key_from_relpath(path26.strip("/"))
-        assert key.exists()
+        assert getentry(testapp, path26).key.exists()
         assert getentry(testapp, path25).file_exists()
     # make sure download still works after deletion
     r = testapp.xget(200, link26)
