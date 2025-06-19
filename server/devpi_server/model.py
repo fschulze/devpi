@@ -2085,33 +2085,44 @@ def normalize_bases(model, bases):
 
 def add_keys(xom, keyfs):
     # users and index configuration
-    keyfs.add_key("USER", "{user}/.config", dict)
-    keyfs.add_key("USERLIST", ".config", set)
-    keyfs.add_key("INDEX", "{user}/{index}/.config", dict)
-    keyfs.add_key("INDEXLIST", "{user}/.indexes", set)
+    user_key = keyfs.register_named_key("USER", "{user}/.config", None, dict)
+    keyfs.register_named_key("USERLIST", ".config", None, set)
+    index_key = keyfs.register_named_key("INDEX", "{index}/.config", user_key, dict)
+    keyfs.register_named_key("INDEXLIST", ".indexes", user_key, set)
 
     # type mirror related data
-    keyfs.add_key("PYPIFILE_NOMD5", "{user}/{index}/+e/{dirname}/{basename}", dict)
-    keyfs.add_key("MIRRORNAMESINIT", "{user}/{index}/.mirrornameschange", int)
+    keyfs.register_named_key(
+        "PYPIFILE_NOMD5", "+e/{dirname}/{basename}", index_key, dict
+    )
+    keyfs.register_named_key("MIRRORNAMESINIT", ".mirrornameschange", index_key, int)
 
     # type "stage" related
-    keyfs.add_key("PROJSIMPLELINKS", "{user}/{index}/{project}/.simple", dict)
-    keyfs.add_key("PROJVERSIONS", "{user}/{index}/{project}/.versions", set)
-    keyfs.add_key("PROJVERSION", "{user}/{index}/{project}/{version}/.config", dict)
-    keyfs.add_key("PROJNAMES", "{user}/{index}/.projects", set)
-    keyfs.add_key("VERSIONFILELIST", "{user}/{index}/{project}/{version}/.files", set)
-    keyfs.add_key("VERSIONFILE", "{user}/{index}/{project}/{version}/{filename}", dict)
-    keyfs.add_key("STAGEFILE",
-                  "{user}/{index}/+f/{hashdir_a}/{hashdir_b}/{filename}", dict)
+    project_key = keyfs.register_named_key(
+        "PROJSIMPLELINKS", "{project}/.simple", index_key, dict
+    )
+    keyfs.register_named_key("PROJVERSIONS", ".versions", project_key, set)
+    version_key = keyfs.register_named_key(
+        "PROJVERSION", "{version}/.config", project_key, dict
+    )
+    keyfs.register_named_key("PROJNAMES", ".projects", index_key, set)
+    keyfs.register_named_key("VERSIONFILELIST", ".files", version_key, set)
+    keyfs.register_named_key("VERSIONFILE", "{filename}", version_key, dict)
+    keyfs.register_named_key(
+        "STAGEFILE", "+f/{hashdir_a}/{hashdir_b}/{filename}", index_key, dict
+    )
 
     # files related
-    keyfs.add_key("DIGESTPATHS", "{digest}", set)
+    keyfs.register_named_key("DIGESTPATHS", "{digest}", None, set)
 
     sub = EventSubscribers(xom)
-    keyfs.PROJVERSION.on_key_change(sub.on_changed_version_config)
-    keyfs.STAGEFILE.on_key_change(sub.on_changed_file_entry)
-    keyfs.MIRRORNAMESINIT.on_key_change(sub.on_mirror_initialnames)
-    keyfs.INDEX.on_key_change(sub.on_changed_index)
+    keyfs.notifier.on_key_change(
+        keyfs.PROJVERSION.key_name, sub.on_changed_version_config
+    )
+    keyfs.notifier.on_key_change(keyfs.STAGEFILE.key_name, sub.on_changed_file_entry)
+    keyfs.notifier.on_key_change(
+        keyfs.MIRRORNAMESINIT.key_name, sub.on_mirror_initialnames
+    )
+    keyfs.notifier.on_key_change(keyfs.INDEX.key_name, sub.on_changed_index)
 
 
 class EventSubscribers:

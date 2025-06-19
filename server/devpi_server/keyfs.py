@@ -14,9 +14,10 @@ from .fileutil import read_int_from_file
 from .fileutil import write_int_to_file
 from .interfaces import IStorageConnection
 from .interfaces import IWriter
-from .keyfs_types import PTypedKey
+from .keyfs_types import LocatedKey
+from .keyfs_types import NamedKey
+from .keyfs_types import NamedKeyFactory
 from .keyfs_types import Record
-from .keyfs_types import TypedKey
 from .log import thread_change_log_prefix
 from .log import thread_pop_log
 from .log import thread_push_log
@@ -34,6 +35,7 @@ from typing import overload
 import contextlib
 import errno
 import time
+import warnings
 
 
 if TYPE_CHECKING:
@@ -71,9 +73,9 @@ class TxNotificationThread:
         if mythread.has_active_thread(self):
             raise RuntimeError(
                 "cannot register handlers after thread has started")
-        keyname = getattr(key, "name", key)
-        assert isinstance(keyname, str)
-        self._on_key_change.setdefault(keyname, []).append(subscriber)
+        key_name = key if isinstance(key, str) else key.key_name
+        assert isinstance(key_name, str), key_name
+        self._on_key_change.setdefault(key_name, []).append(subscriber)
 
     def wait_event_serial(self, serial):
         with threadlog.around("info", "waiting for event-serial %s", serial):
@@ -381,25 +383,49 @@ class KeyFS:
         return self._threadlocal.tx
 
     def add_key(self, name, path, type):
+        warnings.warn(
+            "The add_key method is deprecated, use register*_key instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         assert isinstance(path, str)
-        key: PTypedKey | TypedKey
-        if "{" in path:
-            key = PTypedKey(self, path, type, name)
-        else:
-            key = TypedKey(self, path, type, name)
-        if name in self._keys:
-            raise ValueError("Duplicate registration for key named '%s'" % name)
-        self._keys[name] = key
-        setattr(self, name, key)
+        key = self.register_named_key(name, path, None, type)
         self._storage.add_key(key)
         return key
+
+    def register_key(self, key):
+        allowed_chars = frozenset("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_")
+        key_name = key.key_name
+        assert not set(key_name).difference(allowed_chars), (
+            f"Invalid key name: {key_name}"
+        )
+        if key_name in self._keys:
+            raise ValueError("Duplicate registration for key named '%s'" % key_name)
+        self._keys[key_name] = key
+        setattr(self, key_name, key)
+        if hasattr(self._storage, "register_key"):
+            self._storage.register_key(key)
+        return key
+
+    def register_located_key(self, key_name, location, name, key_type):
+        return self.register_key(LocatedKey(self, key_name, location, name, key_type))
+
+    def register_named_key(self, key_name, pattern_or_name, parent_key, key_type):
+        key: LocatedKey | NamedKey | NamedKeyFactory
+        if "{" in pattern_or_name:
+            key = NamedKeyFactory(self, key_name, pattern_or_name, parent_key, key_type)
+        elif parent_key is None:
+            key = LocatedKey(self, key_name, "", pattern_or_name, key_type)
+        else:
+            key = NamedKey(self, key_name, pattern_or_name, parent_key, key_type)
+        return self.register_key(key)
 
     def get_key(self, name):
         return self._keys.get(name)
 
     def get_key_instance(self, keyname, relpath):
         key = self.get_key(keyname)
-        if isinstance(key, PTypedKey):
+        if key is not None and not isinstance(key, LocatedKey):
             key = key(**key.extract_params(relpath))
         return key
 
@@ -693,7 +719,7 @@ class Transaction:
     @overload
     def get_last_serial_and_value_at(
         self,
-        typedkey: TypedKey,
+        typedkey: LocatedKey,
         at_serial: int,
         *,
         raise_on_error: Literal[False],
@@ -703,7 +729,7 @@ class Transaction:
     @overload
     def get_last_serial_and_value_at(
         self,
-        typedkey: TypedKey,
+        typedkey: LocatedKey,
         at_serial: int,
         *,
         raise_on_error: Literal[True] = True,
@@ -712,7 +738,7 @@ class Transaction:
 
     def get_last_serial_and_value_at(
         self,
-        typedkey: TypedKey,
+        typedkey: LocatedKey,
         at_serial: int,
         *,
         raise_on_error: bool = True,
@@ -728,11 +754,11 @@ class Transaction:
             raise KeyError(relpath)  # was deleted
         return (last_serial, val)
 
-    def get_value_at(self, typedkey: TypedKey, at_serial: int) -> KeyFSTypesRO | None:
+    def get_value_at(self, typedkey: LocatedKey, at_serial: int) -> KeyFSTypesRO | None:
         (last_serial, val) = self.get_last_serial_and_value_at(typedkey, at_serial)
         return val
 
-    def last_serial(self, typedkey: TypedKey) -> int:
+    def last_serial(self, typedkey: LocatedKey) -> int:
         if typedkey in self.cache:
             return self.at_serial
         (last_serial, val) = self.get_original(typedkey)
@@ -760,6 +786,7 @@ class Transaction:
         return self._original[typedkey]
 
     def _get(self, typedkey):
+        assert isinstance(typedkey, LocatedKey)
         if typedkey in self.cache:
             val = self.cache[typedkey]
         else:
