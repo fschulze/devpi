@@ -215,9 +215,11 @@ def xom(makexom):
 def _speed_up_sqlite(cls):
     old = cls._execute_conn_pragmas
 
-    def _execute_conn_pragmas(self, conn, old=old):
-        old(self, conn)
-        conn.execute("PRAGMA synchronous=OFF")
+    def _execute_conn_pragmas(self, conn, *, old=old, write):
+        old(self, conn, write=write)
+        c = conn.cursor()
+        c.execute("PRAGMA synchronous=OFF")
+        c.close()
 
     cls._execute_conn_pragmas = _execute_conn_pragmas
     return old
