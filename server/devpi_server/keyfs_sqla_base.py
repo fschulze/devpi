@@ -7,6 +7,7 @@ from .interfaces import IWriter
 from .keyfs_types import KeyData
 from .keyfs_types import LocatedKey
 from .keyfs_types import PatternedKey
+from .keyfs_types import SearchKey
 from .keyfs_types import ULID
 from .keyfs_types import ULIDKey
 from .log import thread_pop_log
@@ -18,9 +19,11 @@ from .markers import deleted
 from .readonly import ReadonlyView
 from .readonly import ensure_deeply_readonly
 from .sizeof import gettotalsizeof
+from collections import Counter
 from collections import defaultdict
 from contextlib import suppress
 from devpi_common.types import cached_property
+from itertools import count
 from itertools import islice
 from repoze.lru import LRUCache
 from sqlalchemy.ext.compiler import compiles
@@ -62,6 +65,12 @@ class Cache:
         self._large_cache = LRUCache(large_cache_size)
         self._small_cache = LRUCache(small_cache_size)
 
+    def add_key(self, serial: int, key: ULIDKey) -> None:
+        existing = self.get((serial, key.ulid), absent)
+        if isinstance(existing, KeyData):
+            return
+        self._small_cache.put((serial, key.ulid), key)
+
     def add_keydata(self, serial: int, keydata: KeyData) -> None:
         cache_key = keydata.key.ulid
         if (
@@ -98,6 +107,136 @@ class Cache:
         self._large_cache.put(key, value)
 
 
+class ULIDKeyChecker:
+    def __init__(
+        self,
+        cache: Cache,
+        keys: Iterable[LocatedKey | PatternedKey | SearchKey | ULIDKey],
+        at_serial: int,
+        skip_ulid_keys: set[ULIDKey],
+        *,
+        fill_cache: bool,
+        with_deleted: bool,
+    ):
+        self.at_serial = at_serial
+        self.cache = cache
+        cache_keys: dict[LocatedKey | PatternedKey | SearchKey | ULIDKey, tuple] = {}
+        key_names: dict[str, PatternedKey] = {
+            k.key_name: k for k in keys if isinstance(k, PatternedKey)
+        }
+        key_name_locations: dict[tuple[str, str], SearchKey] = dict()
+        key_name_relpaths: dict[tuple[str, str], LocatedKey] = dict()
+        for key in keys:
+            assert isinstance(key, (LocatedKey, PatternedKey, SearchKey, ULIDKey))
+            if isinstance(key, SearchKey) and key.key_name not in key_names:
+                key_name_locations[(key.key_name, key.location)] = key
+            if isinstance(key, LocatedKey) and key.key_name not in key_names:
+                key_name_relpaths[(key.key_name, key.relpath)] = key
+        for key in keys:
+            cache_key: tuple
+            if isinstance(key, LocatedKey):
+                cache_key = (at_serial, key.key_name, key.location, key.name)
+            elif isinstance(key, PatternedKey):
+                cache_key = (at_serial, key.key_name)
+            elif isinstance(key, SearchKey):
+                cache_key = (at_serial, key.key_name, key.location)
+            elif isinstance(key, ULIDKey):
+                cache_key = (at_serial, key.ulid)
+            cache_keys[key] = cache_key
+        self.cache_keys = cache_keys
+        self.fill_cache = fill_cache
+        self.got_all_by_cache_key: dict[tuple, bool] = {}
+        self.key_name_locations = key_name_locations
+        self.key_name_relpaths = key_name_relpaths
+        self.key_names = key_names
+        self.ulids_by_cache_key: defaultdict[tuple, set[ULID]] = defaultdict(set)
+        self.with_deleted = with_deleted
+        for skip_ulid_key in skip_ulid_keys:
+            self.add(skip_ulid_key)
+
+    def add(self, key: ULIDKey) -> None:
+        if (pkey := self.key_names.get(key.key_name)) is not None:
+            cache_key = self.cache_keys[pkey]
+        elif (
+            skey := self.key_name_locations.get((key.key_name, key.location))
+        ) is not None:
+            cache_key = self.cache_keys[skey]
+        elif (
+            lkey := self.key_name_relpaths.get((key.key_name, key.relpath))
+        ) is not None:
+            cache_key = self.cache_keys[lkey]
+        else:
+            return
+        self.ulids_by_cache_key[cache_key].add(key.ulid)
+
+    def iter_keydata(self) -> Iterator[KeyData]:
+        with_deleted = self.with_deleted
+        for cache_key in self.cache_keys.values():
+            cached_ulids = self.cache.get(cache_key, absent)
+            if isinstance(cached_ulids, KeyData):
+                cached_ulids = {cached_ulids.key.ulid}
+            if cached_ulids is absent:
+                continue
+            skip_ulids = self.ulids_by_cache_key[cache_key]
+            at_serial = cache_key[0]
+            got_all = True
+            for ulid in cached_ulids:
+                if ulid in skip_ulids:
+                    continue
+                keydata = self.cache.get_keydata((at_serial, ulid), absent)
+                if keydata is absent:
+                    got_all = False
+                    continue
+                if not with_deleted and keydata.value is deleted:
+                    got_all = False
+                    continue
+                yield keydata
+                skip_ulids.add(ulid)
+            self.got_all_by_cache_key[cache_key] = got_all
+
+    def iter_keys(self) -> Iterator[ULIDKey]:
+        for cache_key in self.cache_keys.values():
+            cached_ulids = self.cache.get(cache_key, absent)
+            if cached_ulids is absent:
+                continue
+            skip_ulids = self.ulids_by_cache_key[cache_key]
+            at_serial = cache_key[0]
+            got_all = True
+            for ulid in cached_ulids:
+                if ulid in skip_ulids:
+                    continue
+                result = self.cache.get((at_serial, ulid), absent)
+                if result is absent:
+                    got_all = False
+                    continue
+                if isinstance(result, ULIDKey):
+                    yield result
+                else:
+                    yield result.key
+                skip_ulids.add(ulid)
+            self.got_all_by_cache_key[cache_key] = got_all
+
+    def got_all(self) -> bool:
+        return all(
+            bool(self.got_all_by_cache_key.get(x)) for x in self.cache_keys.values()
+        )
+
+    def ulids_to_skip(self) -> set[ULID]:
+        return set().union(*self.ulids_by_cache_key.values())
+
+    def update(self) -> None:
+        if not self.fill_cache or not self.ulids_by_cache_key:
+            return
+        for key, cache_key in self.cache_keys.items():
+            if isinstance(key, ULIDKey):
+                continue
+            ulids = self.ulids_by_cache_key[cache_key]
+            if len(ulids) > 10000:
+                self.cache.put_large(cache_key, frozenset(ulids))
+            else:
+                self.cache.put(cache_key, frozenset(ulids))
+
+
 class explain(sa.Executable, sa.ClauseElement):
     inherit_cache = True
 
@@ -130,6 +269,7 @@ class BaseConnection:
     dirty_files: dict[str, IO | None]
     key_ulid_table: sa.Table
     keytype_name_parent_ulid_table: sa.Table
+    parent_ulid_keytype_table: sa.Table
     renames_table: sa.Table
     ulid_changelog_table: sa.Table
     ulid_info_table: sa.Table
@@ -248,36 +388,6 @@ class BaseConnection:
         if result is None:
             raise KeyError(key)
         return result
-
-    def _db_write_typedkeys(
-        self,
-        deleted_typedkeys: Sequence[dict],
-        new_typedkeys: Sequence[dict],
-        updated_typedkeys: Sequence[dict],
-    ) -> None:
-        if deleted_typedkeys:
-            self._sqlaconn.execute(
-                sa.update(self.ulid_info_table).where(
-                    self.ulid_info_table.c.ulid == sa.bindparam("b_ulid")
-                ),
-                deleted_typedkeys,
-            )
-        if new_typedkeys:
-            self._sqlaconn.execute(sa.insert(self.ulid_info_table), new_typedkeys)
-            self._sqlaconn.execute(
-                sa.insert(self.ulid_latest_serial_table),
-                [
-                    dict(latest_serial=x["added_at_serial"], ulid=x["ulid"])
-                    for x in new_typedkeys
-                ],
-            )
-        if updated_typedkeys:
-            stmt = (
-                sa.update(self.ulid_latest_serial_table)
-                .where(self.ulid_latest_serial_table.c.ulid == sa.bindparam("b_ulid"))
-                .values(latest_serial=sa.bindparam("b_serial"))
-            )
-            self._sqlaconn.execute(stmt, updated_typedkeys)
 
     def iter_changes_at(self, serial: int) -> Iterator[KeyData]:
         stmt = (
@@ -505,8 +615,9 @@ class BaseConnection:
         key = self._keys[row.keytype]
         parent_ulid = None if row.parent_ulid < 0 else ULID(row.parent_ulid)
         if parent_ulid:
+            parent_serial = min(serial, row.latest_parent_serial)
             parent_key = self.get_ulid_at_serial(
-                parent_ulid, serial, parent_serial=row.latest_parent_serial
+                parent_ulid, serial, parent_serial=parent_serial
             ).key
             location = parent_key.relpath
             parent_params = parent_key.params
@@ -522,9 +633,9 @@ class BaseConnection:
                 parent_key=parent_key,
                 parent_params=parent_params,
             )
-        assert parent_key is None
-        assert parent_params is None
-        return key.make_ulid_key(ULID(row.ulid))
+        if parent_key is not None:
+            raise RuntimeError
+        return key.make_ulid_key(ULID(row.ulid), parent_key=parent_key)
 
     def get_key_at_serial(self, key: ULIDKey, serial: int) -> KeyData:
         assert isinstance(key, ULIDKey)
@@ -550,14 +661,15 @@ class BaseConnection:
                 serial=fetch_serial,
                 with_deleted=True,
             )
-            results = list(
-                self._iter_relpaths_at(
-                    relpaths_ulid_serials_stmt, fetch_serial, with_deleted=True
-                )
+            results = self._iter_relpaths_at(
+                relpaths_ulid_serials_stmt, fetch_serial, with_deleted=True
             )
-            if not results:
+            result = next(results, absent)
+            if isinstance(result, Absent):
                 raise KeyError(ulid)
-            (result,) = results
+            # exhaust the iterator to make sure we go no more results
+            if next(results, absent) is not absent:
+                raise RuntimeError("Got additional results")
             self._cache.add_keydata(fetch_serial, result)
         return result
 
@@ -565,15 +677,16 @@ class BaseConnection:
 
     def _relpaths_ulid_serials_stmt_for_keys(  # noqa: PLR0912
         self,
-        keys: Iterable[LocatedKey | PatternedKey | ULIDKey],
+        keys: Iterable[LocatedKey | PatternedKey | SearchKey | ULIDKey],
         at_serial: int,
         *,
-        skip_ulid_keys: set[ULIDKey] = emptyset,
+        skip_ulids: set[ULID] = emptyset,
         with_deleted: bool = False,
     ) -> sa.Select:
         execute = self._sqlaconn.execute
         keytypes = {key.key_name for key in keys if isinstance(key, PatternedKey)}
         keytype_name_parent_ulid: set[tuple[str, str, int]] = set()
+        parent_ulid_keytype: set[tuple[int, str]] = set()
         key_ulid: set[int] = set()
         for key in keys:
             if key.key_name in keytypes:
@@ -582,13 +695,15 @@ class BaseConnection:
                 keytype_name_parent_ulid.add(
                     (key.key_name, key.name, key.query_parent_ulid)
                 )
+            elif isinstance(key, SearchKey):
+                parent_ulid_keytype.add((key.query_parent_ulid, key.key_name))
             elif isinstance(key, ULIDKey):
                 key_ulid.add(int(key.ulid))
         clauses = []
         if keytypes:
             clauses.append(self.ulid_info_table.c.keytype.in_(keytypes))
         is_large_query = (
-            len(keytype_name_parent_ulid) + len(key_ulid)
+            len(keytype_name_parent_ulid) + len(parent_ulid_keytype) + len(key_ulid)
         ) > MAX_SQL_VARIABLES
         if keytype_name_parent_ulid:
             keytype_name_parent_ulid_in: sa.Select | Iterator[sa.Tuple]
@@ -636,6 +751,49 @@ class BaseConnection:
                     self.ulid_info_table.c.parent_ulid,
                 ).in_(keytype_name_parent_ulid_in)
             )
+        if parent_ulid_keytype:
+            parent_ulid_keytype_in: sa.Select | Iterator[sa.Tuple]
+            if is_large_query:
+                parent_ulid_keytype_iter = iter(parent_ulid_keytype)
+                del parent_ulid_keytype
+                execute(
+                    sa.schema.CreateTable(
+                        self.parent_ulid_keytype_table, if_not_exists=True
+                    )
+                )
+                execute(self.parent_ulid_keytype_table.delete())
+                while True:
+                    parent_ulid_keytype_batch = list(
+                        islice(parent_ulid_keytype_iter, INSERT_BATCH_SIZE)
+                    )
+                    if not parent_ulid_keytype_batch:
+                        break
+                    execute(
+                        self.parent_ulid_keytype_table.insert(),
+                        [
+                            dict(keytype=keytype, parent_ulid=parent_ulid)
+                            for parent_ulid, keytype in parent_ulid_keytype_batch
+                        ],
+                    )
+                    del parent_ulid_keytype_batch
+                parent_ulid_keytype_in = sa.select(
+                    self.parent_ulid_keytype_table.c.parent_ulid,
+                    self.parent_ulid_keytype_table.c.keytype,
+                )
+            else:
+                parent_ulid_keytype_in = (
+                    sa.tuple_(
+                        sa.literal(parent_ulid),
+                        sa.literal(key_name),
+                    )
+                    for (parent_ulid, key_name) in parent_ulid_keytype
+                )
+            clauses.append(
+                sa.tuple_(
+                    self.ulid_info_table.c.parent_ulid,
+                    self.ulid_info_table.c.keytype,
+                ).in_(parent_ulid_keytype_in)
+            )
         if key_ulid:
             key_ulid_in: sa.Select | Iterator[sa.Tuple]
             if is_large_query:
@@ -667,9 +825,9 @@ class BaseConnection:
             )
         assert clauses
         whereclauses = [sa.or_(*clauses)]
-        if skip_ulid_keys:
+        if skip_ulids:
             whereclauses.append(
-                self.ulid_info_table.c.ulid.notin_(int(x.ulid) for x in skip_ulid_keys)
+                self.ulid_info_table.c.ulid.notin_(int(x) for x in skip_ulids)
             )
         return self._relpaths_ulid_serials_stmt(
             *whereclauses, serial=at_serial, with_deleted=with_deleted
@@ -677,30 +835,74 @@ class BaseConnection:
 
     def iter_keys_at_serial(
         self,
-        keys: Iterable[LocatedKey | PatternedKey],
+        keys: Iterable[LocatedKey | PatternedKey | SearchKey | ULIDKey],
         at_serial: int,
         *,
         skip_ulid_keys: set[ULIDKey] = emptyset,
+        fill_cache: bool,
         with_deleted: bool,
     ) -> Iterator[KeyData]:
-        stmt = self._relpaths_ulid_serials_stmt_for_keys(
-            keys, at_serial, skip_ulid_keys=skip_ulid_keys, with_deleted=with_deleted
+        checker = ULIDKeyChecker(
+            self._cache,
+            keys,
+            at_serial,
+            skip_ulid_keys,
+            fill_cache=fill_cache,
+            with_deleted=with_deleted,
         )
-        yield from self._iter_relpaths_at(stmt, at_serial, with_deleted=with_deleted)
+        yield from checker.iter_keydata()
+        if checker.got_all():
+            return
+        stmt = self._relpaths_ulid_serials_stmt_for_keys(
+            keys,
+            at_serial,
+            skip_ulids=checker.ulids_to_skip(),
+            with_deleted=with_deleted,
+        )
+        for keydata in self._iter_relpaths_at(
+            stmt, at_serial, with_deleted=with_deleted
+        ):
+            yield keydata
+            if fill_cache:
+                checker.add(keydata.key)
+                self._cache.add_keydata(at_serial, keydata)
+        checker.update()
 
     def iter_ulidkeys_at_serial(
         self,
-        keys: Iterable[LocatedKey | PatternedKey],
+        keys: Iterable[LocatedKey | PatternedKey | SearchKey],
         at_serial: int,
         *,
         skip_ulid_keys: set[ULIDKey] = emptyset,
+        fill_cache: bool,
         with_deleted: bool,
     ) -> Iterator[ULIDKey]:
-        stmt = self._relpaths_ulid_serials_stmt_for_keys(
-            keys, at_serial, skip_ulid_keys=skip_ulid_keys, with_deleted=with_deleted
+        checker = ULIDKeyChecker(
+            self._cache,
+            keys,
+            at_serial,
+            skip_ulid_keys,
+            fill_cache=fill_cache,
+            with_deleted=with_deleted,
         )
-        for result in self._sqlaconn.execute(stmt):
-            yield self._ulidkey_for_row(result, at_serial)
+        for key in checker.iter_keys():
+            yield key
+        if checker.got_all():
+            return
+        stmt = self._relpaths_ulid_serials_stmt_for_keys(
+            keys,
+            at_serial,
+            skip_ulids=checker.ulids_to_skip(),
+            with_deleted=with_deleted,
+        )
+        for result in self._sqlaconn.execute(stmt).all():
+            key = self._ulidkey_for_row(result, at_serial)
+            yield key
+            if fill_cache:
+                checker.add(key)
+                if not with_deleted:
+                    self._cache.add_key(at_serial, key)
+        checker.update()
 
     @cached_property
     def last_changelog_serial(self) -> int:
@@ -711,24 +913,6 @@ class BaseConnection:
 
     def _write_dirty_files(self) -> tuple[Sequence, Sequence]:
         raise NotImplementedError
-
-    def _write_records(
-        self, serial: int, records: Sequence[Record], renames: Sequence[str]
-    ) -> None:
-        execute = self._sqlaconn.execute
-        threadlog.debug("writing changelog for serial %s", serial)
-        ulid_changelog = [
-            dict(
-                ulid=int(record.key.ulid),
-                serial=serial,
-                back_serial=record.back_serial,
-                value=None if record.value is deleted else dumps(record.value),
-            )
-            for record in records
-        ]
-        if ulid_changelog:
-            execute(sa.insert(self.ulid_changelog_table).values(ulid_changelog))
-        execute(sa.insert(self.renames_table).values((serial, dumps(renames))))
 
     def write_transaction(self, io_file: IIOFile | None) -> IWriter:
         return Writer(self.storage, self, io_file)
@@ -777,68 +961,158 @@ class Writer:
             thread_pop_log("fswriter%s:" % commit_serial)
         return None
 
-    def commit(self, commit_serial: int) -> LazyChangesFormatter:
+    def commit(self, commit_serial: int) -> LazyChangesFormatter:  # noqa: PLR0912
+        execute = self.conn._sqlaconn.execute
         records = self.records
         assert records is not None
         del self.records
-        rel_renames = self.rel_renames
+        execute(
+            sa.insert(self.conn.renames_table).values(
+                (commit_serial, dumps(self.rel_renames))
+            )
+        )
         del self.rel_renames
-        deleted_typedkeys = []
-        new_typedkeys = []
-        updated_typedkeys = []
-        for record in records:
-            if record.back_serial is None:
-                raise RuntimeError
-            assert not isinstance(record.value, ReadonlyView), record.value
-            if record.key != record.old_key:
-                new_typedkeys.append(
-                    dict(
-                        name=record.key.name,
-                        ulid=int(record.key.ulid),
-                        parent_ulid=record.key.query_parent_ulid,
-                        keytype=record.key.key_name,
-                        added_at_serial=commit_serial,
-                    )
+        records_info: Counter | set
+        num_records = len(records)
+        if num_records > 20:
+            records_counter: Counter[str] = Counter()
+            records_info = records_counter
+
+            def add_record_info(r: Record) -> None:
+                records_counter[r.key.key_name] += 1
+        else:
+            records_key_info: set[tuple[str, str, ULID | None, ULID]] = set()
+            records_info = records_key_info
+
+            def add_record_info(r: Record) -> None:
+                records_key_info.add(
+                    (r.key.key_name, r.key.name, r.key.parent_ulid, r.key.ulid)
                 )
-            else:
-                updated_typedkeys.append(
-                    dict(
-                        b_ulid=int(record.key.ulid),
-                        b_keytype=record.key.key_name,
-                        b_serial=commit_serial,
-                        b_back_serial=record.back_serial,
-                    )
-                )
+
+        # to work in batches and be able to garbage collect old batches
+        # we create an iterator and remove the reference to full list
+        records_iter = iter(records)
+        del records
+        num_batches = (num_records // INSERT_BATCH_SIZE) + 1
+        for batch_index in count(1):
+            batch = list(islice(records_iter, INSERT_BATCH_SIZE))
+            if not batch:
+                break
+            deleted_typedkeys = []
+            new_typedkeys = []
+            updated_typedkeys = []
+            ulid_changelog = []
+            for record in batch:
+                record_back_serial = record.back_serial
+                assert record_back_serial is not None
+                assert not isinstance(record.value, ReadonlyView), record.value
+                add_record_info(record)
+                record_ulid = int(record.key.ulid)
                 if record.value is deleted:
+                    record_value = None
                     deleted_typedkeys.append(
+                        dict(b_ulid=record_ulid, b_deleted_at_serial=commit_serial)
+                    )
+                else:
+                    record_value = dumps(record.value)
+                if record.key != record.old_key:
+                    new_typedkeys.append(
                         dict(
-                            b_ulid=int(record.key.ulid),
-                            deleted_at_serial=commit_serial
-                            if record.value is deleted
-                            else None,
+                            b_name=record.key.name,
+                            b_ulid=record_ulid,
+                            b_parent_ulid=record.key.query_parent_ulid,
+                            b_keytype=record.key.key_name,
+                            b_commit_serial=commit_serial,
                         )
                     )
-        self.conn._db_write_typedkeys(
-            deleted_typedkeys, new_typedkeys, updated_typedkeys
+                else:
+                    updated_typedkeys.append(
+                        dict(
+                            b_ulid=record_ulid,
+                            b_keytype=record.key.key_name,
+                            b_serial=commit_serial,
+                            b_back_serial=record_back_serial,
+                        )
+                    )
+                ulid_changelog.append(
+                    dict(
+                        b_ulid=record_ulid,
+                        b_serial=commit_serial,
+                        b_back_serial=record_back_serial,
+                        b_value=record_value,
+                    )
+                )
+            threadlog.debug(
+                "writing changelog batch %s/%s for serial %s",
+                batch_index,
+                num_batches,
+                commit_serial,
+            )
+            if deleted_typedkeys:
+                execute(
+                    sa.update(self.conn.ulid_info_table)
+                    .where(self.conn.ulid_info_table.c.ulid == sa.bindparam("b_ulid"))
+                    .values(
+                        ulid=sa.bindparam("b_ulid"),
+                        deleted_at_serial=sa.bindparam("b_deleted_at_serial"),
+                    ),
+                    deleted_typedkeys,
+                )
+            del deleted_typedkeys
+            if new_typedkeys:
+                execute(
+                    sa.insert(self.conn.ulid_info_table).values(
+                        name=sa.bindparam("b_name"),
+                        ulid=sa.bindparam("b_ulid"),
+                        parent_ulid=sa.bindparam("b_parent_ulid"),
+                        keytype=sa.bindparam("b_keytype"),
+                        added_at_serial=sa.bindparam("b_commit_serial"),
+                    ),
+                    new_typedkeys,
+                )
+                execute(
+                    sa.insert(self.conn.ulid_latest_serial_table).values(
+                        ulid=sa.bindparam("b_ulid"),
+                        latest_serial=sa.bindparam("b_commit_serial"),
+                    ),
+                    new_typedkeys,
+                )
+            del new_typedkeys
+            if updated_typedkeys:
+                execute(
+                    sa.update(self.conn.ulid_latest_serial_table)
+                    .where(
+                        self.conn.ulid_latest_serial_table.c.ulid
+                        == sa.bindparam("b_ulid")
+                    )
+                    .values(latest_serial=sa.bindparam("b_serial")),
+                    updated_typedkeys,
+                )
+            del updated_typedkeys
+            execute(
+                sa.insert(self.conn.ulid_changelog_table).values(
+                    ulid=sa.bindparam("b_ulid"),
+                    serial=sa.bindparam("b_serial"),
+                    back_serial=sa.bindparam("b_back_serial"),
+                    value=sa.bindparam("b_value"),
+                ),
+                ulid_changelog,
+            )
+            del ulid_changelog
+            del batch
+        (files_commit, files_del) = (
+            self.conn._write_dirty_files() if self.io_file else ([], [])
         )
-        del new_typedkeys, updated_typedkeys
-        self.conn._write_records(commit_serial, records, rel_renames)
-        if self.io_file:
-            (files_commit, files_del) = self.conn._write_dirty_files()
-        else:
-            (files_commit, files_del) = ([], [])
         analyze_frequency = (
             100 if commit_serial < 1000 else 1000 if commit_serial < 20000 else 10000
         )
-        if ((commit_serial % analyze_frequency) == 0) or len(records) > 10000:
+        if ((commit_serial % analyze_frequency) == 0) or num_records > 10000:
             self.conn.analyze()
         self.conn.commit()
         self.storage.last_commit_timestamp = time.time()
-        return LazyChangesFormatter(
-            {(x.key.key_name, x.key.name, x.key.parent_ulid) for x in records},
-            files_commit,
-            files_del,
-        )
+        if isinstance(records_info, Counter):
+            records_info = set(records_info.items())
+        return LazyChangesFormatter(records_info, files_commit, files_del)
 
     def records_set(self, records: Sequence[Record]) -> None:
         assert records is not None
@@ -887,6 +1161,13 @@ class BaseStorage:
                 sa.Column("keytype", sa.String),
                 sa.Column("name", sa.String),
                 sa.Column("parent_ulid", sa.BigInteger),
+                prefixes=["TEMPORARY"],
+            ),
+            parent_ulid_keytype_table=sa.Table(
+                "parent_ulid_keytype",
+                metadata_obj,
+                sa.Column("parent_ulid", sa.BigInteger),
+                sa.Column("keytype", sa.String),
                 prefixes=["TEMPORARY"],
             ),
             renames_table=sa.Table(

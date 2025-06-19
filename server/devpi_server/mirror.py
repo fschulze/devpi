@@ -654,8 +654,14 @@ class MirrorStage(BaseStage):
                 cache.get("requires_python", []),
                 cache.get("yanked", []))
             if self.offline and links_with_data:
-                links_with_data = ensure_deeply_readonly(list(
-                    filter(self._is_file_cached, links_with_data)))
+                entries = self.get_entries_for_entrypaths(x[1] for x in links_with_data)
+                links_with_data = ensure_deeply_readonly(
+                    [
+                        link
+                        for (link, entry) in zip(links_with_data, entries)
+                        if entry is not None and entry.file_exists()
+                    ]
+                )
 
         return (is_expired, links_with_data, serial, etag)
 

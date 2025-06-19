@@ -208,21 +208,21 @@ class FSIOFile:
 
 
 class LazyChangesFormatter:
-    __slots__ = ('files_commit', 'files_del', 'keys')
+    __slots__ = ("files_commit", "files_del", "records_info")
 
-    def __init__(self, keys, files_commit, files_del):
+    def __init__(self, records_info, files_commit, files_del):
         self.files_commit = files_commit
         self.files_del = files_del
-        self.keys = keys
+        self.records_info = records_info
 
     def __str__(self):
         msg = []
-        if self.keys:
-            msg.append(f"keys: {','.join(repr(c) for c in self.keys)}")
+        if self.records_info:
+            msg.append(f"records_info: {', '.join(repr(c) for c in self.records_info)}")
         if self.files_commit:
-            msg.append(f"files_commit: {','.join(self.files_commit)}")
+            msg.append(f"files_commit: {', '.join(self.files_commit)}")
         if self.files_del:
-            msg.append(f"files_del: {','.join(self.files_del)}")
+            msg.append(f"files_del: {', '.join(self.files_del)}")
         return ", ".join(msg)
 
 
