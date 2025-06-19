@@ -265,7 +265,7 @@ class Connection:
         return result
 
     def iter_relpaths_at(self, typedkeys, at_serial):
-        keynames = frozenset(k.name for k in typedkeys)
+        keynames = frozenset(k.key_name for k in typedkeys)
         keyname_id_values = {"keynameid%i" % i: k for i, k in enumerate(keynames)}
         q = """
             SELECT key, keyname, serial
@@ -716,7 +716,7 @@ class Writer:
         # at __exit__ time we write out changes to the _changelog_cache
         # so we protect here against the caller modifying the value later
         value = get_mutable_deepcopy(value)
-        self.changes[typedkey.relpath] = (typedkey.name, back_serial, value)
+        self.changes[typedkey.relpath] = (typedkey.key_name, back_serial, value)
 
     def records_set(self, records) -> None:
         for record in records:

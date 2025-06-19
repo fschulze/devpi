@@ -631,7 +631,7 @@ class ReplicaThread:
 
 
 def register_key_subscribers(xom):
-    xom.keyfs.PROJSIMPLELINKS.on_key_change(SimpleLinksChanged(xom))
+    xom.keyfs.notifier.on_key_change(xom.keyfs.PROJSIMPLELINKS, SimpleLinksChanged(xom))
 
 
 class FileReplicationSharedData:
@@ -663,14 +663,15 @@ class FileReplicationSharedData:
 
     def on_import(self, serial, changes):
         keyfs = self.xom.keyfs
-        user_keyname = keyfs.USER.name
+        user_keyname = keyfs.USER.key_name
         for key in changes:
-            if key.name == user_keyname:
+            if key.key_name == user_keyname:
                 self.update_index_types(keyfs, serial, key, *changes[key])
         file_keynames = frozenset(
-            (keyfs.STAGEFILE.name, keyfs.PYPIFILE_NOMD5.name))
+            (keyfs.STAGEFILE.key_name, keyfs.PYPIFILE_NOMD5.key_name)
+        )
         for key in changes:
-            if key.name in file_keynames:
+            if key.key_name in file_keynames:
                 self.on_import_file(keyfs, serial, key, *changes[key])
 
     def on_import_file(self, keyfs, serial, key, val, back_serial):
@@ -712,8 +713,9 @@ class FileReplicationSharedData:
                 return
 
         # note the negated serial for the PriorityQueue
-        self.queue.put((
-            index_type, -serial, key.relpath, key.name, val, back_serial))
+        self.queue.put(
+            (index_type, -serial, key.relpath, key.key_name, val, back_serial)
+        )
         self.last_added = time.time()
 
     def update_index_types(self, keyfs, serial, key, val, back_serial):
