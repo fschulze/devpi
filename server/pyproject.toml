@@ -143,7 +143,6 @@ exclude = [
     "test_devpi_server/test_genconfig.py",
     "test_devpi_server/test_importexport.py",
     "test_devpi_server/test_keyfs.py",
-    "test_devpi_server/test_keyfs_sqlite_fs.py",
     "test_devpi_server/test_log.py",
     "test_devpi_server/test_main.py",
     "test_devpi_server/test_mirror.py",
@@ -242,9 +241,6 @@ extend-ignore = [
     "I001", # maybe cleanup later - import block unsorted
 ]
 "devpi_server/importexport.py" = [
-    "I001", # maybe cleanup later - import block unsorted
-]
-"devpi_server/interfaces.py" = [
     "I001", # maybe cleanup later - import block unsorted
 ]
 "devpi_server/keyfs.py" = [
