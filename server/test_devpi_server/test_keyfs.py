@@ -343,7 +343,7 @@ class TestTransactionIsolation:
             tx_1.delete(key)
 
     def test_serialized_writing(self, TimeoutQueue, keyfs, storage_info):
-        if "sqlite" not in storage_info.name:
+        if "lite" not in storage_info.name:
             pytest.skip("The test is only relevant for sqlite based storages.")
         import threading
         q1 = TimeoutQueue()
@@ -891,6 +891,17 @@ class TestSubscriber:
     def test_at_serial(self, keyfs):
         with keyfs.read_transaction(at_serial=-1) as tx:
             assert tx.at_serial == -1
+
+
+@notransaction
+def test_file_rollback(file_digest, keyfs, monkeypatch, storage_info):
+    content = b"foo"
+    content_hash = file_digest(content)
+    # trigger rollback during write
+    monkeypatch.setattr(storage_info.writer_cls, "records_set", lambda _s, _r: 0 / 0)
+    with pytest.raises(ZeroDivisionError), keyfs.write_transaction() as tx:
+        # put a file into the transaction
+        tx.io_file.set_content(FilePathInfo("foo", content_hash), content)
 
 
 @notransaction

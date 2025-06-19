@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import closing
 from inspect import getfullargspec
 from typing import TYPE_CHECKING
+from typing import overload
 from zope.interface import Attribute
 from zope.interface import Interface
 from zope.interface.interface import adapter_hooks
@@ -23,6 +24,7 @@ if TYPE_CHECKING:
     from typing import Any
     from typing import Callable
     from typing import IO
+    from typing import Literal
     from typing import Optional
 
 
@@ -116,9 +118,21 @@ class IStorage(Interface):
     ) -> None:
         """Create the storage object and initialize it."""
 
+    @overload
+    def get_connection(
+        *, closing: Literal[True], write: bool, timeout: int
+    ) -> AbstractContextManager[IStorageConnection]:
+        pass
+
+    @overload
+    def get_connection(
+        *, closing: Literal[False], write: bool, timeout: int
+    ) -> IStorageConnection:
+        pass
+
     def get_connection(
         *, closing: bool, write: bool, timeout: int
-    ) -> IStorageConnection:
+    ) -> IStorageConnection | AbstractContextManager[IStorageConnection]:
         """Returns a connection to the storage."""
 
     def perform_crash_recovery() -> None:

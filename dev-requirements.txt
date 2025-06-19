@@ -25,6 +25,7 @@ pytest-sugar
 pytest-timeout
 regendoc
 setuptools_changelog_shortener
+sqlparse
 supervisor
 towncrier>=21.9.0
 tox
