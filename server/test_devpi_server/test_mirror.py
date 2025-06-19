@@ -933,12 +933,14 @@ class TestMirrorStageprojects:
         # now the timestamp should differ
         assert projectnames._timestamp > ts
 
+    @pytest.mark.usefixtures("caplog")
+    @pytest.mark.slow
     @pytest.mark.notransaction
-    def test_simplelinks_timeout(self, pypistage):
+    def test_simplelinks_timeout(self, monkeypatch, pypistage):
         import asyncio
         # release files should be updated in background in case of timeout
         pypistage.timeout = 0.1
-        orig_async_get = pypistage.http.async_get
+        orig_async_get = pypistage.xom.http.async_get
 
         async def sleeping_async_get(*args, **kw):
             await asyncio.sleep(0.2)
@@ -946,24 +948,27 @@ class TestMirrorStageprojects:
 
         # first we need some releases in the db
         pypistage.mock_simple("pkg", text='<a href="pkg-1.0.zip"</a>')
-        with pypistage.keyfs.read_transaction():
+        with pypistage.keyfs.read_transaction() as tx:
             assert [
                 (x.project, x.version)
                 for x in pypistage.get_releaselinks("pkg")] == [
                     ('pkg', '1.0')]
+        initial_serial = tx.commit_serial
+        assert initial_serial == 1
 
         # now expire the cache, add a version on the mirror and fetch again with a timeout
         pypistage.cache_retrieve_times.expire("pkg")
         pypistage.mock_simple("pkg", text='<a href="pkg-1.0.zip"</a><a href="pkg-2.0.zip"</a>')
-        pypistage.http.async_get = sleeping_async_get
-        serial = pypistage.keyfs.get_current_serial()
+        monkeypatch.setattr(pypistage.xom.http, "async_get", sleeping_async_get)
         # we should get stale results
-        with pypistage.keyfs.read_transaction():
+        with pypistage.keyfs.read_transaction() as tx:
+            assert initial_serial == tx.at_serial
             assert pypistage.cache_retrieve_times.is_expired("pkg", pypistage.cache_expiry)
             assert [
                 (x.project, x.version)
                 for x in pypistage.get_releaselinks("pkg")] == [
                     ('pkg', '1.0')]
+            serial = tx.at_serial
         # now we wait for the new serial to arrive
         pypistage.keyfs.wait_tx_serial(serial + 1)
         # and we should see the new version

@@ -825,16 +825,13 @@ class Transaction:
             return result
         with contextlib.ExitStack() as cstack:
             cstack.callback(self._close)
-            cstack.enter_context(self.io_file)
-            fswriter = IWriter(
-                cstack.enter_context(self.conn.write_transaction(self.io_file))
-            )
-            fswriter.set_rel_renames(self.io_file.get_rel_renames())
-            fswriter.records_set(records)
-            commit_serial = fswriter.commit_serial
-        self.commit_serial = commit_serial
-        self._run_listeners(self._success_listeners)
-        self._run_listeners(self._finished_listeners)
+            with self.io_file, self.conn.write_transaction(self.io_file) as writer:
+                writer.set_rel_renames(self.io_file.get_rel_renames())
+                writer.records_set(records)
+                commit_serial = writer.commit_serial
+            self.commit_serial = commit_serial
+            self._run_listeners(self._success_listeners)
+            self._run_listeners(self._finished_listeners)
         return commit_serial
 
     def on_commit_success(self, callback):
