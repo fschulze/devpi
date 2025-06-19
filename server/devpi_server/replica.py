@@ -506,11 +506,17 @@ class ReplicaThread:
             if r.status_code in (301, 302):
                 log.error(
                     "%s %s: redirect detected at %s to %s",
-                    r.status_code, r.reason, url, r.headers.get('Location'))
+                    r.status_code,
+                    r.reason_phrase,
+                    url,
+                    r.headers.get("Location"),
+                )
                 return False
 
             if r.status_code not in (200, 202):
-                log.error("%s %s: failed fetching %s", r.status_code, r.reason, url)
+                log.error(
+                    "%s %s: failed fetching %s", r.status_code, r.reason_phrase, url
+                )
                 return False
 
             # we check that the remote instance
@@ -1075,11 +1081,11 @@ class FileReplicationThread:
                 threadlog.error(
                     "error downloading '%s' from primary, will be retried later: %s",
                     relpath,
-                    r.reason,
+                    r.reason_phrase,
                 )
                 # add the error for the UI
                 self.shared_data.errors.add(
-                    dict(url=r.url, message=r.reason, relpath=entry.relpath)
+                    dict(url=r.url, message=r.reason_phrase, relpath=entry.relpath)
                 )
                 # and raise for retrying later
                 raise FileReplicationError(r, relpath)
@@ -1099,7 +1105,7 @@ class FileReplicationThread:
                     threadlog.error(
                         "checksum mismatch for '%s', will be retried later: %s",
                         relpath,
-                        r.reason,
+                        r.reason_phrase,
                     )
                 self.shared_data.errors.add(
                     dict(url=r.url, message=str(err), relpath=entry.relpath)
@@ -1398,10 +1404,18 @@ class FileReplicationError(Exception):
     def __init__(self, response, relpath, message=None):
         self.url = response.url
         self.status_code = response.status_code
-        self.reason = response.reason
+        self.reason_phrase = response.reason_phrase
         self.relpath = relpath
         self.message = message or "failed"
 
     def __str__(self):
-        return "FileReplicationError with %s, code=%s, reason=%s, relpath=%s, message=%s" % (
-               self.url, self.status_code, self.reason, self.relpath, self.message)
+        return (
+            "FileReplicationError with %s, code=%s, reason=%s, relpath=%s, message=%s"
+            % (
+                self.url,
+                self.status_code,
+                self.reason_phrase,
+                self.relpath,
+                self.message,
+            )
+        )
