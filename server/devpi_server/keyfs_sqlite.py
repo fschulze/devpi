@@ -488,7 +488,7 @@ class BaseStorage(object):
         else:
             return conn
 
-    def add_key(self, key):
+    def register_key(self, key):
         pass
 
     def get_connection(self, *, closing=True, write=False, timeout=30):
