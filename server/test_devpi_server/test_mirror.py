@@ -1431,7 +1431,7 @@ def test_redownload_locally_removed_release(file_digest, mapp, simpypi):
         assert tx.io_file.exists(file_path_info)
     # now remove the local copy
     with mapp.xom.keyfs.write_transaction() as tx:
-        tx.io_file.delete(file_path_info)
+        tx.io_file.delete(file_path_info, is_last_of_hash=True)
     with mapp.xom.keyfs.read_transaction() as tx:
         assert not tx.io_file.exists(file_path_info)
     serial = mapp.xom.keyfs.get_current_serial()

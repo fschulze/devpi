@@ -381,6 +381,9 @@ class FileStore:
             hashdir_a=hashdir_a, hashdir_b=hashdir_b, filename=basename)
         entry = MutableFileEntry(key)
         entry.file_set_content(content_or_file, hashes=hashes)
+        digest_key = entry.get_digest_key()
+        with digest_key.update() as digest_paths:
+            digest_paths.add(entry.relpath)
         return entry
 
 
@@ -537,8 +540,10 @@ class BaseFileEntry:
     def file_exists(self):
         return self.tx.io_file.exists(self.file_path_info)
 
-    def file_delete(self):
-        return self.tx.io_file.delete(self.file_path_info)
+    def file_delete(self, *, is_last_of_hash):
+        return self.tx.io_file.delete(
+            self.file_path_info, is_last_of_hash=is_last_of_hash
+        )
 
     def file_size(self):
         return self.tx.io_file.size(self.file_path_info)
@@ -618,7 +623,17 @@ class BaseFileEntry:
         self._meta = {}
 
     def delete_file_only(self):
-        self.file_delete()
+        digest_key = self.get_digest_key()
+        with digest_key.update() as digest_paths:
+            digest_paths.discard(self.relpath)
+        is_last_of_hash = False
+        if not digest_paths:
+            digest_key.delete()
+            is_last_of_hash = True
+        self.file_delete(is_last_of_hash=is_last_of_hash)
+
+    def get_digest_key(self):
+        return self.tx.keyfs.DIGESTPATHS(digest=self.hashes[DEFAULT_HASH_TYPE])
 
     def has_existing_metadata(self):
         return bool(
