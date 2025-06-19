@@ -43,6 +43,7 @@ if TYPE_CHECKING:
 @implementer(IStorageConnection)
 class Connection(BaseConnection):
     files_table: sa.Table
+    storage: Storage
 
     def commit_files_without_increasing_serial(self) -> None:
         try:
@@ -185,6 +186,10 @@ class Connection(BaseConnection):
                 files_commit.append(path)
         self.dirty_files.clear()
         return (files_commit, files_del)
+
+    def analyze(self) -> None:
+        super().analyze()
+        self.storage.ro_engine.dispose()
 
 
 @implementer(IStorage)
