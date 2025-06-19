@@ -1441,7 +1441,7 @@ class TestLinkStore:
         linkstore.new_reflink(
             rel="toxresult",
             content_or_file=tox_content1,
-            for_entrypath=link1,
+            for_link=link1,
             hashes=get_hashes(tox_content1),
         )
         tox_content2 = b'tox456'
@@ -1449,7 +1449,7 @@ class TestLinkStore:
         linkstore.new_reflink(
             rel="toxresult",
             content_or_file=tox_content2,
-            for_entrypath=link2,
+            for_link=link2,
             hashes=get_hashes(tox_content2),
         )
         rlink, = linkstore.get_links(rel="toxresult", for_entrypath=link1)

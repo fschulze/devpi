@@ -871,7 +871,7 @@ class BaseStage(object):
         return linkstore.new_reflink(
             rel=Rel.ToxResult,
             content_or_file=content_or_file,
-            for_entrypath=link,
+            for_link=link,
             filename=filename,
             hashes=hashes,
             last_modified=last_modified,
@@ -1821,21 +1821,18 @@ class LinkStore:
         self,
         rel,
         content_or_file,
-        for_entrypath,
+        for_link,
         *,
         filename=None,
         hashes,
         last_modified=None,
     ):
-        if isinstance(for_entrypath, ELink):
-            for_entrypath = for_entrypath.relpath
-        elif for_entrypath is not None:
-            assert "#" not in for_entrypath
-        links = self.get_links(entrypath=for_entrypath)
+        links = self.get_links(entrypath=for_link.relpath)
         assert len(links) == 1, f"need exactly one reference, got {links}"
-        base_entry = links[0].entry
+        assert for_link.relpath == links[0].relpath
+        base_entry = for_link.entry
         if filename is None:
-            other_reflinks = self.get_links(rel=rel, for_entrypath=for_entrypath)
+            other_reflinks = self.get_links(rel=rel, for_entrypath=for_link.relpath)
             timestamp = strftime("%Y%m%d%H%M%S", gmtime())
             filename = "%s.%s-%s-%d" % (
                 base_entry.basename, rel, timestamp, len(other_reflinks))
@@ -1847,8 +1844,7 @@ class LinkStore:
         )
         if last_modified is not None:
             entry.last_modified = last_modified
-        return self._add_link_to_file_entry(
-            rel, entry, for_entrypath=for_entrypath)
+        return self._add_link_to_file_entry(rel, entry, for_link=for_link)
 
     def remove_links(self, rel=None, basename=None, for_entrypath=None):
         linkdicts = self._get_inplace_linkdicts()
@@ -1909,19 +1905,16 @@ class LinkStore:
     def _get_inplace_linkdicts(self):
         return self.verdata.setdefault("+elinks", [])
 
-    def _add_link_to_file_entry(self, rel, file_entry, for_entrypath=None):
-        if isinstance(for_entrypath, ELink):
-            for_entrypath = for_entrypath.relpath
-        elif for_entrypath is not None:
-            assert "#" not in for_entrypath
+    def _add_link_to_file_entry(self, rel, file_entry, for_link=None):
         new_linkdict = {
             "rel": str(rel),
             "entrypath": file_entry.relpath,
             "hashes": file_entry.hashes,
             "_log": [],
         }
-        if for_entrypath:
-            new_linkdict["for_entrypath"] = for_entrypath
+        if for_link:
+            assert isinstance(for_link, ELink)
+            new_linkdict["for_entrypath"] = for_link.relpath
         linkdicts = self._get_inplace_linkdicts()
         linkdicts.append(new_linkdict)
         threadlog.info("added %r link %s", rel, file_entry.relpath)
