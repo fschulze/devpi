@@ -1585,9 +1585,8 @@ def test_acl_toxresults_upload(mapp, testapp, tox_result_data):
     # still allow upload to anonymous
     with mapp.xom.keyfs.write_transaction():
         stage = mapp.xom.model.getstage('user1/dev')
-        with stage.user.key.update() as userconfig:
-            del userconfig['indexes']['dev']['acl_toxresult_upload']
-            stage.ixconfig = userconfig['indexes']['dev']
+        with stage.key_index.update() as ixconfig:
+            del ixconfig["acl_toxresult_upload"]
     r = testapp.post(path, json.dumps(tox_result_data), headers=headers)
     assert r.status_code == 200
 
