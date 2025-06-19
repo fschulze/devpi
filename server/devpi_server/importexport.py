@@ -514,8 +514,7 @@ class Importer:
                 if "bases" in import_index["indexconfig"]:
                     # we are changing bases directly to allow import with
                     # removed bases without changing the data from the export
-                    with stage.user.key.update() as userconfig:
-                        indexconfig = userconfig['indexes'][stage.index]
+                    with stage.key_index.update() as indexconfig:
                         indexconfig["bases"] = tuple(bases)
                 stages.append(stage)
         del tree

@@ -161,7 +161,7 @@ class RootModel:
         return user
 
     def create_stage(self, user, index, type="stage", **kwargs):
-        if index in user.get().get("indexes", {}):
+        if index in user.key_indexes.get():
             raise InvalidIndex("indexname '%s' already exists" % index)
         if not is_valid_name(index):
             raise InvalidIndex(
@@ -177,7 +177,9 @@ class RootModel:
         for key, value in stage.customizer.get_default_config_items():
             kwargs.setdefault(key, value)
         stage._modify(**kwargs)
-        threadlog.info("created index %s: %s", stage.name, stage.ixconfig)
+        with user.key_indexes.update() as indexes:
+            indexes.add(index)
+        threadlog.debug("created index %s: %s", stage.name, stage.ixconfig)
         return stage
 
     def delete_user(self, username):
@@ -185,19 +187,19 @@ class RootModel:
             userlist.remove(username)
 
     def delete_stage(self, username, index):
+        stage = self.getstage(username, index)
+        stage.key_index.delete()
         user = self.get_user(username)
-        with user.key.update() as userconfig:
-            indexes = userconfig.get("indexes", {})
+        with user.key_indexes.update() as indexes:
             if index not in indexes:
                 threadlog.info("index %s not exists", index)
-                return False
-            del indexes[index]
+                return
+            indexes.remove(index)
             self.xom.del_singletons(f"{username}/{index}")
 
     def get_user(self, name):
         user = User(self, name)
-        if user.key.exists():
-            return user
+        return user if user.key.exists() else None
 
     def get_userlist(self):
         return [User(self, name) for name in self.keyfs.USERLIST.get()]
@@ -220,7 +222,7 @@ class RootModel:
         _user = self.get_user(username)
         if _user is None:
             return None
-        ixconfig = _user.get()["indexes"].get(indexname, {})
+        ixconfig = _user.key_index(indexname).get_mutable()
         if not ixconfig:
             return None
         return _user._getstage(indexname, ixconfig["type"], ixconfig)
@@ -332,10 +334,11 @@ class User:
         self.keyfs = parent.keyfs
         self.xom = parent.xom
         self.name = name
+        self.key = self.keyfs.USER(user=self.name)
+        self.key_indexes = self.keyfs.INDEXLIST(user=self.name)
 
-    @property
-    def key(self):
-        return self.keyfs.USER(user=self.name)
+    def key_index(self, index):
+        return self.keyfs.INDEX(user=self.name, index=index)
 
     def get_cleaned_config(self, **kwargs):
         result = {}
@@ -352,6 +355,7 @@ class User:
                 "Unknown keys in user config: %s" % ", ".join(unknown_keys))
 
     def _set(self, newuserconfig):
+        assert "indexes" not in newuserconfig
         with self.key.update() as userconfig:
             userconfig.update(newuserconfig)
             threadlog.info("internal: set user information %r", self.name)
@@ -375,7 +379,6 @@ class User:
                 elif key in userconfig:
                     del userconfig[key]
                     modified[key] = None
-            userconfig.setdefault("indexes", {})
             if self.modification_update_keys.intersection(modified):
                 if "created" not in userconfig:
                     # old data will be set to epoch
@@ -384,6 +387,7 @@ class User:
                     # only set modified if not created at the same time
                     modified_ts = strftime("%Y-%m-%dT%H:%M:%SZ", gmtime())
                     modified["modified"] = userconfig["modified"] = modified_ts
+            assert "indexes" not in userconfig
         return ["%s=%s" % (k, v) for k, v in sorted(modified.items())]
 
     def modify(self, **kwargs):
@@ -401,8 +405,7 @@ class User:
 
     def delete(self):
         # delete all projects on the index
-        userconfig = self.get()
-        for name in list(userconfig.get("indexes", {})):
+        for name in self.key_indexes.get():
             self.getstage(name).delete()
         # delete the user information itself
         self.key.delete()
@@ -424,15 +427,22 @@ class User:
         return False
 
     def get(self, credentials=False):
-        d = get_mutable_deepcopy(self.key.get())
-        if not d:
-            return d
+        if not self.key.exists():
+            return {}
+        d = self.key.get_mutable()
         if not credentials:
             for key in list(d):
                 if key not in self.visible_keys:
                     del d[key]
         d["username"] = self.name
+        d["indexes"] = self.get_indexes()
         return d
+
+    def get_indexes(self):
+        indexes = {}
+        for index in self.key_indexes.get():
+            indexes[index] = self.key_index(index).get_mutable()
+        return indexes
 
     def create_stage(self, index, type="stage", **kwargs):
         return self.parent.create_stage(self, index, type=type, **kwargs)
@@ -682,6 +692,7 @@ class BaseStage(object):
         # the following attributes are per-xom singletons
         self.keyfs = xom.keyfs
         self.filestore = xom.filestore
+        self.key_index = self.keyfs.INDEX(user=username, index=index)
 
     def __repr__(self):
         return f"<{self.__class__.__name__} {self.name}>"
@@ -786,8 +797,7 @@ class BaseStage(object):
         return self.model.get_user(self.username)
 
     def get(self):
-        userconfig = self.user.get()
-        return userconfig.get("indexes", {}).get(self.index)
+        return self.key_index.get_mutable()
 
     def delete(self):
         self.model.delete_stage(self.username, self.index)
@@ -1034,10 +1044,9 @@ class BaseStage(object):
                 raise InvalidIndexconfig(
                     ["indexconfig got unexpected keyword arguments: %s"
                      % ", ".join("%s=%s" % x for x in unknown.items())])
-        # modify user/indexconfig
-        with self.user.key.update() as userconfig:
+        # modify indexconfig
+        with self.key_index.update() as newconfig:
             oldconfig = dict(self.ixconfig)
-            newconfig = userconfig["indexes"].setdefault(self.index, {})
             for key, value in list(ixconfig.items()):
                 if value is RemoveValue:
                     newconfig.pop(key, None)
@@ -1540,34 +1549,20 @@ class PrivateStage(BaseStage):
             if last_serial >= at_serial:
                 return last_serial
             for version in versions:
-                (version_serial, version) = tx.get_last_serial_and_value_at(
-                    self.key_projversion(project, version), at_serial)
+                (version_serial, version_value) = tx.get_last_serial_and_value_at(
+                    self.key_projversion(project, version), at_serial
+                )
                 last_serial = max(last_serial, version_serial)
                 if last_serial >= at_serial:
                     return last_serial
         # no project uploaded yet
-        user_key = self.user.key
-        (user_serial, user_config) = tx.get_last_serial_and_value_at(
-            user_key, at_serial)
-        try:
-            current_index_config = user_config["indexes"][self.index]
-        except KeyError:
-            raise KeyError("The index '%s' was not committed yet." % self.index)
-        # if any project is newer than the user config, we are done
-        if last_serial >= user_serial:
+        index_key = self.key_index
+        (index_serial, index_config) = tx.get_last_serial_and_value_at(
+            index_key, at_serial
+        )
+        if last_serial >= index_serial:
             return last_serial
-        relpath = user_key.relpath
-        for serial, user_config in tx.iter_serial_and_value_backwards(relpath, user_serial):
-            if user_serial < last_serial:
-                break
-            index_config = get_mutable_deepcopy(
-                user_config["indexes"].get(self.index, {}))
-            if current_index_config == index_config:
-                user_serial = serial
-                continue
-            last_serial = user_serial
-            break
-        return last_serial
+        return index_serial
 
 
 class StageCustomizer(BaseStageCustomizer):
@@ -1994,6 +1989,8 @@ def add_keys(xom, keyfs):
     # users and index configuration
     keyfs.add_key("USER", "{user}/.config", dict)
     keyfs.add_key("USERLIST", ".config", set)
+    keyfs.add_key("INDEX", "{user}/{index}/.config", dict)
+    keyfs.add_key("INDEXLIST", "{user}/.indexes", set)
 
     # type mirror related data
     keyfs.add_key("PYPIFILE_NOMD5", "{user}/{index}/+e/{dirname}/{basename}", dict)
@@ -2014,7 +2011,7 @@ def add_keys(xom, keyfs):
     keyfs.PROJVERSION.on_key_change(sub.on_changed_version_config)
     keyfs.STAGEFILE.on_key_change(sub.on_changed_file_entry)
     keyfs.MIRRORNAMESINIT.on_key_change(sub.on_mirror_initialnames)
-    keyfs.USER.on_key_change(sub.on_userchange)
+    keyfs.INDEX.on_key_change(sub.on_changed_index)
 
 
 class EventSubscribers:
@@ -2092,10 +2089,11 @@ class EventSubscribers:
                     projectnames=stage.list_projects_perstage()
                 )
 
-    def on_userchange(self, ev):
-        """ when user data changes. """
+    def on_changed_index(self, ev):
+        """when index data changes."""
         params = ev.typedkey.params
         username = params.get("user")
+        indexname = params.get("index")
         keyfs = self.xom.keyfs
         with keyfs.read_transaction(at_serial=ev.at_serial) as tx:
 
@@ -2104,18 +2102,14 @@ class EventSubscribers:
                     old = tx.get_value_at(ev.typedkey, ev.back_serial)
                 except KeyError:
                     # the user was previously deleted
-                    old = {}
-                old_indexes = set(old.get("indexes", {}))
+                    old = None
             else:
-                old_indexes = set()
-            threadlog.debug("old indexes: %s", old_indexes)
-
-            user = self.xom.model.get_user(username)
-            if user is None:
+                old = None
+            if old is not None:
+                # we only care about new stages
+                return
+            stage = self.xom.model.getstage(username, indexname)
+            if stage is None:
                 # deleted
                 return
-            userconfig = user.key.get()
-            for name in userconfig.get("indexes", {}):
-                if name not in old_indexes:
-                    stage = user.getstage(name)
-                    self.xom.config.hook.devpiserver_stage_created(stage=stage)
+            self.xom.config.hook.devpiserver_stage_created(stage=stage)

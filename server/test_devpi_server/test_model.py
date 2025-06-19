@@ -563,10 +563,10 @@ class TestStage:
         with xom.keyfs.write_transaction():
             user = xom.model.create_user("hello", password="123")
             config = udict(index="world", bases=(), type="stage", volatile=True)
-            user.create_stage(**config)
-            with user.key.update() as userconfig:
+            stage = user.create_stage(**config)
+            with stage.key_index.update() as ixconfig:
                 # here we inject the legacy setting
-                userconfig['indexes']['world']['pypi_whitelist'] = []
+                ixconfig["pypi_whitelist"] = []
             del user
         with xom.keyfs.write_transaction():
             stage = xom.model.getstage('hello/world')
@@ -765,9 +765,9 @@ class TestStage:
             stage = user.create_stage(**config)
             assert stage.ixconfig["mirror_whitelist_inheritance"] == "intersection"
             assert stage.get_whitelist_inheritance() == "intersection"
-            with user.key.update() as userconfig:
+            with stage.key_index.update() as ixconfig:
                 # here we remove the value to simulate an old stage
-                del userconfig['indexes']['world']['mirror_whitelist_inheritance']
+                del ixconfig["mirror_whitelist_inheritance"]
         with keyfs.read_transaction():
             stage = xom.model.getstage("hello/world")
             assert 'mirror_whitelist_inheritance' not in stage.ixconfig
@@ -1150,7 +1150,7 @@ class TestStage:
         with xom.keyfs.write_transaction():
             stage = user.create_stage(**udict(
                 index="world", bases=(), type="stage", volatile=True))
-            with pytest.raises(KeyError, match='not committed yet'):
+            with pytest.raises(KeyError, match="hello/world/.config"):
                 stage.get_last_change_serial_perstage()
         assert current_serial == xom.keyfs.get_current_serial() - 1
         current_serial = xom.keyfs.get_current_serial()
