@@ -266,15 +266,7 @@ class KeyFS:
     class ReadOnly(Exception):
         """ attempt to open write transaction while in readonly mode. """
 
-    def __init__(
-        self,
-        basedir,
-        storage_info,
-        *,
-        io_file_factory=None,
-        readonly=False,
-        cache_size=10000,
-    ):
+    def __init__(self, basedir, storage_info, *, io_file_factory=None, readonly=False):
         self.base_path = Path(basedir)
         self.base_path.mkdir(parents=True, exist_ok=True)
         self._keys = {}
@@ -285,7 +277,6 @@ class KeyFS:
         self._storage = storage_info.storage_factory(
             self.base_path,
             notify_on_commit=self._notify_on_commit,
-            cache_size=cache_size,
             settings={} if storage_info.settings is None else storage_info.settings,
         )
         self.io_file_factory = io_file_factory

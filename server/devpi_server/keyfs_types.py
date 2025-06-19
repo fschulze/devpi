@@ -119,6 +119,7 @@ class StorageInfo:
     connection_cls: type[IStorageConnection] = field(kw_only=True)
     writer_cls: type[IWriter] = field(kw_only=True)
     storage_factory: Callable = field(kw_only=True)
+    process_settings: Callable | None = field(kw_only=True)
     settings: dict = field(kw_only=True, default={})
 
     @property

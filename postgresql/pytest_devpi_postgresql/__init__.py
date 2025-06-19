@@ -124,10 +124,7 @@ def devpipostgresql_postgresql(
                 settings['ssl_certfile'] = client_cert
 
             storage = main.Storage(
-                tmpdir,
-                notify_on_commit=lambda: None,
-                cache_size=10000,
-                settings=settings,
+                tmpdir, notify_on_commit=lambda: None, settings=settings
             )
             storage.engine.dispose()
             yield settings
@@ -252,6 +249,7 @@ def _devpipostgresql_devpiserver_describe_storage_backend_mock(
             connection_cls=result.connection_cls,
             writer_cls=result.writer_cls,
             storage_factory=Storage,
+            process_settings=Storage.process_settings,
             settings=result.settings,
         )
 

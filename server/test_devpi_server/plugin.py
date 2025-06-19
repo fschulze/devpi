@@ -318,7 +318,16 @@ def makexom(request, gen_path, http, monkeypatch, storage_args, storage_plugin):
         else:
             fullopts = ["devpi-server", "--serverdir", serverdir] + list(opts)
         if not request.node.get_closest_marker("no_storage_option"):
-            fullopts.extend(storage_args(serverdir))
+            _storage_args = storage_args(serverdir)
+            if "--storage" in fullopts:
+                assert len(_storage_args) == 1
+                storage_options = fullopts[fullopts.index("--storage") + 1]
+                assert storage_options.startswith(":")
+                if ":" in _storage_args[0]:
+                    _storage_args[0] = f"{_storage_args[0]},{storage_options[1:]}"
+                else:
+                    _storage_args[0] = f"{_storage_args[0]}{storage_options}"
+            fullopts.extend(_storage_args)
         fullopts = [str(x) for x in fullopts]
         config = parseoptions(pm, fullopts)
         config.init_nodeinfo()
