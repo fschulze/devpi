@@ -42,20 +42,12 @@ def fsck():
         got_errors = False
         with xom.keyfs.read_transaction() as tx:
             log.info("Checking at serial %s", tx.at_serial)
-            relpaths = tx.iter_keys_at_serial(keys, tx.at_serial)
-            for item in relpaths:
-                if item.value is None:
-                    continue
+            for key, value in tx.iter_ulidkey_values_for(keys, fill_cache=False):
                 if time.time() - last_time > 5:
                     last_time = time.time()
-                    log.info(
-                        "Processed a total of %s files (serial %s/%s) so far.",
-                        processed,
-                        tx.at_serial - item.serial,
-                        tx.at_serial,
-                    )
+                    log.info("Processed a total of %s files so far.", processed)
                 processed = processed + 1
-                entry = FileEntry(item.key, item.value)
+                entry = FileEntry(key, value)
                 if not entry.last_modified:
                     continue
                 if not entry.file_exists():

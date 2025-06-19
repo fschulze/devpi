@@ -1192,21 +1192,20 @@ class InitialQueueThread:
                 for stage in user.getstages():
                     self.shared_data.set_index_type_for(
                         stage.name, stage.ixconfig['type'])
-            relpaths = tx.iter_keys_at_serial(keys, tx.at_serial)
-            for item in relpaths:
+            for key, value in tx.iter_ulidkey_values_for(keys, fill_cache=False):
                 self.thread.exit_if_shutdown()
-                if item.value is deleted:
-                    continue
                 if self.shared_data.queue.qsize() > self.shared_data.num_threads:
                     # let the queue be processed before filling it further
                     self.shared_data.wait()
                 if time.time() - last_time > 5:
                     last_time = time.time()
                     threadlog.info(
-                        "Processed a total of %s files (serial %s/%s) and queued %s so far.",
-                        processed, tx.at_serial - item.serial, tx.at_serial, queued)
+                        "Processed a total of %s files and queued %s so far.",
+                        processed,
+                        queued,
+                    )
                 processed = processed + 1
-                key = item.key
+                entry = FileEntry(key, value)
                 index_name = self.shared_data.get_index_name_for(key)
                 if index_name in skip_indexes:
                     threadlog.debug(
@@ -1219,14 +1218,20 @@ class InitialQueueThread:
                         "Skipping %s because %r in %s.", key, index_type, skip_indexes
                     )
                     continue
-                entry = FileEntry(key, item.value)
                 if entry.file_exists() or not entry.last_modified:
                     continue
                 # note the negated serial for the PriorityQueue
                 # the index_type boolean will prioritize non mirrors
-                self.shared_data.queue.put((
-                    index_type, -item.serial, item.relpath,
-                    item.keyname, item.value, item.back_serial))
+                self.shared_data.queue.put(
+                    (
+                        index_type,
+                        -key.last_serial,
+                        key.relpath,
+                        key.keyname,
+                        key.value,
+                        key.back_serial,
+                    )
+                )
                 queued = queued + 1
         threadlog.info(
             "Queued %s of %s files for possible download from primary",

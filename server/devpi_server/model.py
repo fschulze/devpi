@@ -148,10 +148,10 @@ class RootModel:
     def __init__(self, xom):
         self.xom = xom
         self.keyfs = xom.keyfs
+        self.key_user = self.keyfs.USER
 
     def create_user(self, username, password, **kwargs):
-        userlist = self.keyfs.USERLIST.get_mutable()
-        if username in userlist:
+        if self.key_user(username).exists():
             raise InvalidUser("username '%s' already exists" % username)
         if not is_valid_name(username):
             raise InvalidUser(
@@ -160,8 +160,6 @@ class RootModel:
         user = User(self, username)
         kwargs.update(created=strftime("%Y-%m-%dT%H:%M:%SZ", gmtime()))
         user._modify(password=password, **kwargs)
-        userlist.add(username)
-        self.keyfs.USERLIST.set(userlist)
         if "email" in kwargs:
             threadlog.info("created user %r with email %r" % (username, kwargs["email"]))
         else:
@@ -169,7 +167,7 @@ class RootModel:
         return user
 
     def create_stage(self, user, index, type="stage", **kwargs):
-        if index in user.key_indexes.get():
+        if user.key_index(index).exists():
             raise InvalidIndex("indexname '%s' already exists" % index)
         if not is_valid_name(index):
             raise InvalidIndex(
@@ -185,35 +183,30 @@ class RootModel:
         for key, value in stage.customizer.get_default_config_items():
             kwargs.setdefault(key, value)
         stage._modify(**kwargs)
-        with user.key_indexes.update() as indexes:
-            indexes.add(index)
         threadlog.debug("created index %s: %s", stage.name, stage.ixconfig)
         return stage
 
     def delete_user(self, username):
-        with self.keyfs.USERLIST.update() as userlist:
-            userlist.remove(username)
+        self.key_user(username).delete()
 
     def delete_stage(self, username, index):
         stage = self.getstage(username, index)
         stage.key_index.delete()
-        user = self.get_user(username)
-        with user.key_indexes.update() as indexes:
-            if index not in indexes:
-                threadlog.info("index %s not exists", index)
-                return
-            indexes.remove(index)
-            self.xom.del_singletons(f"{username}/{index}")
+        self.xom.del_singletons(f"{username}/{index}")
 
     def get_user(self, name):
         user = User(self, name)
         return user if user.key.exists() else None
 
     def get_userlist(self):
-        return [User(self, name) for name in self.keyfs.USERLIST.get()]
+        # using iter_ulidkey_values pre-fetches values of users
+        # which are then used in User
+        return [
+            User(self, key.name) for key, v in self.key_user().iter_ulidkey_values()
+        ]
 
     def get_usernames(self):
-        return set(user.name for user in self.get_userlist())
+        return {key.params["user"] for key in self.key_user().iter_ulidkeys()}
 
     def _get_user_and_index(self, user, index=None):
         assert isinstance(user, str)
@@ -342,11 +335,8 @@ class User:
         self.keyfs = parent.keyfs
         self.xom = parent.xom
         self.name = name
-        self.key = self.keyfs.USER(user=self.name)
-        self.key_indexes = self.keyfs.INDEXLIST(user=self.name)
-
-    def key_index(self, index):
-        return self.keyfs.INDEX(user=self.name, index=index)
+        self.key = self.keyfs.USER(name)
+        self.key_index = self.keyfs.INDEX(user=name)
 
     def get_cleaned_config(self, **kwargs):
         result = {}
@@ -413,8 +403,8 @@ class User:
 
     def delete(self):
         # delete all projects on the index
-        for name in self.key_indexes.get():
-            self.getstage(name).delete()
+        for key in list(self.key_index.iter_ulidkeys()):
+            self.getstage(key.params["index"]).delete()
         # delete the user information itself
         self.key.delete()
         self.parent.delete_user(self.name)
@@ -447,10 +437,10 @@ class User:
         return d
 
     def get_indexes(self):
-        indexes = {}
-        for index in self.key_indexes.get():
-            indexes[index] = self.key_index(index).get_mutable()
-        return indexes
+        return {
+            key.params["index"]: get_mutable_deepcopy(value)
+            for key, value in self.key_index.iter_ulidkey_values()
+        }
 
     def create_stage(self, index, type="stage", **kwargs):
         return self.parent.create_stage(self, index, type=type, **kwargs)
@@ -677,7 +667,7 @@ class SimpleLinks:
         return f"<{clsname} stale={self.stale!r} [{content}]>"
 
 
-class BaseStage(object):
+class BaseStage:
     InvalidIndex = InvalidIndex
     InvalidIndexconfig = InvalidIndexconfig
     InvalidUser = InvalidUser
@@ -2114,9 +2104,7 @@ def normalize_bases(model, bases):
 def register_keys(xom, keyfs):
     # users and index configuration
     user_key = keyfs.register_named_key("USER", "{user}", None, dict)
-    keyfs.register_anonymous_key("USERLIST", None, set)
     index_key = keyfs.register_named_key("INDEX", "{index}", user_key, dict)
-    keyfs.register_anonymous_key("INDEXLIST", user_key, set)
 
     # type mirror related data
     keyfs.register_named_key(

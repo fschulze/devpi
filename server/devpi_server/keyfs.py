@@ -855,13 +855,6 @@ class Transaction:
             self._model = TransactionRootModel(xom)
         return self._model
 
-    def iter_keys_at_serial(
-        self, keys: LocatedKey, at_serial: int
-    ) -> Iterator[KeyData]:
-        return self.conn.iter_keys_at_serial(
-            keys, at_serial, fill_cache=False, with_deleted=True
-        )
-
     def iter_serial_and_value_backwards(
         self, key: LocatedKey | ULIDKey, last_serial: int
     ) -> Iterator[tuple[int, KeyFSTypesRO]]:
