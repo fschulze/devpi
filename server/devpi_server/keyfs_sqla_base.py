@@ -189,6 +189,9 @@ class BaseConnection:
             results = self._sqlaconn.execute(results)
         pprint([x._asdict() for x in results])  # noqa: T203 - debugging
 
+    def analyze(self) -> None:
+        self._sqlaconn.execute(sa.text("ANALYZE"))
+
     def close(self) -> None:
         if hasattr(self, "_sqlaconn"):
             self._sqlaconn.close()
@@ -624,6 +627,11 @@ class Writer:
             (files_commit, files_del) = self.conn._write_dirty_files()
         else:
             (files_commit, files_del) = ([], [])
+        analyze_frequency = (
+            100 if commit_serial < 1000 else 1000 if commit_serial < 20000 else 10000
+        )
+        if ((commit_serial % analyze_frequency) == 0) or len(records) > 10000:
+            self.conn.analyze()
         self.conn.commit()
         self.storage.last_commit_timestamp = time.time()
         return LazyChangesFormatter(
