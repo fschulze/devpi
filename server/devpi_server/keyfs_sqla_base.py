@@ -1139,8 +1139,8 @@ class BaseStorage:
         self.basedir = basedir
         self._notify_on_commit = notify_on_commit
         self._cache = Cache(
-            settings.get("large_cache_size", 500),
-            settings.get("small_cache_size", 9500),
+            settings.get("large_cache_size", 5000),
+            settings.get("small_cache_size", 95000),
         )
         self._keys = {}
         self.last_commit_timestamp = time.time()
