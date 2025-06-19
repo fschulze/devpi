@@ -238,20 +238,13 @@ class TestConfig:
         assert config.args.logger_cfg == config_file
 
     def test_keyfs_cache_size(self, makexom):
-        opts = ("--keyfs-cache-size", "200")
-        config = make_config(("devpi-server",) + opts)
-        assert config.args.keyfs_cache_size == 200
+        opts = ("--storage", ":large_cache_size=10,small_cache_size=190")
+        config = make_config(("devpi-server", *opts))
+        assert opts[1] in config.args.storage
         xom = makexom(opts=opts)
-        _changelog_cache = getattr(xom.keyfs._storage, "_changelog_cache", None)
-        _relpath_cache = getattr(xom.keyfs._storage, "_relpath_cache", None)
-        if not _changelog_cache and not _relpath_cache:
-            pytest.skip("Storage has no _changelog_cache and _relpath_cache")
-        size = 0
-        if _changelog_cache:
-            size += _changelog_cache.size
-        if _relpath_cache:
-            size += _relpath_cache.size
-        assert size == 200
+        _large_cache = xom.keyfs._storage._large_cache
+        _small_cache = xom.keyfs._storage._small_cache
+        assert (_large_cache.size + _small_cache.size) == 200
 
     @pytest.mark.no_storage_option
     def test_storage_backend_default(self, makexom):
@@ -276,6 +269,7 @@ class TestConfig:
                     connection_cls=keyfs_sqla_lite.Connection,
                     writer_cls=keyfs_sqla_lite.Writer,
                     storage_cls=keyfs_sqla_lite.Storage,
+                    process_settings=keyfs_sqla_lite.Storage.process_settings,
                     storage_factory=keyfs_sqla_lite.Storage,
                     name="foo",
                     description="Foo backend",
@@ -409,6 +403,7 @@ class TestConfigFile:
                     connection_cls=keyfs_sqla_lite.Connection,
                     writer_cls=keyfs_sqla_lite.Writer,
                     storage_cls=keyfs_sqla_lite.Storage,
+                    process_settings=keyfs_sqla_lite.Storage.process_settings,
                     storage_factory=keyfs_sqla_lite.Storage,
                     name="foo",
                     description="Foo backend",

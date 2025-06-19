@@ -113,9 +113,7 @@ class IIOFile(Interface):
 
 
 class IStorage(Interface):
-    def __init__(
-        basedir: Path, *, notify_on_commit: Callable, cache_size: int, settings: dict
-    ) -> None:
+    def __init__(basedir: Path, *, notify_on_commit: Callable, settings: dict) -> None:
         """Create the storage object and initialize it."""
 
     def close() -> None:

@@ -430,7 +430,6 @@ class XOM:
             storage_info,
             io_file_factory=self.config.io_file_factory,
             readonly=self.is_replica(),
-            cache_size=self.config.args.keyfs_cache_size,
         )
         register_keys(self, keyfs)
         try:

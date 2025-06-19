@@ -293,14 +293,6 @@ def add_storage_options(parser, pluginmanager):
         + ", ".join(f'"{x.name}": {x.description}' for x in backends),
     )
 
-    parser.addoption(
-        "--keyfs-cache-size", type=int, metavar="NUM",
-        action="store", default=10000,
-        help="size of keyfs cache. If your devpi-server installation "
-             "gets a lot of writes, then increasing this might "
-             "improve performance. Each entry uses 1kb of memory on "
-             "average. So by default about 10MB are used.")
-
 
 def add_init_options(parser, pluginmanager):
     parser.addoption(
@@ -976,6 +968,7 @@ class Config:
                     key, value = item.split('=', 1)
                     settings[key] = value
         storage_info = self._storage_info_from_name(name, settings)
+        settings = storage_info.process_settings(settings)
         self._storage_info = dict(name=storage_info.name, settings=settings)
 
     def storage_exists(self):
