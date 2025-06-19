@@ -253,9 +253,6 @@ extend-ignore = [
 "devpi_server/keyfs_sqlite.py" = [
     "I001", # maybe cleanup later - import block unsorted
 ]
-"devpi_server/keyfs_sqlite_fs.py" = [
-    "I001", # maybe cleanup later - import block unsorted
-]
 "devpi_server/main.py" = [
     "I001", # maybe cleanup later - import block unsorted
 ]
