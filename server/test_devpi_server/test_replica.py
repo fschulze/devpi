@@ -180,7 +180,7 @@ class TestReplicaThread:
 
     @pytest.fixture
     def mockchangelog(self, http, monkeypatch, rt):
-        monkeypatch.setattr(rt, "http", http)
+        monkeypatch.setattr(rt.connection, "http", http)
 
         def mockchangelog(num, code, data=b'',
                           uuid="123", headers=None):
@@ -197,7 +197,9 @@ class TestReplicaThread:
                 url = url + '?initial_fetch'
             if isinstance(data, list):
                 data = dumps([(num, data)])
-            rt.http.mockresponse(url, code=code, content=data, headers=headers)
+            rt.connection.http.mockresponse(
+                url, code=code, content=data, headers=headers
+            )
 
         return mockchangelog
 
@@ -222,10 +224,12 @@ class TestReplicaThread:
         data = get_changelog_entry(xom, 0)
         mockchangelog(0, code=200, data=data)
         # get the result
-        orig_req = rt.http.url2response["http://localhost/+changelog/0-?initial_fetch"]
+        orig_req = rt.connection.http.url2response[
+            "http://localhost/+changelog/0-?initial_fetch"
+        ]
         # setup so the first attempt fails, then the second succeeds
         url2response = mock.Mock()
-        monkeypatch.setattr(rt.http, "url2response", url2response)
+        monkeypatch.setattr(rt.connection.http, "url2response", url2response)
         url2response.get.side_effect = [OSError(), orig_req]
         sleep = mock.Mock()
         monkeypatch.setattr(rt.thread, "sleep", sleep)
