@@ -1,4 +1,5 @@
 from devpi_common.types import cached_property
+from devpi_server.filestore_fs import LazyChangesFormatter
 from devpi_server.fileutil import SpooledTemporaryFile
 from devpi_server.fileutil import dumps
 from devpi_server.fileutil import loads
@@ -724,13 +725,22 @@ class Writer:
     def set_rel_renames(self, rel_renames):
         self.rel_renames = rel_renames
 
-    def _db_write_typedkey(self, relpath, name, serial):
+    def _db_insert_typedkey(self, relpath, name, serial):
         q = """
             INSERT INTO kv(key, keyname, serial)
-                VALUES (:relpath, :name, :serial)
-            ON CONFLICT (key) DO UPDATE
-                SET keyname = EXCLUDED.keyname, serial = EXCLUDED.serial;"""
+                VALUES (:relpath, :name, :serial);"""
         self.conn._sqlconn.run(q, relpath=relpath, name=name, serial=serial)
+
+    def _db_update_typedkey(self, relpath, name, serial, back_serial):
+        q = """
+            UPDATE kv SET serial = :serial
+            WHERE
+                key = :relpath
+                AND keyname = :name
+                AND serial = :back_serial;"""
+        self.conn._sqlconn.run(
+            q, relpath=relpath, name=name, serial=serial, back_serial=back_serial
+        )
 
     def __enter__(self):
         self.conn.begin()
@@ -746,26 +756,13 @@ class Writer:
         try:
             del self.commit_serial
             if cls is None:
-                self.conn._write_dirty_files()
-                for relpath, (keyname, back_serial, value) in self.changes.items():
-                    if back_serial is None:
-                        try:
-                            (_, back_serial) = self.conn.db_read_typedkey(relpath)
-                        except KeyError:
-                            back_serial = -1
-                        # update back_serial for write_changelog_entry
-                        self.changes[relpath] = (keyname, back_serial, value)
-                    self._db_write_typedkey(relpath, keyname, commit_serial)
-                entry = (self.changes, self.rel_renames)
-                self.conn.write_changelog_entry(commit_serial, entry)
-                self.conn.commit()
-                message = "committed: keys: %s"
-                args = [",".join(map(repr, list(self.changes)))]
+                changes_formatter = self.commit(commit_serial)
                 self.log.info("committed at %s", commit_serial)
-                self.log.debug(message, *args)
+                self.log.debug("committed: %s", changes_formatter)
+
                 self.storage._notify_on_commit(commit_serial)
             else:
-                self.conn.rollback()
+                self.rollback()
                 self.log.info("roll back in %s", commit_serial)
             del self.conn
             del self.storage
@@ -775,3 +772,21 @@ class Writer:
             raise
         finally:
             thread_pop_log("fswriter%s:" % commit_serial)
+
+    def commit(self, commit_serial):
+        self.conn._write_dirty_files()
+        for relpath, (keyname, back_serial, _value) in self.changes.items():
+            if back_serial is None:
+                raise RuntimeError
+            if back_serial == -1:
+                self._db_insert_typedkey(relpath, keyname, commit_serial)
+            else:
+                self._db_update_typedkey(relpath, keyname, commit_serial, back_serial)
+        entry = (self.changes, self.rel_renames)
+        self.conn.write_changelog_entry(commit_serial, entry)
+        self.conn.commit()
+        self.storage.last_commit_timestamp = time.time()
+        return LazyChangesFormatter(self.changes, (), ())
+
+    def rollback(self):
+        self.conn.rollback()
