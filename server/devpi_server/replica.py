@@ -791,9 +791,7 @@ class FileReplicationSharedData:
         for key in changes:
             if key.key_name == user_keyname:
                 self.update_index_types(keyfs, serial, key, *changes[key])
-        file_keynames = frozenset(
-            (keyfs.STAGEFILE.key_name, keyfs.PYPIFILE_NOMD5.key_name)
-        )
+        file_keynames = frozenset((keyfs.FILE.key_name, keyfs.FILE_NOHASH.key_name))
         for key in changes:
             if key.key_name in file_keynames:
                 self.on_import_file(keyfs, serial, key, *changes[key])
@@ -1342,7 +1340,7 @@ class InitialQueueThread:
         thread_push_log("[FREPQ]")
         keyfs = self.xom.keyfs
         threadlog.info("Queuing files for possible download from primary")
-        keys = (keyfs.PYPIFILE_NOMD5, keyfs.STAGEFILE)
+        keys = (keyfs.FILE_NOHASH, keyfs.FILE)
         last_time = time.time()
         self.shared_data.initial_processed = 0
         queued = 0

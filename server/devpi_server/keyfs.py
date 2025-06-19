@@ -257,7 +257,7 @@ class TxNotificationThread:
             changes: list[KeyData] = list(conn.iter_changes_at(event_serial))
         # we first check for missing files before we call subscribers
         for change in changes:
-            if change.key.key_name in ("STAGEFILE", "PYPIFILE_NOMD5"):
+            if change.key.key_name in ("FILE", "FILE_NOHASH"):
                 self.check_file_change(change, event_serial)
         # all files exist or are deleted in a later serial,
         # call subscribers now
@@ -394,9 +394,7 @@ class KeyFS:
             ) -> Iterable[FilePathInfo]:
                 for relpath in relpaths:
                     if (
-                        key := self.match_key(
-                            relpath, self.PYPIFILE_NOMD5, self.STAGEFILE
-                        )
+                        key := self.match_key(relpath, self.FILE_NOHASH, self.FILE)
                     ) is not None and isinstance(
                         val := next(
                             conn.iter_keys_at_serial(

@@ -1126,7 +1126,7 @@ class TestStage:
                 entry = FileEntry(ev.data.key, meta=ev.data.value)
                 results.append((entry.basename, entry.file_exists()))
 
-        mapp.xom.keyfs.notifier.on_key_change(mapp.xom.keyfs.PYPIFILE_NOMD5, subscriber)
+        mapp.xom.keyfs.notifier.on_key_change(mapp.xom.keyfs.FILE_NOHASH, subscriber)
         content = b"123"
         pypistage.mock_extfile("/simple/pytest/pytest-1.0.zip", content)
         pypistage.mock_simple("pytest", '<a href="pytest-1.0.zip" /a>')

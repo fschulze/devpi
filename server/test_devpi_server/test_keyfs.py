@@ -1006,8 +1006,8 @@ def test_crash_recovery(caplog, keyfs, storage_info):
         pytest.skip("The storage doesn't have marker 'storage_with_filesystem'.")
     content = b'foo'
     hashes = get_hashes(content)
-    key = keyfs.register_patterned_key("PYPIFILE_NOMD5", "+e/{path}", None, dict)
-    key = keyfs.register_patterned_key("STAGEFILE", "+f/{path}", None, dict)
+    key = keyfs.register_patterned_key("FILE_NOHASH", "+e/{path}", None, dict)
+    key = keyfs.register_patterned_key("FILE", "+f/{path}", None, dict)
     file_path_info = FilePathInfo(RelPath("+f/foo"), hashes.get_default_value())
     with keyfs.write_transaction() as tx:
         key(path="foo").set(dict(hashes=hashes))
