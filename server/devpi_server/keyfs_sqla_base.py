@@ -9,6 +9,7 @@ from .keyfs_types import ULID
 from .log import thread_pop_log
 from .log import thread_push_log
 from .log import threadlog
+from .markers import Absent
 from .markers import absent
 from .markers import deleted
 from .readonly import ReadonlyView
@@ -48,6 +49,48 @@ if TYPE_CHECKING:
 
 warnings.simplefilter("error", sa.exc.SADeprecationWarning)
 warnings.simplefilter("error", sa.exc.SAWarning)
+
+
+class Cache:
+    def __init__(self, large_cache_size: int, small_cache_size: int) -> None:
+        self._large_cache = LRUCache(large_cache_size)
+        self._small_cache = LRUCache(small_cache_size)
+
+    def add_keydata(self, serial: int, keydata: KeyData) -> None:
+        cache_key = (keydata.keyname, keydata.relpath)
+        if (
+            keydata.value is not deleted
+            and gettotalsizeof(keydata.value, maxlen=100000) is None
+        ):
+            # keydata.value is big, put it in the large cache,
+            # which has fewer entries to preserve memory
+            self._large_cache.put((serial, cache_key), keydata)
+        else:
+            # keydata is small
+            self._small_cache.put((serial, cache_key), keydata)
+
+    def get(self, key: Any, default: Any = None) -> Any:
+        result = self._small_cache.get(key, absent)
+        if result is absent:
+            result = self._large_cache.get(key, absent)
+        if result is absent:
+            return default
+        return result
+
+    def get_keydata(self, key: Any, default: Any = None) -> Any:
+        result = self._small_cache.get(key, absent)
+        if not isinstance(result, Absent):
+            return result
+        result = self._large_cache.get(key, absent)
+        if not isinstance(result, Absent):
+            return result
+        return default
+
+    def put(self, key: Any, value: Any) -> None:
+        self._small_cache.put(key, value)
+
+    def put_large(self, key: Any, value: Any) -> None:
+        self._large_cache.put(key, value)
 
 
 class explain(sa.Executable, sa.ClauseElement):
@@ -92,9 +135,8 @@ class BaseConnection:
             if isinstance(member, sa.Table):
                 setattr(self, name, member)
         self.dirty_files = {}
-        self._large_cache = storage._large_cache
+        self._cache = storage._cache
         self._keys = storage._keys
-        self._small_cache = storage._small_cache
 
     def _dump(self) -> None:
         # for debugging
@@ -405,9 +447,7 @@ class BaseConnection:
 
     def get_key_at_serial(self, key: LocatedKey, serial: int) -> KeyData:
         cache_key = (key.key_name, key.relpath)
-        result = self._small_cache.get((serial, cache_key), absent)
-        if result is absent:
-            result = self._large_cache.get((serial, cache_key), absent)
+        result = self._cache.get_keydata((serial, cache_key), absent)
         if result is absent:
             results = list(
                 self._iter_relpaths_at((sa.tuple_(key.relpath, key.key_name),), serial)
@@ -415,16 +455,7 @@ class BaseConnection:
             if not results:
                 raise KeyError(key)
             (result,) = results
-        if (
-            result.value is not deleted
-            and gettotalsizeof(result.value, maxlen=100000) is None
-        ):
-            # result is big, put it in the changelog cache,
-            # which has fewer entries to preserve memory
-            self._large_cache.put((serial, cache_key), result)
-        else:
-            # result is small
-            self._small_cache.put((serial, cache_key), result)
+            self._cache.add_keydata(serial, result)
         return result
 
     def iter_keys_at_serial(
@@ -623,8 +654,10 @@ class BaseStorage:
     ) -> None:
         self.basedir = basedir
         self._notify_on_commit = notify_on_commit
-        self._large_cache = LRUCache(settings.get("large_cache_size", 500))
-        self._small_cache = LRUCache(settings.get("small_cache_size", 9500))
+        self._cache = Cache(
+            settings.get("large_cache_size", 500),
+            settings.get("small_cache_size", 9500),
+        )
         self._keys = {}
         self.last_commit_timestamp = time.time()
 
@@ -676,8 +709,8 @@ class BaseStorage:
 
 def cache_metrics(storage: BaseStorage) -> list[tuple[str, str, object]]:
     result: list[tuple[str, str, object]] = []
-    large_cache = storage._large_cache
-    small_cache = storage._small_cache
+    large_cache = storage._cache._large_cache
+    small_cache = storage._cache._small_cache
     if large_cache is None and small_cache is None:
         return result
     if large_cache:
