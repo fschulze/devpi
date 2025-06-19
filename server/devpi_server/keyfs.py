@@ -35,7 +35,6 @@ from typing import overload
 import contextlib
 import errno
 import time
-import warnings
 
 
 if TYPE_CHECKING:
@@ -382,17 +381,6 @@ class KeyFS:
     def tx(self):
         return self._threadlocal.tx
 
-    def add_key(self, name, path, type):
-        warnings.warn(
-            "The add_key method is deprecated, use register*_key instead",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        assert isinstance(path, str)
-        key = self.register_named_key(name, path, None, type)
-        self._storage.add_key(key)
-        return key
-
     def register_key(self, key):
         allowed_chars = frozenset("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_")
         key_name = key.key_name
@@ -403,8 +391,7 @@ class KeyFS:
             raise ValueError("Duplicate registration for key named '%s'" % key_name)
         self._keys[key_name] = key
         setattr(self, key_name, key)
-        if hasattr(self._storage, "register_key"):
-            self._storage.register_key(key)
+        self._storage.register_key(key)
         return key
 
     def register_located_key(self, key_name, location, name, key_type):

@@ -116,9 +116,6 @@ class IStorage(Interface):
     ) -> None:
         """Create the storage object and initialize it."""
 
-    def add_key(key: IKeyFSKey) -> None:
-        """Register key information."""
-
     def get_connection(
         *, closing: bool, write: bool, timeout: int
     ) -> IStorageConnection:
@@ -126,6 +123,9 @@ class IStorage(Interface):
 
     def perform_crash_recovery() -> None:
         """Perform recovery from crash during two phase commit."""
+
+    def register_key(key: IKeyFSKey) -> None:
+        """Register key information."""
 
 
 class IStorageConnection(Interface):
