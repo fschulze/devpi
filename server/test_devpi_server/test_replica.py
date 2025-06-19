@@ -1204,9 +1204,9 @@ class TestFileReplicationSharedData:
         cases.extend(permutations(((mirror_file, 2), (stage_file, 0), (deleted_file, 1))))
         cases.extend(permutations(((mirror_file, 2), (stage_file, 1), (deleted_file, 0))))
         for (relpath1, serial1), (relpath2, serial2), (relpath3, serial3) in cases:
-            key1 = shared_data.xom.keyfs.get_key_instance('STAGEFILE', relpath1)
-            key2 = shared_data.xom.keyfs.get_key_instance('STAGEFILE', relpath2)
-            key3 = shared_data.xom.keyfs.get_key_instance('STAGEFILE', relpath3)
+            key1 = shared_data.xom.keyfs.get_key_instance("FILE", relpath1)
+            key2 = shared_data.xom.keyfs.get_key_instance("FILE", relpath2)
+            key3 = shared_data.xom.keyfs.get_key_instance("FILE", relpath3)
             shared_data.on_import_file(None, serial1, key1, None, -1)
             shared_data.on_import_file(None, serial2, key2, None, -1)
             shared_data.on_import_file(None, serial3, key3, None, -1)
@@ -1220,7 +1220,7 @@ class TestFileReplicationSharedData:
 
     def test_serial_priority(self, shared_data):
         relpath = 'root/dev/+f/274/e88b0b3d028fe/pytest-2.1.0.zip'
-        key = shared_data.xom.keyfs.get_key_instance('STAGEFILE', relpath)
+        key = shared_data.xom.keyfs.get_key_instance("FILE", relpath)
         # set the index_types cache to prevent db access
         shared_data.set_index_type_for('root/dev', 'stage')
         result = []
@@ -1242,7 +1242,7 @@ class TestFileReplicationSharedData:
     @pytest.mark.slow
     def test_error_queued(self, shared_data):
         relpath = 'root/dev/+f/274/e88b0b3d028fe/pytest-2.1.0.zip'
-        key = shared_data.xom.keyfs.get_key_instance('STAGEFILE', relpath)
+        key = shared_data.xom.keyfs.get_key_instance("FILE", relpath)
         # set the index_types cache to prevent db access
         shared_data.set_index_type_for('root/dev', 'stage')
 
@@ -1304,7 +1304,7 @@ class TestFileReplicationSharedData:
     def test_deleted_index(self, monkeypatch, shared_data):
         from devpi_server.replica import IndexType
         relpath = "root/dev/+f/274/e88b0b3d028fe/pytest-2.1.0.zip"
-        key = shared_data.xom.keyfs.get_key_instance("STAGEFILE", relpath)
+        key = shared_data.xom.keyfs.get_key_instance("FILE", relpath)
 
         result = []
 
@@ -1342,7 +1342,7 @@ class TestFileReplicationSharedData:
         from devpi_server.markers import deleted
         from devpi_server.replica import IndexType
         relpath = "root/dev/+f/274/e88b0b3d028fe/pytest-2.1.0.zip"
-        key = shared_data.xom.keyfs.get_key_instance("STAGEFILE", relpath)
+        key = shared_data.xom.keyfs.get_key_instance("FILE", relpath)
         userkey = shared_data.xom.keyfs.get_key_instance("USER", "root")
 
         result = []

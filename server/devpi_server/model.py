@@ -843,9 +843,7 @@ class BaseStage:
         for entrypath in entrypaths:
             relpath = entrypath.rsplit("#", 1)[0]
             keys.append(
-                self.keyfs.match_key(
-                    relpath, self.keyfs.PYPIFILE_NOMD5, self.keyfs.STAGEFILE
-                )
+                self.keyfs.match_key(relpath, self.keyfs.FILE_NOHASH, self.keyfs.FILE)
             )
         return keys
 
@@ -2038,13 +2036,11 @@ def register_keys(xom, keyfs):
     user_key = keyfs.register_named_key("USER", "{user}", None, dict)
     index_key = keyfs.register_named_key("INDEX", "{index}", user_key, dict)
 
-    # type mirror related data
-    keyfs.register_named_key(
-        "PYPIFILE_NOMD5", "+e/{dirname}/{basename}", index_key, dict
-    )
+    # mirror related data
+    keyfs.register_named_key("FILE_NOHASH", "+e/{dirname}/{basename}", index_key, dict)
     keyfs.register_anonymous_key("MIRRORNAMESINIT", index_key, int)
 
-    # type "stage" related
+    # "stage" related
     project_key = keyfs.register_named_key(
         "PROJECTNAME", "{project}", index_key, NormalizedName
     )
@@ -2054,7 +2050,7 @@ def register_keys(xom, keyfs):
     )
     keyfs.register_named_key("VERSIONFILE", "{filename}", version_key, dict)
     keyfs.register_named_key(
-        "STAGEFILE", "+f/{hashdir_a}/{hashdir_b}/{filename}", index_key, dict
+        "FILE", "+f/{hashdir_a}/{hashdir_b}/{filename}", index_key, dict
     )
 
     # files related
@@ -2064,7 +2060,7 @@ def register_keys(xom, keyfs):
     keyfs.notifier.on_key_change(
         keyfs.PROJVERSION.key_name, sub.on_changed_version_config
     )
-    keyfs.notifier.on_key_change(keyfs.STAGEFILE.key_name, sub.on_changed_file_entry)
+    keyfs.notifier.on_key_change(keyfs.FILE.key_name, sub.on_changed_file_entry)
     keyfs.notifier.on_key_change(
         keyfs.MIRRORNAMESINIT.key_name, sub.on_mirror_initialnames
     )
