@@ -146,6 +146,9 @@ class IStorage(Interface):
 class IStorageConnection(Interface):
     storage: IStorage = Attribute(""" A reference back to the storage. """)
 
+    def analyze() -> None:
+        """Run database analyze."""
+
     def db_read_last_changelog_serial() -> int:
         """Return last stored serial.
         Returns -1 if nothing is stored yet."""
