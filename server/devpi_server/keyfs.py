@@ -316,6 +316,31 @@ class KeyFS:
         self.io_file_factory = io_file_factory
         self._readonly = readonly
 
+    @cached_property
+    def keynames_by_parent(self) -> list[frozenset[str]]:
+        return [
+            frozenset(x.key_name for x in by_parent)
+            for by_parent in self.keys_by_parent
+        ]
+
+    @cached_property
+    def keys_by_parent(self) -> list[frozenset[LocatedKey | PatternedKey]]:
+        keys = set(self._keys.values())
+        result = []
+        stack: list[LocatedKey | PatternedKey | None] = [None]
+        while stack:
+            parent_key = stack.pop()
+            parent_result = []
+            for key in set(keys):
+                if key.parent_key != parent_key:
+                    continue
+                keys.remove(key)
+                parent_result.append(key)
+                stack.append(key)
+            if parent_result:
+                result.append(frozenset(parent_result))
+        return result
+
     def __repr__(self):
         return f"<{self.__class__.__name__} {self.base_path}>"
 
@@ -334,6 +359,42 @@ class KeyFS:
             io_file.perform_crash_recovery()
 
     def import_changes(self, serial: int, changes: Sequence[KeyData]) -> None:
+        changes = list(changes)
+        with self.get_connection(write=False) as conn:
+            old_keys = {}
+            for key_names in self.keynames_by_parent:
+                keys = [x.key for x in changes if x.key.key_name in key_names]
+                if not keys:
+                    continue
+                for kd in conn.iter_keys_at_serial(
+                    keys, serial - 1, fill_cache=True, with_deleted=True
+                ):
+                    old_keys[kd.key] = kd
+            records: list[Record] = []
+            for change in changes:
+                if not isinstance(change, KeyData):
+                    raise TypeError
+                old_key: ULIDKey | Absent
+                old_val: KeyFSTypesRO | Absent | Deleted
+                if (old_data := old_keys.get(change.key)) is not None:
+                    old_key = old_data.key
+                    old_val = old_data.value
+                else:
+                    old_key = absent
+                    old_val = absent
+                assert old_val != change.value
+                records.append(
+                    Record(
+                        change.key,
+                        change.mutable_value,
+                        change.back_serial,
+                        old_key,
+                        old_val,
+                    )
+                )
+        self.import_records(serial, records)
+
+    def import_records(self, serial: int, records: Sequence[Record]) -> None:
         with contextlib.ExitStack() as cstack:
             conn = cstack.enter_context(self.get_connection(write=True))
             io_file = (
@@ -344,29 +405,15 @@ class KeyFS:
             fswriter = IWriter(cstack.enter_context(conn.write_transaction(io_file)))
             next_serial = conn.last_changelog_serial + 1
             assert next_serial == serial, (next_serial, serial)
-            records: list[Record] = []
             subscriber_changes: dict[ULIDKey, tuple[KeyFSTypesRO | Deleted, int]] = {}
-            for change in changes:
-                if not isinstance(change, KeyData):
+            for record in records:
+                if not isinstance(record, Record):
                     raise TypeError
-                old_key: ULIDKey | Absent
-                old_val: KeyFSTypesRO | Absent | Deleted
-                try:
-                    old_data: KeyData = conn.get_key_at_serial(change.key, serial - 1)
-                    old_key = old_data.key
-                    old_val = old_data.value
-                except KeyError:
-                    old_key = absent
-                    old_val = absent
-                subscriber_changes[change.key] = (change.value, change.back_serial)
-                records.append(
-                    Record(
-                        change.key,
-                        change.mutable_value,
-                        change.back_serial,
-                        old_key,
-                        old_val,
-                    )
+                subscriber_changes[record.key] = (
+                    deleted
+                    if record.value is deleted
+                    else ensure_deeply_readonly(record.value),
+                    record.back_serial,
                 )
             fswriter.records_set(records)
         if callable(self._import_subscriber):
