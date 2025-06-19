@@ -96,9 +96,6 @@ extend-ignore = [
 "testing/test_archive.py" = [
     "I001", # maybe cleanup later - import block unsorted
 ]
-"testing/test_metadata.py" = [
-    "I001", # maybe cleanup later - import block unsorted
-]
 "testing/test_request.py" = [
     "I001", # maybe cleanup later - import block unsorted
 ]

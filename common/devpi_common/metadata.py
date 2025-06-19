@@ -2,15 +2,21 @@ from __future__ import annotations
 
 from .types import CompareMixin
 from .validation import normalize_name
+from itertools import dropwhile
+from operator import not_
 from packaging.requirements import Requirement as BaseRequirement
+from packaging.version import InfinityType
+from packaging.version import NegativeInfinityType
+from packaging_legacy.version import LegacyVersion
 from packaging_legacy.version import parse as parse_version
 from typing import TYPE_CHECKING
 import posixpath
 import re
+import string
 
 
 if TYPE_CHECKING:
-    from packaging_legacy.version import LegacyVersion
+    from collections.abc import Iterable
     from packaging_legacy.version import Version as PackagingVersion
 
 
@@ -148,6 +154,84 @@ def splitext_archive(basename):
     return base, ext
 
 
+VE_NEG_INFINITY = "!"  # (33) lowest printable ASCII value besides whitespace
+VE_ITERABLE_WRAPPER = '"'  # (34)
+# negative digits are translate downwards from "." (46) to "%" (37) (avoiding "/")
+VE_NEG_NUMBER_TRANS_DIGITS = str.maketrans(
+    {x: chr(ord("0") - 2 - i) for i, x in enumerate(string.digits)}
+)
+# the lengths for negative numbers are going backwards as well
+VE_NEG_NUMBER_TRANS_LENGTHS = str.maketrans(
+    dict(zip(string.ascii_uppercase, reversed(string.ascii_uppercase)))
+)
+VE_INFINITY = "~"  # highest printable ASCII value
+
+
+def encode_int(value: int) -> str:
+    is_neg = value < 0
+    s = f"{-value}".translate(VE_NEG_NUMBER_TRANS_DIGITS) if is_neg else f"{value}"
+    l = len(s)
+    lengths = "".join(
+        f"{chr(end + 64 - start)}"
+        for start, end in zip(range(0, l, 26), (*range(26, l, 26), l))
+    )
+    return (
+        f"-{lengths.translate(VE_NEG_NUMBER_TRANS_LENGTHS)}{s}"
+        if is_neg
+        else f"{lengths}{s}"
+    )
+
+
+def encode_iterable(value: Iterable, *, wrapped: bool = True) -> str:
+    # wrapped in '"', so versions sort correctly when the beginning
+    # is the same as local version
+    # for example 1.0.1 > 1.0+foo.1 == 'A0!A1A0A1!~!~!' > 'A0!A1!~!~!@fooA1!'
+    # without it wouldn't work
+    # for example 1.0.1 > 1.0+foo.1 != 'A0A1A0A1~!~!' > 'A0A1~!~@fooA1'
+    # because 'A0A1A' < 'A0A1~'
+    result = "".join(encode_value(x) for x in value)
+    if not wrapped:
+        return result
+    return VE_ITERABLE_WRAPPER + result + VE_ITERABLE_WRAPPER
+
+
+_local_version_separators = re.compile(r"[\._-]")
+
+
+def encode_local(value):
+    return encode_iterable(
+        part.lower() if not part.isdigit() else int(part)
+        for part in _local_version_separators.split(value)
+    )
+
+
+def encode_release(value):
+    # drop trailing zeroes
+    return encode_iterable(reversed(list(dropwhile(not_, reversed(value)))))
+
+
+def encode_value(value: InfinityType | NegativeInfinityType | int | str | tuple) -> str:
+    if isinstance(value, InfinityType):
+        return VE_INFINITY
+    if isinstance(value, NegativeInfinityType):
+        return VE_NEG_INFINITY
+    if isinstance(value, int):
+        return encode_int(value)
+    if isinstance(value, str):
+        return f"@{value}"
+    if isinstance(value, tuple):
+        return encode_iterable(value, wrapped=True)
+    msg = f"Don't know how to encode type {type(value)!r}"  # type: ignore[unreachable]
+    raise ValueError(msg)
+
+
+def version_sort_string(version: LegacyVersion | PackagingVersion) -> str:
+    if isinstance(version, LegacyVersion):
+        (epoch, key) = version._key
+        return encode_iterable((epoch, *key), wrapped=False)
+    return encode_iterable(version._key, wrapped=False)
+
+
 class Version(str):
     __slots__ = ('_cmpstr', '_cmpval')
     _cmpstr: str
@@ -189,6 +273,13 @@ class Version(str):
     def __repr__(self):
         orig = super().__repr__()
         return f"{self.__class__.__name__}({orig})"
+
+    @property
+    def cmpstr(self):
+        _cmpstr = getattr(self, "_cmpstr", None)
+        if _cmpstr is None:
+            self._cmpstr = _cmpstr = version_sort_string(self.cmpval)
+        return _cmpstr
 
     @property
     def cmpval(self):

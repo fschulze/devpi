@@ -1,12 +1,17 @@
 from devpi_common.metadata import BasenameMeta
 from devpi_common.metadata import Version
-from devpi_common.metadata import get_pyversion_filetype
+from devpi_common.metadata import encode_int
 from devpi_common.metadata import get_latest_version
+from devpi_common.metadata import get_pyversion_filetype
 from devpi_common.metadata import get_sorted_versions
 from devpi_common.metadata import parse_requirement
 from devpi_common.metadata import splitbasename
 from devpi_common.metadata import splitext_archive
+from devpi_common.metadata import version_sort_string
+from hypothesis import given
+from hypothesis import strategies as st
 import pytest
+import string
 
 
 @pytest.mark.parametrize(("releasename", "expected"), [
@@ -136,6 +141,123 @@ def test_get_sorted_versions_legacy(versions, expected):
 ])
 def test_get_sorted_versions_legacy_stable(versions, expected):
     assert get_sorted_versions(versions, stable=True, reverse=False) == expected
+
+
+@given(st.lists(st.integers(min_value=-(10**100), max_value=10**100)))
+def test_encode_int(integers):
+    si = sorted((i, encode_int(i)) for i in integers)
+    se = sorted((encode_int(i), i) for i in integers)
+    assert [i for i, _e in si] == [i for _e, i in se]
+    assert [e for _i, e in si] == [e for e, _i in se]
+    assert not any("/" in e for e, _i in se)
+
+
+@st.composite
+def pep440versions(draw):
+    version = "v" if draw(st.booleans()) else ""
+    if draw(st.booleans()):
+        # epoch
+        version = f"{version}{draw(st.integers(min_value=0))}!"
+    version = f"{version}{draw(st.integers(min_value=0))}"
+    for _n in range(draw(st.integers(min_value=0, max_value=10))):
+        version = f"{version}.{draw(st.integers(min_value=0))}"
+    seps = ["", ".", "-", "_"]
+    if draw(st.booleans()):
+        # pre-release
+        kind = draw(
+            st.sampled_from(["a", "alpha", "b", "beta", "c", "pre", "preview", "rc"])
+        )
+        pre_sep = draw(st.sampled_from(seps))
+        sep = draw(st.sampled_from(seps))
+        _num = (
+            draw(st.integers(min_value=0))
+            if sep
+            else draw(st.just("") | st.integers(min_value=0))
+        )
+        version = f"{version}{pre_sep}{kind}{sep}{_num}"
+    if draw(st.booleans()):
+        # post-release
+        kind = draw(st.sampled_from(["post", "r", "rev"]))
+        post_sep = draw(st.sampled_from(seps))
+        sep = draw(st.sampled_from(seps))
+        _num = (
+            draw(st.integers(min_value=0))
+            if sep
+            else draw(st.just("") | st.integers(min_value=0))
+        )
+        version = f"{version}{post_sep}{kind}{sep}{_num}"
+    if draw(st.booleans()):
+        # post-release
+        dev_sep = draw(st.sampled_from(seps))
+        sep = draw(st.sampled_from(seps))
+        _num = (
+            draw(st.integers(min_value=0))
+            if sep
+            else draw(st.just("") | st.integers(min_value=0))
+        )
+        version = f"{version}{dev_sep}dev{sep}{_num}"
+    if draw(st.booleans()):
+        # local version
+        version = f"{version}+{''.join(draw(st.lists(st.integers().map(str) | st.text(string.ascii_letters + string.digits) | st.sampled_from(['.', '-', '_']), max_size=5)))}"
+    return version
+
+
+_versions = [
+    "3.1.4-ec6",
+    "1.0beta5prerelease2",
+    "1.0alpha1",
+    "2.0.0.post1",
+    "2.0.0",
+    "2.0.post1",
+    "2.0",
+    "1!2.0",
+    "2!2.0",
+    "2.0-pre1",
+    "2.0pre0",
+    "2.0dev1",
+    "2.0.dev0",
+    "2.0rc2",
+    "1.0",
+    "1.0.dev0",
+    "1.0dev0",
+    "1.0.0.dev2",
+    "1.0.0dev2",
+    "1.0+foo.10",
+    "1.0+foo.1",
+    "1.0+foo.3",
+    "1.0+foo.4.ham",
+    "1.0+foo.4.bar",
+    "1.0.4.3.1.2.4.5.6.2.3.4.5.1.2.3.5.6.3.2.4.2.3.4.5.3.4.1.3.4.23.5.5.32.42.43.2.34.44",
+    "0.1.40404040404040404040404040404040404040404040404040404040404040404040404040404040",
+    "99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999111111111111111111111111111111111100000000.6.0",
+    "3.14159265358979323846264338327950288419716939937510582097494459230781640628620899862803482534211706798214808651328230664709384460955058223172535940812848111745028410270193852110555964462294895493038196442881097566593",
+    "2004d",
+    "2005i",
+    "2022.7",
+    "2022.7.1",
+]
+
+
+@given(st.lists(pep440versions() | st.sampled_from(_versions), min_size=2, max_size=20))
+def test_version_sort_string(versions):
+    from operator import itemgetter
+
+    expected = get_sorted_versions(versions, reverse=False)
+    result = sorted(
+        (
+            (
+                version_sort_string(x.cmpval),
+                x.cmpval,
+                getattr(x.cmpval, "_key", None),
+                x.string,
+            )
+            for x in map(Version, versions)
+        ),
+        key=itemgetter(0),
+    )
+    assert not any("/" in x[0] for x in result)
+    result_strings = [x[-1] for x in result]
+    assert expected == result_strings
 
 
 def test_version():

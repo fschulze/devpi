@@ -6,6 +6,7 @@ dev = [
     "certauth",
     "execnet",
     "furo",
+    "hypothesis",
     "keyring",
     "match-diff-lines",
     "mock",

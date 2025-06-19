@@ -35,6 +35,7 @@ from devpi_common.metadata import BasenameMeta
 from devpi_common.metadata import is_archive_of_project
 from devpi_common.metadata import parse_version
 from devpi_common.metadata import splitbasename
+from devpi_common.metadata import version_sort_string
 from devpi_common.types import cached_property
 from devpi_common.url import URL
 from functools import partial
@@ -663,6 +664,10 @@ class MirrorData:
             old[k.name] = v
             assert v["relpath"].endswith(f"/{k.name}"), (k, v)
         if old != data:
+            encoded_version_map = {
+                v: version_sort_string(parse_version(v))
+                for v in set(name_version_map.values())
+            }
             threadlog.debug(
                 "processing changed simplelinks for %s in %s", project, stage.index
             )
@@ -679,7 +684,8 @@ class MirrorData:
                     num_deleted += 1
                     name_key_mirrorfile_map[name].delete()
                     key_simpledata(
-                        version=name_version_map[name], filename=name
+                        version=encoded_version_map[name_version_map[name]],
+                        filename=name,
                     ).delete()
                 else:
                     num_changed += 1
@@ -692,9 +698,10 @@ class MirrorData:
                     entry.project = project
                     entry.version = name_version_map[name]
                     del entry
-                    key_simpledata(version=name_version_map[name], filename=name).set(
-                        cast("dict", new_value)
-                    )
+                    key_simpledata(
+                        version=encoded_version_map[name_version_map[name]],
+                        filename=name,
+                    ).set(cast("dict", new_value))
                 del name
             del old
             new_mirrorfile_keys = [key_mirrorfile(name) for name in data]
@@ -710,8 +717,11 @@ class MirrorData:
                 (projectname, version, _ext) = splitbasename(ulid_key.name)
                 assert normalize_name(projectname) == project
                 new_simpledata_keys.append(
-                    key_simpledata(version=version, filename=ulid_key.name)
+                    key_simpledata(
+                        version=encoded_version_map[version], filename=ulid_key.name
+                    )
                 )
+            del encoded_version_map
             del new_mirrorfile_keys
             for _k, ulid_key in tx.resolve_keys(
                 new_file_keys, fetch=True, fill_cache=True, new_for_missing=True
@@ -761,7 +771,9 @@ class MirrorData:
         stage = self.get_stage()
         with (
             stage.key_mirrorfile(project, filename).update() as mirrorfiledata,
-            stage.key_simpledata(project, (version, filename)).update() as simpledata,
+            stage.key_simpledata(
+                project, (version_sort_string(parse_version(version)), filename)
+            ).update() as simpledata,
         ):
             assert not mirrorfiledata
             assert not simpledata
