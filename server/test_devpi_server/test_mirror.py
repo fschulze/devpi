@@ -1223,12 +1223,22 @@ async def test_get_simplelinks_perstage_when_http_error(exc, pypistage, monkeypa
     # to reach the code path in question, we must have cached links
     links = [("key", "href", "req_py", "yanked")]
 
-    def mock_load_cache_links(project):
-        return (True, links, 42, '"foo"')
+    class MockMirrorLinks:
+        def __init__(self, stage, project):
+            pass
 
-    monkeypatch.setattr(pypistage, "_load_cache_links", mock_load_cache_links)
+        def are_expired(self):
+            return True
 
-    async def async_httpget(self, url, **kw):
+        def get_cache_info(self):
+            return dict(serial=42, etag='"foo"')
+
+        def get_links(self):
+            return links
+
+    monkeypatch.setattr("devpi_server.mirror.MirrorLinks", MockMirrorLinks)
+
+    async def async_httpget(_self, _url, **_kw):
         raise exc
 
     monkeypatch.setattr(httpx.AsyncClient, "get", async_httpget)

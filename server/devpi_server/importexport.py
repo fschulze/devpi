@@ -624,8 +624,8 @@ class Importer:
                     url, stage.username, stage.index, project)
                 entry.file_set_content(
                     f, hashes=hashes, last_modified=mapping["last_modified"])
-                (_, links_with_data, serial, etag) = stage._load_cache_links(project)
-                if links_with_data is None:
+                mirrorlinks = stage._get_mirrorlinks(project)
+                if (links_with_data := mirrorlinks.get_links()) is None:
                     links_with_data = []
                 entrypath = entry.relpath
                 if hash_spec := entry.best_available_hash_spec:
@@ -637,8 +637,7 @@ class Importer:
                     links.append((key, href))
                     requires_python.append(require_python)
                     yanked.append(is_yanked)
-                stage._save_cache_links(
-                    project, links, requires_python, yanked, serial, None)
+                mirrorlinks._save_cache_links(links, requires_python, yanked, None)
         elif filedesc["type"] == Rel.DocZip:
             version = filedesc["version"]
             # docs didn't always have entrymapping in export dump
