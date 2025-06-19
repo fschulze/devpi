@@ -12,7 +12,9 @@ from zope.interface import Attribute
 from zope.interface import Interface
 from zope.interface import implementer
 import contextlib
+import random
 import re
+import time
 
 
 if TYPE_CHECKING:
@@ -28,6 +30,7 @@ if TYPE_CHECKING:
     from typing import Any
     from typing import Callable
     from typing import Union
+    from typing_extensions import Self
 
     KeyFSTypesRO = Union[
         bool,
@@ -42,6 +45,33 @@ if TYPE_CHECKING:
         TupleViewReadonly,
     ]
     KeyFSTypes = Union[bool, bytes, dict, float, frozenset, int, list, set, str, tuple]
+
+
+ULID_NS_DIVISOR = 1_000_000_000
+ULID_SHIFT = 28
+# steal a few bits from the seconds part for more randomness to avoid collisions
+ULID_RAND_BITS = 30
+
+
+class ULID(int):
+    def __new__(cls, ulid: int) -> Self:
+        assert ulid >= 0
+        return super().__new__(cls, ulid)
+
+    @classmethod
+    def new(
+        cls,
+        *,
+        _randbits: Callable = random.getrandbits,
+        _time_ns: Callable = time.time_ns,
+    ) -> Self:
+        ns = _time_ns()
+        high_part = (ns // ULID_NS_DIVISOR) << ULID_SHIFT
+        low_part = _randbits(ULID_RAND_BITS)
+        return super().__new__(cls, high_part ^ low_part)
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}({super().__repr__()})"
 
 
 @frozen

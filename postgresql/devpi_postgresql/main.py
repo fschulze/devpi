@@ -786,7 +786,7 @@ class Writer:
         self.conn.write_changelog_entry(commit_serial, entry)
         self.conn.commit()
         self.storage.last_commit_timestamp = time.time()
-        return LazyChangesFormatter(self.changes, (), ())
+        return LazyChangesFormatter(list(self.changes.keys()), (), ())
 
     def rollback(self):
         self.conn.rollback()

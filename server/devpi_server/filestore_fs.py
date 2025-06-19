@@ -77,7 +77,7 @@ class FSIOFile:
         (files_commit, files_del) = self.write_dirty_files(rel_renames)
         if files_commit or files_del:
             threadlog.debug(
-                "wrote files: %s", LazyChangesFormatter({}, files_commit, files_del)
+                "wrote files: %s", LazyChangesFormatter((), files_commit, files_del)
             )
         return True
 
@@ -172,7 +172,7 @@ class FSIOFile:
         if files_commit or files_del:
             threadlog.debug(
                 "wrote files without increasing serial: %s",
-                LazyChangesFormatter({}, files_commit, files_del),
+                LazyChangesFormatter((), files_commit, files_del),
             )
 
     def get_rel_renames(self):
@@ -210,10 +210,10 @@ class FSIOFile:
 class LazyChangesFormatter:
     __slots__ = ('files_commit', 'files_del', 'keys')
 
-    def __init__(self, changes, files_commit, files_del):
+    def __init__(self, keys, files_commit, files_del):
         self.files_commit = files_commit
         self.files_del = files_del
-        self.keys = changes.keys()
+        self.keys = keys
 
     def __str__(self):
         msg = []

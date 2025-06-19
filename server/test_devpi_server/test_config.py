@@ -242,11 +242,15 @@ class TestConfig:
         config = make_config(("devpi-server",) + opts)
         assert config.args.keyfs_cache_size == 200
         xom = makexom(opts=opts)
+        _changelog_cache = getattr(xom.keyfs._storage, "_changelog_cache", None)
+        _relpath_cache = getattr(xom.keyfs._storage, "_relpath_cache", None)
+        if not _changelog_cache and not _relpath_cache:
+            pytest.skip("Storage has no _changelog_cache and _relpath_cache")
         size = 0
-        if hasattr(xom.keyfs._storage, "_changelog_cache"):
-            size += xom.keyfs._storage._changelog_cache.size
-        if hasattr(xom.keyfs._storage, "_relpath_cache"):
-            size += xom.keyfs._storage._relpath_cache.size
+        if _changelog_cache:
+            size += _changelog_cache.size
+        if _relpath_cache:
+            size += _relpath_cache.size
         assert size == 200
 
     @pytest.mark.no_storage_option
