@@ -1519,10 +1519,9 @@ class PyPIView:
         # We want people to notice that condition by returning a 404, but
         # they can still recover the deleted release from the filesystem
         # manually in case they need it.
-        key = self.xom.filestore.get_key_from_relpath(relpath)
-        if key is None or not key.exists():
+        entry = self.xom.filestore.get_file_entry(relpath)
+        if entry is None or not entry.key.exists():
             abort(self.request, 404, "no such file")
-        entry = self.xom.filestore.get_file_entry_from_key(key)
         return self._pkgserv(entry)
 
     @view_config(route_name="/{user}/{index}/+f/{relpath:.*}")
