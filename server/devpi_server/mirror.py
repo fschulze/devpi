@@ -488,7 +488,9 @@ class MirrorStage(BaseStage):
     def http(self):
         if self.xom.is_replica():
             (uuid, primary_uuid) = self.xom.config.nodeinfo.make_uuid_headers()
-            get_extra_headers = self.xom.replica_thread.http.get_extra_headers
+            get_extra_headers = (
+                self.xom.replica_thread.connection.http.get_extra_headers
+            )
         else:
 
             def get_extra_headers(extra_headers):
