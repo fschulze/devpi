@@ -192,19 +192,9 @@ class Storage(BaseStorage):
     db_filename = ".sqlite_alchemy_files"
 
     def __init__(
-        self,
-        basedir: Path,
-        *,
-        notify_on_commit: Callable,
-        cache_size: int,
-        settings: dict,
+        self, basedir: Path, *, notify_on_commit: Callable, settings: dict
     ) -> None:
-        super().__init__(
-            basedir,
-            notify_on_commit=notify_on_commit,
-            cache_size=cache_size,
-            settings=settings,
-        )
+        super().__init__(basedir, notify_on_commit=notify_on_commit, settings=settings)
         self.sqlpath = self.basedir / self.db_filename
         self.ro_engine = sa.create_engine(self._url(mode="ro"), echo=False)
         self.rw_engine = sa.create_engine(
@@ -310,6 +300,7 @@ def devpiserver_describe_storage_backend(settings: dict) -> StorageInfo:
         connection_cls=Connection,
         writer_cls=Writer,
         storage_factory=Storage,
+        process_settings=Storage.process_settings,
         settings=settings,
     )
 
