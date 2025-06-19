@@ -225,9 +225,6 @@ extend-ignore = [
 "devpi_server/config.py" = [
     "I001", # maybe cleanup later - import block unsorted
 ]
-"devpi_server/filestore.py" = [
-    "I001", # maybe cleanup later - import block unsorted
-]
 "devpi_server/main.py" = [
     "I001", # maybe cleanup later - import block unsorted
 ]

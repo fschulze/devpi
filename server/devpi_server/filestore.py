@@ -3,18 +3,18 @@ Module for handling storage and proxy-streaming and caching of release files
 for all indexes.
 
 """
-import hashlib
-import mimetypes
 from .keyfs_types import FilePathInfo
+from .log import threadlog
+from .markers import absent
 from .readonly import get_mutable_deepcopy
-from wsgiref.handlers import format_date_time
-import re
 from devpi_common.metadata import splitbasename
 from devpi_common.types import parse_hash_spec
-from devpi_server.log import threadlog
-from devpi_server.markers import absent
 from inspect import currentframe
 from urllib.parse import unquote
+from wsgiref.handlers import format_date_time
+import hashlib
+import mimetypes
+import re
 
 
 def _get_default_hash_types():  # this is a function for testing
@@ -308,18 +308,14 @@ class FileStore:
             entry.version = version
         return entry
 
-    def get_key_from_relpath(self, relpath):
-        try:
-            key = self.keyfs.tx.derive_key(relpath)
-        except KeyError:
-            return None
-        return key
-
     def get_file_entry(self, relpath):
-        key = self.get_key_from_relpath(relpath)
-        if key is None:
-            return None
-        return FileEntry(key)
+        if key := self.keyfs.match_key(
+            relpath, self.keyfs.PYPIFILE_NOMD5, self.keyfs.STAGEFILE
+        ):
+            if key.last_serial < 0:
+                return None
+            return FileEntry(key)
+        return None
 
     def get_file_entry_from_key(self, key, meta=_nodefault):
         return MutableFileEntry(key, meta=meta)
