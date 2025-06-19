@@ -880,6 +880,12 @@ class Transaction:
         self.dirty.add(typedkey)
 
     def commit(self):
+        threadlog.debug(
+            "_original %s, cache %s, dirty %s",
+            len(self._original),
+            len(self.cache),
+            len(self.dirty),
+        )
         if self.doomed:
             threadlog.debug("closing doomed transaction")
             result = self._close()
