@@ -644,11 +644,15 @@ def get_io_file_factory(storage_info):
 
         verifyClass(IIOFile, DBIOFile)
         _io_file_factory = DBIOFile
-    else:
+    elif True:
         from .filestore_fs import FSIOFile
 
         verifyClass(IIOFile, FSIOFile)
         _io_file_factory = FSIOFile
+    else:
+        from .filestore_hash import HashIOFile  # type: ignore[unreachable]
+
+        _io_file_factory = HashIOFile
     settings = storage_info.settings
 
     def io_file_factory(conn):
