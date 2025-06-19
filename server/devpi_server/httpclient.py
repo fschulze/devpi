@@ -3,14 +3,10 @@ from __future__ import annotations
 from . import __version__ as server_version
 from .exceptions import lazy_format_exception_only
 from .log import threadlog
-from devpi_common.types import cached_property
 from devpi_common.url import URL
-from requests.utils import DEFAULT_CA_BUNDLE_PATH
 from typing import TYPE_CHECKING
 import httpx
 import inspect
-import os
-import ssl
 import sys
 
 
@@ -62,28 +58,11 @@ class HTTPClient:
 
     def __init__(self, *, component_name: str, timeout: int | None) -> None:
         self.headers = {"User-Agent": f"devpi-{component_name}/{server_version}"}
-        self.client = httpx.Client(headers=self.headers, verify=self._ssl_context)
+        self.client = httpx.Client(headers=self.headers)
         self.timeout = timeout
 
-    @cached_property
-    def _ssl_context(self) -> ssl.SSLContext:
-        # create an SSLContext object that uses the same CA certs as requests
-        cafile = (
-            os.environ.get("REQUESTS_CA_BUNDLE")
-            or os.environ.get("CURL_CA_BUNDLE")
-            or DEFAULT_CA_BUNDLE_PATH
-        )
-        if cafile and not os.path.exists(cafile):
-            threadlog.warning(
-                "Could not find a suitable TLS CA certificate bundle, invalid path: %s",
-                cafile,
-            )
-            cafile = None
-
-        return ssl.create_default_context(cafile=cafile)
-
     def async_client(self) -> httpx.AsyncClient:
-        return httpx.AsyncClient(headers=self.headers, verify=self._ssl_context)
+        return httpx.AsyncClient(headers=self.headers)
 
     async def async_get(
         self,
