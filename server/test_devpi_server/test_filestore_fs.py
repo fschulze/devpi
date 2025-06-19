@@ -158,7 +158,7 @@ class TestRenameFileLogic:
             index_key = tx.keyfs.INDEX(user="user", index="index")
             index_key.set({})
             hashdir_a, hashdir_b = make_splitdir(hashes.get_default_spec())
-            key = tx.keyfs.STAGEFILE(
+            key = tx.keyfs.FILE(
                 user="user",
                 index="index",
                 hashdir_a=hashdir_a,
