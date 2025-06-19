@@ -1843,7 +1843,7 @@ class LinkStore:
             filename,
             content_or_file,
             hashes=hashes,
-            ref_hash_spec=base_entry.best_available_hash_spec,
+            ref_hash_spec=base_entry.ref_hash_spec,
         )
         if last_modified is not None:
             entry.last_modified = last_modified
@@ -1892,11 +1892,13 @@ class LinkStore:
         self, basename, content_or_file, *, hashes, ref_hash_spec=None
     ):
         entry = self.filestore.store(
-            user=self.stage.username, index=self.stage.index,
+            user=self.stage.username,
+            index=self.stage.index,
             basename=basename,
             content_or_file=content_or_file,
-            dir_hash_spec=ref_hash_spec,
-            hashes=hashes)
+            ref_hash_spec=ref_hash_spec,
+            hashes=hashes,
+        )
         entry.project = self.project
         entry.version = self.version
         return entry
