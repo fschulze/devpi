@@ -61,7 +61,7 @@ H_REPLICA_FILEREPL = "X-DEVPI-REPLICA-FILEREPL"
 H_EXPECTED_MASTER_ID = "X-DEVPI-EXPECTED-MASTER-ID"
 H_EXPECTED_PRIMARY_ID = "X-DEVPI-EXPECTED-PRIMARY-ID"
 
-MAX_REPLICA_BLOCK_TIME = 30.0
+MAX_REPLICA_BLOCK_TIME = 300.0
 REPLICA_USER_NAME = "+replica"
 REPLICA_REQUEST_TIMEOUT = MAX_REPLICA_BLOCK_TIME * 1.25
 REPLICA_MULTIPLE_TIMEOUT = REPLICA_REQUEST_TIMEOUT / 2
@@ -329,6 +329,7 @@ class PrimaryChangelogRequest:
         def iter_changelog_entries():
             with keyfs.get_connection() as conn:
                 for serial in range(start_serial, devpi_serial + 1):
+                    threadlog.debug("Sending serial %s", serial)
                     with self.update_replica_status(serial, streaming=True):
                         yield dumps(serial)
                         yield from dump_iter(conn.iter_serializable_changes(serial))
