@@ -1374,6 +1374,16 @@ class PrivateStage(BaseStage):
             user=self.username, index=self.index, project=normalize_name(project), **kw
         )
 
+    def key_toxresult(self, project, version, filename=None):
+        kw = {} if filename is None else dict(filename=filename)
+        return self.keyfs.TOXRESULT(
+            user=self.username,
+            index=self.index,
+            project=normalize_name(project),
+            version=version,
+            **kw,
+        )
+
     def key_versionfile(self, project, version, filename=None):
         kw = {} if filename is None else dict(filename=filename)
         return self.keyfs.VERSIONFILE(
@@ -1456,7 +1466,9 @@ class PrivateStage(BaseStage):
         keys: list = []
         if Rel.DocZip in rels:
             keys.append(self.key_doczip(project, version))
-        if Rel.ReleaseFile in rels or Rel.ToxResult in rels:
+        if Rel.ToxResult in rels:
+            keys.append(self.key_toxresult(project, version))
+        if Rel.ReleaseFile in rels:
             keys.append(self.key_versionfile(project, version))
         return [v for k, v in self.keyfs.tx.iter_ulidkey_values_for(keys)]
 
@@ -1645,6 +1657,15 @@ class PrivateStage(BaseStage):
                 if version_keydata.value in (absent, deleted):
                     continue
                 version = version_keydata.key.name
+                for toxresult_key in tx.conn.iter_ulidkeys_at_serial(
+                    (self.key_toxresult(project, version),),
+                    at_serial=at_serial,
+                    fill_cache=False,
+                    with_deleted=True,
+                ):
+                    last_serial = max(last_serial, toxresult_key.last_serial)
+                    if last_serial >= at_serial:
+                        return last_serial
                 for versionfile_key in tx.conn.iter_ulidkeys_at_serial(
                     (self.key_versionfile(project, version),),
                     at_serial=at_serial,
@@ -1885,6 +1906,7 @@ class MutableLinkStore(LinkStore):
         del_links = self.get_links(rel=rel, basename=basename, for_entrypath=for_entrypath)
         was_deleted = []
         key_doczip = self.stage.key_doczip(self.project, self.version)
+        key_toxresult = self.stage.key_toxresult(self.project, self.version)
         key_versionfile = self.stage.key_versionfile(self.project, self.version)
         if del_links:
             for link in del_links:
@@ -1892,8 +1914,12 @@ class MutableLinkStore(LinkStore):
                 link.entry.delete()
                 if link.rel == Rel.DocZip:
                     key_doczip.delete()
-                else:
+                elif link.rel == Rel.ToxResult:
+                    key_toxresult(filename).delete()
+                elif link.rel == Rel.ReleaseFile:
                     key_versionfile(filename).delete()
+                else:
+                    raise RuntimeError
                 was_deleted.append(link.relpath)
                 threadlog.info("deleted %r link %s", link.rel, link.relpath)
         has_versionfiles = next(key_versionfile.iter_ulidkeys(), absent) is not absent
@@ -1928,10 +1954,16 @@ class MutableLinkStore(LinkStore):
             new_linkdict["for_entrypath"] = for_link.relpath
         if rel == Rel.DocZip:
             key = self.stage.key_doczip(self.project, self.version)
-        else:
+        elif rel == Rel.ToxResult:
+            key = self.stage.key_toxresult(
+                self.project, self.version, file_entry.basename
+            )
+        elif rel == Rel.ReleaseFile:
             key = self.stage.key_versionfile(
                 self.project, self.version, file_entry.basename
             )
+        else:
+            raise RuntimeError
         if key.exists():
             raise RuntimeError
         key.set(new_linkdict)
@@ -2108,6 +2140,7 @@ def register_keys(xom, keyfs):
     keyfs.register_anonymous_key("PROJSIMPLELINKS", project_key, dict)
     version_key = keyfs.register_named_key("VERSION", "{version}", project_key, dict)
     keyfs.register_named_key("DOCZIP", "{version}", project_key, dict)
+    keyfs.register_named_key("TOXRESULT", "{filename}", version_key, dict)
     keyfs.register_named_key("VERSIONFILE", "{filename}", version_key, dict)
     keyfs.register_named_key(
         "FILE", "+f/{hashdir_a}/{hashdir_b}/{filename}", index_key, dict
