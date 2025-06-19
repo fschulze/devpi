@@ -3,6 +3,7 @@ from __future__ import annotations
 from .filestore_fs_base import LazyChangesFormatter
 from .fileutil import dumps
 from .fileutil import loads
+from .interfaces import EmptySet
 from .interfaces import IWriter
 from .keyfs_types import KeyData
 from .keyfs_types import LocatedKey
@@ -29,7 +30,6 @@ from itertools import islice
 from repoze.lru import LRUCache
 from sqlalchemy.ext.compiler import compiles
 from typing import TYPE_CHECKING
-from typing import cast
 from zope.interface import implementer
 import inspect
 import sqlalchemy as sa
@@ -667,14 +667,12 @@ class BaseConnection:
             self._cache.add_keydata(fetch_serial, result)
         return result
 
-    emptyset = cast("set", frozenset())
-
     def _relpaths_ulid_serials_stmt_for_keys(  # noqa: PLR0912
         self,
         keys: Iterable[LocatedKey | PatternedKey | SearchKey | ULIDKey],
         at_serial: int,
         *,
-        skip_ulids: set[ULID] = emptyset,
+        skip_ulids: set[ULID] = EmptySet,
         with_deleted: bool = False,
     ) -> sa.Select:
         execute = self._sqlaconn.execute
@@ -832,7 +830,7 @@ class BaseConnection:
         keys: Iterable[LocatedKey | PatternedKey | SearchKey | ULIDKey],
         at_serial: int,
         *,
-        skip_ulid_keys: set[ULIDKey] = emptyset,
+        skip_ulid_keys: set[ULIDKey] = EmptySet,
         fill_cache: bool,
         with_deleted: bool,
     ) -> Iterator[KeyData]:
@@ -867,7 +865,7 @@ class BaseConnection:
         keys: Iterable[LocatedKey | PatternedKey | SearchKey],
         at_serial: int,
         *,
-        skip_ulid_keys: set[ULIDKey] = emptyset,
+        skip_ulid_keys: set[ULIDKey] = EmptySet,
         fill_cache: bool,
         with_deleted: bool,
     ) -> Iterator[ULIDKey]:
