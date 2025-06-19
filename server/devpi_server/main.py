@@ -691,11 +691,13 @@ def tween_request_profiling(handler, registry):
     profile = [Profile()]
 
     def request_profiling_handler(request):
-        profile[0].enable()
+        if req[0] >= 0:
+            profile[0].enable()
         try:
             return handler(request)
         finally:
-            profile[0].disable()
+            if req[0] >= 0:
+                profile[0].disable()
             req[0] += 1
             if req[0] >= num_profile:
                 stats = Stats(profile[0])
