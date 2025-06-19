@@ -254,7 +254,7 @@ class TxNotificationThread:
             changes: list[KeyData] = list(conn.iter_changes_at(event_serial))
         # we first check for missing files before we call subscribers
         for change in changes:
-            if change.key.key_name in ("STAGEFILE", "PYPIFILE_NOMD5"):
+            if change.key.key_name in ("FILE", "FILE_NOHASH"):
                 self.check_file_change(change, event_serial)
         # all files exist or are deleted in a later serial,
         # call subscribers now
