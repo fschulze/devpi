@@ -6,11 +6,11 @@ for all indexes.
 from __future__ import annotations
 
 from .keyfs_types import FilePathInfo
+from .log import threadlog
+from .markers import absent
 from .readonly import get_mutable_deepcopy
 from devpi_common.metadata import splitbasename
 from devpi_common.types import parse_hash_spec
-from devpi_server.log import threadlog
-from devpi_server.markers import absent
 from inspect import currentframe
 from typing import TYPE_CHECKING
 from typing import cast
@@ -365,18 +365,14 @@ class FileStore:
             entry.version = version
         return entry
 
-    def get_key_from_relpath(self, relpath):
-        try:
-            key = self.keyfs.tx.derive_key(relpath)
-        except KeyError:
-            return None
-        return key
-
     def get_file_entry(self, relpath: RelPath) -> FileEntry | None:
-        key = self.get_key_from_relpath(relpath)
-        if key is None:
-            return None
-        return FileEntry(key)
+        if key := self.keyfs.match_key(
+            relpath, self.keyfs.PYPIFILE_NOMD5, self.keyfs.STAGEFILE
+        ):
+            if key.last_serial < 0:
+                return None
+            return FileEntry(key)
+        return None
 
     def get_file_entry_from_key(self, key, meta=_nodefault):
         return MutableFileEntry(key, meta=meta)
