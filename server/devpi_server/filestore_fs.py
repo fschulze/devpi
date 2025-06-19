@@ -1,9 +1,14 @@
 from .fileutil import get_write_file_ensure_dir
 from .fileutil import rename
+from .interfaces import IIOFile
+from .keyfs_types import FilePathInfo
 from .log import threadlog
 from contextlib import suppress
 from hashlib import sha256
+from pathlib import Path
 from zope.interface import Interface
+from zope.interface import alsoProvides
+from zope.interface import implementer
 import os
 import re
 import shutil
@@ -51,6 +56,155 @@ class DirtyFile:
                     content_or_file.seek(0)
                     shutil.copyfileobj(content_or_file, f)
         return self
+
+
+@implementer(IIOFile)
+class FSIOFile:
+    def __init__(self, conn, settings):
+        self.conn = conn
+        self.settings = settings
+        self.basedir = Path(self.conn.storage.basedir)
+        self._dirty_files = {}
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, cls, val, tb):
+        if cls is not None:
+            self.rollback()
+            return False
+        rel_renames = self.get_rel_renames()
+        (files_commit, files_del) = self.write_dirty_files(rel_renames)
+        if files_commit or files_del:
+            threadlog.debug(
+                "wrote files: %s", LazyChangesFormatter({}, files_commit, files_del)
+            )
+        return True
+
+    def delete(self, path):
+        assert isinstance(path, FilePathInfo)
+        path = str(self.basedir / path.relpath)
+        old = self._dirty_files.get(path)
+        if old is not None:
+            os.remove(old.tmppath)
+        self._dirty_files[path] = None
+
+    def exists(self, path):
+        assert isinstance(path, FilePathInfo)
+        path = str(self.basedir / path.relpath)
+        if path in self._dirty_files:
+            dirty_file = self._dirty_files[path]
+            if dirty_file is None:
+                return False
+            path = dirty_file.tmppath
+        return os.path.exists(path)
+
+    def get_content(self, path):
+        assert isinstance(path, FilePathInfo)
+        path = str(self.basedir / path.relpath)
+        if path in self._dirty_files:
+            dirty_file = self._dirty_files[path]
+            if dirty_file is None:
+                raise OSError
+            path = dirty_file.tmppath
+        with open(path, "rb") as f:
+            data = f.read()
+            if len(data) > 1048576:
+                threadlog.warn(
+                    "Read %.1f megabytes into memory in get_content for %s",
+                    len(data) / 1048576,
+                    path,
+                )
+            return data
+
+    def is_dirty(self):
+        return bool(self._dirty_files)
+
+    def is_path_dirty(self, path):
+        return path in self._dirty_files
+
+    def new_open(self, path):
+        assert isinstance(path, FilePathInfo)
+        assert not self.exists(path)
+        path = str(self.basedir / path.relpath)
+        assert not path.endswith("-tmp")
+        f = get_write_file_ensure_dir(DirtyFile(path).tmppath)
+        alsoProvides(f, IStorageFile)
+        return f
+
+    def open_read(self, path):
+        assert isinstance(path, FilePathInfo)
+        path = str(self.basedir / path.relpath)
+        if path in self._dirty_files:
+            dirty_file = self._dirty_files[path]
+            if dirty_file is None:
+                raise OSError
+            path = dirty_file.tmppath
+        return open(path, "rb")
+
+    def os_path(self, path):
+        assert isinstance(path, FilePathInfo)
+        return str(self.basedir / path.relpath)
+
+    def set_content(self, path, content_or_file):
+        assert isinstance(path, FilePathInfo)
+        path = str(self.basedir / path.relpath)
+        assert not path.endswith("-tmp")
+        if IStorageFile.providedBy(content_or_file):
+            self._dirty_files[path] = DirtyFile(path)
+        else:
+            self._dirty_files[path] = DirtyFile.from_content(path, content_or_file)
+
+    def size(self, path):
+        assert isinstance(path, FilePathInfo)
+        path = str(self.basedir / path.relpath)
+        if path in self._dirty_files:
+            dirty_file = self._dirty_files[path]
+            if dirty_file is None:
+                return None
+            path = dirty_file.tmppath
+        with suppress(OSError):
+            return os.path.getsize(path)
+
+    def commit(self):
+        rel_renames = self.get_rel_renames()
+        (files_commit, files_del) = self.write_dirty_files(rel_renames)
+        if files_commit or files_del:
+            threadlog.debug(
+                "wrote files without increasing serial: %s",
+                LazyChangesFormatter({}, files_commit, files_del),
+            )
+
+    def get_rel_renames(self):
+        pending_renames = []
+        for path, dirty_file in self._dirty_files.items():
+            if dirty_file is None:
+                pending_renames.append((None, path))
+            else:
+                pending_renames.append((dirty_file.tmppath, path))
+        basedir = str(self.basedir)
+        return list(make_rel_renames(basedir, pending_renames))
+
+    def perform_crash_recovery(self):
+        rel_renames = self.conn.get_rel_renames(self.conn.last_changelog_serial)
+        if rel_renames:
+            check_pending_renames(str(self.basedir), rel_renames)
+
+    def rollback(self):
+        for dirty_file in self._dirty_files.values():
+            if dirty_file is not None:
+                os.remove(dirty_file.tmppath)
+        self._dirty_files.clear()
+
+    def write_dirty_files(self, rel_renames):
+        basedir = str(self.basedir)
+        # If we crash in the remainder, the next restart will
+        # - call check_pending_renames which will replay any remaining
+        #   renames from the changelog entry, and
+        # - initialize next_serial from the max committed serial + 1
+        result = commit_renames(basedir, rel_renames)
+        self._dirty_files.clear()
+        return result
 
 
 class LazyChangesFormatter:
