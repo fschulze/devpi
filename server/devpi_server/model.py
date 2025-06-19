@@ -850,6 +850,33 @@ class BaseStage(object):
             threadlog.warn("index is marked read only")
         return MutableLinkStore(self, name, version)
 
+    def get_keys_for_entrypaths(self, entrypaths):
+        keys = []
+        for entrypath in entrypaths:
+            relpath = entrypath.rsplit("#", 1)[0]
+            keys.append(
+                self.keyfs.match_key(
+                    relpath, self.keyfs.PYPIFILE_NOMD5, self.keyfs.STAGEFILE
+                )
+            )
+        return keys
+
+    def get_entries_for_keys(self, keys):
+        key_to_ulidkey = dict(
+            self.keyfs.tx.resolve_keys(
+                keys, fetch=True, fill_cache=True, new_for_missing=False
+            )
+        )
+        result = []
+        for key in keys:
+            ulid_key = key_to_ulidkey.get(key)
+            result.append(None if ulid_key is None else FileEntry(ulid_key))
+        return result
+
+    def get_entries_for_entrypaths(self, entrypaths):
+        keys = self.get_keys_for_entrypaths(entrypaths)
+        return self.get_entries_for_keys(keys)
+
     def get_link_from_entrypath(self, entrypath):
         relpath = entrypath.rsplit("#", 1)[0]
         entry = self.xom.filestore.get_file_entry(relpath)

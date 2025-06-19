@@ -180,6 +180,7 @@ class IStorageConnection(Interface):
         at_serial: int,
         *,
         skip_ulid_keys: set[ULIDKey],
+        fill_cache: bool,
         with_deleted: bool,
     ) -> Iterator[KeyData]:
         """Iterate over all relpaths of the given typed keys starting
@@ -193,6 +194,7 @@ class IStorageConnection(Interface):
         at_serial: int,
         *,
         skip_ulid_keys: set[ULIDKey],
+        fill_cache: bool,
         with_deleted: bool,
     ) -> Iterator[ULIDKey]:
         """Get ULIDKey for given LocatedKeys."""
