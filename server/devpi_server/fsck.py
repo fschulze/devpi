@@ -35,7 +35,7 @@ def fsck():
         log.info("serverdir: %s", xom.config.server_path)
         log.info("uuid: %s", xom.config.nodeinfo["uuid"])
         keyfs = xom.keyfs
-        keys = (keyfs.get_key('PYPIFILE_NOMD5'), keyfs.get_key('STAGEFILE'))
+        keys = (keyfs.FILE_NOHASH, keyfs.FILE)
         last_time = time.time()
         processed = 0
         missing_files = 0
