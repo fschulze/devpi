@@ -537,8 +537,9 @@ def parseoptions(pluginmanager, argv, parser=None):
     try:
         config_options = load_config_file(config_file)
     except InvalidConfigError as e:
-        log.error("Error in config file '%s':\n  %s" % (  # noqa: TRY400
-            config_file, e))
+        log.error(  # noqa: TRY400
+            "Error in config file '%s':\n  %s", config_file, e
+        )
         sys.exit(4)
     defaultget = partial(
         default_getter,
@@ -1075,7 +1076,9 @@ class Config:
                 return None
             log.warning(
                 "Using deprecated existing secret file at '%s', use "
-                "--secretfile to explicitly provide the location." % secretfile)
+                "--secretfile to explicitly provide the location.",
+                secretfile,
+            )
             return secretfile
         return Path(self.args.secretfile).expanduser()
 
