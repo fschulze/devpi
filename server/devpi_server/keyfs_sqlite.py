@@ -155,9 +155,24 @@ class BaseConnection:
             raise KeyError(relpath)
         return tuple(row[:2])
 
-    def db_write_typedkeys(self, keys):
-        q = "INSERT OR REPLACE INTO kv (key, keyname, serial) VALUES (?, ?, ?)"
-        self.executemany(q, keys)
+    def db_write_typedkeys(self, data):
+        new_typedkeys = []
+        updated_typedkeys = []
+        for key, keyname, serial, back_serial in data:
+            if back_serial == -1:
+                new_typedkeys.append(dict(key=key, keyname=keyname, serial=serial))
+            else:
+                updated_typedkeys.append(
+                    dict(
+                        key=key, keyname=keyname, serial=serial, back_serial=back_serial
+                    )
+                )
+        if new_typedkeys:
+            q = "INSERT INTO kv (key, keyname, serial) VALUES (:key, :keyname, :serial)"
+            self.executemany(q, new_typedkeys)
+        if updated_typedkeys:
+            q = "UPDATE kv SET serial = :serial WHERE key = :key AND keyname = :keyname AND serial = :back_serial"
+            self.executemany(q, updated_typedkeys)
 
     def write_changelog_entry(self, serial, entry):
         threadlog.debug("writing changelog for serial %s", serial)
@@ -354,7 +369,7 @@ class Connection(BaseConnection):
     def _file_write(self, path, f):
         assert not os.path.isabs(path)
         assert not path.endswith("-tmp")
-        q = "INSERT OR REPLACE INTO files (path, size, data) VALUES (?, ?, ?)"
+        q = "INSERT INTO files (path, size, data) VALUES (?, ?, ?)"
         f.seek(0)
         content = f.read()
         f.close()
@@ -652,9 +667,10 @@ class Writer:
         self.changes = {}
         self.rel_renames = []
 
-    def record_set(self, typedkey, value=None, back_serial=None):
+    def record_set(self, typedkey, value, back_serial):
         """ record setting typedkey to value (None means it's deleted) """
         assert not isinstance(value, ReadonlyView), value
+        assert back_serial is not None
         # at __exit__ time we write out changes to the _changelog_cache
         # so we protect here against the caller modifying the value later
         value = get_mutable_deepcopy(value)
@@ -695,13 +711,8 @@ class Writer:
         data = []
         for relpath, (keyname, back_serial, value) in self.changes.items():
             if back_serial is None:
-                try:
-                    _, back_serial = self.conn.db_read_typedkey(relpath)
-                except KeyError:
-                    back_serial = -1
-                # update back_serial for write_changelog_entry
-                self.changes[relpath] = (keyname, back_serial, value)
-            data.append((relpath, keyname, commit_serial))
+                raise RuntimeError
+            data.append((relpath, keyname, commit_serial, back_serial))
         self.conn.db_write_typedkeys(data)
         del data
         entry = (self.changes, self.rel_renames)
