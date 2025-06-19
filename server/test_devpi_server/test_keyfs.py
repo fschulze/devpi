@@ -914,7 +914,7 @@ def test_crash_recovery(file_digest, keyfs, storage_info):
     assert path.exists()
     assert not tmppath.exists()
     with keyfs.write_transaction() as tx:
-        tx.io_file.delete(FilePathInfo("foo", content_hash))
+        tx.io_file.delete(FilePathInfo("foo", content_hash), is_last_of_hash=True)
     assert not path.exists()
     assert not tmppath.exists()
     # put file back in place

@@ -33,7 +33,7 @@ class IDBIOFileConnection(Interface):
         """Writes any files which have been changed without
         increasing the serial."""
 
-    def io_file_delete(path: FilePathInfo) -> None:
+    def io_file_delete(path: FilePathInfo, *, is_last_of_hash: bool) -> None:
         """Deletes the file at path."""
 
     def io_file_exists(path: FilePathInfo) -> bool:
@@ -75,7 +75,7 @@ class IIOFile(Interface):
     def commit() -> None:
         """Commit changed files to storage."""
 
-    def delete(path: FilePathInfo) -> None:
+    def delete(path: FilePathInfo, *, is_last_of_hash: bool) -> None:
         """Deletes the file at path."""
 
     def exists(path: FilePathInfo) -> bool:
@@ -300,7 +300,7 @@ class IOFileConnectionAdapter:
         self.dirty_files = conn.dirty_files
         self.storage = conn.storage
 
-    def io_file_delete(self, path: FilePathInfo) -> None:
+    def io_file_delete(self, path: FilePathInfo, *, is_last_of_hash: bool) -> None:  # noqa: ARG002
         return self.conn.io_file_delete(path.relpath)
 
     def io_file_exists(self, path: FilePathInfo) -> bool:

@@ -2114,6 +2114,9 @@ def add_keys(xom, keyfs):
     keyfs.add_key("STAGEFILE",
                   "{user}/{index}/+f/{hashdir_a}/{hashdir_b}/{filename}", dict)
 
+    # files related
+    keyfs.add_key("DIGESTPATHS", "{digest}", set)
+
     sub = EventSubscribers(xom)
     keyfs.PROJVERSION.on_key_change(sub.on_changed_version_config)
     keyfs.STAGEFILE.on_key_change(sub.on_changed_file_entry)
