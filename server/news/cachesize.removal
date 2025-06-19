@@ -1,0 +1,1 @@
+Remove ``--keyfs-cache-size`` option and replace it with ``large_cache_size`` and ``small_cache_size`` storage options.

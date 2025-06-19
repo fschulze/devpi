@@ -529,11 +529,11 @@ devpi command reference (server)
                         [--primary-url PRIMARY_URL] [--replica-max-retries NUM]
                         [--replica-file-search-path PATH] [--hard-links]
                         [--file-replication-threads NUM]
-                        [--file-replication-skip-indexes INDEXES]
                         [--proxy-timeout NUM] [--no-replica-streaming]
                         [--request-timeout NUM] [--offline-mode] [--serverdir DIR]
-                        [--storage NAME] [--keyfs-cache-size NUM]
-                        [--secretfile path] [--requests-only]
+                        [--storage NAME] [--secretfile path] [--requests-only]
+                        [--restrict-modify SPEC] [--theme THEME] [--debug-macros]
+                        [--documentation-path DOCUMENTATION_PATH]
                         [--restrict-modify SPEC] [--theme THEME] [--debug-macros]
                         [--documentation-path DOCUMENTATION_PATH]
                         [--keep-docs-packed] [--indexer-backend NAME]
@@ -653,11 +653,6 @@ devpi command reference (server)
       --storage NAME        the storage backend to use. "pg8000": Postgresql
                             backend with support for files in DB, "sqla_lite":
                             sqlite backend using SQLAlchemy [sqla_lite]
-      --keyfs-cache-size NUM
-                            size of keyfs cache. If your devpi-server installation
-                            gets a lot of writes, then increasing this might
-                            improve performance. Each entry uses 1kb of memory on
-                            average. So by default about 10MB are used. [10000]
 
     deployment options:
       --secretfile path     file containing the server side secret used for user
@@ -702,8 +697,7 @@ devpi command reference (server)
     $ devpi-export -h
     usage: devpi-export [-h] [-c CONFIGFILE] [--debug] [--logger-cfg LOGGER_CFG]
                         [--serverdir DIR] [--storage NAME]
-                        [--keyfs-cache-size NUM] [--include-mirrored-files]
-                        [--hard-links]
+                        [--include-mirrored-files] [--hard-links]
                         directory
 
     Export the data of a devpi-server instance.
@@ -723,11 +717,6 @@ devpi command reference (server)
       --storage NAME        the storage backend to use. "pg8000": Postgresql
                             backend with support for files in DB, "sqla_lite":
                             sqlite backend using SQLAlchemy [sqla_lite]
-      --keyfs-cache-size NUM
-                            size of keyfs cache. If your devpi-server installation
-                            gets a lot of writes, then increasing this might
-                            improve performance. Each entry uses 1kb of memory on
-                            average. So by default about 10MB are used. [10000]
       --include-mirrored-files
                             include downloaded files from mirror indexes in dump.
                             [False]
@@ -740,8 +729,7 @@ devpi command reference (server)
 
     $ devpi-import -h
     usage: devpi-import [-h] [-c CONFIGFILE] [--debug] [--logger-cfg LOGGER_CFG]
-                        [--serverdir DIR] [--storage NAME]
-                        [--keyfs-cache-size NUM] [--no-root-pypi]
+                        [--serverdir DIR] [--storage NAME] [--no-root-pypi]
                         [--root-passwd ROOT_PASSWD]
                         [--root-passwd-hash ROOT_PASSWD_HASH]
                         [--skip-import-type TYPE] [--no-events] [--hard-links]
@@ -764,11 +752,6 @@ devpi command reference (server)
       --storage NAME        the storage backend to use. "pg8000": Postgresql
                             backend with support for files in DB, "sqla_lite":
                             sqlite backend using SQLAlchemy [sqla_lite]
-      --keyfs-cache-size NUM
-                            size of keyfs cache. If your devpi-server installation
-                            gets a lot of writes, then increasing this might
-                            improve performance. Each entry uses 1kb of memory on
-                            average. So by default about 10MB are used. [10000]
       --no-root-pypi        don't create root/pypi on server initialization.
                             [False]
       --root-passwd ROOT_PASSWD
@@ -798,7 +781,7 @@ devpi command reference (server)
     usage: devpi-init [-h] [-c CONFIGFILE] [--debug] [--logger-cfg LOGGER_CFG]
                       [--role {primary,replica,standalone,auto}]
                       [--primary-url PRIMARY_URL] [--serverdir DIR]
-                      [--storage NAME] [--keyfs-cache-size NUM] [--no-root-pypi]
+                      [--storage NAME] [--no-root-pypi]
                       [--root-passwd ROOT_PASSWD]
                       [--root-passwd-hash ROOT_PASSWD_HASH]
 
@@ -825,11 +808,6 @@ devpi command reference (server)
       --storage NAME        the storage backend to use. "pg8000": Postgresql
                             backend with support for files in DB, "sqla_lite":
                             sqlite backend using SQLAlchemy [sqla_lite]
-      --keyfs-cache-size NUM
-                            size of keyfs cache. If your devpi-server installation
-                            gets a lot of writes, then increasing this might
-                            improve performance. Each entry uses 1kb of memory on
-                            average. So by default about 10MB are used. [10000]
       --no-root-pypi        don't create root/pypi on server initialization.
                             [False]
       --root-passwd ROOT_PASSWD
@@ -844,7 +822,6 @@ devpi command reference (server)
     $ devpi-passwd -h
     usage: devpi-passwd [-h] [-c CONFIGFILE] [--debug] [--logger-cfg LOGGER_CFG]
                         [--serverdir DIR] [--storage NAME]
-                        [--keyfs-cache-size NUM]
                         [user]
 
     Change password for a user directly in devpi-server database.
@@ -864,18 +841,12 @@ devpi command reference (server)
       --storage NAME        the storage backend to use. "pg8000": Postgresql
                             backend with support for files in DB, "sqla_lite":
                             sqlite backend using SQLAlchemy [sqla_lite]
-      --keyfs-cache-size NUM
-                            size of keyfs cache. If your devpi-server installation
-                            gets a lot of writes, then increasing this might
-                            improve performance. Each entry uses 1kb of memory on
-                            average. So by default about 10MB are used. [10000]
 
 ::
 
     $ devpi-clear-search-index -h
     usage: devpi-clear-search-index [-h] [-c CONFIGFILE] [--serverdir DIR]
-                                    [--storage NAME] [--keyfs-cache-size NUM]
-                                    [--indexer-backend NAME]
+                                    [--storage NAME] [--indexer-backend NAME]
 
     Clear project search index.
 
@@ -887,11 +858,6 @@ devpi command reference (server)
       --storage NAME        the storage backend to use. "pg8000": Postgresql
                             backend with support for files in DB, "sqla_lite":
                             sqlite backend using SQLAlchemy [sqla_lite]
-      --keyfs-cache-size NUM
-                            size of keyfs cache. If your devpi-server installation
-                            gets a lot of writes, then increasing this might
-                            improve performance. Each entry uses 1kb of memory on
-                            average. So by default about 10MB are used. [10000]
       --indexer-backend NAME
                             the indexer backend to use [whoosh]
 
