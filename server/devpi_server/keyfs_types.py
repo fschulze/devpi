@@ -76,14 +76,14 @@ class ULID(int):
 @frozen
 class Record:
     key: LocatedKey
-    value: KeyFSTypes | None
+    value: KeyFSTypes | Deleted
     back_serial: int
-    old_value: KeyFSTypesRO | Absent
+    old_value: KeyFSTypesRO | Absent | Deleted
 
     def __attrs_post_init__(self):
         if (
-            self.value is not None
-            and not isinstance(self.old_value, (Absent, Deleted, type(None)))
+            not isinstance(self.value, Deleted)
+            and not isinstance(self.old_value, (Absent, Deleted))
             and not isinstance(ensure_deeply_readonly(self.value), type(self.old_value))
         ):
             msg = f"Mismatching types for value {self.value!r} and old_value {self.old_value!r}"

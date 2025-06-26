@@ -702,7 +702,7 @@ class Writer:
         assert back_serial is not None
         # at __exit__ time we write out changes to the _changelog_cache
         # so we protect here against the caller modifying the value later
-        value = get_mutable_deepcopy(value)
+        value = None if value is deleted else get_mutable_deepcopy(value)
         self.changes[typedkey.relpath] = (typedkey.key_name, back_serial, value)
 
     def records_set(self, records: Iterable[Record]) -> None:
