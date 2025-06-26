@@ -394,12 +394,27 @@ class BaseConnection:
             )
 
     def get_key_at_serial(self, key: LocatedKey, serial: int) -> KeyData:
-        results = list(
-            self._iter_relpaths_at((sa.tuple_(key.relpath, key.key_name),), serial)
-        )
-        if not results:
-            raise KeyError(key)
-        (result,) = results
+        cache_key = (key.key_name, key.relpath)
+        result = self._relpath_cache.get((serial, cache_key), absent)
+        if result is absent:
+            result = self._changelog_cache.get((serial, cache_key), absent)
+        if result is absent:
+            results = list(
+                self._iter_relpaths_at((sa.tuple_(key.relpath, key.key_name),), serial)
+            )
+            if not results:
+                raise KeyError(key)
+            (result,) = results
+        if (
+            result.value is not deleted
+            and gettotalsizeof(result.value, maxlen=100000) is None
+        ):
+            # result is big, put it in the changelog cache,
+            # which has fewer entries to preserve memory
+            self._changelog_cache.put((serial, cache_key), result)
+        else:
+            # result is small
+            self._relpath_cache.put((serial, cache_key), result)
         return result
 
     def iter_keys_at_serial(
