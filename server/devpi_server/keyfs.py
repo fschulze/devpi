@@ -314,7 +314,12 @@ class KeyFS:
                 typedkey = self.get_key_instance(keyname, relpath)
                 subscriber_changes[typedkey] = (val, back_serial)
                 records.append(
-                    Record(typedkey, get_mutable_deepcopy(val), back_serial, old_val)
+                    Record(
+                        typedkey,
+                        deleted if val is None else get_mutable_deepcopy(val),
+                        back_serial,
+                        old_val,
+                    )
                 )
             fswriter.records_set(records)
         if callable(self._import_subscriber):
@@ -807,10 +812,8 @@ class Transaction:
             (back_serial, old_val) = self.get_original(typedkey)
             if val == old_val:
                 continue
-            if val is deleted:
-                if old_val in (absent, deleted):
-                    continue
-                val = None
+            if val is deleted and old_val in (absent, deleted):
+                continue
             records.append(Record(typedkey, val, back_serial, old_val))
         if not records and not self.io_file.is_dirty():
             threadlog.debug("nothing to commit, just closing tx")
