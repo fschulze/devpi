@@ -27,7 +27,6 @@ if TYPE_CHECKING:
     from .readonly import SetViewReadonly
     from .readonly import TupleViewReadonly
     from pathlib import Path
-    from typing import Any
     from typing import Callable
     from typing import Union
     from typing_extensions import Self
@@ -77,9 +76,9 @@ class ULID(int):
 @frozen
 class Record:
     key: LocatedKey
-    value: Any
+    value: KeyFSTypes | None
     back_serial: int
-    old_value: Any
+    old_value: KeyFSTypesRO | Absent
 
     def __attrs_post_init__(self):
         if (
@@ -91,13 +90,17 @@ class Record:
             raise TypeError(msg)
 
 
-@define
-class RelpathInfo:
+@frozen
+class KeyData:
     relpath: str
     keyname: str
     serial: int
     back_serial: int
-    value: Any
+    value: KeyFSTypesRO | None
+
+    @property
+    def last_serial(self):
+        return self.serial
 
 
 @frozen

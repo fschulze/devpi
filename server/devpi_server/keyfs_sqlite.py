@@ -10,7 +10,7 @@ from .interfaces import IStorage
 from .interfaces import IStorageConnection
 from .interfaces import IWriter
 from .keyfs import KeyfsTimeoutError
-from .keyfs_types import RelpathInfo
+from .keyfs_types import KeyData
 from .keyfs_types import StorageInfo
 from .log import thread_pop_log
 from .log import thread_push_log
@@ -36,6 +36,7 @@ import time
 if TYPE_CHECKING:
     from .keyfs_types import Record
     from collections.abc import Iterable
+    from collections.abc import Iterator
 
 
 class BaseConnection:
@@ -207,33 +208,43 @@ class BaseConnection:
         (changes, rel_renames) = loads(data)
         return rel_renames
 
-    def _get_relpath_at(self, relpath, serial):
+    def _get_relpath_at(self, relpath: str, serial: int) -> KeyData:
         (keyname, last_serial) = self.db_read_typedkey(relpath)
         serials_and_values = self._iter_serial_and_value_backwards(relpath, last_serial)
         try:
-            (last_serial, back_serial, val) = next(serials_and_values)
+            keydata = next(serials_and_values)
+            last_serial = keydata.last_serial
             while last_serial >= 0:
                 if last_serial > serial:
-                    (last_serial, back_serial, val) = next(serials_and_values)
+                    keydata = next(serials_and_values)
+                    last_serial = keydata.last_serial
                     continue
-                return (last_serial, back_serial, val)
+                return keydata
         except StopIteration:
             pass
         raise KeyError(relpath)
 
-    def _iter_serial_and_value_backwards(self, relpath, last_serial):
+    def _iter_serial_and_value_backwards(
+        self, relpath: str, last_serial: int
+    ) -> Iterator[KeyData]:
         while last_serial >= 0:
             tup = self.get_changes(last_serial).get(relpath)
             if tup is None:
                 raise RuntimeError("no transaction entry at %s" % (last_serial))
             keyname, back_serial, val = tup
-            yield (last_serial, back_serial, val)
+            yield KeyData(
+                relpath=relpath,
+                keyname=keyname,
+                serial=last_serial,
+                back_serial=back_serial,
+                value=val,
+            )
             last_serial = back_serial
 
         # we could not find any change below at_serial which means
         # the key didn't exist at that point in time
 
-    def get_relpath_at(self, relpath, serial):
+    def get_relpath_at(self, relpath: str, serial: int) -> KeyData:
         result = self._relpath_cache.get((serial, relpath), absent)
         if result is absent:
             result = self._changelog_cache.get((serial, relpath), absent)
@@ -241,10 +252,16 @@ class BaseConnection:
             changes = self._changelog_cache.get(serial, absent)
             if changes is not absent and relpath in changes:
                 (keyname, back_serial, value) = changes[relpath]
-                result = (serial, back_serial, value)
+                result = KeyData(
+                    relpath=relpath,
+                    keyname=keyname,
+                    serial=serial,
+                    back_serial=back_serial,
+                    value=value,
+                )
         if result is absent:
             result = self._get_relpath_at(relpath, serial)
-        if gettotalsizeof(result, maxlen=100000) is None:
+        if gettotalsizeof(result.value, maxlen=100000) is None:
             # result is big, put it in the changelog cache,
             # which has fewer entries to preserve memory
             self._changelog_cache.put((serial, relpath), result)
@@ -271,10 +288,13 @@ class BaseConnection:
             changes = self.get_changes(serial)
             for relpath, keyname, serial in rows:
                 (keyname, back_serial, val) = changes[relpath]
-                yield RelpathInfo(
-                    relpath=relpath, keyname=keyname,
-                    serial=serial, back_serial=back_serial,
-                    value=val)
+                yield KeyData(
+                    relpath=relpath,
+                    keyname=keyname,
+                    serial=serial,
+                    back_serial=back_serial,
+                    value=val,
+                )
 
     def write_transaction(self, io_file):
         return Writer(self.storage, self, io_file)
