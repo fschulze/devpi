@@ -37,6 +37,7 @@ import time
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+    from devpi_server.keyfs_types import LocatedKey
 
 
 devpiserver_hookimpl = HookimplMarker("devpiserver")
@@ -218,17 +219,16 @@ class Connection:
         res = self.fetchscalar(q)
         return -1 if res is None else res
 
-    def db_read_typedkey(self, relpath):
-        q = "SELECT keyname, serial FROM kv WHERE key = :relpath"
-        res = self.fetchone(q, relpath=relpath)
-        if res is None:
-            raise KeyError(relpath)
-        (keyname, serial) = res
-        return (keyname, serial)
+    def last_key_serial(self, key: LocatedKey) -> int:
+        q = "SELECT serial FROM kv WHERE keyname = :keyname AND key = :relpath"
+        serial = self.fetchscalar(q, keyname=key.key_name, relpath=key.relpath)
+        if serial is None:
+            raise KeyError(key)
+        return serial
 
-    def _get_relpath_at(self, relpath, serial) -> KeyData:
-        (keyname, last_serial) = self.db_read_typedkey(relpath)
-        serials_and_values = self._iter_serial_and_value_backwards(relpath, last_serial)
+    def _get_key_at_serial(self, key: LocatedKey, serial) -> KeyData:
+        last_serial = self.last_key_serial(key)
+        serials_and_values = self._iter_serial_and_value_backwards(key, last_serial)
         try:
             keydata = next(serials_and_values)
             last_serial = keydata.last_serial
@@ -240,20 +240,20 @@ class Connection:
                 return keydata
         except StopIteration:
             pass
-        raise KeyError(relpath)
+        raise KeyError(key)
 
     def _iter_serial_and_value_backwards(
-        self, relpath, last_serial
+        self, key: LocatedKey, last_serial
     ) -> Iterator[KeyData]:
         while last_serial >= 0:
-            tup = self.get_changes(last_serial).get(relpath)
+            tup = self.get_changes(last_serial).get(key.relpath)
             if tup is None:
                 raise RuntimeError("no transaction entry at %s" % (last_serial))
-            keyname, back_serial, val = tup
+            (keyname, back_serial, val) = tup
             if val is None:
                 val = deleted
             yield KeyData(
-                relpath=relpath,
+                relpath=key.relpath,
                 keyname=keyname,
                 serial=last_serial,
                 back_serial=back_serial,
@@ -264,35 +264,23 @@ class Connection:
         # we could not find any change below at_serial which means
         # the key didn't exist at that point in time
 
-    def get_relpath_at(self, relpath, serial) -> KeyData:
-        result = self._relpath_cache.get((serial, relpath), absent)
+    def get_key_at_serial(self, key: LocatedKey, serial) -> KeyData:
+        cache_key = key.relpath
+        result = self._relpath_cache.get((serial, cache_key), absent)
         if result is absent:
-            result = self._changelog_cache.get((serial, relpath), absent)
+            result = self._changelog_cache.get((serial, cache_key), absent)
         if result is absent:
-            changes = self._changelog_cache.get(serial, absent)
-            if changes is not absent and relpath in changes:
-                (keyname, back_serial, value) = changes[relpath]
-                if value is None:
-                    value = deleted
-                result = KeyData(
-                    relpath=relpath,
-                    keyname=keyname,
-                    serial=serial,
-                    back_serial=back_serial,
-                    value=value,
-                )
-        if result is absent:
-            result = self._get_relpath_at(relpath, serial)
+            result = self._get_key_at_serial(key, serial)
         if (
             result.value is not deleted
             and gettotalsizeof(result.value, maxlen=100000) is None
         ):
             # result is big, put it in the changelog cache,
             # which has fewer entries to preserve memory
-            self._changelog_cache.put((serial, relpath), result)
+            self._changelog_cache.put((serial, cache_key), result)
         else:
             # result is small
-            self._relpath_cache.put((serial, relpath), result)
+            self._relpath_cache.put((serial, cache_key), result)
         return result
 
     def iter_relpaths_at(self, typedkeys, at_serial):

@@ -30,6 +30,7 @@ import warnings
 if TYPE_CHECKING:
     from .interfaces import IIOFile
     from .keyfs_types import IKeyFSKey
+    from .keyfs_types import LocatedKey
     from .keyfs_types import Record
     from collections.abc import Iterable
     from collections.abc import Iterator
@@ -156,29 +157,27 @@ class BaseConnection:
     def get_next_serial(self) -> int:
         raise NotImplementedError
 
-    def db_read_typedkey(self, relpath: str) -> tuple[str, int]:
+    def last_key_serial(self, key: LocatedKey) -> int:
         latest_serial_stmt = (
             sa.select(
                 self.relpath_ulid_table.c.relpath,
                 sa.func.max(self.relpath_ulid_table.c.serial).label("serial"),
             )
-            .where(self.relpath_ulid_table.c.relpath == relpath)
+            .where(self.relpath_ulid_table.c.relpath == key.relpath)
             .group_by(self.relpath_ulid_table.c.relpath)
         )
         latest_serial_sq = latest_serial_stmt.subquery("latest_serial_sq")
-        stmt = sa.select(
-            self.relpath_ulid_table.c.keytype, latest_serial_sq.c.serial
-        ).join(
+        stmt = sa.select(self.relpath_ulid_table.c.serial).join(
             latest_serial_sq,
             sa.and_(
                 self.relpath_ulid_table.c.relpath == latest_serial_sq.c.relpath,
                 self.relpath_ulid_table.c.serial == latest_serial_sq.c.serial,
             ),
         )
-        row = self._sqlaconn.execute(stmt).one_or_none()
-        if row is None:
-            raise KeyError(relpath)
-        return (row.relpath, row.serial)
+        result = self._sqlaconn.execute(stmt).scalar()
+        if result is None:
+            raise KeyError(key)
+        return result
 
     def _db_write_typedkeys(
         self, new_typedkeys: Sequence[dict], updated_typedkeys: Sequence[dict]
@@ -373,10 +372,10 @@ class BaseConnection:
                 else ensure_deeply_readonly(loads(value)),
             )
 
-    def get_relpath_at(self, relpath: str, serial: int) -> KeyData:
-        results = list(self._iter_relpaths_at((relpath,), serial))
+    def get_key_at_serial(self, key: LocatedKey, serial: int) -> KeyData:
+        results = list(self._iter_relpaths_at((key.relpath,), serial))
         if not results:
-            raise KeyError(relpath)
+            raise KeyError(key)
         (result,) = results
         return result
 
