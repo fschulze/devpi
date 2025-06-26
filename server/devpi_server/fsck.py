@@ -42,7 +42,7 @@ def fsck():
         got_errors = False
         with xom.keyfs.read_transaction() as tx:
             log.info("Checking at serial %s", tx.at_serial)
-            relpaths = tx.iter_relpaths_at(keys, tx.at_serial)
+            relpaths = tx.iter_keys_at_serial(keys, tx.at_serial)
             for item in relpaths:
                 if item.value is None:
                     continue
