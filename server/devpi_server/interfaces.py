@@ -26,7 +26,6 @@ if TYPE_CHECKING:
     from typing import Callable
     from typing import IO
     from typing import Literal
-    from typing import Optional
 
 
 class IDBIOFileConnection(Interface):
@@ -119,6 +118,9 @@ class IStorage(Interface):
     ) -> None:
         """Create the storage object and initialize it."""
 
+    def close() -> None:
+        """Close the storage."""
+
     @overload
     def get_connection(
         *, closing: Literal[True], write: bool, timeout: int
@@ -144,6 +146,8 @@ class IStorage(Interface):
 
 
 class IStorageConnection(Interface):
+    storage: IStorage = Attribute(""" A reference back to the storage. """)
+
     def db_read_last_changelog_serial() -> int:
         """Return last stored serial.
         Returns -1 if nothing is stored yet."""
@@ -152,7 +156,7 @@ class IStorageConnection(Interface):
         """Return the latest serial for given key.
         Raises KeyError if not found."""
 
-    def get_raw_changelog_entry(serial: int) -> Optional[bytes]:
+    def get_raw_changelog_entry(serial: int) -> bytes | None:
         """Returns serialized changes for given serial."""
 
     def get_key_at_serial(key: LocatedKey, serial: int) -> KeyData:
@@ -169,7 +173,7 @@ class IStorageConnection(Interface):
         """Iterate over all relpaths of the given typed keys starting
         from at_serial until the first serial in the database."""
 
-    def iter_rel_renames(serial: int) -> Optional[Iterable]:
+    def iter_rel_renames(serial: int) -> Iterable | None:
         """Returns deserialized rel_renames for given serial."""
 
     def write_transaction(io_file: IIOFile | None) -> IWriter:
