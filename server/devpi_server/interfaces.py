@@ -163,14 +163,14 @@ class IStorageConnection(Interface):
     def iter_changes_at(serial: int) -> Iterator[KeyData]:
         """Returns deserialized readonly changes for given serial."""
 
-    def iter_rel_renames(serial: int) -> Optional[Iterable]:
-        """Returns deserialized rel_renames for given serial."""
-
-    def iter_relpaths_at(
+    def iter_keys_at_serial(
         typedkeys: Iterable[IKeyFSKey], at_serial: int
     ) -> Iterator[KeyData]:
         """Iterate over all relpaths of the given typed keys starting
         from at_serial until the first serial in the database."""
+
+    def iter_rel_renames(serial: int) -> Optional[Iterable]:
+        """Returns deserialized rel_renames for given serial."""
 
     def write_transaction(io_file: IIOFile | None) -> IWriter:
         """Returns a context providing class with a IWriter interface."""
