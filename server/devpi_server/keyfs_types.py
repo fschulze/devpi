@@ -87,18 +87,18 @@ KeyType = TypeVar("KeyType")
 @frozen
 class Record(Generic[KeyType]):
     key: LocatedKey[KeyType]
-    value: KeyFSTypes | None
+    value: KeyFSTypes | Deleted
     back_serial: int
     old_value: KeyFSTypesRO | Absent | Deleted
 
     def __attrs_post_init__(self) -> None:
-        if (value := self.value) is not None:
+        if not isinstance(value := self.value, Deleted):
             if not isinstance(value, self.key.type):
                 msg = f"Mismatching value type {type(value)} for record with {self.key}"
                 raise TypeError(msg)
-            if not isinstance(
-                self.old_value, (Absent, Deleted, type(None))
-            ) and not isinstance(ensure_deeply_readonly(value), type(self.old_value)):
+            if not isinstance(self.old_value, (Absent, Deleted)) and not isinstance(
+                ensure_deeply_readonly(value), type(self.old_value)
+            ):
                 msg = f"Mismatching types for value {value!r} and old_value {self.old_value!r}"
                 raise TypeError(msg)
 
