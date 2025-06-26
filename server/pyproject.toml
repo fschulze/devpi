@@ -118,7 +118,6 @@ exclude = [
     "devpi_server/init.py",
     "devpi_server/keyfs.py",
     "devpi_server/keyfs_sqlite.py",
-    "devpi_server/keyfs_sqlite_fs.py",
     "devpi_server/log.py",
     "devpi_server/main.py",
     "devpi_server/markers.py",

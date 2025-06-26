@@ -137,8 +137,9 @@ class TestMultiChangelog:
     @pytest.mark.usefixtures("noiter")
     def test_multiple_changes(self, mapp, reqchangelogs, testapp):
         mapp.create_user("this", password="p")
+        this_serial = self.get_latest_serial(testapp)
         mapp.create_user("that", password="p")
-        latest_serial = self.get_latest_serial(testapp)
+        that_serial = latest_serial = self.get_latest_serial(testapp)
         assert latest_serial > 1
         r = reqchangelogs(0)
         assert int(r.headers['X-DEVPI-SERIAL']) == latest_serial
@@ -146,8 +147,11 @@ class TestMultiChangelog:
         data = loads(body)
         assert isinstance(data, list)
         assert len(data) == (latest_serial + 1)
-        assert "this/.config" in str(data[-2])
-        assert "that/.config" in str(data[-1])
+        data_by_serial = dict(data)
+        changes_this = data_by_serial[this_serial]
+        changes_that = data_by_serial[that_serial]
+        assert ("USER", "this") in {c[:2]: c[2:] for c in changes_this}
+        assert ("USER", "that") in {c[:2]: c[2:] for c in changes_that}
 
     @pytest.mark.usefixtures("noiter")
     def test_size_limit(self, mapp, monkeypatch, reqchangelogs, testapp):
@@ -1332,7 +1336,7 @@ class TestFileReplicationSharedData:
         from devpi_server.replica import IndexType
         relpath = "root/dev/+f/274/e88b0b3d028fe/pytest-2.1.0.zip"
         key = shared_data.xom.keyfs.get_key_instance("STAGEFILE", relpath)
-        userkey = shared_data.xom.keyfs.get_key_instance("USER", "root/.config")
+        userkey = shared_data.xom.keyfs.get_key_instance("USER", "root")
 
         result = []
 

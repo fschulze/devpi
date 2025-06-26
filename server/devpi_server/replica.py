@@ -600,7 +600,7 @@ class ReplicaThread:
         return self.fetch(self.handler_multi, url)
 
     def iter_changes(self, serial, changes):
-        for relpath, (keyname, back_serial, val) in changes.items():
+        for keyname, relpath, back_serial, val in changes:
             yield KeyData(
                 relpath=relpath,
                 keyname=keyname,
