@@ -2,15 +2,18 @@ from __future__ import annotations
 
 from certauth.certauth import CertificateAuthority
 from devpi_postgresql import main
+from devpi_server.keyfs_types import StorageInfo
 from pathlib import Path
 from pluggy import HookimplMarker
 from shutil import rmtree
 from typing import TYPE_CHECKING
+from typing import overload
 import contextlib
 import getpass
 import os
 import pytest
 import socket
+import sqlalchemy as sa
 import subprocess
 import sys
 import tempfile
@@ -18,19 +21,23 @@ import time
 
 
 if TYPE_CHECKING:
+    from collections.abc import Generator
+    from contextlib import AbstractContextManager
     from typing import ClassVar
+    from typing import Literal
+
 
 devpiserver_hookimpl = HookimplMarker("devpiserver")
 
 
-def get_open_port(host):
+def get_open_port(host: str) -> int:
     with contextlib.closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
         s.bind((host, 0))
         s.listen(1)
         return s.getsockname()[1]
 
 
-def wait_for_port(host, port, timeout=60):
+def wait_for_port(host: str, port: int, timeout: float = 60) -> None:
     while timeout > 0:
         with contextlib.closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
             s.settimeout(1)
@@ -38,18 +45,19 @@ def wait_for_port(host, port, timeout=60):
                 return
         time.sleep(1)
         timeout -= 1
-    raise RuntimeError(
-        "The port %s on host %s didn't become accessible" % (port, host))
+    raise RuntimeError(f"The port {port} on host {host} didn't become accessible")
 
 
-def pytest_addoption(parser):
+def pytest_addoption(parser: pytest.Parser) -> None:
     parser.addoption(
         "--backend-postgresql-ssl", action="store_true",
         help="make SSL connections to PostgreSQL")
 
 
 @pytest.fixture(scope="session")
-def devpipostgresql_postgresql(request):
+def devpipostgresql_postgresql(
+    request: pytest.FixtureRequest,
+) -> Generator[dict, None, None]:
     tmpdir = Path(
         tempfile.mkdtemp(prefix='test-', suffix='-devpi-postgresql'))
     tmpdir_path = str(tmpdir)
@@ -60,7 +68,8 @@ def devpipostgresql_postgresql(request):
             "fsync = off",
             "full_page_writes = off",
             "synchronous_commit = off",
-            "unix_socket_directories = '{}'".format(tmpdir_path)]
+            f"unix_socket_directories = '{tmpdir_path}'",
+        ]
 
         pg_ssl = request.config.option.backend_postgresql_ssl
         host = 'localhost'
@@ -74,20 +83,24 @@ def devpipostgresql_postgresql(request):
                 # Postgres requires restrictive permissions on private key.
                 os.chmod(server_cert, 0o600)
 
-            postgresql_conf_lines.extend([
-                "ssl = on",
-                "ssl_cert_file = '{}'".format(server_cert),
-                "ssl_key_file = '{}'".format(server_cert),
-                "ssl_ca_file = 'ca.pem'"])
+            postgresql_conf_lines.extend(
+                [
+                    "ssl = on",
+                    f"ssl_cert_file = '{server_cert}'",
+                    f"ssl_key_file = '{server_cert}'",
+                    "ssl_ca_file = 'ca.pem'",
+                ]
+            )
 
             # Require SSL connections to be authenticated by client certificates.
             with tmpdir.joinpath('pg_hba.conf').open('w', encoding='ascii') as f:
-                f.write("\n".join([
+                f.write(
                     # "local" is for Unix domain socket connections only
-                    'local all all trust',
+                    "local all all trust\n"
                     # IPv4 local connections:
-                    'hostssl all all 127.0.0.1/32 cert',
-                    'host all all 127.0.0.1/32 trust']))
+                    "hostssl all all 127.0.0.1/32 cert\n"
+                    "host all all 127.0.0.1/32 trust\n"
+                )
 
         with tmpdir.joinpath('postgresql.conf').open('w+', encoding='ascii') as f:
             f.write("\n".join(postgresql_conf_lines))
@@ -110,13 +123,19 @@ def devpipostgresql_postgresql(request):
                 settings['ssl_ca_certs'] = str(tmpdir / 'ca.pem')
                 settings['ssl_certfile'] = client_cert
 
-            main.Storage(
-                tmpdir_path, notify_on_commit=False,
-                cache_size=10000, settings=settings)
+            storage = main.Storage(
+                tmpdir,
+                notify_on_commit=lambda: None,
+                cache_size=10000,
+                settings=settings,
+            )
+            storage.engine.dispose()
             yield settings
+            storage.engine.dispose()
             for conn, _is_closing, _db, _ts in Storage._connections:
                 with contextlib.suppress(AttributeError):
                     conn.close()
+            storage.close()
             # use a copy of the set, as it might be changed in another thread
             for db in set(Storage._dbs_created):
                 with contextlib.suppress(subprocess.CalledProcessError):
@@ -130,36 +149,50 @@ def devpipostgresql_postgresql(request):
 
 
 class Storage(main.Storage):
-    _dbs_created: ClassVar[set[str]] = set()
     _connections: ClassVar[list] = []
+    _dbs_created: ClassVar[set[str]] = set()
+    poolclass = sa.NullPool
 
     @classmethod
-    def _get_test_db(cls, basedir):
+    def _get_test_db(cls, basedir: Path) -> str:
         import hashlib
         db = hashlib.md5(  # noqa: S324
             str(basedir).encode('ascii', errors='ignore')).hexdigest()
         if db not in cls._dbs_created:
-            subprocess.call([
-                'createdb', '-h', cls.host, '-p', str(cls.port),
-                '-T', 'devpi', db])
+            subprocess.check_call(
+                ["createdb", "-h", cls.host, "-p", str(cls.port), "-T", "devpi", db]
+            )
             cls._dbs_created.add(db)
         return db
 
     @classmethod
-    def _get_test_storage_options(cls, basedir):
+    def _get_test_storage_options(cls, basedir: Path) -> str:
         db = cls._get_test_db(basedir)
-        return ":host=%s,port=%s,user=%s,database=%s" % (
-            cls.host, cls.port, cls.user, db)
+        return f":host={cls.host},port={cls.port},user={cls.user},database={db}"
 
     @property
-    def database(self):
+    def database(self) -> str:
         return self._get_test_db(self.basedir)
 
     @database.setter
-    def database(self, value):
+    def database(self, value: str) -> None:
         pass
 
-    def get_connection(self, *, closing=True, write=False, timeout=30):
+    @overload
+    def get_connection(
+        self, *, closing: Literal[True], write: bool = False, timeout: int = 30
+    ) -> AbstractContextManager[main.Connection]:
+        pass
+
+    @overload
+    def get_connection(
+        self, *, closing: Literal[False], write: bool = False, timeout: int = 30
+    ) -> main.Connection:
+        pass
+
+    def get_connection(
+        self, *, closing: bool = True, write: bool = False, timeout: int = 30
+    ) -> main.Connection | AbstractContextManager[main.Connection]:
         conn = main.Storage.get_connection(
             self, closing=False, write=write, timeout=timeout
         )
@@ -172,13 +205,13 @@ class Storage(main.Storage):
 
 
 @pytest.fixture(autouse=True, scope="class")
-def _devpipostgresql_db_cleanup():
+def _devpipostgresql_db_cleanup() -> Generator[None, None, None]:
     # this fixture is doing cleanups after tests, so it doesn't yield anything
     yield
     dbs_to_skip = set()
     for i, (conn, _is_closing, db, ts) in reversed(list(enumerate(Storage._connections))):
-        sqlconn = getattr(conn, '_sqlconn', None)
-        if sqlconn is not None:
+        sqlaconn = getattr(conn, "_sqlaconn", None)
+        if sqlaconn is not None:
             if ((time.monotonic() - ts) > 120):
                 conn.close()
             else:
@@ -197,16 +230,16 @@ def _devpipostgresql_db_cleanup():
 
 
 @pytest.fixture(autouse=True, scope="session")
-def _devpipostgresql_devpiserver_describe_storage_backend_mock(request):
+def _devpipostgresql_devpiserver_describe_storage_backend_mock(
+    request: pytest.FixtureRequest,
+) -> None:
     backend = getattr(request.config.option, "devpi_server_storage_backend", None)
     if backend is None:
         return
     old = main.devpiserver_describe_storage_backend
 
     @devpiserver_hookimpl
-    def devpiserver_describe_storage_backend(settings):
-        from devpi_server.keyfs_types import StorageInfo
-
+    def devpiserver_describe_storage_backend(settings: dict) -> StorageInfo:
         result = old(settings)
         postgresql = request.getfixturevalue("devpipostgresql_postgresql")
         for k, v in postgresql.items():

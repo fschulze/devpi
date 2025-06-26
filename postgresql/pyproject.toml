@@ -60,11 +60,10 @@ exclude = [
 
 
 [tool.ruff.lint]
-extend-ignore = [
-    "FLY002", # maybe cleanup later - f-string instead of join
-    "PLR0912", # maybe cleanup later
-    "RUF012", # cleanup later
-    "UP032", # cleanup later - f-string instead of format
+extend-select = [
+    "ANN", # annotations
+    "I001", # import block unsorted
+    "UP031", # printf string formatting
 ]
 
 

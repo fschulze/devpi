@@ -58,6 +58,16 @@ class explain(sa.Executable, sa.ClauseElement):
         self.analyze = analyze
 
 
+@compiles(explain, "postgresql")
+def pg_explain(element: explain, compiler: SQLCompiler, **kw: Any) -> str:
+    text = "EXPLAIN "
+    if element.analyze:
+        text += "ANALYZE "
+    text += compiler.process(element.statement, **kw)
+
+    return text
+
+
 @compiles(explain, "sqlite")
 def sqlite_explain(element: explain, compiler: SQLCompiler, **kw: Any) -> str:
     text = "EXPLAIN "
