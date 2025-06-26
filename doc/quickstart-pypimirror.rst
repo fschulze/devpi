@@ -106,49 +106,6 @@ package name to the `devpi issue tracker`_, at best including
 the output of ``devpi-server --log``.  We constantly aim to get the
 mirroring 100% bug free and compatible to pypi.org.
 
-.. _`pip search`:
-
-using ``pip search``
-++++++++++++++++++++
-
-To enable ``pip search`` functionality, you should install the ``devpi-web`` plugin
-**before you initially start devpi-server**.  As we started a server instance
-above already we'll need to trigger recreating the search index. But first let's
-install the plugin which we can safely do while the server is running::
-
-    $ pip install -q -U devpi-web
-      Could not find a version that satisfies the requirement repoze.lru>=0.6 (from devpi-server>=3.0.0.dev2->devpi-web) (from versions: )
-    No matching distribution found for repoze.lru>=0.6 (from devpi-server>=3.0.0.dev2->devpi-web)
-
-We now need to stop the server, we do that using supervisorctl::
-
-    $ supervisorctl -c gen-config/supervisord.conf stop devpi-server
-    devpi-server: stopped
-
-and then start the server again::
-
-    $ supervisorctl -c gen-config/supervisord.conf start devpi-server
-    devpi-server: started
-
-..
-    $ waitforports -t 60 3141
-    Waiting for 127.0.0.1:3141
-
-..
-    $ sleep 10
-
-We can now use search with pip::
-
-    $ pip search --index http://localhost:3141/root/pypi/ devpi-client
-    devpi-client-extensions ()  - [root/pypi]
-    devpi-client ()             - [root/pypi]
-
-.. note::
-
-   Currently devpi-web does not support showing the description of pypi.org packages
-   (the right hand site of the "-") but it will show the description for projects which you
-   uploaded to your own private indexes.
-
 .. _perminstallindex:
 
 permanent index configuration for pip
@@ -168,7 +125,7 @@ to your shell settings (e.g. ``.bashrc``):
 
    export PIP_INDEX_URL=http://localhost:3141/root/pypi/+simple/
 
-For `pip search`_ you need a ``[search]`` section in your ``pip.conf``::
+For ``pip search`` you need a ``[search]`` section in your ``pip.conf``::
 
     # $HOME/.pip/pip.conf
     [global]
