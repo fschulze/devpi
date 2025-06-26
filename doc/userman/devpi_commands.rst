@@ -5,6 +5,9 @@ devpi command reference (client)
 
 .. include:: ../links.rst
 
+..
+  $ pip install -q --pre devpi-postgresql devpi-web
+
 Summary
 -------
 
@@ -882,3 +885,6 @@ devpi command reference (server)
                             average. So by default about 10MB are used. [10000]
       --indexer-backend NAME
                             the indexer backend to use [whoosh]
+
+..
+  $ pip uninstall -q -y devpi-web
