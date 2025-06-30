@@ -13,6 +13,7 @@
     /* The poppy colors are colors that 'pop' in the theme */
     --poppy-primary-color: #1f99d2;
     --poppy-primary-color-darker: #068BCB;
+    --poppy-primary-color-darkest: oklch(from var(--poppy-primary-color) calc(l - 0.15) c h);
     --poppy-primary-color-lighter: #2fc2e3;
     --poppy-secondary-color: #d87d28;
     --poppy-secondary-color-darker: oklch(from var(--poppy-secondary-color) calc(l - 0.05) c h);
@@ -29,8 +30,8 @@
     --statusbadge-shadow-color: var(--shadow-color);
     --statusbadge-shadow: var(--statusbadge-shadow-color) 0px 4px 16px, var(--statusbadge-shadow-color) 0px 8px 32px;
     --subnavigation-fg-color: white;
-    --main-link-color: LinkText;
-    --main-link-color-visited: VisitedText;
+    --main-link-color: oklch(from var(--poppy-primary-color) calc(l - 0.15) calc(c + 0.2) h);
+    --main-link-color-visited: oklch(from var(--poppy-primary-color) calc(l - 0.15) calc(c + 0.4) calc(h + 40));
     --card-bg-color: var(--main-bg-color);
     --card-header-color: var(--main-fg-color);
     --card-border-color: var(--main-bg-color-alt);
