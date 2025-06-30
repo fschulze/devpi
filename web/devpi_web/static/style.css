@@ -615,6 +615,11 @@ table.projectinfos .opened td:after {
     content: "-";
 }
 
+.projectinfos {
+    grid-column: 1 / 2;
+    grid-row: 1 / 5;
+}
+
 .projectinfos > details > summary {
     font-weight: bold;
 }
