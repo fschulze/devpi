@@ -20,6 +20,11 @@
     --poppy-secondary-color-darkest: oklch(from var(--poppy-secondary-color) calc(l - 0.1) c h);
     --poppy-secondary-color-lighter: oklch(from var(--poppy-secondary-color) calc(l + 0.05) c h);
 
+    /* --poppy-primary-color-darkmode: #1c1c1c; */
+    --poppy-primary-color-darkmode: #068bcb;
+    --poppy-primary-color-darkmode-darker:  oklch(from var(--poppy-primary-color-darkmode) calc(l - 0.40) calc(c - 0.05) h);
+    --poppy-primary-color-darkmode-darkest: oklch(from var(--poppy-primary-color-darkmode) calc(l - 0.35) calc(c - 0.05) h);
+    --poppy-primary-color-darkmode-lighter: oklch(from var(--poppy-primary-color-darkmode) calc(l + 0.05) calc(c - 0.05) h);
 
     --header-bg-color: var(--poppy-primary-color);
     --header-bg-color-alt: var(--poppy-primary-color-darker);
@@ -941,18 +946,16 @@ footer li {
 
 @media (prefers-color-scheme: dark) {
     :root {
+        --main-bg-color-alt: #ececec;
         --main-bg-color: #0a0a0a;
         --main-fg-color: white;
         --main-link-color: var(--poppy-primary-color-lighter);
         --main-link-color-visited: #f87ce8;
         --muted-bg-color: #232323;
-        --header-bg-color: var(--poppy-secondary-color-darker);
-        --header-bg-color-alt: var(--poppy-secondary-color-darkest);
-        --header-fg-color: #0e0e0e;
-        --statusbadge-shadow-color: rgba(255, 255, 255, 0.18);
-        --subnavigation-fg-color: var(--muted-bg-color);
+        --statusbadge-shadow-color: rgba(255, 255, 255, 0.072);
+        --subnavigation-fg-color: var(--muted-fg-color);
         --card-border-color: var(--muted-bg-color);
-        --card-box-shadow-color: rgba(255, 255, 255, 0.1);
+        --card-box-shadow-color: rgba(255, 255, 255, 0.024);
         --card-poppy-border-color: var(--poppy-primary-color-lighter);
         --code-bg-color: var(--main-bg-color);
         --code-fg-color: #0bfd0b;
@@ -960,10 +963,12 @@ footer li {
         --table-bg-color-alt: var(--muted-bg-color);
         --table-border-color: var(--muted-bg-color-alt);
         --table-poppy-border-color: var(--poppy-primary-color-lighter);
-/*        --table-shadow-color: rgba(255, 255, 255, 0.1);*/
         --toxresult-steps-bg-color: #202020;
         --jumptotop-shadow-color: #484848;
-        --footer-bg-color: var(--poppy-secondary-color-darker);
-        --footer-fg-color: #0e0e0e;
+        --header-bg-color: var(--poppy-primary-color-darkmode-darker);
+        --header-bg-color-alt: var(--poppy-primary-color-darkmode-darkest);
+        --header-fg-color: var(--main-bg-color-alt);
+        --footer-bg-color: var(--poppy-primary-color-darkmode-darker);
+        --footer-fg-color: var(--main-bg-color-alt);
     }
 }
