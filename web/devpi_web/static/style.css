@@ -377,11 +377,11 @@ table.main > thead > tr > th {
     vertical-align: top;
 }
 
-table.main > tbody > tr.even, table.projectinfos > tbody tr:nth-child(even) {
+table.main > tbody > tr.even {
     background: var(--table-bg-color);
 }
 
-table.main > tbody > tr.odd, table.projectinfos> tbody tr:nth-child(odd) {
+table.main > tbody > tr.odd {
     background: var(--table-bg-color-alt);
 }
 
