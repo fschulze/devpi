@@ -1,6 +1,6 @@
 <table class="main projectinfos">
     <caption>Metadata</caption>
-    <tr tal:repeat="item metadata" class="${item.name}${' closed' if item.is_list and item.count &gt; 5 else ''}">
+    <tr tal:repeat="item metadata" class="${repeat.item.parity} ${item.name}${' closed' if item.is_list and item.count &gt; 5 else ''}">
         <th>${item.name}</th>
         <td tal:condition="item.is_list">
             <ul>
