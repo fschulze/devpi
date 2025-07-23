@@ -1,1 +1,1 @@
-<a class="logo" href="${request.route_url('root')}"><img src="${request.static_url('devpi_web:static/logo-d.svg')}" title="devpi" height="60"></a>
+<a class="logo" href="${request.route_url('root')}"><img src="${request.static_url('devpi_web:static/logo-d.svg')}" title="devpi" height="60" width="53"></a>
