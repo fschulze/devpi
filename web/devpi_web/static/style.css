@@ -20,11 +20,6 @@
     --poppy-secondary-color-darkest: oklch(from var(--poppy-secondary-color) calc(l - 0.1) c h);
     --poppy-secondary-color-lighter: oklch(from var(--poppy-secondary-color) calc(l + 0.05) c h);
 
-    /* --poppy-primary-color-darkmode: #1c1c1c; */
-    --poppy-primary-color-darkmode: #068bcb;
-    --poppy-primary-color-darkmode-darker:  oklch(from var(--poppy-primary-color-darkmode) calc(l - 0.40) calc(c - 0.05) h);
-    --poppy-primary-color-darkmode-darkest: oklch(from var(--poppy-primary-color-darkmode) calc(l - 0.35) calc(c - 0.05) h);
-    --poppy-primary-color-darkmode-lighter: oklch(from var(--poppy-primary-color-darkmode) calc(l + 0.05) calc(c - 0.05) h);
 
     --header-bg-color: var(--poppy-primary-color);
     --header-bg-color-alt: var(--poppy-primary-color-darker);
@@ -946,12 +941,20 @@ footer li {
 
 @media (prefers-color-scheme: dark) {
     :root {
-        --main-bg-color-alt: #ececec;
+        --poppy-primary-color-darkmode: #068bcb;
+        --poppy-primary-color-darkmode-darker:  oklch(from var(--poppy-primary-color-darkmode) calc(l - 0.40) calc(c - 0.05) h);
+        --poppy-primary-color-darkmode-darkest: oklch(from var(--poppy-primary-color-darkmode) calc(l - 0.35) calc(c - 0.05) h);
+        --poppy-primary-color-darkmode-lighter: oklch(from var(--poppy-primary-color-darkmode) calc(l + 0.05) calc(c - 0.05) h);
+
         --main-bg-color: #0a0a0a;
         --main-fg-color: white;
+        --main-bg-color-alt: #ececec;
         --main-link-color: var(--poppy-primary-color-lighter);
         --main-link-color-visited: #f87ce8;
         --muted-bg-color: #232323;
+        --header-bg-color: var(--poppy-primary-color-darkmode-darker);
+        --header-bg-color-alt: var(--poppy-primary-color-darkmode-darkest);
+        --header-fg-color: var(--main-bg-color-alt);
         --statusbadge-shadow-color: rgba(255, 255, 255, 0.072);
         --subnavigation-fg-color: var(--muted-fg-color);
         --card-border-color: var(--muted-bg-color);
@@ -965,9 +968,6 @@ footer li {
         --table-poppy-border-color: var(--poppy-primary-color-lighter);
         --toxresult-steps-bg-color: #202020;
         --jumptotop-shadow-color: #484848;
-        --header-bg-color: var(--poppy-primary-color-darkmode-darker);
-        --header-bg-color-alt: var(--poppy-primary-color-darkmode-darkest);
-        --header-fg-color: var(--main-bg-color-alt);
         --footer-bg-color: var(--poppy-primary-color-darkmode-darker);
         --footer-fg-color: var(--main-bg-color-alt);
     }
