@@ -445,19 +445,19 @@ tr.even table.inlinetoxresults {
 }
 
 tr.odd table.inlinetoxresults tr:nth-child(odd) {
-    background: var(--table-bg-color);
+    background: var(--table-bg-color-alt);
 }
 
 tr.odd table.inlinetoxresults tr:nth-child(even) {
-    background: var(--table-bg-color-alt);
+    background: var(--table-bg-color);
 }
 
 tr.even table.inlinetoxresults tr:nth-child(odd) {
-    background: var(--table-bg-color-alt);
+    background: var(--table-bg-color);
 }
 
 tr.even table.inlinetoxresults tr:nth-child(even) {
-    background: var(--table-bg-color);
+    background: var(--table-bg-color-alt);
 }
 
 table.packages td.prerelease a:after {
