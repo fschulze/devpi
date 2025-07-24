@@ -375,4 +375,7 @@ def process_theme_toml(config, theme_path, theme_toml):
         if not template_path.exists():
             msg = f"The template {template_path.relative_to(theme_path)} for the {name!r} macro from your theme.toml does not exist."
             raise ValueError(msg)
-        config.add_macro(_empty_macro, name=name, template=str(template_path))
+        groups = []
+        for group_name, group_cfg in macro_cfg.get("groups", {}).items():
+            groups.append(GroupDef(group_name, **group_cfg))
+        config.add_macro(_empty_macro, name=name, template=str(template_path), groups=groups)
