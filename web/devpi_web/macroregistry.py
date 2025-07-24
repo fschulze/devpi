@@ -288,6 +288,8 @@ def add_theme(config, theme_path):
     theme_toml = theme_path.joinpath("theme.toml")
     if theme_toml.exists():
         process_theme_toml(config, theme_path, theme_toml)
+    else:
+        log.debug("No %s found.", theme_toml)
     # add deprecated macros.pt
     config.add_macros()
 
