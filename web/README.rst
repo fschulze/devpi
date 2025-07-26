@@ -8,6 +8,8 @@ This plugin adds a web interface with search for `devpi-server`_.
 
 See https://doc.devpi.net for quickstart and more documentation.
 
+Theme by `Luna Winters <https://gocreate.fun/>`_ and Florian Schulze.
+
 
 Installation
 ============
