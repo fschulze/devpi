@@ -156,9 +156,23 @@ class ReplicaImport:
                 raise exc
 
     def import_changes(self, serial: int, changes: Any) -> None:
+        # from cProfile import Profile
+        # from pstats import Stats
+
+        # profile = Profile()
+        # profile.enable()
         with self.xom.keyfs.read_transaction():
             records = self.make_records(serial, changes[0])
         self.xom.keyfs.import_records(serial, records)
+        # profile.disable()
+        # stats = Stats(profile)
+        # if stats.total_tt > 1:
+        #     stats.sort_stats("cumtime")
+        #     stats.print_stats(100)
+        #     stats.sort_stats("tottime")
+        #     stats.print_stats(100)
+        #     import pdb; pdb.set_trace()
+        #     pass
 
     def iter_migrated_changes(
         self, changes: Any
@@ -357,22 +371,13 @@ class ReplicaImport:
 
     def make_records(self, serial: int, changes: Any) -> Sequence[Record]:
         changes = list(self.iter_migrated_changes(changes))
+        len_changes = len(changes)
         keys_to_fetch = set(self.iter_keys_to_fetch(changes))
-        threadlog.info("Fetching keys: %s", Counter(x.key_name for x in keys_to_fetch))
+        log = threadlog.info if len_changes > 2000 else threadlog.debug
+        log("Fetching keys: %s", Counter(x.key_name for x in keys_to_fetch))
         keys = self.get_keys(keys_to_fetch)
-        # threadlog.info("Fetched keys")
         get_key_instance = self.xom.keyfs.get_key_instance
-        _new_ulidkeys = set()
         new_keys = dict()
-
-        def _new_ulidkey(key):
-            while True:
-                new_ulid_key = key.new_ulid()
-                # when rapidly generating new ulid keys, we can get
-                # duplicates due to the birthday paradox
-                if new_ulid_key not in _new_ulidkeys:
-                    _new_ulidkeys.add(new_ulid_key)
-                    return new_ulid_key
 
         tx = self.xom.keyfs.tx
         for key, ulid_key in list(keys.items()):
@@ -387,7 +392,7 @@ class ReplicaImport:
         userlist = Nameslist("USER", "", keys)
         nameslists = Nameslists()
         nameslists.add(userlist)
-        threadlog.info("Processing %s changes", len(changes))
+        log("Processing %s changes: %s", len_changes, Counter(x[1] for x in changes))
         for relpath, keyname, _back_serial, _val in changes:
             # if keyname == "PROJECTNAME":
             #     import pdb; pdb.set_trace()
@@ -445,7 +450,7 @@ class ReplicaImport:
             old_key: ULIDKey | Absent
             old_val: KeyFSTypesRO | Absent | Deleted
             if key not in keys:
-                keys[key] = _new_ulidkey(key)
+                keys[key] = tx._new_absent_ulidkey(key)
             assert key in keys
             ulid_key = keys[key]
             if ulid_key.exists():
@@ -463,8 +468,8 @@ class ReplicaImport:
             if val is deleted and old_val in (absent, deleted):
                 continue
             records.append(Record(ulid_key, val, back_serial, old_key, old_val))
-        # threadlog.info("Checking %s records", len(records))
-        nameslists.check(records)
+        log("Checking %s records", len(records))
+        # nameslists.check(records)
         for nameslist in nameslists.lists.values():
             if nameslist.keyname == "PROJECTNAME":
                 self.recent_existing.put(nameslist.key, nameslist.value)
