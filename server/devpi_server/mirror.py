@@ -590,7 +590,7 @@ class MirrorLinks:
             for fn, value in data.items():
                 new_keys.add(key_mirrorfile(fn))
                 (project, version, _ext) = splitbasename(fn)
-                assert project == self.project
+                assert normalize_name(project) == self.project
                 if version not in old_versions:
                     version_key = key_version(version)
                     new_version = new_versions[version_key] = {}
