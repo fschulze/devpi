@@ -227,6 +227,9 @@ class ReplicaImport:
                     path = Path(elink["entrypath"])
                     name = path.name
                     rel = elink["rel"]
+                    elink["hashes"] = hashes = Digests(_hashes) if (_hashes := elink.get("hashes")) else Digests()
+                    if hash_spec := elink.pop("hash_spec", None):
+                        hashes.add_spec(hash_spec)
                     if rel == "doczip":
                         yield (new_relpath, "DOCZIP", back_serial, elink)
                     elif rel == "releasefile":
@@ -245,9 +248,9 @@ class ReplicaImport:
                 yield (new_relpath, new_keyname, back_serial, val)
             elif keyname == "STAGEFILE":
                 if val is not None:
-                    val["hashes"] = hashes = Digests()
-                    if "hash_spec" in val:
-                        hashes.add_spec(val.pop("hash_spec"))
+                    val["hashes"] = hashes = Digests(_hashes) if (_hashes := val.get("hashes")) else Digests()
+                    if hash_spec := val.pop("hash_spec", None):
+                        hashes.add_spec(hash_spec)
                 yield (new_relpath, new_keyname, back_serial, val)
             elif keyname == "USER":
                 value = get_mutable_deepcopy(val)
