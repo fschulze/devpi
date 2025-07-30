@@ -9,6 +9,7 @@ from .readonly import get_mutable_deepcopy
 from attrs import define
 from attrs import field
 from attrs import frozen
+from functools import lru_cache
 from string import Formatter
 from typing import TYPE_CHECKING
 from typing import overload
@@ -170,6 +171,7 @@ def get_rex_reverse(pattern: str) -> Pattern:
     return re.compile(f"^{rex_pattern}$")
 
 
+@lru_cache(maxsize=128)
 def get_simple_pattern_key(pattern: str) -> str | None:
     result = list(_formatter.parse(pattern))
     if len(result) != 1:
