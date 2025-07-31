@@ -259,6 +259,7 @@ def _dump_normalized_name(write, obj, _pack=pack):
     write(b"z")
     write(_pack("!i", len(obj_orig)))
     write(obj_orig)
+    # XXX store None if same
     write(_pack("!i", len(obj)))
     write(obj)
 

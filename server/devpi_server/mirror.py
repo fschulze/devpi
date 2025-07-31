@@ -954,7 +954,7 @@ class MirrorStage(BaseStage):
         # return a read-only version of the cached data,
         # so it can't be modified accidentally and we avoid a copy
         return ensure_deeply_readonly(
-            {v: v.original for v in self._list_projects_perstage()}
+            {v: getattr(v, "original", v) for v in self._list_projects_perstage()}
         )
 
     def is_project_cached(self, project):
