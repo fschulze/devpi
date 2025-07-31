@@ -1260,14 +1260,14 @@ class MirrorStage(BaseStage):
 
     def has_project_perstage(self, project):
         project = normalize_name(project)
-        if self.is_project_cached(project):
+        if self.key_projectname(project).exists():
             return True
         if self.no_project_list:
-            if project in self._stale_list_projects_perstage():
-                return True
             return unknown
         # recheck full project list while abiding to expiration etc
         # use the internal method to avoid a copy
+        if self.offline:
+            return unknown
         return project in self._list_projects_perstage()
 
     def has_version_perstage(self, project: str, version: str) -> bool | Unknown:
