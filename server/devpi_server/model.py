@@ -863,7 +863,7 @@ class BaseStage(object):
         raise NotImplementedError
 
     def store_toxresult(
-        self, link, content_or_file, *, filename=None, hashes=None, last_modified=None
+        self, link, content_or_file, *, filename=None, hashes, last_modified=None
     ):
         if self.customizer.readonly:
             raise ReadonlyIndex("index is marked read only")
@@ -1489,8 +1489,9 @@ class PrivateStage(BaseStage):
     def has_project_perstage(self, project):
         return normalize_name(project) in self.list_projects_perstage()
 
-    def store_releasefile(self, project, version, filename, content_or_file,
-                          *, hashes=None, last_modified=None):
+    def store_releasefile(
+        self, project, version, filename, content_or_file, *, hashes, last_modified=None
+    ):
         if self.customizer.readonly:
             raise ReadonlyIndex("index is marked read only")
         project = normalize_name(project)
@@ -1515,8 +1516,9 @@ class PrivateStage(BaseStage):
         self._regen_simplelinks(project)
         return link
 
-    def store_doczip(self, project, version, content_or_file,
-                     *, hashes=None, last_modified=None):
+    def store_doczip(
+        self, project, version, content_or_file, *, hashes, last_modified=None
+    ):
         if self.customizer.readonly:
             raise ReadonlyIndex("index is marked read only")
         project = normalize_name(project)
@@ -1801,7 +1803,9 @@ class LinkStore:
     def get_file_entry(self, relpath):
         return self.filestore.get_file_entry(relpath)
 
-    def create_linked_entry(self, rel, basename, content_or_file, *, hashes=None, last_modified=None):
+    def create_linked_entry(
+        self, rel, basename, content_or_file, *, hashes, last_modified=None
+    ):
         overwrite = None
         for link in self.get_links(rel=rel, basename=basename):
             if not self.stage.ixconfig.get("volatile"):
@@ -1821,8 +1825,16 @@ class LinkStore:
             link.add_log('overwrite', None, count=overwrite + 1)
         return link
 
-    def new_reflink(self, rel, content_or_file, for_entrypath,
-                    *, filename=None, hashes=None, last_modified=None):
+    def new_reflink(
+        self,
+        rel,
+        content_or_file,
+        for_entrypath,
+        *,
+        filename=None,
+        hashes,
+        last_modified=None,
+    ):
         if isinstance(for_entrypath, ELink):
             for_entrypath = for_entrypath.relpath
         elif for_entrypath is not None:
@@ -1882,7 +1894,9 @@ class LinkStore:
         return list(filter(fil, [ELink(self.filestore, linkdict, self.project, self.version)
                            for linkdict in self.verdata.get("+elinks", [])]))
 
-    def _create_file_entry(self, basename, content_or_file, *, hashes=None, ref_hash_spec=None):
+    def _create_file_entry(
+        self, basename, content_or_file, *, hashes, ref_hash_spec=None
+    ):
         entry = self.filestore.store(
             user=self.stage.username, index=self.stage.index,
             basename=basename,
