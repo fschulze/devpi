@@ -1851,9 +1851,19 @@ class SimplelinkMeta:
     """ helper class to provide information for items from get_simplelinks() """
 
     __slots__ = (
-        '__basename', '__cmpval', '__ext', '__hash_spec',
-        '__name', '__path', '__url', '__version',
-        'href', 'key', 'require_python', 'yanked',
+        "__basename",
+        "__cmpval",
+        "__ext",
+        "__hash_spec",
+        "__hashes",
+        "__name",
+        "__path",
+        "__url",
+        "__version",
+        "href",
+        "key",
+        "require_python",
+        "yanked",
     )
 
     def __init__(self, link_info):
@@ -1861,6 +1871,7 @@ class SimplelinkMeta:
         self.__cmpval = notset
         self.__ext = notset
         self.__hash_spec = notset
+        self.__hashes = notset
         self.__name = notset
         self.__path = notset
         self.__url = notset
@@ -1874,6 +1885,7 @@ class SimplelinkMeta:
                 self.__cmpval,
                 self.__ext,
                 self.__hash_spec,
+                self.__hashes,
                 self.__name,
                 self.__path,
                 self.__url,
@@ -1919,6 +1931,9 @@ class SimplelinkMeta:
         url = URL(self.href)
         self.__basename = url.basename
         self.__hash_spec = url.hash_spec
+        self.__hashes = Digests()
+        if hash_type := url.hash_type:
+            self.__hashes[hash_type] = url.hash_value
         self.__path = url.path
 
     @property
@@ -1932,6 +1947,12 @@ class SimplelinkMeta:
         if self.__hash_spec is notset:
             self.__parse_url()
         return self.__hash_spec
+
+    @property
+    def hashes(self):
+        if self.__hashes is notset:
+            self.__parse_url()
+        return self.__hashes
 
     @property
     def path(self):
