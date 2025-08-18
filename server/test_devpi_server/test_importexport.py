@@ -285,7 +285,10 @@ class TestImportExport:
         filedata["entrymapping"].pop("hashes")
         filedata['entrymapping']['md5'] = 'foo'
         impexp.exportdir.joinpath('dataindex.json').write_text(json.dumps(data))
-        with pytest.raises(Fatal, match="has bad checksum 7e55db001d319a94b0b713529a756623, expected foo"):
+        with pytest.raises(
+            Fatal,
+            match="hello-1.0.tar.gz: md5 mismatch, got 7e55db001d319a94b0b713529a756623, expected foo",
+        ):
             do_import(impexp.exportdir, terminalwriter, xom)
 
     def test_created_and_modified_old_data(self, impexp, mock, monkeypatch):
