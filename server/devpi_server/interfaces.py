@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from .keyfs_types import RelpathInfo
 from contextlib import closing
 from inspect import getfullargspec
@@ -11,8 +12,9 @@ from zope.interface.verify import verifyObject
 
 
 if TYPE_CHECKING:
+    from .keyfs_types import PTypedKey
     from .keyfs_types import Record
-    from .keyfs_types import PTypedKey, TypedKey
+    from .keyfs_types import TypedKey
     from collections.abc import Iterable
     from collections.abc import Iterator
     from contextlib import AbstractContextManager
@@ -175,14 +177,14 @@ class IWriter(Interface):
     commit_serial = Attribute("""
         The current to be commited serial set when entering the context manager. """)
 
-    def __enter__() -> None:
+    def __enter__() -> AbstractContextManager:
         pass
 
     def __exit__(  # noqa: PLE0302, PYI036
-        cls: Optional[type[BaseException]],
-        val: Optional[BaseException],  # noqa: PYI036
-        tb: Optional[TracebackType],  # noqa: PYI036
-    ) -> None:
+        cls: type[BaseException] | None,
+        val: BaseException | None,  # noqa: PYI036
+        tb: TracebackType | None,  # noqa: PYI036
+    ) -> bool | None:
         pass
 
     def record_set(
@@ -195,14 +197,14 @@ class IWriter2(Interface):
     commit_serial = Attribute("""
         The current to be commited serial set when entering the context manager. """)
 
-    def __enter__() -> None:
+    def __enter__() -> AbstractContextManager:
         pass
 
     def __exit__(  # noqa: PLE0302 PYI036
-        cls: Optional[type[BaseException]],
-        val: Optional[BaseException],  # noqa: PYI036
-        tb: Optional[TracebackType],  # noqa: PYI036
-    ) -> None:
+        cls: type[BaseException] | None,
+        val: BaseException | None,  # noqa: PYI036
+        tb: TracebackType | None,  # noqa: PYI036
+    ) -> bool | None:
         pass
 
     def records_set(records: Iterable[Record]) -> None:

@@ -247,9 +247,6 @@ extend-ignore = [
 "devpi_server/importexport.py" = [
     "I001", # maybe cleanup later - import block unsorted
 ]
-"devpi_server/interfaces.py" = [
-    "I001", # maybe cleanup later - import block unsorted
-]
 "devpi_server/keyfs.py" = [
     "I001", # maybe cleanup later - import block unsorted
 ]
