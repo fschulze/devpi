@@ -177,8 +177,8 @@ def get_raw_changelog_entry(xom, serial):
 
 class TestReplicaThread:
     @pytest.fixture
-    def rt(self, makexom):
-        xom = makexom(["--primary-url=http://localhost"])
+    def rt(self, makexom, secretfile):
+        xom = makexom(["--primary-url=http://localhost", f"--secretfile={secretfile}"])
         return xom.replica_thread
 
     @pytest.fixture
