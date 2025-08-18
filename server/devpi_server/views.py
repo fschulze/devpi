@@ -1817,7 +1817,8 @@ def iter_cache_remote_file(stage, entry, url):
             with xom.keyfs.filestore_transaction():
                 entry.file_set_content_no_meta(f, hashes=file_streamer.hashes)
                 threadlog.debug(
-                    "put missing file back into place: %s", entry._storepath)
+                    "put missing file back into place: %s", entry.file_path_info
+                )
                 # on Windows we need to close the file
                 # before the transaction closes
                 f.close()
@@ -1879,7 +1880,9 @@ def iter_remote_file_replica(stage, entry, url):
             # on Windows we need to close the file
             # before the transaction closes
             f.close()
-            threadlog.debug("put missing file back into place: %s", entry._storepath)
+            threadlog.debug(
+                "put missing file back into place: %s", entry.file_path_info
+            )
         # in case there were errors before, we can now remove them
         replication_errors.remove(entry)
 
