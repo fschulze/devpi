@@ -89,13 +89,19 @@ def test_pyramid_configure_called(makexom):
     assert config == xom.config
 
 
-def test_requests_only(makexom):
+def test_requests_only(makexom, secretfile):
     xom = makexom(opts=["--requests-only"])
     xom.create_app()
     assert len(xom.thread_pool._objects) == 1
     assert hasattr(xom.thread_pool._objects[0], "loop")
 
-    xom = makexom(opts=["--requests-only", "--primary-url=http://localhost:3140"])
+    xom = makexom(
+        opts=[
+            "--requests-only",
+            "--primary-url=http://localhost:3140",
+            f"--secretfile={secretfile}",
+        ]
+    )
     xom.create_app()
     assert len(xom.thread_pool._objects) == 1
     assert hasattr(xom.thread_pool._objects[0], "loop")
