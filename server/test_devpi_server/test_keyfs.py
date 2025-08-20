@@ -982,14 +982,14 @@ def test_crash_recovery(file_digest, keyfs, storage_info):
         keyfs.finalize_init()
 
 
-def test_keyfs_sqlite(file_digest, gen_path, sorted_serverdir):
-    from devpi_server import keyfs_sqlite
+def test_keyfs_sqla_lite_files(file_digest, gen_path, sorted_serverdir):
+    from devpi_server import keyfs_sqla_lite_files
     from devpi_server.filestore_db import DBIOFile
 
     tmp = gen_path()
 
     class StorageInfo:
-        storage_factory = keyfs_sqlite.Storage
+        storage_factory = keyfs_sqla_lite_files.Storage
         settings = None
 
     keyfs = KeyFS(tmp, StorageInfo(), io_file_factory=DBIOFile)
@@ -998,21 +998,21 @@ def test_keyfs_sqlite(file_digest, gen_path, sorted_serverdir):
     with keyfs.write_transaction() as tx:
         assert tx.io_file.os_path(file_path_info) is None
         tx.io_file.set_content(file_path_info, content)
-        tx.conn._sqlconn.commit()
+        tx.conn._sqlaconn.commit()
     with keyfs.read_transaction() as tx:
         assert tx.io_file.os_path(file_path_info) is None
         assert tx.io_file.get_content(file_path_info) == content
-    assert sorted_serverdir(tmp) == [".sqlite_db"]
+    assert sorted_serverdir(tmp) == [".sqlite_alchemy_files"]
 
 
-def test_keyfs_sqlite_fs(file_digest, gen_path, sorted_serverdir):
-    from devpi_server import keyfs_sqlite_fs
+def test_keyfs_sqla_lite(file_digest, gen_path, sorted_serverdir):
+    from devpi_server import keyfs_sqla_lite
     from devpi_server.filestore_fs import FSIOFile
 
     tmp = gen_path()
 
     class StorageInfo:
-        storage_factory = keyfs_sqlite_fs.Storage
+        storage_factory = keyfs_sqla_lite.Storage
         settings = None
 
     io_file_factory = partial(FSIOFile, settings={})
@@ -1022,12 +1022,12 @@ def test_keyfs_sqlite_fs(file_digest, gen_path, sorted_serverdir):
     with keyfs.write_transaction() as tx:
         assert tx.io_file.os_path(file_path_info) == str(tmp / "foo")
         tx.io_file.set_content(file_path_info, content)
-        tx.conn._sqlconn.commit()
+        tx.conn._sqlaconn.commit()
     with keyfs.read_transaction() as tx:
         assert tx.io_file.get_content(file_path_info) == content
         with open(tx.io_file.os_path(file_path_info), "rb") as f:
             assert f.read() == content
-    assert sorted_serverdir(tmp) == [".sqlite", "foo"]
+    assert sorted_serverdir(tmp) == [".sqlite_alchemy", "foo"]
 
 
 @notransaction
