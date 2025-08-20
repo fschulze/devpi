@@ -32,7 +32,6 @@ from pyramid.httpexceptions import status_map
 from queue import Queue as BaseQueue
 from webtest import TestApp as TApp
 from webtest import TestResponse
-import warnings
 
 
 class NotSet:
@@ -1627,33 +1626,10 @@ class Gen:
         self,
         pkgname: str,
         *,
-        hash_spec: NotSet | bool | str = notset,
+        hash_spec: bool | str = True,
         hash_type: NotSet | str = notset,
-        md5: NotSet | bool | str = notset,
     ) -> URL:
         link = f"https://pypi.org/package/some/{pkgname}"
-        if md5 is not notset:
-            warnings.warn(
-                "The 'md5' argument of 'pypi_package_link' is deprecated, "
-                "use 'hash_spec' or 'hash_type' instead.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-        if isinstance(md5, bool):
-            assert hash_spec is notset
-            if md5:
-                assert hash_type is notset
-                hash_type = "md5"
-            else:
-                hash_spec = False
-            md5 = notset
-        elif isinstance(md5, str):
-            assert hash_spec is notset
-            hash_spec = f"md5={md5}"
-            md5 = notset
-        elif md5 is not notset:
-            raise TypeError
-        assert md5 is notset
         if hash_spec is notset or hash_spec is True:
             if hash_type is notset:
                 hash_type = self.DEFAULT_HASH_TYPE
