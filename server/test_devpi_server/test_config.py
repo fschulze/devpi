@@ -255,30 +255,31 @@ class TestConfig:
 
     @pytest.mark.no_storage_option
     def test_storage_backend_default(self, makexom):
-        from devpi_server import keyfs_sqlite
-        from devpi_server import keyfs_sqlite_fs
+        from devpi_server import keyfs_sqla_lite
+        from devpi_server import keyfs_sqla_lite_files
+
         config = make_config(("devpi-server",))
-        assert config.args.storage == "sqlite"
-        xom = makexom(plugins=(keyfs_sqlite, keyfs_sqlite_fs))
-        assert xom.config.storage_info.storage_cls is keyfs_sqlite_fs.Storage
+        assert config.args.storage == "sqla_lite"
+        xom = makexom(plugins=(keyfs_sqla_lite, keyfs_sqla_lite_files))
+        assert xom.config.storage_info.storage_cls is keyfs_sqla_lite.Storage
 
     @pytest.mark.no_storage_option
     def test_storage_backend_options(self, makexom):
         class Plugin:
             @hookimpl
             def devpiserver_describe_storage_backend(self, settings):
-                from devpi_server import keyfs_sqlite_fs
+                from devpi_server import keyfs_sqla_lite
                 from devpi_server.keyfs_types import StorageInfo
 
                 self.settings = settings
                 return StorageInfo(
-                    connection_cls=keyfs_sqlite_fs.Connection,
-                    writer_cls=keyfs_sqlite_fs.Writer,
-                    storage_cls=keyfs_sqlite_fs.Storage,
-                    storage_factory=keyfs_sqlite_fs.Storage,
+                    connection_cls=keyfs_sqla_lite.Connection,
+                    writer_cls=keyfs_sqla_lite.Writer,
+                    storage_cls=keyfs_sqla_lite.Storage,
+                    storage_factory=keyfs_sqla_lite.Storage,
                     name="foo",
                     description="Foo backend",
-                    exists=keyfs_sqlite_fs.Storage.exists,
+                    exists=keyfs_sqla_lite.Storage.exists,
                 )
 
         options = ("--storage", "foo:bar=ham")
@@ -400,18 +401,18 @@ class TestConfigFile:
         class Plugin:
             @hookimpl
             def devpiserver_describe_storage_backend(self, settings):
-                from devpi_server import keyfs_sqlite_fs
+                from devpi_server import keyfs_sqla_lite
                 from devpi_server.keyfs_types import StorageInfo
 
                 self.settings = settings
                 return StorageInfo(
-                    connection_cls=keyfs_sqlite_fs.Connection,
-                    writer_cls=keyfs_sqlite_fs.Writer,
-                    storage_cls=keyfs_sqlite_fs.Storage,
-                    storage_factory=keyfs_sqlite_fs.Storage,
+                    connection_cls=keyfs_sqla_lite.Connection,
+                    writer_cls=keyfs_sqla_lite.Writer,
+                    storage_cls=keyfs_sqla_lite.Storage,
+                    storage_factory=keyfs_sqla_lite.Storage,
                     name="foo",
                     description="Foo backend",
-                    exists=keyfs_sqlite_fs.Storage.exists,
+                    exists=keyfs_sqla_lite.Storage.exists,
                 )
 
         yaml_path = make_yaml_config(textwrap.dedent("""\

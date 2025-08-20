@@ -1,0 +1,4 @@
+Replaced the default storage backend with a new one using SQLAlchemy and optimized database schema for size and performance.
+
+..warning::
+    This change requires an export of your data using ``devpi-export`` with the previous major devpi-server version 6.x and an import using ``devpi-import`` with devpi-server 7.x.

@@ -83,8 +83,6 @@ devpi-server-view-auth = "devpi_server.view_auth"
 devpi-server-views = "devpi_server.views"
 devpi-server-sqla-lite = "devpi_server.keyfs_sqla_lite"
 devpi-server-sqla-lite-files = "devpi_server.keyfs_sqla_lite_files"
-devpi-server-sqlite = "devpi_server.keyfs_sqlite"
-devpi-server-sqlite-fs = "devpi_server.keyfs_sqlite_fs"
 
 
 [project.entry-points.devpi_web]
@@ -117,7 +115,6 @@ exclude = [
     "devpi_server/importexport.py",
     "devpi_server/init.py",
     "devpi_server/keyfs.py",
-    "devpi_server/keyfs_sqlite.py",
     "devpi_server/log.py",
     "devpi_server/main.py",
     "devpi_server/markers.py",
@@ -182,7 +179,6 @@ extend-ignore = [
     "C402", # maybe cleanup later - rewrite as dict comprehension
     "C405", # cleanup soon - set literal instead of set call
     "DTZ001", # cleanup soon
-    "ERA001", # cleanup soon
     "FBT002", # cleanup soon - boolean positional argument
     "FIX003", # cleanup later - xxx
     "FLY002", # maybe cleanup later - f-string instead of join

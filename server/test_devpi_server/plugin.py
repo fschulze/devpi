@@ -215,9 +215,9 @@ def xom(makexom):
 def _speed_up_sqlite(cls):
     old = cls._execute_conn_pragmas
 
-    def _execute_conn_pragmas(self, conn, *, old=old, write):
-        old(self, conn, write=write)
-        c = conn.cursor()
+    def _execute_conn_pragmas(self, conn, *, old=old):
+        old(self, conn)
+        c = conn.connection.cursor()
         c.execute("PRAGMA synchronous=OFF")
         c.close()
 
@@ -226,16 +226,18 @@ def _speed_up_sqlite(cls):
 
 
 @pytest.fixture(autouse=True, scope="session")
-def speed_up_sqlite():
-    from devpi_server.keyfs_sqlite import Storage
+def _speed_up_sqla_lite():
+    from devpi_server.keyfs_sqla_lite import Storage
+
     old = _speed_up_sqlite(Storage)
     yield
     Storage._execute_conn_pragmas = old
 
 
 @pytest.fixture(autouse=True, scope="session")
-def speed_up_sqlite_fs():
-    from devpi_server.keyfs_sqlite_fs import Storage
+def _speed_up_sqla_lite_files():
+    from devpi_server.keyfs_sqla_lite_files import Storage
+
     old = _speed_up_sqlite(Storage)
     yield
     Storage._execute_conn_pragmas = old
@@ -252,7 +254,7 @@ def storage_plugin(request):
     from pydoc import locate
     backend = request.config.option.devpi_server_storage_backend
     if backend is None:
-        backend = 'devpi_server.keyfs_sqlite_fs'
+        backend = "devpi_server.keyfs_sqla_lite"
     plugin = locate(backend)
     if plugin is None:
         raise RuntimeError("Couldn't find storage backend '%s'" % backend)

@@ -642,8 +642,8 @@ devpi command reference (server)
     storage options:
       --serverdir DIR       directory for server data. [~/.devpi/server]
       --storage NAME        the storage backend to use. "pg8000": Postgresql
-                            backend, "sqlite": SQLite backend with files on the
-                            filesystem [sqlite]
+                            backend with support for files in DB, "sqla_lite":
+                            sqlite backend using SQLAlchemy [sqla_lite]
       --keyfs-cache-size NUM
                             size of keyfs cache. If your devpi-server installation
                             gets a lot of writes, then increasing this might
@@ -712,8 +712,8 @@ devpi command reference (server)
                             [None]
       --serverdir DIR       directory for server data. [~/.devpi/server]
       --storage NAME        the storage backend to use. "pg8000": Postgresql
-                            backend, "sqlite": SQLite backend with files on the
-                            filesystem [sqlite]
+                            backend with support for files in DB, "sqla_lite":
+                            sqlite backend using SQLAlchemy [sqla_lite]
       --keyfs-cache-size NUM
                             size of keyfs cache. If your devpi-server installation
                             gets a lot of writes, then increasing this might
@@ -753,8 +753,8 @@ devpi command reference (server)
                             [None]
       --serverdir DIR       directory for server data. [~/.devpi/server]
       --storage NAME        the storage backend to use. "pg8000": Postgresql
-                            backend, "sqlite": SQLite backend with files on the
-                            filesystem [sqlite]
+                            backend with support for files in DB, "sqla_lite":
+                            sqlite backend using SQLAlchemy [sqla_lite]
       --keyfs-cache-size NUM
                             size of keyfs cache. If your devpi-server installation
                             gets a lot of writes, then increasing this might
@@ -814,8 +814,8 @@ devpi command reference (server)
                             [None]
       --serverdir DIR       directory for server data. [~/.devpi/server]
       --storage NAME        the storage backend to use. "pg8000": Postgresql
-                            backend, "sqlite": SQLite backend with files on the
-                            filesystem [sqlite]
+                            backend with support for files in DB, "sqla_lite":
+                            sqlite backend using SQLAlchemy [sqla_lite]
       --keyfs-cache-size NUM
                             size of keyfs cache. If your devpi-server installation
                             gets a lot of writes, then increasing this might
@@ -853,8 +853,8 @@ devpi command reference (server)
                             [None]
       --serverdir DIR       directory for server data. [~/.devpi/server]
       --storage NAME        the storage backend to use. "pg8000": Postgresql
-                            backend, "sqlite": SQLite backend with files on the
-                            filesystem [sqlite]
+                            backend with support for files in DB, "sqla_lite":
+                            sqlite backend using SQLAlchemy [sqla_lite]
       --keyfs-cache-size NUM
                             size of keyfs cache. If your devpi-server installation
                             gets a lot of writes, then increasing this might
@@ -876,8 +876,8 @@ devpi command reference (server)
                             Config file to use. [None]
       --serverdir DIR       directory for server data. [~/.devpi/server]
       --storage NAME        the storage backend to use. "pg8000": Postgresql
-                            backend, "sqlite": SQLite backend with files on the
-                            filesystem [sqlite]
+                            backend with support for files in DB, "sqla_lite":
+                            sqlite backend using SQLAlchemy [sqla_lite]
       --keyfs-cache-size NUM
                             size of keyfs cache. If your devpi-server installation
                             gets a lot of writes, then increasing this might
