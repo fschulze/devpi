@@ -411,7 +411,7 @@ class BadGateway(Exception):
 
 
 class BaseFileEntry:
-    __slots__ = ("_meta", "_storepath", "basename", "key", "relpath")
+    __slots__ = ("_meta", "key")
 
     BadGateway = BadGateway
     _hash_spec = metaprop("hash_spec")  # e.g. "md5=120938012"
@@ -423,11 +423,18 @@ class BaseFileEntry:
 
     def __init__(self, key, meta=_nodefault):
         self.key = key
-        self.relpath = key.relpath
-        self.basename = self.relpath.split("/")[-1]
         self._meta = _nodefault
         if meta is not _nodefault:
             self._meta = meta or {}
+
+    @property
+    def basename(self):
+        params = self.key.params
+        if "filename" in params:
+            return params["filename"]
+        if "basename" in params:
+            return params["basename"]
+        return self.relpath.split("/")[-1]
 
     @property
     def file_path_info(self):
@@ -438,6 +445,10 @@ class BaseFileEntry:
     @property
     def index(self):
         return self.key.params['index']
+
+    @property
+    def relpath(self):
+        return self.key.relpath
 
     @property
     def user(self):
