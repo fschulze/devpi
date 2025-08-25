@@ -470,7 +470,7 @@ def replay(xom, replica_xom, events=True):
         if serial == -1:
             continue
         with xom.keyfs._storage.get_connection() as conn:
-            change_entry = conn.get_changes(serial)
+            change_entry = list(conn.iter_changes_at(serial))
         threadlog.info("test: importing to replica %s", serial)
         replica_xom.keyfs.import_changes(serial, change_entry)
     replica_xom.replica_thread.wait()
@@ -1328,6 +1328,7 @@ class TestFileReplicationSharedData:
         assert key == relpath
 
     def test_recreated_index(self, monkeypatch, shared_data):
+        from devpi_server.markers import deleted
         from devpi_server.replica import IndexType
         relpath = "root/dev/+f/274/e88b0b3d028fe/pytest-2.1.0.zip"
         key = shared_data.xom.keyfs.get_key_instance("STAGEFILE", relpath)
@@ -1345,8 +1346,9 @@ class TestFileReplicationSharedData:
             3: {key: (None, -1)},
             4: {userkey: ({"indexes": {"dev": {"type": "mirror"}}}, 2)},
             5: {key: (None, -1)},
-            6: {userkey: (None, 4)},
-            7: {key: (None, -1)}}
+            6: {userkey: (deleted, 4)},
+            7: {key: (None, -1)},
+        }
 
         class Tx:
             def get_value_at(self, key, serial):

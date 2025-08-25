@@ -116,7 +116,6 @@ exclude = [
     "devpi_server/hookspecs.py",
     "devpi_server/importexport.py",
     "devpi_server/init.py",
-    "devpi_server/interfaces.py",
     "devpi_server/keyfs.py",
     "devpi_server/keyfs_sqlite.py",
     "devpi_server/keyfs_sqlite_fs.py",
