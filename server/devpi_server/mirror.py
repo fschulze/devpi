@@ -39,6 +39,7 @@ import weakref
 
 
 if TYPE_CHECKING:
+    from .markers import Unknown
     from typing import Any
 
 
@@ -948,6 +949,10 @@ class MirrorStage(BaseStage):
         # use the internal method to avoid a copy
         return project in self._list_projects_perstage()
 
+    def has_version_perstage(self, project: str, version: str) -> bool | Unknown:
+        verdata = self.get_versiondata_perstage(project, version, with_elinks=False)
+        return True if "version" in verdata else unknown
+
     def list_versions_perstage(self, project):
         try:
             return set(x.version for x in self.get_simplelinks_perstage(project))
@@ -967,6 +972,10 @@ class MirrorStage(BaseStage):
             return -1
         (last_serial, ulid, links) = info
         return last_serial
+
+    def _get_elinks(self, project: str, version: str) -> list:
+        verdata = self.get_versiondata_perstage(project, version, with_elinks=True)
+        return verdata["+elinks"]
 
     def get_versiondata_perstage(self, project, version, *, with_elinks=True):
         # we do not use normalize_name name here, so the returned data
