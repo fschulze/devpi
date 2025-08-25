@@ -1331,9 +1331,9 @@ class PrivateStage(BaseStage):
         validate_metadata(dict(metadata))
         self._set_versiondata(metadata)
 
-    def key_projversion(self, project, version=None):
+    def key_version(self, project, version=None):
         kw = {} if version is None else dict(version=version)
-        return self.keyfs.PROJVERSION(
+        return self.keyfs.VERSION(
             user=self.username, index=self.index, project=normalize_name(project), **kw
         )
 
@@ -1352,7 +1352,7 @@ class PrivateStage(BaseStage):
         project = normalize_name(metadata["name"])
         version = metadata["version"]
         self.key_projectname(project).set(project)
-        with self.key_projversion(project, version).update() as versiondata:
+        with self.key_version(project, version).update() as versiondata:
             versiondata.update(metadata)
         threadlog.info("set_metadata %s-%s", project, version)
         self.add_project_name(project)
@@ -1365,7 +1365,7 @@ class PrivateStage(BaseStage):
 
     def del_project(self, project):
         project = normalize_name(project)
-        versions = {x.name for x in self.key_projversion(project).iter_ulidkeys()}
+        versions = {x.name for x in self.key_version(project).iter_ulidkeys()}
         for version in versions:
             self.del_versiondata(project, version, cleanup=False)
         self._regen_simplelinks(project)
@@ -1378,17 +1378,16 @@ class PrivateStage(BaseStage):
         if not self.has_project_perstage(project):
             raise self.NotFound("project %r not found on stage %r" %
                                 (project, self.name))
-        if not self.key_projversion(project, version).exists():
+        if not self.key_version(project, version).exists():
             raise self.NotFound("version %r of project %r not found on stage %r" %
                                 (version, project, self.name))
         linkstore = self.get_mutable_linkstore_perstage(project, version)
         linkstore.remove_links()
-        self.key_projversion(project, version).delete()
+        self.key_version(project, version).delete()
         if cleanup:
             self._regen_simplelinks(project)
             has_versions = (
-                next(self.key_projversion(project).iter_ulidkeys(), absent)
-                is not absent
+                next(self.key_version(project).iter_ulidkeys(), absent) is not absent
             )
             if not has_versions:
                 self.del_project(project)
@@ -1409,17 +1408,17 @@ class PrivateStage(BaseStage):
         project = normalize_name(project)
         if not self.has_project_perstage(project):
             return set()
-        return {x.name for x in self.key_projversion(project).iter_ulidkeys()}
+        return {x.name for x in self.key_version(project).iter_ulidkeys()}
 
     def _get_elinks(self, project, version):
-        if not self.key_projversion(project, version).exists():
+        if not self.key_version(project, version).exists():
             return []
         return [
             v for k, v in self.key_versionfile(project, version).iter_ulidkey_values()
         ]
 
     def get_has_versiondata_perstage(self, project, version):
-        return self.key_projversion(project, version).exists()
+        return self.key_version(project, version).exists()
 
     def get_last_project_change_serial_perstage(self, project, at_serial=None):  # noqa: PLR0911, PLR0912
         project = normalize_name(project)
@@ -1433,7 +1432,7 @@ class PrivateStage(BaseStage):
             # the whole index never existed or was deleted
             return last_serial
         for version_keydata in tx.conn.iter_keys_at_serial(
-            (self.key_projversion(project),),
+            (self.key_version(project),),
             at_serial=at_serial,
             fill_cache=False,
             with_deleted=True,
@@ -1457,7 +1456,7 @@ class PrivateStage(BaseStage):
 
     def get_versiondata_perstage(self, project, version, *, with_elinks=True):
         project = normalize_name(project)
-        verdata = self.key_projversion(project, version).get()
+        verdata = self.key_version(project, version).get()
         assert "+elinks" not in verdata
         if with_elinks:
             elinks = self._get_elinks(project, version)
@@ -1592,7 +1591,7 @@ class PrivateStage(BaseStage):
             if project is deleted:
                 continue
             for version_keydata in tx.conn.iter_keys_at_serial(
-                (self.key_projversion(project),),
+                (self.key_version(project),),
                 at_serial=at_serial,
                 fill_cache=False,
                 with_deleted=True,
@@ -2048,9 +2047,7 @@ def register_keys(xom, keyfs):
         "PROJECTNAME", "{project}", index_key, NormalizedName
     )
     keyfs.register_anonymous_key("PROJSIMPLELINKS", project_key, dict)
-    version_key = keyfs.register_named_key(
-        "PROJVERSION", "{version}", project_key, dict
-    )
+    version_key = keyfs.register_named_key("VERSION", "{version}", project_key, dict)
     keyfs.register_named_key("VERSIONFILE", "{filename}", version_key, dict)
     keyfs.register_named_key(
         "FILE", "+f/{hashdir_a}/{hashdir_b}/{filename}", index_key, dict
@@ -2060,9 +2057,7 @@ def register_keys(xom, keyfs):
     keyfs.register_named_key("DIGESTPATHS", "{digest}", None, set)
 
     sub = EventSubscribers(xom)
-    keyfs.notifier.on_key_change(
-        keyfs.PROJVERSION.key_name, sub.on_changed_version_config
-    )
+    keyfs.notifier.on_key_change(keyfs.VERSION.key_name, sub.on_changed_version_config)
     keyfs.notifier.on_key_change(keyfs.FILE.key_name, sub.on_changed_file_entry)
     keyfs.notifier.on_key_change(
         keyfs.MIRRORNAMESINIT.key_name, sub.on_mirror_initialnames
