@@ -1414,7 +1414,7 @@ def test_ProjectUpdateCache(monkeypatch):
 @pytest.mark.notransaction
 @pytest.mark.with_notifier
 @pytest.mark.nomocking
-def test_redownload_locally_removed_release(mapp, simpypi):
+def test_redownload_locally_removed_release(file_digest, mapp, simpypi):
     from devpi_common.url import URL
     mapp.create_and_login_user('mirror')
     indexconfig = dict(
@@ -1427,7 +1427,7 @@ def test_redownload_locally_removed_release(mapp, simpypi):
     simpypi.add_release('pkg', pkgver='pkg-1.0.zip')
     simpypi.add_file('/pkg/pkg-1.0.zip', content)
     result = mapp.getreleaseslist("pkg")
-    file_path_info = FilePathInfo(f"+files{URL(result[0]).path}")
+    file_path_info = FilePathInfo(f"+files{URL(result[0]).path}", file_digest(content))
     assert len(result) == 1
     r = mapp.downloadrelease(200, result[0])
     assert r == content
