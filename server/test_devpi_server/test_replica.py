@@ -1000,7 +1000,9 @@ class TestFileReplication:
             assert b"".join(result) == content
 
     @pytest.mark.mock_frt_http
-    def test_checksum_mismatch(self, xom, replica_xom, maketestapp, makemapp):
+    def test_checksum_mismatch(
+        self, file_digest, xom, replica_xom, maketestapp, makemapp
+    ):
         # this test might seem to be doing the same as test_fetch above, but
         # test_fetch creates a new transaction for the same file, which doesn't
         # happen 'in real life'™
@@ -1014,7 +1016,7 @@ class TestFileReplication:
         # first we try to return something wrong
         primary_url = replica_xom.config.primary_url
         (path,) = mapp.get_release_paths('hello')
-        file_path_info = FilePathInfo(f"+files{path}")
+        file_path_info = FilePathInfo(f"+files{path}", file_digest(content1))
         primary_file_url = primary_url.joinpath(path).url
         replica_xom.frt.http.mockresponse(primary_file_url, content=b"13")
         replay(xom, replica_xom, events=False)
