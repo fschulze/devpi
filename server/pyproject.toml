@@ -199,7 +199,6 @@ extend-ignore = [
     "RET507", # maybe cleanup later - unnecessary elif after continue
     "RUF005", # cleanup later
     "RUF012", # cleanup later
-    "RUF100", # after soon to cleanup
     "RSE102", # maybe cleanup later
     "SIM102", # maybe cleanup later
     "SIM105", # cleanup soon

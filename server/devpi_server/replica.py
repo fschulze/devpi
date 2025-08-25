@@ -15,9 +15,9 @@ from .log import thread_push_log
 from .log import threadlog
 from .main import Fatal
 from .markers import deleted
+from .mirror import FileStreamer
 from .model import UpstreamError
 from .normalized import normalize_name
-from .views import FileStreamer
 from .views import H_PRIMARY_UUID
 from devpi_common.types import cached_property
 from devpi_common.url import URL

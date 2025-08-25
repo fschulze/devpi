@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from .config import hookimpl
 from .exceptions import lazy_format_exception
+from .filestore import BadGateway
+from .filestore import RunningHashes
 from .filestore import key_from_link
 from .htmlpage import HTMLPage
 from .log import threadlog
@@ -22,7 +24,7 @@ from .model import join_links_data
 from .normalized import NormalizedName
 from .normalized import normalize_name
 from .readonly import ensure_deeply_readonly
-from .views import SIMPLE_API_V1_JSON
+from contextlib import ExitStack
 from devpi_common.metadata import BasenameMeta
 from devpi_common.metadata import is_archive_of_project
 from devpi_common.metadata import parse_version
@@ -44,13 +46,197 @@ if TYPE_CHECKING:
     from .markers import Unknown
     from typing import Any
 
-
+SIMPLE_API_V1_JSON = "application/vnd.pypi.simple.v1+json"
 SIMPLE_API_V1_VERSION = parse_version("1.0")
 SIMPLE_API_V2_VERSION = parse_version("2.0")
 SIMPLE_API_ACCEPT = ", ".join((
     "application/vnd.pypi.simple.v1+html;q=0.2",
     SIMPLE_API_V1_JSON,
     "text/html;q=0.01"))
+
+
+def _headers_from_response(r):
+    content_type = r.headers.get("content-type")
+    if not content_type:
+        content_type = "application/octet-stream"
+    if isinstance(content_type, tuple):
+        content_type = content_type[0]
+    headers = {
+        "X-Accel-Buffering": "no",  # disable buffering in nginx
+        "content-type": content_type,
+    }
+    if "last-modified" in r.headers:
+        headers["last-modified"] = r.headers["last-modified"]
+    if "content-length" in r.headers:
+        headers["content-length"] = str(r.headers["content-length"])
+    return headers
+
+
+class FileStreamer:
+    def __init__(self, f, entry, response):
+        self.hash_type = entry.best_available_hash_type
+        self.hash_types = entry.default_hash_types
+        self._hashes = entry.hashes
+        self.relpath = entry.relpath
+        self.response = response
+        self.error = None
+        self.f = f
+
+    def __iter__(self):
+        filesize = 0
+        running_hashes = RunningHashes(self.hash_type, *self.hash_types)
+        running_hashes.start()
+        content_size = self.response.headers.get("content-length")
+
+        yield _headers_from_response(self.response)
+
+        data_iter = self.response.iter_raw(10240)
+        while 1:
+            data = next(data_iter, None)
+            if data is None:
+                break
+            filesize += len(data)
+            for rh in running_hashes._running_hashes:
+                rh.update(data)
+            self.f.write(data)
+            yield data
+
+        self.hashes = running_hashes.digests
+
+        if content_size and int(content_size) != filesize:
+            raise ValueError(
+                "%s: got %s bytes of %r from remote, expected %s"
+                % (self.relpath, filesize, self.response.url, content_size)
+            )
+        if self._hashes:
+            err = self.hashes.exception_for(self._hashes, self.relpath)
+            if err is not None:
+                raise err
+
+
+def iter_cache_remote_file(stage, entry, url):
+    # we get and cache the file and some http headers from remote
+    xom = stage.xom
+    url = URL(url)
+
+    with ExitStack() as cstack:
+        r = stage.http.stream(cstack, "GET", url, allow_redirects=True)
+        if r.status_code != 200:
+            r.close()
+            msg = f"error {r.status_code} getting {url}"
+            threadlog.error(msg)
+            raise BadGateway(msg, code=r.status_code, url=url)
+        f = cstack.enter_context(entry.file_new_open())
+        file_streamer = FileStreamer(f, entry, r)
+        threadlog.info("reading remote: %r, target %s", URL(r.url), entry.relpath)
+
+        try:
+            yield from file_streamer
+        except Exception as err:
+            threadlog.error(str(err))
+            raise
+
+        if not entry.has_existing_metadata():
+            with xom.keyfs.write_transaction(allow_restart=True):
+                if entry.readonly:
+                    entry = xom.filestore.get_file_entry_from_key(entry.key)
+                entry.file_set_content(
+                    f,
+                    last_modified=r.headers.get("last-modified", None),
+                    hashes=file_streamer.hashes,
+                )
+                digest_key = entry.get_digest_key()
+                with digest_key.update() as digest_paths:
+                    digest_paths.add(entry.relpath)
+                if entry.project:
+                    stage = xom.model.getstage(entry.user, entry.index)
+                    # for mirror indexes this makes sure the project is in the database
+                    # as soon as a file was fetched
+                    stage.add_project_name(entry.project)
+                # on Windows we need to close the file
+                # before the transaction closes
+                f.close()
+        else:
+            # the file was downloaded before but locally removed, so put
+            # it back in place without creating a new serial
+            with xom.keyfs.filestore_transaction():
+                entry.file_set_content_no_meta(f, hashes=file_streamer.hashes)
+                threadlog.debug(
+                    "put missing file back into place: %s", entry.file_path_info
+                )
+                # on Windows we need to close the file
+                # before the transaction closes
+                f.close()
+
+
+def iter_remote_file_replica(stage, entry, url):
+    xom = stage.xom
+    replication_errors = xom.replica_thread.shared_data.errors
+    # construct primary URL with param
+    primary_url = xom.config.primary_url.joinpath(entry.relpath).url
+    if not url:
+        threadlog.warn("missing private file: %s" % entry.relpath)
+    else:
+        threadlog.info("replica doesn't have file: %s", entry.relpath)
+
+    with ExitStack() as cstack:
+        r = stage.http.stream(
+            cstack,
+            "GET",
+            primary_url,
+            allow_redirects=True,
+            extra_headers={xom.replica_thread.H_REPLICA_FILEREPL: "YES"},
+        )
+        if r.status_code != 200:
+            r.close()
+            msg = f"{primary_url}: received {r.status_code} from primary"
+            if not url:
+                threadlog.error(msg)
+                raise BadGateway(msg)
+            # try to get from original location
+            headers = {}
+            url = URL(url)
+            username = url.username or ""
+            password = url.password or ""
+            if username or password:
+                url = url.replace(username=None, password=None)
+                auth = f"{username}:{password}".encode()
+                headers["Authorization"] = f"Basic {b64encode(auth).decode()}"
+            r = xom.http.stream(
+                cstack, "GET", url, allow_redirects=True, extra_headers=headers
+            )
+            if r.status_code != 200:
+                r.close()
+                msg = f"{msg}\n{url}: received {r.status_code}"
+                threadlog.error(msg)
+                raise BadGateway(msg)
+        cstack.callback(r.close)
+        f = cstack.enter_context(entry.file_new_open())
+        file_streamer = FileStreamer(f, entry, r)
+
+        try:
+            yield from file_streamer
+        except Exception as err:  # noqa: BLE001 - we have to convert all exceptions
+            # the file we got is different, so we fail
+            raise BadGateway(str(err)) from err
+
+        with xom.keyfs.filestore_transaction():
+            entry.file_set_content_no_meta(f, hashes=file_streamer.hashes)
+            # on Windows we need to close the file
+            # before the transaction closes
+            f.close()
+            threadlog.debug(
+                "put missing file back into place: %s", entry.file_path_info
+            )
+        # in case there were errors before, we can now remove them
+        replication_errors.remove(entry)
+
+
+def iter_fetch_remote_file(stage, entry, url):
+    if not stage.xom.is_replica():
+        yield from iter_cache_remote_file(stage, entry, url)
+    else:
+        yield from iter_remote_file_replica(stage, entry, url)
 
 
 class Link(URL):

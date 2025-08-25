@@ -26,6 +26,7 @@ ignore = [
     "PT023", # ignore - pytest.mark.nomocking
     "PTH", # ignore - pathlib
     "Q", # ignore - quotes style
+    "RUF100", # after soon to cleanup
     "S101", # ignore - asserts
     "SLF001", # ignore - private member accessed
     "TD", # ignore - todos
