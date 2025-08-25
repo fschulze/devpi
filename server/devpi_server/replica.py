@@ -1301,13 +1301,15 @@ class FileReplicationThread:
             stage.offline = True
             name = normalize_name(entry.project)
             try:
-                linkstore = stage.get_linkstore_perstage(name, entry.version)
+                if not stage.has_version_perstage(name, entry.version):
+                    msg = f"{name}-{entry.version} on stage {stage.name} at {stage.keyfs.tx.at_serial}"
+                    raise stage.MissesRegistration(msg)  # noqa: TRY301
             except (stage.MissesRegistration, stage.UpstreamError):
                 if index_type == IndexType(None) or index_type == IndexType("mirror"):
                     return
                 raise
-            links = linkstore.get_links(basename=entry.basename)
-            for link in links:
+            link = stage._get_elink_from_entry(entry)
+            if link is not None:
                 self.xom.config.hook.devpiserver_on_replicated_file(
                     stage=stage, project=name, version=entry.version, link=link,
                     serial=serial, back_serial=back_serial,
