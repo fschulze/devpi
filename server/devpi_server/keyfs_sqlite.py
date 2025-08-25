@@ -16,6 +16,7 @@ from .log import thread_pop_log
 from .log import thread_push_log
 from .log import threadlog
 from .markers import absent
+from .markers import deleted
 from .mythread import current_thread
 from .readonly import ReadonlyView
 from .readonly import ensure_deeply_readonly
@@ -232,6 +233,8 @@ class BaseConnection:
             if tup is None:
                 raise RuntimeError("no transaction entry at %s" % (last_serial))
             keyname, back_serial, val = tup
+            if val is None:
+                val = deleted
             yield KeyData(
                 relpath=relpath,
                 keyname=keyname,
@@ -252,6 +255,8 @@ class BaseConnection:
             changes = self._changelog_cache.get(serial, absent)
             if changes is not absent and relpath in changes:
                 (keyname, back_serial, value) = changes[relpath]
+                if value is None:
+                    value = deleted
                 result = KeyData(
                     relpath=relpath,
                     keyname=keyname,
@@ -261,7 +266,10 @@ class BaseConnection:
                 )
         if result is absent:
             result = self._get_relpath_at(relpath, serial)
-        if gettotalsizeof(result.value, maxlen=100000) is None:
+        if (
+            result.value is not deleted
+            and gettotalsizeof(result.value, maxlen=100000) is None
+        ):
             # result is big, put it in the changelog cache,
             # which has fewer entries to preserve memory
             self._changelog_cache.put((serial, relpath), result)
