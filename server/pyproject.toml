@@ -238,9 +238,6 @@ extend-ignore = [
 "test_devpi_server/test_config.py" = [
     "I001", # maybe cleanup later - import block unsorted
 ]
-"test_devpi_server/test_fileutil.py" = [
-    "I001", # maybe cleanup later - import block unsorted
-]
 "test_devpi_server/test_genconfig.py" = [
     "I001", # maybe cleanup later - import block unsorted
 ]
