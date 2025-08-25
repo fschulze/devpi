@@ -1434,11 +1434,12 @@ def nginx_replica_host_port(request, call_devpi_in_dir, server_path, adjust_ngin
 
 @pytest.fixture(scope="session")
 def simpypiserver():
-    from .simpypi import httpserver, SimPyPIRequestHandler
+    from .simpypi import SimPyPIRequestHandler
+    from .simpypi import SimPyPIServer
     import threading
     host = 'localhost'
     port = get_open_port(host)
-    server = httpserver.HTTPServer((host, port), SimPyPIRequestHandler)
+    server = SimPyPIServer((host, port), SimPyPIRequestHandler)
     thread = threading.Thread(target=server.serve_forever)
     thread.daemon = True
     thread.start()

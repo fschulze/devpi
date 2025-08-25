@@ -1472,7 +1472,7 @@ class PyPIView:
         url = URL(entry.url)
 
         file_exists = entry.file_exists()
-        if entry.last_modified is None or not file_exists:
+        if entry.deleted_or_never_fetched or not file_exists:
             # We check whether we should serve the file directly
             # or redirect to the external URL
             if stage.use_external_url:

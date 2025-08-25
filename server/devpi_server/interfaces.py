@@ -12,10 +12,11 @@ from zope.interface.verify import verifyObject
 
 if TYPE_CHECKING:
     from .keyfs_types import FilePathInfo
-    from .keyfs_types import IKeyFSKey
     from .keyfs_types import KeyData
     from .keyfs_types import LocatedKey
+    from .keyfs_types import PatternedKey
     from .keyfs_types import Record
+    from .keyfs_types import ULIDKey
     from collections.abc import Iterable
     from collections.abc import Iterator
     from collections.abc import Sequence
@@ -139,7 +140,7 @@ class IStorage(Interface):
     def perform_crash_recovery() -> None:
         """Perform recovery from crash during two phase commit."""
 
-    def register_key(key: IKeyFSKey) -> None:
+    def register_key(key: LocatedKey | PatternedKey) -> None:
         """Register key information."""
 
 
@@ -160,7 +161,7 @@ class IStorageConnection(Interface):
     def get_raw_changelog_entry(serial: int) -> bytes | None:
         """Returns serialized changes for given serial."""
 
-    def get_key_at_serial(key: LocatedKey, serial: int) -> KeyData:
+    def get_key_at_serial(key: ULIDKey, serial: int) -> KeyData:
         """Get tuple of (last_serial, back_serial, value) for given relpath
         at given serial.
         Raises KeyError if not found."""
@@ -169,13 +170,26 @@ class IStorageConnection(Interface):
         """Returns deserialized readonly changes for given serial."""
 
     def iter_keys_at_serial(
-        typedkeys: Iterable[IKeyFSKey], at_serial: int
+        typedkeys: Iterable[LocatedKey | PatternedKey],
+        at_serial: int,
+        *,
+        skip_ulid_keys: set[ULIDKey],
+        with_deleted: bool,
     ) -> Iterator[KeyData]:
         """Iterate over all relpaths of the given typed keys starting
         from at_serial until the first serial in the database."""
 
     def iter_rel_renames(serial: int) -> Iterable | None:
         """Returns deserialized rel_renames for given serial."""
+
+    def iter_ulidkeys_at_serial(
+        keys: Iterable[LocatedKey | PatternedKey],
+        at_serial: int,
+        *,
+        skip_ulid_keys: set[ULIDKey],
+        with_deleted: bool,
+    ) -> Iterator[ULIDKey]:
+        """Get ULIDKey for given LocatedKeys."""
 
     def write_transaction(io_file: IIOFile | None) -> IWriter:
         """Returns a context providing class with a IWriter interface."""

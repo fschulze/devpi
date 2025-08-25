@@ -55,8 +55,7 @@ def fsck():
                         tx.at_serial,
                     )
                 processed = processed + 1
-                key = keyfs.get_key_instance(item.keyname, item.relpath)
-                entry = FileEntry(key, item.value)
+                entry = FileEntry(item.key, item.value)
                 if not entry.last_modified:
                     continue
                 if not entry.file_exists():

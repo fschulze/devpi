@@ -2128,7 +2128,7 @@ class EventSubscribers:
 
     def on_changed_version_config(self, ev: KeyChangeEvent) -> None:
         """ when version config is changed for a project in a stage"""
-        params = ev.key.params
+        params = ev.data.key.params
         keyfs = self.xom.keyfs
         hook = self.xom.config.hook
         with keyfs.read_transaction(at_serial=ev.at_serial) as tx:
@@ -2138,7 +2138,7 @@ class EventSubscribers:
             else:
                 assert ev.data.back_serial < ev.at_serial
                 try:
-                    old = tx.get_value_at(ev.key, ev.data.back_serial)
+                    old = tx.get_value_at(ev.data.key, ev.data.back_serial)
                 except KeyError:
                     old = {}
 
@@ -2158,7 +2158,7 @@ class EventSubscribers:
 
     def on_changed_file_entry(self, ev: KeyChangeEvent) -> None:
         """ when a file entry is modified. """
-        params = ev.key.params
+        params = ev.data.key.params
         user = params.get("user")
         index = params.get("index")
         keyfs = self.xom.keyfs
@@ -2166,12 +2166,12 @@ class EventSubscribers:
             stage = self.xom.model.getstage(user, index)
             if stage is not None and stage.ixconfig["type"] == "mirror":
                 return  # we don't trigger on file changes of pypi mirror
-            entry = FileEntry(ev.key, meta=ev.data.value)
+            entry = FileEntry(ev.data.key, meta=ev.data.value)
             if not entry.project or not entry.version:
                 # the entry was deleted
                 self.xom.config.hook.devpiserver_on_remove_file(
                     stage=stage,
-                    relpath=ev.key.relpath,
+                    relpath=ev.data.key.relpath,
                 )
                 return
             name = entry.project
@@ -2186,7 +2186,7 @@ class EventSubscribers:
 
     def on_mirror_initialnames(self, ev: KeyChangeEvent) -> None:
         """ when projectnames are first loaded into a mirror. """
-        params = ev.key.params
+        params = ev.data.key.params
         user = params.get("user")
         index = params.get("index")
         keyfs = self.xom.keyfs
@@ -2200,14 +2200,14 @@ class EventSubscribers:
 
     def on_changed_index(self, ev: KeyChangeEvent) -> None:
         """when index data changes."""
-        params = ev.key.params
+        params = ev.data.key.params
         username = params.get("user")
         indexname = params.get("index")
         keyfs = self.xom.keyfs
         with keyfs.read_transaction(at_serial=ev.at_serial) as tx:
             if ev.data.back_serial > -1:
                 try:
-                    old = tx.get_value_at(ev.key, ev.data.back_serial)
+                    old = tx.get_value_at(ev.data.key, ev.data.back_serial)
                 except KeyError:
                     # the user was previously deleted
                     old = None
