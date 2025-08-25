@@ -481,15 +481,15 @@ class TestExtPYPIDB:
 
         with pypistage.keyfs.read_transaction():
             assert "mirror_ignore_serial_header" not in pypistage.get()
-            assert pypistage.key_projsimplelinks("pytest").get() == {}
+            assert pypistage.key_projectcacheinfo("pytest").get() == {}
             assert len(pypistage.get_releaselinks("pytest")) == 1
-            assert pypistage.key_projsimplelinks("pytest").get()["serial"] == 10
+            assert pypistage.key_projectcacheinfo("pytest").get()["serial"] == 10
         pypistage.mock_simple("pytest", text="", pypiserial=9)
         with pypistage.keyfs.read_transaction():
             assert "mirror_ignore_serial_header" not in pypistage.get()
-            assert pypistage.key_projsimplelinks("pytest").get()["serial"] == 10
+            assert pypistage.key_projectcacheinfo("pytest").get()["serial"] == 10
             assert len(pypistage.get_releaselinks("pytest")) == 1
-            assert pypistage.key_projsimplelinks("pytest").get()["serial"] == 10
+            assert pypistage.key_projectcacheinfo("pytest").get()["serial"] == 10
         recs = caplog.getrecords(".*serving stale links.*")
         assert len(recs) >= 1
         with pypistage.keyfs.write_transaction():
@@ -500,9 +500,9 @@ class TestExtPYPIDB:
                 ]
                 is True
             )
-            assert pypistage.key_projsimplelinks("pytest").get()["serial"] == 10
+            assert pypistage.key_projectcacheinfo("pytest").get()["serial"] == 10
             assert len(pypistage.get_releaselinks("pytest")) == 0
-            assert pypistage.key_projsimplelinks("pytest").get()["serial"] == -1
+            assert pypistage.key_projectcacheinfo("pytest").get()["serial"] == -1
 
     def test_get_releaselinks_cache_no_fresh_write(self, pypistage):
         pypistage.mock_simple("pytest", text='''

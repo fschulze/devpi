@@ -447,15 +447,15 @@ def test_project_simple_results_for_installers(pypistage, testapp, user_agent):
     r = testapp.get("/root/pypi/py", headers=headers, follow=False)
     assert r.status_code == 200
     links = [os.path.basename(x.attrs["href"]) for x in getlinks(r.text)]
-    assert links == ["py-2.0.zip", "py-3.0.zip", "py-1.0.zip"]
+    assert sorted(links) == ["py-1.0.zip", "py-2.0.zip", "py-3.0.zip"]
     r = testapp.get("/root/pypi/py/", headers=headers, follow=False)
     assert r.status_code == 200
     links = [os.path.basename(x.attrs["href"]) for x in getlinks(r.text)]
-    assert links == ["py-2.0.zip", "py-3.0.zip", "py-1.0.zip"]
+    assert sorted(links) == ["py-1.0.zip", "py-2.0.zip", "py-3.0.zip"]
     r = testapp.get("/root/pypi/+simple/py", headers=headers, follow=False)
     assert r.status_code == 200
     links = [os.path.basename(x.attrs["href"]) for x in getlinks(r.text)]
-    assert links == ["py-2.0.zip", "py-3.0.zip", "py-1.0.zip"]
+    assert sorted(links) == ["py-1.0.zip", "py-2.0.zip", "py-3.0.zip"]
 
 
 def test_project_redirect(pypistage, testapp):
@@ -596,26 +596,32 @@ def test_simple_page_pypi_serial(pypistage, testapp):
     assert "X-PYPI-LAST-SERIAL" not in r.headers
 
 
-def test_simple_refresh(mapp, xom, pypistage, testapp):
+def test_simple_refresh(xom, pypistage, testapp):
     pypistage.mock_simple("hello", "<html/>")
     r = testapp.xget(200, "/root/pypi/+simple/hello/")
-    input, = r.html.select('form input')
-    assert input.attrs['name'] == 'refresh'
-    assert input.attrs['value'] == 'Refresh'
+    (input_elem,) = r.html.select("form input")
+    assert input_elem.attrs["name"] == "refresh"
+    assert input_elem.attrs["value"] == "Refresh"
     with xom.keyfs.read_transaction():
-        info = pypistage.key_projsimplelinks("hello").get()
-    assert info != {}
-    assert info["links"] == []
-    assert info["serial"] == 10000
+        key_mirrorfile = pypistage.key_mirrorfile("hello")
+        projects = {k.name: v for k, v in key_mirrorfile.iter_ulidkey_values()}
+        cache_info = pypistage.key_projectcacheinfo("hello").get()
+    assert projects == {}
+    assert cache_info["serial"] == 10000
     pypistage.mock_simple("hello", pkgver="hello-1.0.zip", pypiserial=10001)
     r = testapp.post("/root/pypi/+simple/hello/refresh")
     assert r.status_code == 302
     assert r.location.endswith("/root/pypi/+simple/hello/")
     with xom.keyfs.read_transaction():
-        info = pypistage.key_projsimplelinks("hello").get()
-    assert info["links"] == [
-        ('hello-1.0.zip', 'root/pypi/+e/https_pypi.org_hello/hello-1.0.zip')]
-    assert info["serial"] == 10001
+        key_mirrorfile = pypistage.key_mirrorfile("hello")
+        projects = {k.name: v for k, v in key_mirrorfile.iter_ulidkey_values()}
+        cache_info = pypistage.key_projectcacheinfo("hello").get()
+    assert projects == {
+        "hello-1.0.zip": dict(
+            entrypath="root/pypi/+e/https_pypi.org_hello/hello-1.0.zip"
+        )
+    }
+    assert cache_info["serial"] == 10001
 
 
 def test_inheritance_project_listing_ignore_bases(mapp):
@@ -653,21 +659,22 @@ def test_simple_refresh_inherited(mapp, xom, pypistage, testapp, project,
     stagename = api.stagename
 
     r = testapp.xget(200, "/%s/+simple/%s/" % (stagename, project))
-    input, = r.html.select('form input')
-    assert input.attrs['name'] == 'refresh'
+    (input_elem,) = r.html.select("form input")
+    assert input_elem.attrs["name"] == "refresh"
     with xom.keyfs.read_transaction():
-        info = pypistage.key_projsimplelinks(project).get()
-    assert info != {}
+        key_mirrorfile = pypistage.key_mirrorfile(project)
+        info = list(key_mirrorfile.iter_ulidkeys())
+    assert bool(info)
     pypistage.mock_simple(project, '<a href="/%s-2.0.zip" />' % project,
                           serial=200)
     r = testapp.post("/%s/+simple/%s/refresh" % (stagename, project))
     assert r.status_code == 302
     assert r.location.endswith("/%s/+simple/%s/" % (stagename, project))
     with xom.keyfs.read_transaction():
-        info = pypistage.key_projsimplelinks(project).get()
-    elist = info["links"]
-    assert len(elist) == 1
-    assert elist[0][0].endswith("-2.0.zip")
+        key_mirrorfile = pypistage.key_mirrorfile(project)
+        info = list(key_mirrorfile.iter_ulidkeys())
+    assert len(info) == 1
+    assert info[0].name.endswith("-2.0.zip")
 
 
 def test_simple_refresh_inherited_not_whitelisted(mapp, testapp):
