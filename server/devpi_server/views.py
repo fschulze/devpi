@@ -128,9 +128,7 @@ def abort_submit(request, code, msg, level="error"):
 
 
 def abort_authenticate(request, msg="authentication required"):
-    err = type(
-        'HTTPError', (HTTPException,), dict(
-            code=401, title=msg))
+    err: HTTPException = type("HTTPError", (HTTPException,), dict(code=401, title=msg))
     err = err()
     err.headers.add('WWW-Authenticate', 'Basic realm="pypi"')
     err.headers.add('location', request.route_url("/+login"))
@@ -147,7 +145,7 @@ class HTTPResponse(HTTPSuccessful):
         Exception.__init__(self)
 
 
-def apiresult(code, message=None, result=None, type=None):  # noqa: A002
+def apiresult(code, message=None, *, result=None, type=None):  # noqa: A002
     d = dict()
     if result is not None:
         assert type is not None
@@ -160,7 +158,7 @@ def apiresult(code, message=None, result=None, type=None):  # noqa: A002
     return HTTPResponse(body=data, status=code, headers=headers)
 
 
-def apireturn(code, message=None, result=None, type=None):  # noqa: A002
+def apireturn(code, message=None, *, result=None, type=None):  # noqa: A002
     raise apiresult(code, message=message, result=result, type=type)
 
 
@@ -169,15 +167,15 @@ def json_preferred(request):
     return "application/json" in request.headers.get("Accept", "")
 
 
-class ContentTypePredicate(object):
-    def __init__(self, val, config):
+class ContentTypePredicate:
+    def __init__(self, val, config):  # noqa: ARG002
         self.val = val
 
     def text(self):
         return 'content type = %s' % self.val
     phash = text
 
-    def __call__(self, context, request):
+    def __call__(self, context, request):  # noqa: ARG002
         return request.content_type == self.val
 
 
@@ -1683,9 +1681,9 @@ class PyPIView:
     @view_config(route_name="/{user}/", accept="application/json", request_method="GET")
     def user_get(self):
         if self.context.user is None:
-            apireturn(404, "user %r does not exist" % self.context.username)
+            return apiresult(404, f"user {self.context.username!r} does not exist")
         userconfig = self.context.user.get()
-        apireturn(200, type="userconfig", result=userconfig)
+        return apiresult(200, type="userconfig", result=userconfig)
 
     @view_config(route_name="/", accept="application/json", request_method="GET")
     def user_list(self):
