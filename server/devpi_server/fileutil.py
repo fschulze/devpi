@@ -7,6 +7,7 @@ from io import BytesIO
 from struct import error as struct_error
 from struct import pack
 from struct import unpack
+from tempfile import SpooledTemporaryFile as SpooledTemporaryFileBase
 from typing import TYPE_CHECKING
 import errno
 import os.path
@@ -45,6 +46,22 @@ class DumpError(DataFormatError):
 
 class LoadError(DataFormatError):
     """Error while unserializing an object."""
+
+
+class SpooledTemporaryFile(SpooledTemporaryFileBase):
+    # some missing methods
+    def readable(self):
+        return self._file.readable()
+
+    def readinto(self, buffer):
+        assert hasattr(self._file, "readinto")
+        return self._file.readinto(buffer)
+
+    def seekable(self):
+        return self._file.seekable()
+
+    def writable(self):
+        return self._file.writable()
 
 
 def load(fp, _from_bytes=int.from_bytes, _unpack=unpack):

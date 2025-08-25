@@ -7,7 +7,7 @@ import argparse
 import secrets
 import sys
 import uuid
-from operator import itemgetter
+from operator import attrgetter
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from pluggy import HookimplMarker, PluginManager
@@ -281,16 +281,17 @@ def add_storage_options(parser, pluginmanager):
         default='~/.devpi/server',
         help="directory for server data.")
 
-    storages = pluginmanager.hook.devpiserver_storage_backend(settings=None)
-    backends = sorted(
-        (s for s in storages if not s.get('hidden', False)),
-        key=itemgetter("name"))
+    storages = pluginmanager.hook.devpiserver_describe_storage_backend(settings={})
+    backends = sorted((s for s in storages if not s.hidden), key=attrgetter("name"))
     parser.addoption(
-        "--storage", type=str, metavar="NAME",
+        "--storage",
+        type=str,
+        metavar="NAME",
         action="store",
         default="sqlite",
-        help="the storage backend to use.\n" + ", ".join(
-             '"%s": %s' % (x['name'], x['description']) for x in backends))
+        help="the storage backend to use.\n"
+        + ", ".join(f'"{x.name}": {x.description}' for x in backends),
+    )
 
     parser.addoption(
         "--keyfs-cache-size", type=int, metavar="NUM",
@@ -640,27 +641,26 @@ class ConfigurationError(Exception):
 
 
 def get_io_file_factory(storage_info):
+    from .interfaces import IDBIOFileConnection
     from .interfaces import IIOFile
-    from zope.interface.verify import verifyObject
+    from zope.interface.verify import verifyClass
 
-    db_filestore = storage_info.setdefault("db_filestore", True)
+    db_filestore = IDBIOFileConnection.implementedBy(storage_info.connection_cls)
     _io_file_factory: type
     if db_filestore:
         from .filestore_db import DBIOFile
 
+        verifyClass(IIOFile, DBIOFile)
         _io_file_factory = DBIOFile
     else:
         from .filestore_fs import FSIOFile
 
-        settings = storage_info.get("settings", {})
-        storage_info.setdefault("_test_markers", []).append("storage_with_filesystem")
+        verifyClass(IIOFile, FSIOFile)
         _io_file_factory = FSIOFile
     settings = storage_info.settings
 
     def io_file_factory(conn):
-        result = IIOFile(_io_file_factory(conn, settings))
-        verifyObject(IIOFile, result)
-        return result
+        return IIOFile(_io_file_factory(conn, settings))
 
     return io_file_factory
 
@@ -943,25 +943,25 @@ class Config:
 
     def _storage_info_from_name(self, name, settings):
         from .main import Fatal
-        storages = self.pluginmanager.hook.devpiserver_storage_backend(settings=settings)
+
+        storages = self.pluginmanager.hook.devpiserver_describe_storage_backend(
+            settings=settings
+        )
         for storage in storages:
-            if storage['name'] == name:
+            if storage.name == name:
                 return storage
         msg = f"The backend {name!r} can't be found, is the plugin not installed?"
         raise Fatal(msg)
 
-    def _storage_info(self):
-        name = self.storage_info["name"]
-        settings = self.storage_info["settings"]
+    @property
+    def storage_info(self):
+        name = self._storage_info["name"]
+        settings = self._storage_info["settings"]
         return self._storage_info_from_name(name, settings)
 
     @property
     def io_file_factory(self):
-        return get_io_file_factory(self._storage_info())
-
-    @property
-    def storage(self):
-        return self._storage_info()["storage"]
+        return get_io_file_factory(self.storage_info)
 
     def _determine_storage(self):
         if isinstance(self.args.storage, dict):
@@ -976,15 +976,10 @@ class Config:
                     key, value = item.split('=', 1)
                     settings[key] = value
         storage_info = self._storage_info_from_name(name, settings)
-        self.storage_info = dict(
-            name=storage_info['name'],
-            settings=settings)
+        self._storage_info = dict(name=storage_info.name, settings=settings)
 
-    def sqlite_file_needed_but_missing(self):
-        return (
-            self.storage_info['name'] == 'sqlite'
-            and not self.server_path.joinpath(".sqlite").exists()
-        )
+    def storage_exists(self):
+        return self.storage_info.exists(self.server_path, self.storage_info.settings)
 
     @cached_property
     def secret_path(self):

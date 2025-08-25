@@ -60,7 +60,8 @@ class TestStreaming(object):
         (None, '1.0', 'pkg1'), (False, '1.1', 'pkg2')])
     def test_streaming_download(self, content_digest, files_path, length, pkg_version, pkg_name, server_url_session, simpypi, storage_info):
         from time import sleep
-        if "storage_with_filesystem" not in storage_info.get('_test_markers', []):
+
+        if not storage_info.storage_with_filesystem:
             pytest.skip("The storage doesn't have marker 'storage_with_filesystem'.")
         (content, digest) = content_digest
         (url, s) = server_url_session
@@ -98,7 +99,8 @@ class TestStreaming(object):
         (2, '1.2', 'pkg3'), (0.5, '1.3', 'pkg4')])
     def test_streaming_differing_content_size(self, content_digest, files_path, pkg_version, pkg_name, server_url_session, simpypi, size_factor, storage_info):
         from requests.exceptions import ChunkedEncodingError
-        if "storage_with_filesystem" not in storage_info.get('_test_markers', []):
+
+        if not storage_info.storage_with_filesystem:
             pytest.skip("The storage doesn't have marker 'storage_with_filesystem'.")
         (content, digest) = content_digest
         (url, s) = server_url_session

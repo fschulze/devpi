@@ -1,23 +1,29 @@
 from __future__ import annotations
 
-from devpi_common.types import cached_property
 from .config import hookimpl
 from .filestore_fs import LazyChangesFormatter
-from .fileutil import dumps, loads
-from .interfaces import IStorageConnection4
-from .interfaces import IWriter2
+from .fileutil import SpooledTemporaryFile
+from .fileutil import dumps
+from .fileutil import loads
+from .interfaces import IDBIOFileConnection
+from .interfaces import IStorage
+from .interfaces import IStorageConnection
+from .interfaces import IWriter
 from .keyfs import KeyfsTimeoutError
-from .keyfs import get_relpath_at
 from .keyfs_types import RelpathInfo
-from .log import threadlog, thread_push_log, thread_pop_log
+from .keyfs_types import StorageInfo
+from .log import thread_pop_log
+from .log import thread_push_log
+from .log import threadlog
 from .markers import absent
 from .mythread import current_thread
 from .readonly import ReadonlyView
-from .readonly import ensure_deeply_readonly, get_mutable_deepcopy
+from .readonly import ensure_deeply_readonly
+from .readonly import get_mutable_deepcopy
 from .sizeof import gettotalsizeof
+from devpi_common.types import cached_property
 from io import BytesIO
 from repoze.lru import LRUCache
-from tempfile import SpooledTemporaryFile as SpooledTemporaryFileBase
 from typing import TYPE_CHECKING
 from zope.interface import implementer
 import contextlib
@@ -32,24 +38,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
 
-class SpooledTemporaryFile(SpooledTemporaryFileBase):
-    # some missing methods
-    def readable(self):
-        return self._file.readable()
-
-    def readinto(self, buffer):
-        return self._file.readinto(buffer)
-
-    def seekable(self):
-        return self._file.seekable()
-
-    def writable(self):
-        return self._file.writable()
-
-
 class BaseConnection:
-    _get_relpath_at = get_relpath_at
-
     def __init__(self, sqlconn, basedir, storage):
         self._sqlconn = sqlconn
         self._basedir = basedir
@@ -203,6 +192,32 @@ class BaseConnection:
         (changes, rel_renames) = loads(data)
         return rel_renames
 
+    def _get_relpath_at(self, relpath, serial):
+        (keyname, last_serial) = self.db_read_typedkey(relpath)
+        serials_and_values = self._iter_serial_and_value_backwards(relpath, last_serial)
+        try:
+            (last_serial, back_serial, val) = next(serials_and_values)
+            while last_serial >= 0:
+                if last_serial > serial:
+                    (last_serial, back_serial, val) = next(serials_and_values)
+                    continue
+                return (last_serial, back_serial, val)
+        except StopIteration:
+            pass
+        raise KeyError(relpath)
+
+    def _iter_serial_and_value_backwards(self, relpath, last_serial):
+        while last_serial >= 0:
+            tup = self.get_changes(last_serial).get(relpath)
+            if tup is None:
+                raise RuntimeError("no transaction entry at %s" % (last_serial))
+            keyname, back_serial, val = tup
+            yield (last_serial, back_serial, val)
+            last_serial = back_serial
+
+        # we could not find any change below at_serial which means
+        # the key didn't exist at that point in time
+
     def get_relpath_at(self, relpath, serial):
         result = self._relpath_cache.get((serial, relpath), absent)
         if result is absent:
@@ -246,28 +261,29 @@ class BaseConnection:
                     serial=serial, back_serial=back_serial,
                     value=val)
 
-    def write_transaction(self):
-        return Writer(self.storage, self)
+    def write_transaction(self, io_file):
+        return Writer(self.storage, self, io_file)
 
 
-@implementer(IStorageConnection4)
+@implementer(IDBIOFileConnection)
+@implementer(IStorageConnection)
 class Connection(BaseConnection):
     def io_file_os_path(self, path):
         return None
 
     def io_file_exists(self, path):
-        assert not os.path.isabs(path)
-        f = self.dirty_files.get(path, absent)
+        assert not os.path.isabs(path.relpath)
+        f = self.dirty_files.get(path.relpath, absent)
         if f is not absent:
             return f is not None
         q = "SELECT path FROM files WHERE path = ?"
-        result = self.fetchone(q, (path,))
+        result = self.fetchone(q, (path.relpath,))
         return result is not None
 
     def io_file_set(self, path, content_or_file):
-        assert not os.path.isabs(path)
-        assert not path.endswith("-tmp")
-        f = self.dirty_files.get(path, None)
+        assert not os.path.isabs(path.relpath)
+        assert not path.relpath.endswith("-tmp")
+        f = self.dirty_files.get(path.relpath, None)
         if f is None:
             f = SpooledTemporaryFile(max_size=1048576)
         if isinstance(content_or_file, bytes):
@@ -277,10 +293,13 @@ class Connection(BaseConnection):
             assert content_or_file.seekable()
             content_or_file.seek(0)
             shutil.copyfileobj(content_or_file, f)
-        self.dirty_files[path] = f
+        self.dirty_files[path.relpath] = f
+
+    def io_file_new_open(self, path):  # noqa: ARG002
+        return SpooledTemporaryFile(max_size=1048576)
 
     def io_file_open(self, path):
-        dirty_file = self.dirty_files.get(path, absent)
+        dirty_file = self.dirty_files.get(path.relpath, absent)
         if dirty_file is None:
             raise IOError()
         if dirty_file is absent:
@@ -294,8 +313,8 @@ class Connection(BaseConnection):
         return f
 
     def io_file_get(self, path):
-        assert not os.path.isabs(path)
-        f = self.dirty_files.get(path, absent)
+        assert not os.path.isabs(path.relpath)
+        f = self.dirty_files.get(path.relpath, absent)
         if f is None:
             raise IOError()
         elif f is not absent:
@@ -305,14 +324,14 @@ class Connection(BaseConnection):
             f.seek(pos)
             return content
         q = "SELECT data FROM files WHERE path = ?"
-        content = self.fetchone(q, (path,))
+        content = self.fetchone(q, (path.relpath,))
         if content is None:
             raise IOError()
         return bytes(content[0])
 
     def io_file_size(self, path):
-        assert not os.path.isabs(path)
-        f = self.dirty_files.get(path, absent)
+        assert not os.path.isabs(path.relpath)
+        f = self.dirty_files.get(path.relpath, absent)
         if f is None:
             raise IOError()
         elif f is not absent:
@@ -321,16 +340,16 @@ class Connection(BaseConnection):
             f.seek(pos)
             return size
         q = "SELECT size FROM files WHERE path = ?"
-        result = self.fetchone(q, (path,))
+        result = self.fetchone(q, (path.relpath,))
         if result is not None:
             return result[0]
 
-    def io_file_delete(self, path):
-        assert not os.path.isabs(path)
-        f = self.dirty_files.pop(path, None)
+    def io_file_delete(self, path, *, is_last_of_hash):  # noqa: ARG002
+        assert not os.path.isabs(path.relpath)
+        f = self.dirty_files.pop(path.relpath, None)
         if f is not None:
             f.close()
-        self.dirty_files[path] = None
+        self.dirty_files[path.relpath] = None
 
     def _file_write(self, path, f):
         assert not os.path.isabs(path)
@@ -375,7 +394,7 @@ class Connection(BaseConnection):
 
 
 class BaseStorage(object):
-    def __init__(self, basedir, notify_on_commit, cache_size):
+    def __init__(self, basedir, *, notify_on_commit, cache_size, settings=None):  # noqa: ARG002
         self.basedir = basedir
         self.sqlpath = self.basedir / self.db_filename
         self._notify_on_commit = notify_on_commit
@@ -385,6 +404,11 @@ class BaseStorage(object):
         self._relpath_cache = LRUCache(relpath_cache_size)  # is thread safe
         self.last_commit_timestamp = time.time()
         self.ensure_tables_exist()
+
+    @classmethod
+    def exists(cls, basedir, settings):  # noqa: ARG003
+        sqlpath = basedir / cls.db_filename
+        return sqlpath.exists()
 
     def _get_sqlconn_uri_kw(self, uri):
         return sqlite3.connect(
@@ -449,7 +473,10 @@ class BaseStorage(object):
         else:
             return conn
 
-    def get_connection(self, closing=True, write=False, timeout=30):
+    def add_key(self, key):
+        pass
+
+    def get_connection(self, *, closing=True, write=False, timeout=30):
         # we let the database serialize all writers at connection time
         # to play it very safe (we don't have massive amounts of writes).
         mode = "ro"
@@ -518,6 +545,7 @@ class BaseStorage(object):
         assert not missing
 
 
+@implementer(IStorage)
 class Storage(BaseStorage):
     Connection = Connection
     db_filename = ".sqlite_db"
@@ -553,12 +581,18 @@ class Storage(BaseStorage):
 
 
 @hookimpl
-def devpiserver_storage_backend(settings):
-    return dict(
-        storage=Storage,
+def devpiserver_describe_storage_backend(settings):
+    return StorageInfo(
         name="sqlite_db_files",
         description="SQLite backend with files in DB for testing only",
-        hidden=True)
+        exists=Storage.exists,
+        hidden=True,
+        storage_cls=Storage,
+        connection_cls=Connection,
+        writer_cls=Writer,
+        storage_factory=Storage,
+        settings=settings,
+    )
 
 
 @hookimpl
@@ -609,10 +643,11 @@ def devpiserver_metrics(request):
     return result
 
 
-@implementer(IWriter2)
+@implementer(IWriter)
 class Writer:
-    def __init__(self, storage, conn):
+    def __init__(self, storage, conn, io_file):
         self.conn = conn
+        self.io_file = io_file
         self.storage = storage
         self.changes = {}
         self.rel_renames = []

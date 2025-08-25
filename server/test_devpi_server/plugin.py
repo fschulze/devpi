@@ -261,28 +261,24 @@ def storage_plugin(request):
 
 @pytest.fixture(scope="session")
 def storage_info(storage_plugin):
-    return storage_plugin.devpiserver_storage_backend(settings=None)
+    return storage_plugin.devpiserver_describe_storage_backend(settings={})
 
 
 @pytest.fixture(scope="session")
 def storage_args(storage_info):
     def storage_args(basedir):
         args = []
-        if storage_info["name"] != "sqlite":
-            storage_option = "--storage=%s" % storage_info["name"]
+        if storage_info.name != "sqlite":
+            storage_option = f"--storage={storage_info.name}"
             _get_test_storage_options = getattr(
-                storage_info["storage"], "_get_test_storage_options", None)
+                storage_info.storage_cls, "_get_test_storage_options", None
+            )
             if _get_test_storage_options:
                 storage_options = _get_test_storage_options(str(basedir))
                 storage_option = storage_option + storage_options
             args.append(storage_option)
         return args
     return storage_args
-
-
-@pytest.fixture(scope="session")
-def storage(storage_info):
-    return storage_info['storage']
 
 
 @pytest.fixture(scope="session")
@@ -324,12 +320,11 @@ def makexom(request, gen_path, http, monkeypatch, storage_args, storage_plugin):
         fullopts = [str(x) for x in fullopts]
         config = parseoptions(pm, fullopts)
         config.init_nodeinfo()
-        for marker in ("storage_with_filesystem",):
-            if request.node.get_closest_marker(marker):
-                info = config._storage_info()
-                markers = info.get("_test_markers", [])
-                if marker not in markers:
-                    pytest.skip("The storage doesn't have marker '%s'." % marker)
+        if (
+            request.node.get_closest_marker("storage_with_filesystem")
+            and not config.storage_info.storage_with_filesystem
+        ):
+            pytest.skip("The storage doesn't have marker 'storage_with_filesystem'.")
         if request.node.get_closest_marker("nomocking"):
             xom = XOM(config)
         else:

@@ -4,6 +4,7 @@ from .markers import Absent
 from .markers import Deleted
 from .readonly import ensure_deeply_readonly
 from attrs import define
+from attrs import field
 from attrs import frozen
 from typing import TYPE_CHECKING
 import contextlib
@@ -11,11 +12,16 @@ import re
 
 
 if TYPE_CHECKING:
+    from .interfaces import IStorage
+    from .interfaces import IStorageConnection
+    from .interfaces import IWriter
     from .readonly import DictViewReadonly
     from .readonly import ListViewReadonly
     from .readonly import SetViewReadonly
     from .readonly import TupleViewReadonly
+    from pathlib import Path
     from typing import Any
+    from typing import Callable
     from typing import Union
 
     KeyFSTypesRO = Union[
@@ -56,6 +62,25 @@ class RelpathInfo:
     serial: int
     back_serial: int
     value: Any
+
+
+@frozen
+class StorageInfo:
+    name: str = field(kw_only=True)
+    description: str = field(kw_only=True, default="")
+    exists: Callable[[Path, dict], bool] = field(kw_only=True)
+    hidden: bool = field(default=False, kw_only=True)
+    storage_cls: type[IStorage] = field(kw_only=True)
+    connection_cls: type[IStorageConnection] = field(kw_only=True)
+    writer_cls: type[IWriter] = field(kw_only=True)
+    storage_factory: Callable = field(kw_only=True)
+    settings: dict = field(kw_only=True, default={})
+
+    @property
+    def storage_with_filesystem(self):
+        from .interfaces import IDBIOFileConnection
+
+        return not IDBIOFileConnection.implementedBy(self.connection_cls)
 
 
 @define

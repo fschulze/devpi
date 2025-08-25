@@ -1,19 +1,19 @@
-import contextlib
-import pytest
-from devpi_server.mythread import ThreadPool
-
-from devpi_server.keyfs import KeyFS, Transaction
+from devpi_server.keyfs import KeyFS
+from devpi_server.keyfs import Transaction
 from devpi_server.keyfs_types import FilePathInfo
+from devpi_server.mythread import ThreadPool
 from devpi_server.readonly import is_deeply_readonly
 from functools import partial
+import contextlib
+import pytest
 
 
 notransaction = pytest.mark.notransaction
 
 
 @pytest.fixture
-def keyfs(gen_path, pool, storage, storage_io_file_factory):
-    keyfs = KeyFS(gen_path(), storage, io_file_factory=storage_io_file_factory)
+def keyfs(gen_path, pool, storage_info, storage_io_file_factory):
+    keyfs = KeyFS(gen_path(), storage_info, io_file_factory=storage_io_file_factory)
     pool.register(keyfs.notifier)
     return keyfs
 
@@ -51,9 +51,9 @@ class TestKeyFS:
             assert conn.last_changelog_serial == -1
 
     @notransaction
-    def test_keyfs_readonly(self, storage, storage_io_file_factory, tmpdir):
+    def test_keyfs_readonly(self, storage_info, storage_io_file_factory, tmpdir):
         keyfs = KeyFS(
-            tmpdir, storage, io_file_factory=storage_io_file_factory, readonly=True
+            tmpdir, storage_info, io_file_factory=storage_io_file_factory, readonly=True
         )
         with pytest.raises(keyfs.ReadOnly):
             with keyfs.write_transaction():
@@ -343,7 +343,7 @@ class TestTransactionIsolation:
             tx_1.delete(key)
 
     def test_serialized_writing(self, TimeoutQueue, keyfs, storage_info):
-        if "sqlite" not in storage_info["name"]:
+        if "sqlite" not in storage_info.name:
             pytest.skip("The test is only relevant for sqlite based storages.")
         import threading
         q1 = TimeoutQueue()
@@ -440,7 +440,7 @@ class TestTransactionIsolation:
             D.delete()
             assert not D.exists()
 
-    def test_import_changes(self, keyfs, storage, tmpdir):
+    def test_import_changes(self, keyfs, storage_info, tmpdir):
         D = keyfs.add_key("NAME", "hello", dict)
         with keyfs.write_transaction():
             D.set({1:1})
@@ -458,7 +458,7 @@ class TestTransactionIsolation:
 
         assert serial == 2
         # load entries into new keyfs instance
-        new_keyfs = KeyFS(tmpdir.join("newkeyfs"), storage)
+        new_keyfs = KeyFS(tmpdir.join("newkeyfs"), storage_info)
         D2 = new_keyfs.add_key("NAME", "hello", dict)
         for serial in range(3):
             with keyfs.read_transaction() as tx:
@@ -518,14 +518,14 @@ class TestTransactionIsolation:
                 assert len(keyfs._storage._changelog_cache) <= \
                        keyfs._storage.CHANGELOG_CACHE_SIZE + 1
 
-    def test_import_changes_subscriber(self, keyfs, storage, tmpdir):
+    def test_import_changes_subscriber(self, keyfs, storage_info, tmpdir):
         pkey = keyfs.add_key("NAME", "hello/{name}", dict)
         D = pkey(name="world")
         with keyfs.write_transaction():
             D.set({1:1})
         assert keyfs.get_current_serial() == 0
         # load entries into new keyfs instance
-        new_keyfs = KeyFS(tmpdir.join("newkeyfs"), storage)
+        new_keyfs = KeyFS(tmpdir.join("newkeyfs"), storage_info)
         pkey = new_keyfs.add_key("NAME", "hello/{name}", dict)
         l = []
         new_keyfs.subscribe_on_import(lambda *args: l.append(args))
@@ -537,7 +537,7 @@ class TestTransactionIsolation:
         assert changes == {new_keyfs.NAME(name="world"): ({1: 1}, -1)}
 
     def test_import_changes_subscriber_error(
-        self, keyfs, storage, storage_io_file_factory, tmpdir
+        self, keyfs, storage_info, storage_io_file_factory, tmpdir
     ):
         pkey = keyfs.add_key("NAME", "hello/{name}", dict)
         D = pkey(name="world")
@@ -545,7 +545,9 @@ class TestTransactionIsolation:
             D.set({1: 1})
         keyfs_serial = keyfs.get_current_serial()
         new_keyfs = KeyFS(
-            tmpdir.join("newkeyfs"), storage, io_file_factory=storage_io_file_factory
+            tmpdir.join("newkeyfs"),
+            storage_info,
+            io_file_factory=storage_io_file_factory,
         )
         pkey = new_keyfs.add_key("NAME", "hello/{name}", dict)
         new_keyfs.subscribe_on_import(lambda *args: 0 / 0)
@@ -563,14 +565,14 @@ class TestTransactionIsolation:
         with keyfs.read_transaction() as tx:
             assert tx.conn.get_raw_changelog_entry(10000) is None
 
-    def test_cache_interference(self, storage, storage_io_file_factory, tmpdir):
+    def test_cache_interference(self, storage_info, storage_io_file_factory, tmpdir):
         # because the transaction for the import subscriber was opened during
         # the transaction of the import itself and keys were fetched and placed
         # in the relpath cache, there was a value mismatch when a key from
         # the currently being written serial was places in the cache during
         # the import subscriber run
         keyfs1 = KeyFS(
-            tmpdir.join("keyfs1"), storage, io_file_factory=storage_io_file_factory
+            tmpdir.join("keyfs1"), storage_info, io_file_factory=storage_io_file_factory
         )
         pkey1 = keyfs1.add_key("NAME1", "hello1/{name}", dict)
         pkey2 = keyfs1.add_key("NAME2", "hello2/{name}", dict)
@@ -606,7 +608,7 @@ class TestTransactionIsolation:
         with keyfs1.get_connection() as conn1:
             changes1 = [conn1.get_changes(i) for i in range(serial1 + 1)]
         # create new keyfs
-        keyfs2 = KeyFS(tmpdir.join("newkeyfs"), storage)
+        keyfs2 = KeyFS(tmpdir.join("newkeyfs"), storage_info)
         pkey1 = keyfs2.add_key("NAME1", "hello1/{name}", dict)
         pkey2 = keyfs2.add_key("NAME2", "hello2/{name}", dict)
         D1 = pkey1(name="world1")
@@ -746,11 +748,11 @@ class TestSubscriber:
 
     @pytest.mark.xfail(reason="test monkeypatching wrong thing after refactoring")
     def test_persistent(
-        self, tmpdir, queue, monkeypatch, storage, storage_io_file_factory
+        self, tmpdir, queue, monkeypatch, storage_info, storage_io_file_factory
     ):
         @contextlib.contextmanager
         def make_keyfs():
-            keyfs = KeyFS(tmpdir, storage, io_file_factory=storage_io_file_factory)
+            keyfs = KeyFS(tmpdir, storage_info, io_file_factory=storage_io_file_factory)
             key1 = keyfs.add_key("NAME1", "hello", int)
             keyfs.notifier.on_key_change(key1, queue.put)
             pool = ThreadPool()
@@ -762,8 +764,9 @@ class TestSubscriber:
                 pool.kill()
 
         with make_keyfs() as key1:
-            monkeypatch.setattr(key1.keyfs._storage, "_notify_on_commit",
-                                lambda x: 0/0)
+            monkeypatch.setattr(
+                key1.keyfs._storage_info, "_notify_on_commit", lambda _x: 0 / 0
+            )
             # we prevent the hooks from getting called
             with pytest.raises(ZeroDivisionError):
                 with key1.keyfs.write_transaction():
@@ -823,9 +826,8 @@ class TestSubscriber:
         keyfs.wait_tx_serial(keyfs.get_current_serial())
 
     def test_wait_tx_async(self, keyfs, pool, queue):
-        from devpi_server.interfaces import IWriter2
+        from devpi_server.interfaces import IWriter
         from devpi_server.keyfs_types import Record
-
         # start a thread which waits for the next serial
         key = keyfs.add_key("NAME", "hello", int)
         wait_serial = keyfs.get_next_serial()
@@ -839,10 +841,12 @@ class TestSubscriber:
         pool.start()
 
         # directly modify the database without keyfs-transaction machinery
-        with keyfs._storage.get_connection(write=True) as conn:
-            with conn.write_transaction() as _wtx:
-                wtx = IWriter2(_wtx)
-                wtx.records_set([Record(key, 1, -1, None)])
+        with contextlib.ExitStack() as cstack:
+            conn = cstack.enter_context(keyfs._storage.get_connection(write=True))
+            io_file = cstack.enter_context(keyfs.io_file_factory(conn))
+            _wtx = cstack.enter_context(conn.write_transaction(io_file))
+            wtx = IWriter(_wtx)
+            wtx.records_set([Record(key, 1, -1, None)])
 
         # check wait_tx_serial() call from the thread returned True
         assert queue.get() is True
@@ -893,7 +897,8 @@ class TestSubscriber:
 def test_crash_recovery(file_digest, keyfs, storage_info):
     from devpi_server.fileutil import loads
     from pathlib import Path
-    if "storage_with_filesystem" not in storage_info.get("_test_markers", []):
+
+    if not storage_info.storage_with_filesystem:
         pytest.skip("The storage doesn't have marker 'storage_with_filesystem'.")
     content = b'foo'
     content_hash = file_digest(content)
@@ -941,8 +946,12 @@ def test_keyfs_sqlite(file_digest, gen_path, sorted_serverdir):
     from devpi_server.filestore_db import DBIOFile
 
     tmp = gen_path()
-    storage = keyfs_sqlite.Storage
-    keyfs = KeyFS(tmp, storage, io_file_factory=DBIOFile)
+
+    class StorageInfo:
+        storage_factory = keyfs_sqlite.Storage
+        settings = None
+
+    keyfs = KeyFS(tmp, StorageInfo(), io_file_factory=DBIOFile)
     content = b"bar"
     file_path_info = FilePathInfo("foo", file_digest(content))
     with keyfs.write_transaction() as tx:
@@ -960,9 +969,13 @@ def test_keyfs_sqlite_fs(file_digest, gen_path, sorted_serverdir):
     from devpi_server.filestore_fs import FSIOFile
 
     tmp = gen_path()
-    storage = keyfs_sqlite_fs.Storage
+
+    class StorageInfo:
+        storage_factory = keyfs_sqlite_fs.Storage
+        settings = None
+
     io_file_factory = partial(FSIOFile, settings={})
-    keyfs = KeyFS(tmp, storage, io_file_factory=io_file_factory)
+    keyfs = KeyFS(tmp, StorageInfo(), io_file_factory=io_file_factory)
     content = b"bar"
     file_path_info = FilePathInfo("foo", file_digest(content))
     with keyfs.write_transaction() as tx:
