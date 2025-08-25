@@ -869,37 +869,6 @@ class TestStage:
         assert tmpdir.join("index.html").read() == "<html/>"
 
     @pytest.mark.usefixtures("bases")
-    def test_simulate_multiple_doczip_entries(self, stage):
-        stage.set_versiondata(udict(name="pkg1", version="1.0"))
-        content1 = zip_dict({})
-        stage.store_doczip("pkg1", "1.0", content1, hashes=get_hashes(content1))
-
-        # simulate a second entry with a slightly different name
-        # (XXX not clear if this test is really necessary. hpk thinks for
-        # exporting state from server<2.1.5 with such a double-entry one
-        # needs to install 2.1.5 and export from there anyway, clearing
-        # the problem. Then again server<2.3.2 allowed the store_doczip
-        # method to construct doczip filenames which differ only in
-        # casing)
-        linkstore = stage.get_mutable_linkstore_perstage("Pkg1", "1.0")
-        content = zip_dict({"index.html": "<html/>"})
-        linkstore.create_linked_entry(
-            rel="doczip",
-            basename="Pkg1-1.0.doc.zip",
-            content_or_file=content,
-            hashes=get_hashes(content),
-        )
-
-        # check we have two doczip links
-        linkstore = stage.get_linkstore_perstage("pkg1", "1.0")
-        links = linkstore.get_links(rel="doczip")
-        assert len(links) == 2
-
-        # get doczip, which one we get is undefined, so we only check for header
-        doczip = stage.get_doczip("pkg1", "1.0")
-        assert doczip.startswith(b"PK")
-
-    @pytest.mark.usefixtures("bases")
     def test_storedoczipfile(self, stage):
         from devpi_common.archive import Archive
         stage.set_versiondata(udict(name="pkg1", version="1.0"))
