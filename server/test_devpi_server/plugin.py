@@ -22,6 +22,7 @@ from devpi_server import mirror
 from devpi_server.config import get_pluginmanager
 from devpi_server.main import XOM, parseoptions
 from devpi_common.validation import normalize_name
+from devpi_common.terminal import TerminalWriter
 from devpi_common.url import URL
 from devpi_server.log import threadlog, thread_clear_log
 from io import BytesIO
@@ -1714,7 +1715,7 @@ def tox_result_data(request):
 
 @pytest.fixture
 def terminalwriter():
-    return py.io.TerminalWriter()
+    return TerminalWriter()
 
 
 @pytest.fixture(autouse=True, scope="session")
