@@ -1272,15 +1272,14 @@ class TestStage:
         with xom.keyfs.write_transaction() as tx:
             # no change in db yet
             assert tx.at_serial == (first_serial + 1)
-            with stage.key_projects.update() as projects:
-                projects.remove('pkg')
+            stage.key_projectname("pkg").delete()
             assert stage.list_projects_perstage() == set()
         with xom.keyfs.read_transaction() as tx:
             # the deletion of the project name updated the db
             assert tx.at_serial == (first_serial + 2)
-            # and we can't know when it happened, checking all changes in the
-            # project name set would be too expensive
-            assert stage.get_last_project_change_serial_perstage('pkg') == -1
+            assert stage.get_last_project_change_serial_perstage("pkg") == (
+                first_serial + 2
+            )
         with xom.keyfs.write_transaction() as tx:
             # no change in db yet
             assert tx.at_serial == (first_serial + 2)
@@ -1290,6 +1289,8 @@ class TestStage:
         with xom.keyfs.read_transaction() as tx:
             # the addition of the version updated the db
             assert tx.at_serial == (first_serial + 3)
+            assert stage.list_projects_perstage() == {"pkg"}
+            assert stage.list_versions_perstage("pkg") == {"1.0"}
             assert stage.get_last_project_change_serial_perstage('pkg') == (first_serial + 3)
         with xom.keyfs.write_transaction() as tx:
             # no change in db yet
