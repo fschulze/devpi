@@ -10,6 +10,7 @@ from .fileutil import dumps
 from .fileutil import load
 from .fileutil import loads
 from .keyfs_types import KeyData
+from .keyfs_types import ULID
 from .log import thread_push_log
 from .log import threadlog
 from .main import Fatal
@@ -600,10 +601,11 @@ class ReplicaThread:
         return self.fetch(self.handler_multi, url)
 
     def iter_changes(self, serial, changes):
-        for keyname, relpath, back_serial, val in changes:
+        for keyname, relpath, ulid, back_serial, val in changes:
             yield KeyData(
                 relpath=relpath,
                 keyname=keyname,
+                ulid=ULID(ulid),
                 serial=serial,
                 back_serial=back_serial,
                 value=deleted if val is None else val,

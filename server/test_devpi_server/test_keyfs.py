@@ -113,9 +113,11 @@ class TestKeyFS:
         with keyfs.read_transaction() as tx:
             assert tx.at_serial == 1
             assert tx.get(key) == {'bar'}
+            ulid = tx.get_ulid(key)
         with keyfs.read_transaction(at_serial=0) as tx:
             assert tx.at_serial == 0
             assert tx.get(key) == {'bar', 'egg'}
+            assert tx.get_ulid(key) == ulid
 
     @notransaction
     def test_double_set(self, keyfs):
@@ -133,6 +135,18 @@ class TestKeyFS:
             assert tx.get(key) == {u'foo': u'bar', u'ham': u'egg'}
 
     @notransaction
+    def test_multi_set_same_transaction(self, keyfs):
+        key = keyfs.register_located_key("NAME", "", "somekey", dict)
+        with keyfs.write_transaction() as tx:
+            tx.set(key, {"foo": "bar", "ham": "egg"})
+            # set different value
+            tx.set(key, {})
+            # set to same value again in same transaction
+            tx.set(key, {"foo": "bar", "ham": "egg"})
+        with keyfs.read_transaction() as tx:
+            assert tx.get(key) == {"foo": "bar", "ham": "egg"}
+
+    @notransaction
     @pytest.mark.parametrize("before,after", [
         ({u'a': 1}, {u'b': 2}),
         (set([3]), set([4])),
@@ -141,9 +155,26 @@ class TestKeyFS:
         key = keyfs.register_located_key("NAME", "", "somekey", type(before))
         with keyfs.write_transaction() as tx:
             tx.set(key, before)
+            ulid = tx.get_ulid(key)
         with keyfs.write_transaction() as tx:
             tx.delete(key)
         with keyfs.write_transaction() as tx:
+            tx.set(key, after)
+            assert tx.get_ulid(key) != ulid
+        with keyfs.read_transaction() as tx:
+            assert tx.get(key) == after
+            assert tx.get_ulid(key) != ulid
+
+    @notransaction
+    @pytest.mark.parametrize(
+        ("before", "after"), [({"a": 1}, {"b": 2}), ({3}, {4}), (5, 6)]
+    )
+    def test_delete_and_readd_same_transaction(self, keyfs, before, after):
+        key = keyfs.register_located_key("NAME", "", "somekey", type(before))
+        with keyfs.write_transaction() as tx:
+            tx.set(key, before)
+        with keyfs.write_transaction() as tx:
+            tx.delete(key)
             tx.set(key, after)
         with keyfs.read_transaction() as tx:
             assert tx.get(key) == after
@@ -152,10 +183,10 @@ class TestKeyFS:
     def test_not_exists_cached(self, keyfs, monkeypatch):
         key = keyfs.register_located_key("NAME", "", "somekey", dict)
         with keyfs.read_transaction() as tx:
-            assert key not in tx.cache
+            assert key not in tx._dirty
             assert key not in tx._original
             assert not tx.exists(key)
-            assert key not in tx.cache
+            assert key not in tx._dirty
             assert key in tx._original
             # make get_value_at fail if it is called
             monkeypatch.setattr(tx, "get_value_at", lambda k, s: 0 / 0)
@@ -406,13 +437,14 @@ class TestTransactionIsolation:
         tx_1 = Transaction(keyfs, write=True)
         tx_2 = Transaction(keyfs)
         ser = tx_1.conn.last_changelog_serial + 1
-        tx_1.set(D, {1:1})
+        tx_1.set(D, {1: 1})
         tx1_serial = tx_1.commit()
         assert tx1_serial == ser
         assert tx_2.at_serial == ser - 1
         with keyfs._storage.get_connection() as conn:
             assert conn.last_changelog_serial == ser
-        assert D not in tx_2.cache and D not in tx_2.dirty
+        assert D not in tx_2._dirty
+        assert D not in tx_2._dirty
         assert tx_2.get(D) == {}
 
     def test_concurrent_tx_sees_original_value_on_delete(self, keyfs):
@@ -839,6 +871,7 @@ class TestSubscriber:
     def test_wait_tx_async(self, keyfs, pool, queue):
         from devpi_server.interfaces import IWriter
         from devpi_server.keyfs_types import Record
+        from devpi_server.keyfs_types import ULID
         from devpi_server.markers import absent
 
         # start a thread which waits for the next serial
@@ -859,7 +892,7 @@ class TestSubscriber:
             io_file = cstack.enter_context(keyfs.io_file_factory(conn))
             _wtx = cstack.enter_context(conn.write_transaction(io_file))
             wtx = IWriter(_wtx)
-            wtx.records_set([Record(key, 1, -1, absent)])
+            wtx.records_set([Record(key, ULID.new(), 1, -1, None, absent)])
 
         # check wait_tx_serial() call from the thread returned True
         assert queue.get() is True
