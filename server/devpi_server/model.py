@@ -34,6 +34,9 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .keyfs import KeyChangeEvent
+    from collections.abc import Sequence
+    from typing import Any
+    from typing import Literal
 
 
 if TYPE_CHECKING:
@@ -529,12 +532,17 @@ class BaseStageCustomizer:
 
     def get_principals_for_index_delete(self, restrict_modify=None):
         if restrict_modify is None:
-            modify_principals = set(['root', self.stage.username])
+            modify_principals = {"root", self.stage.username}
         else:
             modify_principals = restrict_modify
         return modify_principals
 
-    get_principals_for_index_modify = get_principals_for_index_delete
+    def get_principals_for_index_modify(self, restrict_modify=None):
+        if restrict_modify is None:
+            modify_principals = {"root", self.stage.username}
+        else:
+            modify_principals = restrict_modify
+        return modify_principals
 
     def get_principals_for_del_entry(self, restrict_modify=None):
         modify_principals = set(self.stage.ixconfig.get("acl_upload", []))
@@ -544,8 +552,21 @@ class BaseStageCustomizer:
             modify_principals.update(restrict_modify)
         return modify_principals
 
-    get_principals_for_del_project = get_principals_for_del_entry
-    get_principals_for_del_verdata = get_principals_for_del_entry
+    def get_principals_for_del_project(self, restrict_modify=None):
+        modify_principals = set(self.stage.ixconfig.get("acl_upload", []))
+        if restrict_modify is None:
+            modify_principals.update(["root", self.stage.username])
+        else:
+            modify_principals.update(restrict_modify)
+        return modify_principals
+
+    def get_principals_for_del_verdata(self, restrict_modify=None):
+        modify_principals = set(self.stage.ixconfig.get("acl_upload", []))
+        if restrict_modify is None:
+            modify_principals.update(["root", self.stage.username])
+        else:
+            modify_principals.update(restrict_modify)
+        return modify_principals
 
     def get_possible_indexconfig_keys(self):
         """ Returns all possible custom index config keys.
@@ -612,14 +633,23 @@ class UnknownCustomizer(BaseStageCustomizer):
     readonly = True
 
     # prevent uploads and deletions besides complete index removal
-    def get_principals_for_index_modify(self, restrict_modify=None):
+    def get_principals_for_index_modify(self, restrict_modify=None):  # noqa: ARG002
         return []
 
-    get_principals_for_upload = get_principals_for_index_modify
-    get_principals_for_toxresult_upload = get_principals_for_index_modify
-    get_principals_for_del_entry = get_principals_for_index_modify
-    get_principals_for_del_project = get_principals_for_index_modify
-    get_principals_for_del_verdata = get_principals_for_index_modify
+    def get_principals_for_upload(self, restrict_modify=None):  # noqa: ARG002
+        return []
+
+    def get_principals_for_toxresult_upload(self, restrict_modify=None):  # noqa: ARG002
+        return []
+
+    def get_principals_for_del_entry(self, restrict_modify=None):  # noqa: ARG002
+        return []
+
+    def get_principals_for_del_project(self, restrict_modify=None):  # noqa: ARG002
+        return []
+
+    def get_principals_for_del_verdata(self, restrict_modify=None):  # noqa: ARG002
+        return []
 
 
 @total_ordering
@@ -628,7 +658,7 @@ class SimpleLinks:
     _links: list
     stale: bool
 
-    def __init__(self, links, stale=False):
+    def __init__(self, links: SimpleLinks | list, *, stale: bool = False) -> None:
         assert links is not None
         if isinstance(links, SimpleLinks):
             self._links = links._links
@@ -979,14 +1009,14 @@ class BaseStage:
             all_links.sort(reverse=True)
         return all_links
 
-    def get_whitelist_inheritance(self):
+    def get_whitelist_inheritance(self) -> str:
         return self.ixconfig.get("mirror_whitelist_inheritance", "union")
 
     def get_mirror_whitelist_info(self, project):
         project = ensure_unicode(project)
         private_hit = whitelisted = False
         whitelist_inheritance = self.get_whitelist_inheritance()
-        whitelist = None
+        whitelist: set | None = None
         for stage in self.sro():
             if stage.ixconfig["type"] == "mirror":
                 if private_hit and not whitelisted:
@@ -1101,8 +1131,8 @@ class BaseStage:
         private_hit: BaseStage | bool = whitelisted
         # the default value if the setting is missing is the old behaviour,
         # so existing indexes work as before
-        whitelist_inheritance = self.get_whitelist_inheritance()
-        whitelist = None
+        whitelist_inheritance: str = self.get_whitelist_inheritance()
+        whitelist: set | None = None
         for stage in self.sro():
             if stage.ixconfig["type"] == "mirror":
                 if private_hit:

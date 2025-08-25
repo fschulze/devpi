@@ -206,7 +206,7 @@ def devpiserver_get_mirror_auth(mirror_url, www_authenticate_header):
 
 
 @hookspec
-def devpiserver_get_stage_customizer_classes():
+def devpiserver_get_stage_customizer_classes() -> tuple[str, type]:  # type:ignore[empty-body]
     """EXPERIMENTAL!
 
     Returns a list of tuples of index type and customization class.
