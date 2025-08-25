@@ -133,11 +133,6 @@ class TestConfig:
         with pytest.raises(Fatal, match="folder of the given secret file is world writable"):
             config.basesecret  # noqa: B018
 
-    def test_devpi_serverdir_env(self, tmpdir, monkeypatch):
-        monkeypatch.setenv("DEVPI_SERVERDIR", tmpdir.strpath)
-        config = make_config(["devpi-server"])
-        assert config.server_path == tmpdir
-
     def test_devpiserver_serverdir_env(self, tmpdir, monkeypatch):
         monkeypatch.setenv("DEVPISERVER_SERVERDIR", tmpdir.strpath)
         config = make_config(["devpi-server"])
@@ -206,48 +201,6 @@ class TestConfig:
                              "--serverdir", str(tmpdir)])
         with pytest.raises(Fatal, match="need to specify --primary-url"):
             config.init_nodeinfo()
-
-    def test_get_master_uuid(self, tmpdir):
-        config = make_config([
-            "devpi-server", "--primary-url=xyz", "--role=replica",
-            "--serverdir", str(tmpdir)])
-        config.init_nodeinfo()
-        with pytest.deprecated_call():
-            config.get_master_uuid()
-
-    def test_get_primary_uuid_master_uuid(self, tmpdir):
-        config = make_config([
-            "devpi-server", "--primary-url=xyz", "--role=replica",
-            "--serverdir", str(tmpdir)])
-        config.init_nodeinfo()
-        config.nodeinfo['master-uuid'] = 'foo'
-        with pytest.deprecated_call():
-            assert config.get_primary_uuid() == 'foo'
-
-    def test_master_url(self, caplog, tmpdir):
-        import logging
-        config = make_config([
-            "devpi-server", "--master-url=xyz", "--role=replica",
-            "--serverdir", str(tmpdir)])
-        with pytest.deprecated_call():
-            # triggered by the use of --master-url
-            assert config.primary_url.url == "xyz"
-        (record,) = caplog.getrecords('--master-url')
-        assert "--master-url option is deprecated" in record.message
-        assert record.levelno == logging.WARNING
-        caplog.clear()
-        config = make_config(
-            [
-                "devpi-server",
-                "--primary-url=http://localhost",
-                "--role=replica",
-                "--serverdir",
-                str(tmpdir),
-            ]
-        )
-        with pytest.deprecated_call():
-            assert config.master_url.url == "http://localhost"
-        assert caplog.getrecords('--master-url') == []
 
     def test_uuid(self, tmpdir):
         config = make_config(["devpi-server", "--serverdir", str(tmpdir)])

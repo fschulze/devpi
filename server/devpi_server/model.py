@@ -5,12 +5,11 @@ import getpass
 import posixpath
 import re
 import json
-import warnings
 from devpi_common.metadata import get_latest_version
 from devpi_common.metadata import splitbasename, parse_version
 from devpi_common.url import URL
 from devpi_common.validation import validate_metadata
-from devpi_common.types import ensure_unicode, cached_property, parse_hash_spec
+from devpi_common.types import ensure_unicode, cached_property
 from functools import total_ordering
 from itertools import zip_longest
 from pyramid.authorization import Allow, Authenticated, Everyone
@@ -20,7 +19,6 @@ from .compat import StrEnum
 from .config import hookimpl
 from .filestore import Digests
 from .filestore import FileEntry
-from .filestore import get_hash_spec
 from .log import threadlog
 from .markers import unknown
 from .normalized import normalize_name
@@ -826,21 +824,8 @@ class BaseStage(object):
             link_meta.version,
         )
 
-    def get_linkstore_perstage(self, name, version, readonly=None):
-        if readonly is None:
-            readonly = True
-        else:
-            warnings.warn(
-                "The 'readonly' argument is deprecated. "
-                "Use 'get_mutable_linkstore_perstage' instead.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-        if self.customizer.readonly and not readonly:
-            threadlog.warn("index is marked read only")
-        if readonly:
-            return LinkStore(self, name, version)
-        return MutableLinkStore(self, name, version)
+    def get_linkstore_perstage(self, name, version):
+        return LinkStore(self, name, version)
 
     def get_mutable_linkstore_perstage(self, name, version):
         if self.customizer.readonly:
@@ -1176,17 +1161,6 @@ class BaseStage(object):
         for permission in permissions:
             method_name = 'get_principals_for_%s' % permission
             method = getattr(self.customizer, method_name, None)
-            if not callable(method) and permission == 'upload':
-                method = getattr(
-                    self.customizer, 'get_principals_for_pypi_submit', None)
-                if callable(method):
-                    warnings.warn(
-                        "The 'get_principals_for_pypi_submit' method is deprecated, "
-                        "you should use 'get_principals_for_upload'. "
-                        "If you want to support older devpi-server versions, add an alias.",
-                        DeprecationWarning,
-                        stacklevel=1,
-                    )
             if not callable(method):
                 msg = f"The attribute {method_name} with value {method!r} of {self.customizer!r} is not callable."
                 raise AttributeError(msg)  # noqa: TRY004
@@ -1265,8 +1239,6 @@ class PrivateStage(BaseStage):
     def __init__(self, xom, username, index, ixconfig, customizer_cls):
         super().__init__(xom, username, index, ixconfig, customizer_cls)
         self.key_projects = self.keyfs.PROJNAMES(user=username, index=index)
-        self.httpget = xom.httpget
-        self.async_httpget = xom.async_httpget
         self.http = xom.http
 
     def get_possible_indexconfig_keys(self):
@@ -1444,21 +1416,9 @@ class PrivateStage(BaseStage):
         (version_serial, version) = info
         return max(last_serial, version_serial)
 
-    def get_versiondata_perstage(self, project, version, readonly=None):
-        if readonly is None:
-            readonly = True
-        else:
-            warnings.warn(
-                "The 'readonly' argument is deprecated. "
-                "Use the 'get_mutable_deepcopy' function on the result instead.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
+    def get_versiondata_perstage(self, project, version):
         project = normalize_name(project)
-        result = self.key_projversion(project, version).get()
-        if not readonly:
-            return get_mutable_deepcopy(result)
-        return result
+        return self.key_projversion(project, version).get()
 
     def get_simplelinks_perstage(self, project):
         data = self.key_projsimplelinks(project).get()
@@ -1609,15 +1569,6 @@ class PrivateStage(BaseStage):
             break
         return last_serial
 
-    # BBB old name for backward compatibility, remove with 6.0.0
-    def get_last_change_serial(self, at_serial=None):
-        warnings.warn(
-            "The get_last_change_serial method is deprecated, "
-            "use get_last_change_serial_perstage instead",
-            DeprecationWarning,
-            stacklevel=2)
-        return self.get_last_change_serial_perstage(at_serial=at_serial)
-
 
 class StageCustomizer(BaseStageCustomizer):
     pass
@@ -1690,33 +1641,6 @@ class ELink:
         return Digests() if self._hashes is None else Digests(self._hashes)
 
     @property
-    def hash_spec(self):
-        warnings.warn(
-            "The hash_spec property is deprecated, "
-            "use best_available_hash_spec instead",
-            DeprecationWarning,
-            stacklevel=2)
-        return self.hashes.best_available_spec
-
-    @property
-    def hash_value(self):
-        warnings.warn(
-            "The hash_value property is deprecated, "
-            "use best_available_hash_value instead",
-            DeprecationWarning,
-            stacklevel=2)
-        return self.hashes.best_available_value
-
-    @property
-    def hash_type(self):
-        warnings.warn(
-            "The hash_type property is deprecated, "
-            "use best_available_hash_type instead",
-            DeprecationWarning,
-            stacklevel=2)
-        return self.hashes.best_available_type
-
-    @property
     def basename(self):
         _basename = getattr(self, "_basename", None)
         if _basename is None:
@@ -1730,21 +1654,6 @@ class ELink:
         if hash_spec:
             return f"{entrypath}#{hash_spec}"
         return entrypath
-
-    def matches_checksum(self, content_or_file):
-        warnings.warn(
-            "The 'matches_checksum' method is deprecated. "
-            "Use 'matches_hashes' instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        hash_algo, hash_value = parse_hash_spec(self.best_available_hash_spec)
-        if not hash_algo:
-            return True
-        return (
-            get_hash_spec(content_or_file, hash_algo().name)
-            == self.best_available_hash_spec
-        )
 
     def matches_hashes(self, hashes):
         return self.hashes == hashes
@@ -1985,22 +1894,6 @@ class SimplelinkMeta:
         if isinstance(other, type(self)):
             other = other.cmpval
         return self.cmpval < other
-
-    def __getitem__(self, index):
-        warnings.warn(
-            "Item access for SimplelinkMeta is deprecated, "
-            "use attributes instead.",
-            DeprecationWarning,
-            stacklevel=2)
-        if index == 0:  # noqa: SIM116
-            return self.key
-        elif index == 1:
-            return self.href
-        elif index == 2:
-            return self.require_python
-        elif index == 3:
-            return self.yanked
-        raise IndexError(f"{self.__class__.__name__} index out of range")
 
     def __splitbasename(self):
         (self.__name, self.__version, self.__ext) = splitbasename(

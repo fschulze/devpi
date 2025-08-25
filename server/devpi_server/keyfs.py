@@ -8,42 +8,32 @@ independent from any future changes.
 """
 from __future__ import annotations
 
-import contextlib
 from . import mythread
+from .filestore import FileEntry
+from .fileutil import read_int_from_file
+from .fileutil import write_int_to_file
 from .interfaces import IStorageConnection4
 from .interfaces import IWriter2
 from .keyfs_types import PTypedKey
 from .keyfs_types import Record
 from .keyfs_types import TypedKey
-from .log import threadlog, thread_push_log, thread_pop_log
 from .log import thread_change_log_prefix
-from .markers import absent, deleted
+from .log import thread_pop_log
+from .log import thread_push_log
+from .log import threadlog
+from .markers import absent
+from .markers import deleted
 from .model import RootModel
 from .readonly import ensure_deeply_readonly
 from .readonly import get_mutable_deepcopy
 from .readonly import is_deeply_readonly
-from .filestore import FileEntry
-from .fileutil import read_int_from_file, write_int_to_file
 from devpi_common.types import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING
 from typing import overload
+import contextlib
 import errno
 import time
-import warnings
-
-
-def __getattr__(name):
-    if name == 'RelpathInfo':
-        from .keyfs_types import RelpathInfo
-        warnings.warn(
-            'Importing RelpathInfo from devpi_server.keyfs is deprecated. '
-            'Import from devpi_server.keyfs_types instead.',
-            DeprecationWarning,
-            stacklevel=2)
-        return RelpathInfo
-    msg = f"module {__name__!r} has no attribute {name!r}"
-    raise AttributeError(msg)
 
 
 if TYPE_CHECKING:
@@ -530,16 +520,6 @@ class KeyFS(object):
                 yield tx
 
     @contextlib.contextmanager
-    def transaction(self, write=False, at_serial=None):
-        warnings.warn(
-            "The 'transaction' method is deprecated, "
-            "use 'read_transaction' or 'write_transaction' instead.",
-            DeprecationWarning,
-            stacklevel=3)
-        with self._transaction(write=write, at_serial=at_serial) as tx:
-            yield tx
-
-    @contextlib.contextmanager
     def write_transaction(self, *, allow_restart=False):
         """ Get a write transaction.
 
@@ -826,21 +806,9 @@ class Transaction:
             val = typedkey.type()
         return val
 
-    def get(self, typedkey, *, readonly=None):
+    def get(self, typedkey):
         """Return current read-only value referenced by typedkey."""
-        if readonly is None:
-            readonly = True
-        else:
-            warnings.warn(
-                "The 'readonly' argument is deprecated. You should either drop it, "
-                "use the 'get_mutable' method "
-                "or wrap the result in the 'get_mutable_deepcopy' function.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-        if readonly:
-            return ensure_deeply_readonly(self._get(typedkey))
-        return get_mutable_deepcopy(self._get(typedkey))
+        return ensure_deeply_readonly(self._get(typedkey))
 
     def get_mutable(self, typedkey):
         """Return current mutable value referenced by typedkey."""

@@ -34,7 +34,6 @@ import json
 import re
 import threading
 import time
-import warnings
 import weakref
 
 
@@ -303,59 +302,6 @@ class MirrorStage(BaseStage):
         return HTTPClient(
             self.xom.http, get_extra_headers, self._update_auth_candidates
         )
-
-    def _get_extra_headers(self, extra_headers):
-        # make a copy of extra_headers
-        extra_headers = {} if extra_headers is None else dict(extra_headers)
-        if self.xom.is_replica():
-            (uuid, primary_uuid) = self.xom.config.nodeinfo.make_uuid_headers()
-            rt = self.xom.replica_thread
-            token = rt.auth_serializer.dumps(uuid)
-            extra_headers[rt.H_REPLICA_UUID] = uuid
-            extra_headers['Authorization'] = 'Bearer %s' % token
-        else:
-            auth = self.mirror_url_authorization_header
-            if auth:
-                extra_headers["Authorization"] = auth
-        return extra_headers
-
-    async def async_httpget(self, url, allow_redirects, timeout=None, extra_headers=None):
-        warnings.warn(
-            "The async_httpget method is deprecated, use http.async_get instead",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        extra_headers = self._get_extra_headers(extra_headers)
-        response, text = await self.xom.async_httpget(
-            url=URL(url).url, allow_redirects=allow_redirects, timeout=timeout,
-            extra_headers=extra_headers)
-        # if we get an auth problem, see if we can try an alternative credential
-        # to access the resource
-        if response.status_code in (401, 403) and self._update_auth_candidates(
-            response.headers.get("WWW-Authenticate", ""),
-        ):
-            return await self.async_httpget(
-                url, allow_redirects, timeout, extra_headers)
-        return response, text
-
-    def httpget(self, url, allow_redirects, timeout=None, extra_headers=None):
-        warnings.warn(
-            "The httpget method is deprecated, use http.get instead",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        extra_headers = self._get_extra_headers(extra_headers)
-        response = self.xom.httpget(
-            url=URL(url).url, allow_redirects=allow_redirects, timeout=timeout,
-            extra_headers=extra_headers)
-        # if we get an auth problem, see if we can try an alternative credential
-        # to access the resource
-        if response.status_code in (401, 403) and self._update_auth_candidates(
-            response.headers.get("WWW-Authenticate", ""),
-        ):
-            return self.httpget(
-                url, allow_redirects, timeout, extra_headers)
-        return response
 
     def _update_auth_candidates(self, auth_header):
         # if we have any auth candidates, the first one has just failed, so
@@ -1020,19 +966,10 @@ class MirrorStage(BaseStage):
         (last_serial, links) = info
         return last_serial
 
-    def get_versiondata_perstage(self, project, version, readonly=None):
+    def get_versiondata_perstage(self, project, version):
         # we do not use normalize_name name here, so the returned data
         # contains whatever this method was called with, which is hopefully
         # the title from the project list
-        if readonly is None:
-            readonly = True
-        else:
-            warnings.warn(
-                "The 'readonly' argument is deprecated. "
-                "Use the 'get_mutable_deepcopy' function on the result instead.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
         verdata: dict[str, Any] = {}
         for sm in self.get_simplelinks_perstage(project):
             link_version = sm.version
@@ -1048,9 +985,7 @@ class MirrorStage(BaseStage):
                 elinks.append(
                     dict(rel=Rel.ReleaseFile, entrypath=sm.path, hashes=sm.hashes)
                 )
-        if readonly:
-            return ensure_deeply_readonly(verdata)
-        return verdata
+        return ensure_deeply_readonly(verdata)
 
 
 class MirrorCustomizer(BaseStageCustomizer):
