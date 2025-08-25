@@ -22,28 +22,6 @@ def test_gen_path_unique(gen_path):
     assert s1.parent == s2.parent
 
 
-def test_gentmp_suffix_raises(gentmp):
-    import py
-    t = gentmp("source")
-    assert not t.listdir()
-    pytest.raises(py.error.EEXIST, lambda: gentmp("source"))
-
-
-def test_gentmp_suffix(gentmp):
-    source = gentmp("source")
-    dest = gentmp("dest")
-    assert source.dirpath() == dest.dirpath()
-    assert source.basename.startswith("source")
-    assert dest.basename.startswith("dest")
-
-
-def test_gentmp_unique(gentmp):
-    s1 = gentmp()
-    s2 = gentmp()
-    assert s1 != s2
-    assert s1.dirpath() == s2.dirpath()
-
-
 def test_makexom(makexom, maketestapp):
     xom1 = makexom()
     xom2 = makexom()
