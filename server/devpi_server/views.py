@@ -1026,7 +1026,7 @@ class PyPIView:
             abort(request, 403, "package read forbidden")
 
         targetindex = pushdata.pop("targetindex", None)
-        metadata = linkstore.metadata
+        metadata = get_mutable_deepcopy(linkstore.metadata)
         if targetindex is None:
             return self._push_external(name, version, links, metadata, pushdata)
         if pushdata:

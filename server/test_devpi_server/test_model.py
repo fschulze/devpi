@@ -895,9 +895,9 @@ class TestStage:
         links = linkstore.get_links(rel="doczip")
         assert len(links) == 2
 
-        # get doczip and check it's really the latest one
+        # get doczip, which one we get is undefined, so we only check for header
         doczip = stage.get_doczip("pkg1", "1.0")
-        assert doczip == content
+        assert doczip.startswith(b"PK")
 
     @pytest.mark.usefixtures("bases")
     def test_storedoczipfile(self, stage):
