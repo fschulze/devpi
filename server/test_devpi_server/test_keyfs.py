@@ -609,9 +609,9 @@ class TestTransactionIsolation:
         assert new_keyfs.get_current_serial() > serial
         assert new_keyfs.get_current_serial() == keyfs_serial
 
-    def test_get_raw_changelog_entry_not_exist(self, keyfs):
+    def test_iter_serializable_changes_not_exist(self, keyfs):
         with keyfs.read_transaction() as tx:
-            assert tx.conn.get_raw_changelog_entry(10000) is None
+            assert next(tx.conn.iter_serializable_changes(10000), None) is None
 
     def test_cache_interference(self, storage_info, storage_io_file_factory, tmpdir):
         # because the transaction for the import subscriber was opened during
@@ -985,7 +985,6 @@ def test_file_rollback(file_digest, keyfs, monkeypatch, storage_info):
 
 @notransaction
 def test_crash_recovery(file_digest, keyfs, storage_info):
-    from devpi_server.fileutil import loads
     from pathlib import Path
 
     if not storage_info.storage_with_filesystem:
@@ -996,9 +995,7 @@ def test_crash_recovery(file_digest, keyfs, storage_info):
         tx.io_file.set_content(FilePathInfo("foo", content_hash), content)
     with keyfs.read_transaction() as tx:
         path = Path(tx.io_file.os_path(FilePathInfo("foo", content_hash)))
-        raw_changelog_entry = tx.conn.get_raw_changelog_entry(tx.at_serial)
-        changelog_entry = loads(raw_changelog_entry)
-        tmpname = changelog_entry[1][0]
+        (tmpname,) = tx.conn.iter_rel_renames(tx.at_serial)
     tmppath = path.with_name(tmpname)
     assert path.exists()
     assert not tmppath.exists()

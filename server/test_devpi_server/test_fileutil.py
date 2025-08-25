@@ -1,14 +1,15 @@
 from devpi_server.fileutil import BytesIO
 from devpi_server.fileutil import DumpError
 from devpi_server.fileutil import LoadError
+from devpi_server.fileutil import dump_iter
 from devpi_server.fileutil import dumplen
 from devpi_server.fileutil import dumps
 from devpi_server.fileutil import loads
 from devpi_server.normalized import NormalizedName
-from execnet.gateway_base import _Serializer
 from execnet.gateway_base import DumpError as _DumpError
 from execnet.gateway_base import LoadError as _LoadError
 from execnet.gateway_base import Unserializer
+from execnet.gateway_base import _Serializer
 import pytest
 
 
@@ -87,6 +88,7 @@ def test_execnet_opcodes():
             b"T\x3f\xf0\x00\x00\x00\x00\x00\x00\x3f\xf0\x00\x00\x00\x00\x00\x00Q",
             complex(1, 1),
         ),
+        ((b"N\x00\x00\x00\x03fooy\x00\x00\x00\x01Q",), ["foo"]),
         (
             (b"z\x00\x00\x00\x0cH\xc3\xa4llo___XYZ\x00\x00\x00\x09h-llo-xyzQ",),
             NormalizedName("Hällo___XYZ"),
@@ -121,6 +123,24 @@ def test_loads(data, expected):
         assert result == _loads(data)
         assert _loads(dumps(expected)) == expected
         assert _loads(_dumps(expected)) == expected
+
+
+def test_dump_iterator():
+    data = [1, 2, 3]
+    result = loads(dumps(iter(data)))
+    assert result == data
+
+
+def test_dump_iter():
+    data = [1, 2, 3]
+    result = list(dump_iter(iter(data)))
+    assert result == [
+        b"F\x00\x00\x00\x01",
+        b"F\x00\x00\x00\x02",
+        b"F\x00\x00\x00\x03",
+        b"y\x00\x00\x00\x03Q",
+    ]
+    assert dumps(iter(data)) == b"".join(result)
 
 
 def test_dumplen():

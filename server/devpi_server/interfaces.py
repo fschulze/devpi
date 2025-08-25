@@ -159,9 +159,6 @@ class IStorageConnection(Interface):
         """Return the latest serial for given key.
         Raises KeyError if not found."""
 
-    def get_raw_changelog_entry(serial: int) -> bytes | None:
-        """Returns serialized changes for given serial."""
-
     def get_key_at_serial(key: ULIDKey, serial: int) -> KeyData:
         """Get tuple of (last_serial, back_serial, value) for given relpath
         at given serial.
@@ -188,6 +185,9 @@ class IStorageConnection(Interface):
 
     def iter_rel_renames(serial: int) -> Iterable | None:
         """Returns deserialized rel_renames for given serial."""
+
+    def iter_serializable_changes(serial: int) -> Iterator[tuple]:
+        """Returns pure Python tuples serializable for replications."""
 
     def iter_ulidkeys_at_serial(
         keys: Iterable[LocatedKey | PatternedKey],
