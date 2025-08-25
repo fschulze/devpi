@@ -149,6 +149,7 @@ class RootFactory:
     def list_versions(self, project=None, perstage=False):
         if project is None:
             project = self.project
+        project = normalize_name(project)
         try:
             if perstage:
                 res = self.stage.list_versions_perstage(project)
@@ -157,7 +158,7 @@ class RootFactory:
         except UpstreamError as e:
             abort(self.request, 502, str(e))
         if not res and not self.stage.has_project(project):
-            abort(self.request, 404, f"no project {project!r}")
+            abort(self.request, 404, f"no project {project.original!r}")
         return res
 
     @cached_property

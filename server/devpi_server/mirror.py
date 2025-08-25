@@ -17,6 +17,7 @@ from .model import BaseStageCustomizer
 from .model import Rel
 from .model import ensure_boolean
 from .model import join_links_data
+from .normalized import NormalizedName
 from .normalized import normalize_name
 from .readonly import ensure_deeply_readonly
 from .views import SIMPLE_API_V1_JSON
@@ -524,14 +525,11 @@ class MirrorStage(BaseStage):
             parser = ProjectHTMLParser(response.url)
             parser.feed(text)
         projects_future.set_result(
-            (
-                {normalize_name(x): x for x in parser.projects},
-                response.headers.get("ETag"),
-            )
+            ({normalize_name(x) for x in parser.projects}, response.headers.get("ETag"))
         )
 
     def _stale_list_projects_perstage(self):
-        return {normalize_name(x): x for x in self.key_projects.get()}
+        return {normalize_name(x) for x in self.key_projects.get()}
 
     def _update_projects(self):
         projects_future = self.xom.create_future()
@@ -606,7 +604,9 @@ class MirrorStage(BaseStage):
         """ Return the project names. """
         # return a read-only version of the cached data,
         # so it can't be modified accidentally and we avoid a copy
-        return ensure_deeply_readonly(self._list_projects_perstage())
+        return ensure_deeply_readonly(
+            {v: v.original for v in self._list_projects_perstage()}
+        )
 
     def is_project_cached(self, project):
         """ return True if we have some cached simpelinks information. """
@@ -748,8 +748,8 @@ class MirrorStage(BaseStage):
             releaselinks = parse_index(response_url, text).releaselinks
         num_releaselinks = len(releaselinks)
         key_hrefs: list = [None] * num_releaselinks
-        requires_python = [None] * num_releaselinks
-        yanked = [None] * num_releaselinks
+        requires_python: list = [None] * num_releaselinks
+        yanked: list = [None] * num_releaselinks
         for index, releaselink in enumerate(releaselinks):
             key = _key_from_link(releaselink)
             href = key.relpath
@@ -1011,12 +1011,15 @@ def devpiserver_get_stage_customizer_classes():
 class ProjectNamesCache:
     """ Helper class for maintaining project names from a mirror. """
 
+    _data: set[NormalizedName]
+    _etag: str | None
+    _lock: threading.RLock
     _timestamp: float
 
     def __init__(self):
         self._lock = threading.RLock()
         self._timestamp = -1
-        self._data = dict()
+        self._data = set()
         self._etag = None
 
     def exists(self):
@@ -1040,18 +1043,20 @@ class ProjectNamesCache:
     def add(self, project):
         """ Add project to cache. """
         with self._lock:
-            self._data[normalize_name(project)] = project
+            self._data.add(normalize_name(project))
 
     def discard(self, project):
         """ Remove project from cache. """
         with self._lock:
-            del self._data[normalize_name(project)]
+            self._data.discard(normalize_name(project))
 
     def set(self, data, etag):
         """ Set data and update timestamp. """
         with self._lock:
             if data != self._data:
-                assert isinstance(data, dict)
+                assert isinstance(data, set)
+                if len(data):
+                    assert isinstance(next(iter(data)), NormalizedName)
                 self._data = data
             self.mark_current(etag)
 
@@ -1124,29 +1129,35 @@ class ProjectUpdateCache:
         self._project2lock = weakref.WeakValueDictionary()
 
     def is_expired(self, project, expiry_time):
+        project = str(project)
         (t, etag) = self._project2time.get(project, (None, None))
         if t is not None:
             return (time.time() - t) >= expiry_time
         return True
 
     def get_etag(self, project):
+        project = str(project)
         (t, etag) = self._project2time.get(project, (None, None))
         return etag
 
     def get_timestamp(self, project):
+        project = str(project)
         (ts, etag) = self._project2time.get(project, (-1, None))
         return ts
 
     def refresh(self, project, etag):
+        project = str(project)
         self._project2time[project] = (time.time(), etag)
 
     def expire(self, project, etag=None):
+        project = str(project)
         if etag is None:
             self._project2time.pop(project, None)
         else:
             self._project2time[project] = (0, etag)
 
     def acquire(self, project, timeout=-1):
+        project = str(project)
         lock = ProjectUpdateLock(
             project,
             self._project2lock.setdefault(project, ProjectUpdateInnerLock()))
@@ -1157,8 +1168,10 @@ class ProjectUpdateCache:
         if lock.acquire(timeout=timeout):
             return lock
         self._project2lock.pop(project, None)
+        return None
 
     def release(self, project):
+        project = str(project)
         lock = self._project2lock.pop(project, None)
         if lock is not None and lock.locked():
             lock.release()

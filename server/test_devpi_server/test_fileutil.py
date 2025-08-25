@@ -4,6 +4,7 @@ from devpi_server.fileutil import LoadError
 from devpi_server.fileutil import dumplen
 from devpi_server.fileutil import dumps
 from devpi_server.fileutil import loads
+from devpi_server.normalized import NormalizedName
 from execnet.gateway_base import _Serializer
 from execnet.gateway_base import DumpError as _DumpError
 from execnet.gateway_base import LoadError as _LoadError
@@ -29,66 +30,97 @@ def test_execnet_opcodes():
         b'L', b'M', b'N', b'O', b'P', b'Q', b'R', b'S', b'T'}
 
 
-@pytest.mark.parametrize('data, expected', [
-    (b'@\x00\x00\x00\x00Q', ()),
-    (b'F\x00\x00\x00\x01@\x00\x00\x00\x01Q', (1,)),
-    (b'F\x00\x00\x00\x01F\x00\x00\x00\x02@\x00\x00\x00\x02Q', (1, 2)),
-    (b'A\x00\x00\x00\x01aQ', b'a'),
-    (b'A\x00\x00\x00\x02abQ', b'ab'),
-    (b'CQ', False),
-    (b'D\x00\x00\x00\x00\x00\x00\x00\x00Q', 0.0),
-    (b'D\x3f\xf0\x00\x00\x00\x00\x00\x00Q', 1.0),
-    (b'E\x00\x00\x00\x00Q', frozenset()),
-    (b'F\x00\x00\x00\x01E\x00\x00\x00\x01Q', frozenset((1,))),
-    (b'F\x00\x00\x00\x01F\x00\x00\x00\x02E\x00\x00\x00\x02Q', frozenset((1, 2))),
-    (b'F\x00\x00\x00\x01Q', 1),
-    (b'G\x00\x00\x00\x01Q', 1),
-    (b'H\x00\x00\x00\x011Q', 1),
-    (b'H\x00\x00\x00\x0a8589934592Q', 8589934592),
-    (b'I\x00\x00\x00\x011Q', 1),
-    (b'JQ', {}),
-    (b'JF\x00\x00\x00\x00F\x00\x00\x00\x00PF\x00\x00\x00\x01F\x00\x00\x00\x02PQ', {0: 0, 1: 2}),
-    (b'K\x00\x00\x00\x00Q', []),
-    (b'K\x00\x00\x00\x01Q', [None]),
-    (b'K\x00\x00\x00\x02Q', [None, None]),
-    (b'K\x00\x00\x00\x01F\x00\x00\x00\x00F\x00\x00\x00\x01PQ', [1]),
-    (b'K\x00\x00\x00\x02F\x00\x00\x00\x00F\x00\x00\x00\x01PF\x00\x00\x00\x01F\x00\x00\x00\x02PQ', [1, 2]),
-    (b'K\x00\x00\x00\x01F\x00\x00\x00\x00RPQ', [True]),
-    (b'K\x00\x00\x00\x01F\x00\x00\x00\x00CPQ', [False]),
-    (b'LQ', None),
-    (b'M\x00\x00\x00\x01aQ', b'a'),
-    (b'M\x00\x00\x00\x02abQ', b'ab'),
-    (b'N\x00\x00\x00\x01aQ', 'a'),
-    (b'N\x00\x00\x00\x02\xc3\xa4Q', 'ä'),
-    (b'O\x00\x00\x00\x00Q', set()),
-    (b'F\x00\x00\x00\x01O\x00\x00\x00\x01Q', set((1,))),
-    (b'F\x00\x00\x00\x01F\x00\x00\x00\x02O\x00\x00\x00\x02Q', set((1, 2))),
-    (b'RQ', True),
-    (b'S\x00\x00\x00\x01aQ', 'a'),
-    (b'S\x00\x00\x00\x02\xc3\xa4Q', 'ä'),
-    (b'T\x3f\xf0\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00Q', complex(1, 0)),
-    (b'T\x00\x00\x00\x00\x00\x00\x00\x00\x3f\xf0\x00\x00\x00\x00\x00\x00Q', complex(0, 1)),
-    (b'T\x3f\xf0\x00\x00\x00\x00\x00\x00\x3f\xf0\x00\x00\x00\x00\x00\x00Q', complex(1, 1))])
+@pytest.mark.parametrize(
+    ("data", "expected"),
+    [
+        (b"@\x00\x00\x00\x00Q", ()),
+        (b"F\x00\x00\x00\x01@\x00\x00\x00\x01Q", (1,)),
+        (b"F\x00\x00\x00\x01F\x00\x00\x00\x02@\x00\x00\x00\x02Q", (1, 2)),
+        (b"A\x00\x00\x00\x01aQ", b"a"),
+        (b"A\x00\x00\x00\x02abQ", b"ab"),
+        (b"CQ", False),
+        (b"D\x00\x00\x00\x00\x00\x00\x00\x00Q", 0.0),
+        (b"D\x3f\xf0\x00\x00\x00\x00\x00\x00Q", 1.0),
+        (b"E\x00\x00\x00\x00Q", frozenset()),
+        (b"F\x00\x00\x00\x01E\x00\x00\x00\x01Q", frozenset((1,))),
+        (b"F\x00\x00\x00\x01F\x00\x00\x00\x02E\x00\x00\x00\x02Q", frozenset((1, 2))),
+        (b"F\x00\x00\x00\x01Q", 1),
+        (b"G\x00\x00\x00\x01Q", 1),
+        (b"H\x00\x00\x00\x011Q", 1),
+        (b"H\x00\x00\x00\x0a8589934592Q", 8589934592),
+        (b"I\x00\x00\x00\x011Q", 1),
+        (b"JQ", {}),
+        (
+            b"JF\x00\x00\x00\x00F\x00\x00\x00\x00PF\x00\x00\x00\x01F\x00\x00\x00\x02PQ",
+            {0: 0, 1: 2},
+        ),
+        (b"K\x00\x00\x00\x00Q", []),
+        (b"K\x00\x00\x00\x01Q", [None]),
+        (b"K\x00\x00\x00\x02Q", [None, None]),
+        (b"K\x00\x00\x00\x01F\x00\x00\x00\x00F\x00\x00\x00\x01PQ", [1]),
+        (
+            b"K\x00\x00\x00\x02F\x00\x00\x00\x00F\x00\x00\x00\x01PF\x00\x00\x00\x01F\x00\x00\x00\x02PQ",
+            [1, 2],
+        ),
+        (b"K\x00\x00\x00\x01F\x00\x00\x00\x00RPQ", [True]),
+        (b"K\x00\x00\x00\x01F\x00\x00\x00\x00CPQ", [False]),
+        (b"LQ", None),
+        (b"M\x00\x00\x00\x01aQ", b"a"),
+        (b"M\x00\x00\x00\x02abQ", b"ab"),
+        (b"N\x00\x00\x00\x01aQ", "a"),
+        (b"N\x00\x00\x00\x02\xc3\xa4Q", "ä"),
+        (b"O\x00\x00\x00\x00Q", set()),
+        (b"F\x00\x00\x00\x01O\x00\x00\x00\x01Q", {1}),
+        (b"F\x00\x00\x00\x01F\x00\x00\x00\x02O\x00\x00\x00\x02Q", {1, 2}),
+        (b"RQ", True),
+        (b"S\x00\x00\x00\x01aQ", "a"),
+        (b"S\x00\x00\x00\x02\xc3\xa4Q", "ä"),
+        (
+            b"T\x3f\xf0\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00Q",
+            complex(1, 0),
+        ),
+        (
+            b"T\x00\x00\x00\x00\x00\x00\x00\x00\x3f\xf0\x00\x00\x00\x00\x00\x00Q",
+            complex(0, 1),
+        ),
+        (
+            b"T\x3f\xf0\x00\x00\x00\x00\x00\x00\x3f\xf0\x00\x00\x00\x00\x00\x00Q",
+            complex(1, 1),
+        ),
+        (
+            (b"z\x00\x00\x00\x0cH\xc3\xa4llo___XYZ\x00\x00\x00\x09h-llo-xyzQ",),
+            NormalizedName("Hällo___XYZ"),
+        ),
+    ],
+)
 def test_loads(data, expected):
+    is_custom = False
+    if isinstance(data, tuple):
+        is_custom = True
+        (data,) = data
     result = loads(data)
     assert result == expected
     assert type(result) is type(expected)
-    result = _loads(data)
-    assert result == expected
-    assert type(result) is type(expected)
+    # test original
+    if not is_custom:
+        result = _loads(data)
+        assert result == expected
+        assert type(result) is type(expected)
     # try round-trip
     dump = dumps(expected)
     assert len(dump) == dumplen(expected)
     assert loads(dump) == expected
     # try round-trip with original
-    _dump = _dumps(expected)
-    assert len(_dump) == dumplen(expected)
-    assert loads(_dump) == expected
-    assert dump == _dump
+    if not is_custom:
+        _dump = _dumps(expected)
+        assert len(_dump) == dumplen(expected)
+        assert loads(_dump) == expected
+        assert dump == _dump
     # compare to original
-    assert result == _loads(data)
-    assert _loads(dumps(expected)) == expected
-    assert _loads(_dumps(expected)) == expected
+    if not is_custom:
+        assert result == _loads(data)
+        assert _loads(dumps(expected)) == expected
+        assert _loads(_dumps(expected)) == expected
 
 
 def test_dumplen():
