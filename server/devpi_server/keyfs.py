@@ -9,11 +9,13 @@ independent from any future changes.
 from __future__ import annotations
 
 from . import mythread
+from .compat import get_annotations
 from .filestore import FileEntry
 from .fileutil import read_int_from_file
 from .fileutil import write_int_to_file
 from .interfaces import IStorageConnection
 from .interfaces import IWriter
+from .keyfs_types import KeyData
 from .keyfs_types import LocatedKey
 from .keyfs_types import NamedKey
 from .keyfs_types import NamedKeyFactory
@@ -28,6 +30,7 @@ from .model import RootModel
 from .readonly import ensure_deeply_readonly
 from .readonly import get_mutable_deepcopy
 from .readonly import is_deeply_readonly
+from attrs import frozen
 from devpi_common.types import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -73,6 +76,13 @@ class TxNotificationThread:
                 "cannot register handlers after thread has started")
         key_name = key if isinstance(key, str) else key.key_name
         assert isinstance(key_name, str), key_name
+        if not any(
+            "KeyChangeEvent" in str(v) for v in get_annotations(subscriber).values()
+        ):
+            msg = (
+                f"The event subscriber {subscriber!r} has no KeyChangeEvent annotation"
+            )
+            raise RuntimeError(msg)
         self._on_key_change.setdefault(key_name, []).append(subscriber)
 
     def wait_event_serial(self, serial):
@@ -173,12 +183,12 @@ class TxNotificationThread:
     def _execute_hooks(self, event_serial, log, raising=False):
         log.debug("calling hooks for tx%s", event_serial)
         with self.keyfs.get_connection() as conn:
-            changes = conn.get_changes(event_serial)
+            changes = list(conn.iter_changes_at(event_serial))
         # we first check for missing files before we call subscribers
-        for relpath, (keyname, _back_serial, val) in changes.items():
-            if keyname in ("STAGEFILE", "PYPIFILE_NOMD5"):
-                key = self.keyfs.get_key_instance(keyname, relpath)
-                entry = FileEntry(key, val)
+        for change in changes:
+            if change.keyname in ("STAGEFILE", "PYPIFILE_NOMD5"):
+                key = self.keyfs.get_key_instance(change.keyname, change.relpath)
+                entry = FileEntry(key, change.value)
                 if entry.meta == {} or entry.last_modified is None:
                     # the file was removed
                     continue
@@ -222,23 +232,23 @@ class TxNotificationThread:
                             continue
                     log.debug("missing current_entry.meta %r", current_entry.meta)
                 log.debug("missing entry.meta %r", entry.meta)
-                raise MissingFileException(relpath, event_serial)
+                raise MissingFileException(change.relpath, event_serial)
         # all files exist or are deleted in a later serial,
         # call subscribers now
-        for relpath, (keyname, back_serial, val) in changes.items():
-            subscribers = self._on_key_change.get(keyname, [])
+        for change in changes:
+            subscribers = self._on_key_change.get(change.keyname, [])
             if not subscribers:
                 continue
-            key = self.keyfs.get_key_instance(keyname, relpath)
-            ev = KeyChangeEvent(key, val, event_serial, back_serial)
+            key = self.keyfs.get_key_instance(change.keyname, change.relpath)
+            ev = KeyChangeEvent(key=key, data=change, at_serial=event_serial)
             for sub in subscribers:
                 subname = getattr(sub, "__name__", sub)
                 log.debug(
-                    "%s(key=%r, at_serial=%r, back_serial=%r",
+                    "%s(key=%r, data=%r at_serial=%r",
                     subname,
-                    ev.typedkey,
+                    key,
+                    change,
                     event_serial,
-                    ev.back_serial,
                 )
                 try:
                     sub(ev)
@@ -308,20 +318,17 @@ class KeyFS:
             assert next_serial == serial, (next_serial, serial)
             records = []
             subscriber_changes = {}
-            for relpath, (keyname, back_serial, val) in changes.items():
-                key = self.get_key_instance(keyname, relpath)
+            for change in changes:
+                if not isinstance(change, KeyData):
+                    raise TypeError
+                key = self.get_key_instance(change.keyname, change.relpath)
                 try:
                     old_val = conn.get_key_at_serial(key, serial - 1).value
                 except KeyError:
                     old_val = absent
-                subscriber_changes[key] = (val, back_serial)
+                subscriber_changes[key] = (change.value, change.back_serial)
                 records.append(
-                    Record(
-                        key,
-                        deleted if val is None else get_mutable_deepcopy(val),
-                        back_serial,
-                        old_val,
-                    )
+                    Record(key, change.mutable_value, change.back_serial, old_val)
                 )
             fswriter.records_set(records)
         if callable(self._import_subscriber):
@@ -566,12 +573,11 @@ class KeyFS:
                 yield tx
 
 
+@frozen
 class KeyChangeEvent:
-    def __init__(self, typedkey, value, at_serial, back_serial):
-        self.typedkey = typedkey
-        self.value = value
-        self.at_serial = at_serial
-        self.back_serial = back_serial
+    key: LocatedKey
+    data: KeyData
+    at_serial: int
 
 
 class TransactionRootModel(RootModel):

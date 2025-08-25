@@ -145,15 +145,12 @@ class IStorage(Interface):
 
 class IStorageConnection(Interface):
     def db_read_last_changelog_serial() -> int:
-        """ Return last stored serial.
-            Returns -1 if nothing is stored yet. """
+        """Return last stored serial.
+        Returns -1 if nothing is stored yet."""
 
     def last_key_serial(key: LocatedKey) -> int:
         """Return the latest serial for given key.
         Raises KeyError if not found."""
-
-    def get_changes(serial: int) -> dict:
-        """ Returns deserialized readonly changes for given serial. """
 
     def get_raw_changelog_entry(serial: int) -> Optional[bytes]:
         """Returns serialized changes for given serial."""
@@ -165,6 +162,9 @@ class IStorageConnection(Interface):
         """Get tuple of (last_serial, back_serial, value) for given relpath
         at given serial.
         Raises KeyError if not found."""
+
+    def iter_changes_at(serial: int) -> Iterator[KeyData]:
+        """Returns deserialized readonly changes for given serial."""
 
     def iter_relpaths_at(
         typedkeys: Iterable[IKeyFSKey], at_serial: int

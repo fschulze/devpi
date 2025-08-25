@@ -246,20 +246,12 @@ class Connection:
         self, key: LocatedKey, last_serial
     ) -> Iterator[KeyData]:
         while last_serial >= 0:
-            tup = self.get_changes(last_serial).get(key.relpath)
-            if tup is None:
+            changes = {c.relpath: c for c in self.iter_changes_at(last_serial)}
+            change = changes.get(key.relpath)
+            if change is None:
                 raise RuntimeError("no transaction entry at %s" % (last_serial))
-            (keyname, back_serial, val) = tup
-            if val is None:
-                val = deleted
-            yield KeyData(
-                relpath=key.relpath,
-                keyname=keyname,
-                serial=last_serial,
-                back_serial=back_serial,
-                value=val,
-            )
-            last_serial = back_serial
+            yield change
+            last_serial = change.back_serial
 
         # we could not find any change below at_serial which means
         # the key didn't exist at that point in time
@@ -287,7 +279,7 @@ class Connection:
         keynames = frozenset(k.key_name for k in typedkeys)
         keyname_id_values = {"keynameid%i" % i: k for i, k in enumerate(keynames)}
         q = """
-            SELECT key, keyname, serial
+            SELECT key, keyname
             FROM kv
             WHERE serial=:serial AND keyname IN (:keynames)
         """
@@ -296,16 +288,11 @@ class Connection:
             rows = self._sqlconn.run(q, serial=serial, **keyname_id_values)
             if not rows:
                 continue
-            changes = self.get_changes(serial)
-            for relpath, keyname, serial in rows:
-                (keyname, back_serial, val) = changes[relpath]
-                yield KeyData(
-                    relpath=relpath,
-                    keyname=keyname,
-                    serial=serial,
-                    back_serial=back_serial,
-                    value=val,
-                )
+            changes = {c.relpath: c for c in self.iter_changes_at(serial)}
+            for relpath, keyname in rows:
+                change = changes[relpath]
+                assert change.keyname == keyname
+                yield change
 
     def write_changelog_entry(self, serial, entry):
         threadlog.debug("writing changelog for serial %s", serial)
@@ -476,17 +463,26 @@ class Connection:
         (changes, rel_renames) = loads(data)
         return rel_renames
 
-    def get_changes(self, serial):
+    def iter_changes_at(self, serial) -> Iterator[KeyData]:
         changes = self._changelog_cache.get(serial, absent)
         if changes is absent:
             data = self.get_raw_changelog_entry(serial)
+            if data is None:
+                return
             changes, rel_renames = loads(data)
             # make values in changes read only so no calling site accidentally
             # modifies data
             changes = ensure_deeply_readonly(changes)
             assert isinstance(changes, ReadonlyView)
             self._changelog_cache.put(serial, changes)
-        return changes
+        for relpath, (keyname, back_serial, val) in changes.items():
+            yield KeyData(
+                relpath=relpath,
+                keyname=keyname,
+                serial=serial,
+                back_serial=back_serial,
+                value=deleted if val is None else val,
+            )
 
     def write_transaction(self, io_file):
         return Writer(self.storage, self, io_file)

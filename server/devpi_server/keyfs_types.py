@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from .markers import Absent
 from .markers import Deleted
+from .markers import deleted
 from .readonly import ensure_deeply_readonly
+from .readonly import get_mutable_deepcopy
 from attrs import define
 from attrs import field
 from attrs import frozen
@@ -101,6 +103,10 @@ class KeyData:
     @property
     def last_serial(self):
         return self.serial
+
+    @property
+    def mutable_value(self):
+        return deleted if (val := self.value) is deleted else get_mutable_deepcopy(val)
 
 
 @frozen
