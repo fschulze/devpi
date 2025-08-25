@@ -731,6 +731,12 @@ class BaseStage:
     def model(self):
         return self.xom.model
 
+    def key_version(self, project, version=None):
+        kw = {} if version is None else dict(version=version)
+        return self.keyfs.VERSION(
+            user=self.username, index=self.index, project=normalize_name(project), **kw
+        )
+
     def get_indexconfig_from_kwargs(self, **kwargs):
         """Normalizes values and validates keys.
 
@@ -1361,12 +1367,6 @@ class PrivateStage(BaseStage):
     def key_doczip(self, project, version=None):
         kw = {} if version is None else dict(version=version)
         return self.keyfs.DOCZIP(
-            user=self.username, index=self.index, project=normalize_name(project), **kw
-        )
-
-    def key_version(self, project, version=None):
-        kw = {} if version is None else dict(version=version)
-        return self.keyfs.VERSION(
             user=self.username, index=self.index, project=normalize_name(project), **kw
         )
 

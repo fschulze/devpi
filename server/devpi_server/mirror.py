@@ -23,12 +23,13 @@ from .model import ensure_boolean
 from .model import join_links_data
 from .normalized import NormalizedName
 from .normalized import normalize_name
-from .readonly import get_mutable_deepcopy
 from .readonly import ensure_deeply_readonly
+from .readonly import get_mutable_deepcopy
 from contextlib import ExitStack
 from devpi_common.metadata import BasenameMeta
 from devpi_common.metadata import is_archive_of_project
 from devpi_common.metadata import parse_version
+from devpi_common.metadata import splitbasename
 from devpi_common.types import cached_property
 from devpi_common.url import URL
 from functools import partial
@@ -550,6 +551,7 @@ class MirrorLinks:
             del cache_info["etag"]
         self.stage.key_projectcacheinfo(self.project).set(cache_info)
         key_mirrorfile = self.stage.key_mirrorfile(self.project)
+        key_version = self.stage.key_version(self.project)
         name_key_map = {}
         old = {}
         for k, v in key_mirrorfile.iter_ulidkey_values():
@@ -578,7 +580,22 @@ class MirrorLinks:
                 else:
                     num_changed += 1
                     key.set(new_value)
-            new_keys = [key_mirrorfile(name) for name in data]
+            new_keys = set()
+            new_versions = {}
+            old_versions = dict(key_version.iter_ulidkey_values())
+            if old_versions:
+                import pdb
+
+                pdb.set_trace()
+            for fn, value in data.items():
+                new_keys.add(key_mirrorfile(fn))
+                (project, version, _ext) = splitbasename(fn)
+                assert project == self.project
+                if version not in old_versions:
+                    version_key = key_version(version)
+                    new_version = new_versions[version_key] = {}
+                    if "requires_python" in value:
+                        new_version = RuntimeError
             for _k, ulid_key in tx.resolve_keys(
                 new_keys, fetch=True, fill_cache=True, new_for_missing=True
             ):
@@ -1329,7 +1346,6 @@ def devpiserver_get_stage_customizer_classes():
 
 class ProjectNamesCache:
     """ Helper class for maintaining project names from a mirror. """
-
     _data: set[NormalizedName]
     _etag: str | None
     _lock: threading.RLock
@@ -1439,7 +1455,6 @@ class ProjectUpdateLock:
 
 class ProjectUpdateCache:
     """ Helper class to manage when we last updated something project specific. """
-
     _project2lock: weakref.WeakValueDictionary
     _project2time: dict
 
