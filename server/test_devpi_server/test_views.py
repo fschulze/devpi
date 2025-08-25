@@ -13,7 +13,6 @@ import devpi_server.views
 from devpi_server.config import hookimpl
 from devpi_server.filestore import FileEntry
 from devpi_server.filestore import get_hashes
-from devpi_server.filestore import get_hash_spec
 from devpi_server.filestore import make_splitdir
 from devpi_server.views import tween_keyfs_transaction, make_uuid_headers
 from devpi_server.mirror import parse_index
@@ -1801,9 +1800,6 @@ def test_upload_and_access_releasefile_meta(mapp, testapp, proj):
     link = vv.get_link("releasefile")
     pkgmeta = mapp.getjson(link.href)
     assert pkgmeta["type"] == "releasefilemeta"
-    hash_spec = pkgmeta["result"]["hash_spec"]
-    (hash_type, hash_value) = hash_spec.split("=", 1)
-    assert hash_spec == get_hash_spec(content, hash_type)
     hashes = pkgmeta["result"]["hashes"]
     assert get_hashes(content, hash_types=hashes.keys()) == hashes
 

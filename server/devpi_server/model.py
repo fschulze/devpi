@@ -818,7 +818,6 @@ class BaseStage(object):
             self.filestore,
             dict(
                 entrypath=link_meta.path,
-                hash_spec=link_meta.hash_spec,
                 hashes=link_meta.hashes,
                 require_python=link_meta.require_python,
                 yanked=link_meta.yanked,
@@ -1651,13 +1650,13 @@ class ELink:
     _log = linkdictprop("_log")
     relpath = linkdictprop("entrypath")
     for_entrypath = linkdictprop("for_entrypath", default=None)
-    _hash_spec = linkdictprop("hash_spec", default="")
     _hashes = linkdictprop("hashes", default=None)
     rel = linkdictprop("rel", default=None)
     require_python = linkdictprop("require_python")
     yanked = linkdictprop("yanked")
 
     def __init__(self, filestore, linkdict, project, version):
+        assert "hash_spec" not in linkdict
         self._entry = notset
         self.filestore = filestore
         self.linkdict = linkdict
@@ -1688,16 +1687,7 @@ class ELink:
 
     @property
     def hashes(self):
-        digests = Digests() if self._hashes is None else Digests(self._hashes)
-        if hash_spec := self._hash_spec:
-            (hash_algo, hash_value) = parse_hash_spec(hash_spec)
-            hash_type = hash_algo().name
-            if digests.get(hash_type, notset) != hash_value:
-                # the stored hash_spec takes precedence,
-                # because there may have been a downgrade with content change
-                # we also need to get rid of other hash types in that case
-                return Digests.from_spec(self._hash_spec)
-        return digests
+        return Digests() if self._hashes is None else Digests(self._hashes)
 
     @property
     def hash_spec(self):
@@ -1748,11 +1738,13 @@ class ELink:
             DeprecationWarning,
             stacklevel=2,
         )
-        hash_algo, hash_value = parse_hash_spec(self._hash_spec)
+        hash_algo, hash_value = parse_hash_spec(self.best_available_hash_spec)
         if not hash_algo:
             return True
-        return get_hash_spec(
-            content_or_file, hash_algo().name) == self._hash_spec
+        return (
+            get_hash_spec(content_or_file, hash_algo().name)
+            == self.best_available_hash_spec
+        )
 
     def matches_hashes(self, hashes):
         return self.hashes == hashes
@@ -1848,9 +1840,11 @@ class LinkStore:
             filename = "%s.%s-%s-%d" % (
                 base_entry.basename, rel, timestamp, len(other_reflinks))
         entry = self._create_file_entry(
-            filename, content_or_file,
+            filename,
+            content_or_file,
             hashes=hashes,
-            ref_hash_spec=base_entry._hash_spec)
+            ref_hash_spec=base_entry.best_available_hash_spec,
+        )
         if last_modified is not None:
             entry.last_modified = last_modified
         return self._add_link_to_file_entry(
@@ -1921,7 +1915,6 @@ class LinkStore:
         new_linkdict = {
             "rel": str(rel),
             "entrypath": file_entry.relpath,
-            "hash_spec": file_entry._hash_spec,
             "hashes": file_entry.hashes,
             "_log": [],
         }
@@ -1948,7 +1941,6 @@ class SimplelinkMeta:
         "__basename",
         "__cmpval",
         "__ext",
-        "__hash_spec",
         "__hashes",
         "__name",
         "__path",
@@ -1964,7 +1956,6 @@ class SimplelinkMeta:
         self.__basename = notset
         self.__cmpval = notset
         self.__ext = notset
-        self.__hash_spec = notset
         self.__hashes = notset
         self.__name = notset
         self.__path = notset
@@ -1978,7 +1969,6 @@ class SimplelinkMeta:
                 self.__basename,
                 self.__cmpval,
                 self.__ext,
-                self.__hash_spec,
                 self.__hashes,
                 self.__name,
                 self.__path,
@@ -2024,7 +2014,6 @@ class SimplelinkMeta:
     def __parse_url(self):
         url = URL(self.href)
         self.__basename = url.basename
-        self.__hash_spec = url.hash_spec
         self.__hashes = Digests()
         if hash_type := url.hash_type:
             self.__hashes[hash_type] = url.hash_value
@@ -2035,12 +2024,6 @@ class SimplelinkMeta:
         if self.__basename is notset:
             self.__parse_url()
         return self.__basename
-
-    @property
-    def hash_spec(self):
-        if self.__hash_spec is notset:
-            self.__parse_url()
-        return self.__hash_spec
 
     @property
     def hashes(self):
@@ -2095,8 +2078,8 @@ def make_key_and_href(entry):
     # entry is either an ELink or a filestore.FileEntry instance.
     # both provide a "relpath" attribute which points to a file entry.
     href = entry.relpath
-    if entry._hash_spec:
-        href += "#" + entry._hash_spec
+    if hash_spec := entry.best_available_hash_spec:
+        href += "#" + hash_spec
     return entry.basename, href
 
 

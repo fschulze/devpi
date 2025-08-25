@@ -1803,7 +1803,6 @@ def iter_cache_remote_file(stage, entry, url):
                 entry.file_set_content(
                     f,
                     last_modified=r.headers.get("last-modified", None),
-                    hash_spec=entry._hash_spec,
                     hashes=file_streamer.hashes)
                 if entry.project:
                     stage = xom.model.getstage(entry.user, entry.index)

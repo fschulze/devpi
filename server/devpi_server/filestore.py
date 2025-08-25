@@ -337,7 +337,6 @@ class FileStore:
         key = key_from_link(self.keyfs, link, user, index)
         entry = MutableFileEntry(key)
         entry.url = link.geturl_nofragment().url
-        entry._hash_spec = unicode_if_bytes(link.hash_spec)
         if digest := link.hash_value:
             entry._hashes = Digests({link.hash_type: digest})
         entry.project = project
@@ -409,7 +408,6 @@ class BaseFileEntry:
     __slots__ = ("_meta", "key")
 
     BadGateway = BadGateway
-    _hash_spec = metaprop("hash_spec")  # e.g. "md5=120938012"
     _hashes = metaprop("hashes")  # e.g. dict(md5="120938012")
     last_modified = metaprop("last_modified")
     url = metaprop("url")
@@ -468,16 +466,7 @@ class BaseFileEntry:
 
     @property
     def hashes(self):
-        digests = Digests() if self._hashes is None else Digests(self._hashes)
-        if hash_spec := self._hash_spec:
-            (hash_algo, hash_value) = parse_hash_spec(hash_spec)
-            hash_type = hash_algo().name
-            if digests.get(hash_type, _nodefault) != hash_value:
-                # the stored hash_spec takes precedence,
-                # because there may have been a downgrade with content change
-                # we also need to get rid of other hash types in that case
-                return Digests.from_spec(self._hash_spec)
-        return digests
+        return Digests() if self._hashes is None else Digests(self._hashes)
 
     @property
     def hash_algo(self):
@@ -570,23 +559,16 @@ class BaseFileEntry:
             )
         return path
 
-    def file_set_content(
-        self, content_or_file, *, last_modified=None, hash_spec=None, hashes
-    ):
+    def file_set_content(self, content_or_file, *, last_modified=None, hashes):
         if last_modified != -1:
             if last_modified is None:
                 last_modified = unicode_if_bytes(format_date_time(None))
             self.last_modified = last_modified
-        hashes = Digests() if hashes is None else Digests(hashes)
-        if hash_spec:
-            hashes.add_spec(hash_spec)
+        hashes = Digests(hashes)
         missing_hash_types = hashes.get_missing_hash_types()
         if missing_hash_types:
             msg = f"Missing hash types: {missing_hash_types!r}"
             raise RuntimeError(msg)
-        if not hash_spec:
-            hash_spec = hashes.get_default_spec()
-        self._hash_spec = hash_spec
         self._hashes = self.hashes | hashes
         self.tx.io_file.set_content(self.file_path_info, content_or_file)
         # we make sure we always refresh the meta information
@@ -635,7 +617,9 @@ class BaseFileEntry:
         self.file_delete()
 
     def has_existing_metadata(self):
-        return bool(self._hash_spec and self.last_modified)
+        return bool(
+            self.hashes and self.last_modified and DEFAULT_HASH_TYPE in self.hashes
+        )
 
     def validate(self, content_or_file=None):
         if content_or_file is None:
