@@ -12,7 +12,7 @@ from devpi_server.replica import H_EXPECTED_PRIMARY_ID, H_PRIMARY_UUID
 from devpi_server.replica import H_REPLICA_UUID, H_REPLICA_OUTSIDE_URL
 from devpi_server.replica import PrimaryChangelogRequest
 from devpi_server.replica import proxy_view_to_primary
-from devpi_server.views import iter_remote_file_replica
+from devpi_server.mirror import iter_remote_file_replica
 from pyramid.httpexceptions import HTTPNotFound
 
 
