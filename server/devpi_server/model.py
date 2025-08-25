@@ -1,21 +1,7 @@
 from __future__ import annotations
 
-import functools
-import getpass
-import posixpath
-import re
-import json
-import warnings
-from devpi_common.metadata import get_latest_version
-from devpi_common.metadata import splitbasename, parse_version
-from devpi_common.url import URL
-from devpi_common.validation import validate_metadata, normalize_name
-from devpi_common.types import ensure_unicode, cached_property, parse_hash_spec
-from functools import total_ordering
-from itertools import zip_longest
-from pyramid.authorization import Allow, Authenticated, Everyone
-from time import gmtime, strftime
-from .auth import hash_password, verify_and_update_password_hash
+from .auth import hash_password
+from .auth import verify_and_update_password_hash
 from .compat import StrEnum
 from .config import hookimpl
 from .filestore import Digests
@@ -23,9 +9,31 @@ from .filestore import FileEntry
 from .filestore import get_hash_spec
 from .log import threadlog
 from .markers import unknown
+from .normalized import normalize_name
 from .readonly import get_mutable_deepcopy
+from devpi_common.metadata import get_latest_version
+from devpi_common.metadata import parse_version
+from devpi_common.metadata import splitbasename
+from devpi_common.types import cached_property
+from devpi_common.types import ensure_unicode
+from devpi_common.types import parse_hash_spec
+from devpi_common.url import URL
+from devpi_common.validation import validate_metadata
+from functools import total_ordering
+from itertools import zip_longest
 from operator import iconcat
+from pyramid.authorization import Allow
+from pyramid.authorization import Authenticated
+from pyramid.authorization import Everyone
+from time import gmtime
+from time import strftime
 from typing import TYPE_CHECKING
+import functools
+import getpass
+import json
+import posixpath
+import re
+import warnings
 
 
 if TYPE_CHECKING:

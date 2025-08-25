@@ -21,7 +21,7 @@ from contextlib import closing
 from devpi_server import mirror
 from devpi_server.config import get_pluginmanager
 from devpi_server.main import XOM, parseoptions
-from devpi_common.validation import normalize_name
+from devpi_server.normalized import normalize_name
 from devpi_common.terminal import TerminalWriter
 from devpi_common.url import URL
 from devpi_server.log import threadlog, thread_clear_log
