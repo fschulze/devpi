@@ -9,7 +9,7 @@ import warnings
 from devpi_common.metadata import get_latest_version
 from devpi_common.metadata import splitbasename, parse_version
 from devpi_common.url import URL
-from devpi_common.validation import validate_metadata, normalize_name
+from devpi_common.validation import validate_metadata
 from devpi_common.types import ensure_unicode, cached_property, parse_hash_spec
 from functools import total_ordering
 from itertools import zip_longest
@@ -23,6 +23,7 @@ from .filestore import FileEntry
 from .filestore import get_hash_spec
 from .log import threadlog
 from .markers import unknown
+from .normalized import normalize_name
 from .readonly import get_mutable_deepcopy
 from operator import iconcat
 from typing import TYPE_CHECKING

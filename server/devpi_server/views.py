@@ -37,7 +37,7 @@ from pyramid.view import view_config
 from urllib.parse import urlparse
 import itertools
 import json
-from devpi_common.validation import normalize_name, is_valid_archive_name
+from devpi_common.validation import is_valid_archive_name
 
 from .config import NodeInfo
 from .config import hookimpl
@@ -51,6 +51,7 @@ from .keyfs import KeyfsTimeoutError
 from .model import InvalidIndex, InvalidIndexconfig, InvalidUser, InvalidUserconfig
 from .model import ReadonlyIndex
 from .model import RemoveValue
+from .normalized import normalize_name
 from .readonly import get_mutable_deepcopy
 from .log import thread_push_log, thread_pop_log, threadlog
 
