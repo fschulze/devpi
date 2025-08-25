@@ -1,7 +1,6 @@
 from devpi_server.markers import deleted
 from difflib import SequenceMatcher
 from functools import partial
-from hashlib import sha256
 from itertools import chain
 from operator import itemgetter
 from pyramid.httpexceptions import HTTPForbidden
@@ -126,11 +125,9 @@ def keyfs_changelog_view(request):
             latest_serial = conn.last_key_serial(key)
             changes.append(
                 dict(
-                    fragment=sha256(
-                        f"{keydata.keyname}-{keydata.relpath}".encode()
-                    ).hexdigest(),
+                    fragment=f"{keydata.ulid}",
                     name=keydata.keyname,
-                    type=key.type,
+                    type=key.key_type,
                     relpath=keydata.relpath,
                     previous_serial=keydata.back_serial,
                     latest_serial=latest_serial,
