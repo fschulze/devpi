@@ -11,6 +11,8 @@ from .exceptions import lazy_format_exception
 from .filestore import key_from_link
 from .htmlpage import HTMLPage
 from .log import threadlog
+from .markers import absent
+from .markers import deleted
 from .markers import unknown
 from .model import BaseStage
 from .model import BaseStageCustomizer
@@ -286,6 +288,16 @@ class MirrorStage(BaseStage):
         # used to log about stale projects only once
         self._offline_logging = set()
 
+    def key_mirrorfile(self, project, filename=None):
+        kw = {} if filename is None else dict(filename=filename)
+        return self.keyfs.MIRRORFILE(
+            user=self.username, index=self.index, project=normalize_name(project), **kw
+        )
+
+    def key_projectcacheinfo(self, project=None):
+        kw = {} if project is None else dict(project=normalize_name(project))
+        return self.keyfs.PROJECTCACHEINFO(user=self.username, index=self.index, **kw)
+
     @cached_property
     def http(self):
         if self.xom.is_replica():
@@ -431,8 +443,10 @@ class MirrorStage(BaseStage):
             entries = (x for x in entries if x.file_exists())
             for entry in entries:
                 entry.delete()
-        self.key_projsimplelinks(project).delete()
+        for key in list(self.key_mirrorfile(project).iter_ulidkeys(fill_cache=False)):
+            key.delete()
         self.cache_retrieve_times.expire(project)
+        self.key_projectcacheinfo(project).delete()
         self.key_projectname(project).delete()
 
     def del_versiondata(self, project, version, cleanup=True):
@@ -604,25 +618,63 @@ class MirrorStage(BaseStage):
 
     def is_project_cached(self, project):
         """ return True if we have some cached simpelinks information. """
-        return self.key_projsimplelinks(project).exists()
+        return self.key_projectcacheinfo(project).exists()
 
     def _save_cache_links(self, project, links, requires_python, yanked, serial, etag):
         assert links != ()  # we don't store the old "Not Found" marker anymore
-        assert isinstance(serial, int)
+        assert isinstance(serial, int), serial
         assert project == normalize_name(project), project
-        data = {
-            "etag": etag,
-            "links": links,
-            "requires_python": requires_python,
-            "serial": serial,
-            "yanked": yanked,
-        }
+        data = {}
+        for fn, ep, rp, y in join_links_data(links, requires_python, yanked):
+            link_data = data[fn] = dict(entrypath=ep)
+            if rp is not None:
+                link_data["requires_python"] = rp
+            if y is not None:
+                link_data["yanked"] = y
         self.key_projectname(project).set(project)
-        key = self.key_projsimplelinks(project)
-        old = key.get()
+        self.key_projectcacheinfo(project).set(dict(serial=serial, etag=etag))
+        key_mirrorfile = self.key_mirrorfile(project)
+        name_key_map = {}
+        old = {}
+        for k, v in key_mirrorfile.iter_ulidkey_values():
+            name_key_map[k.name] = k
+            old[k.name] = v
+            assert v["entrypath"].rsplit("#", 1)[0].endswith(f"/{k.name}"), (k, v)
         if old != data:
-            threadlog.debug("saving changed simplelinks for %s: %s", project, data)
-            key.set(data)
+            threadlog.debug(
+                "processing changed simplelinks for %s in %s", project, self.index
+            )
+            num_unchanged = 0
+            num_changed = 0
+            num_deleted = 0
+            num_new = 0
+            for name, v in old.items():
+                new_value = data.pop(name, absent)
+                if new_value == v:
+                    num_unchanged += 1
+                    continue
+                key = name_key_map[name]
+                if new_value is absent:
+                    num_deleted += 1
+                    key.delete()
+                else:
+                    num_changed += 1
+                    key.set(new_value)
+            new_keys = [key_mirrorfile(name) for name in data]
+            for _k, ulid_key in self.keyfs.tx.resolve_keys(
+                new_keys, fetch=True, fill_cache=True, new_for_missing=True
+            ):
+                num_new += 1
+                ulid_key.set(data[ulid_key.name])
+            threadlog.debug(
+                "%s new, %s deleted, %s changed, and %s unchanged simplelinks for %s in %s",
+                num_new,
+                num_deleted,
+                num_changed,
+                num_unchanged,
+                project,
+                self.index,
+            )
             # maintain list of currently cached project names to enable
             # deletion and offline mode
             self.add_project_name(project)
@@ -639,15 +691,19 @@ class MirrorStage(BaseStage):
     def _load_cache_links(self, project):
         (is_expired, links_with_data, serial, etag) = (True, None, -1, None)
 
-        cache = self.key_projsimplelinks(project).get()
-        if cache:
+        links_with_data = None
+        if self.key_projectname(project).exists():
+            cache_info = self.key_projectcacheinfo(project).get()
+            serial = cache_info.get("serial", -1)
+            etag = cache_info.get("etag", None)
+            if cache_info:
+                key_mirrorfile = self.key_mirrorfile(project=project)
+                links_with_data = [
+                    (k.name, v["entrypath"], v.get("requires_python"), v.get("yanked"))
+                    for k, v in key_mirrorfile.iter_ulidkey_values()
+                ]
+        if links_with_data:
             is_expired = self.cache_retrieve_times.is_expired(project, self.cache_expiry)
-            serial = cache["serial"]
-            etag = cache.get("etag", None)
-            links_with_data = join_links_data(
-                cache["links"],
-                cache.get("requires_python", []),
-                cache.get("yanked", []))
             if self.offline and links_with_data:
                 entries = self.get_entries_for_entrypaths(x[1] for x in links_with_data)
                 links_with_data = ensure_deeply_readonly(
@@ -673,7 +729,7 @@ class MirrorStage(BaseStage):
         # we have to set to an empty dict instead of removing the key, so
         # replicas behave correctly
         self.cache_retrieve_times.expire(project)
-        self.key_projsimplelinks(project).set({})
+        self.key_projectcacheinfo(project).set({})
         threadlog.debug("cleared cache for %s", project)
 
     async def _async_fetch_releaselinks(
@@ -789,15 +845,18 @@ class MirrorStage(BaseStage):
 
         with self.keyfs.write_transaction(allow_restart=True):
             # on the master we need to write the updated links.
-            maplink = partial(
-                self.filestore.maplink,
-                user=self.user.name, index=self.index, project=project)
             existing_info = set(links or ())
-            # calling mapkey on the links creates the entries in the database
-            for newinfo, link in zip(newlinks, info["releaselinks"]):
-                if newinfo in existing_info:
-                    continue
-                maplink(link)
+            assert len(newlinks) == len(info["releaselinks"])
+            linkstomap = [
+                newlink
+                for newinfo, link in zip(newlinks, info["releaselinks"])
+                if (newlink := link) not in existing_info
+            ]
+            # looping over iter_maplinks creates the entries in the database
+            for _entry in self.filestore.iter_maplinks(
+                linkstomap, self.user.name, self.index, project
+            ):
+                pass
             # this stores the simple links info
             self._save_cache_links(
                 project,
@@ -964,13 +1023,21 @@ class MirrorStage(BaseStage):
         tx = self.keyfs.tx
         if at_serial is None:
             at_serial = tx.at_serial
-        info = tx.get_last_serial_and_value_at(
-            self.key_projsimplelinks(project), at_serial
+        (last_serial, projectname_ulid, projectname) = tx.get_last_serial_and_value_at(
+            self.key_projectname(project), at_serial
         )
-        if info is None:
-            # never existed
-            return -1
-        (last_serial, ulid, links) = info
+        if projectname in (absent, deleted):
+            # the whole project never existed or was deleted
+            return last_serial
+        for mirrorfile_key in tx.conn.iter_ulidkeys_at_serial(
+            (self.key_mirrorfile(project),),
+            at_serial=at_serial,
+            fill_cache=False,
+            with_deleted=True,
+        ):
+            last_serial = max(last_serial, mirrorfile_key.last_serial)
+            if last_serial >= at_serial:
+                return last_serial
         return last_serial
 
     def _get_elinks(
