@@ -15,7 +15,11 @@ if TYPE_CHECKING:
 
 @implementer(IIOFile)
 class DBIOFile:
-    def __init__(self, conn: Any) -> None:
+    def __init__(
+        self,
+        conn: Any,
+        settings: dict,  # noqa: ARG002
+    ) -> None:
         conn = IDBIOFileConnection(conn)
         verifyObject(IDBIOFileConnection, conn)
         self._dirty_files = conn.dirty_files
