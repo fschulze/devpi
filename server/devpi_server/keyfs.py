@@ -9,7 +9,6 @@ independent from any future changes.
 from __future__ import annotations
 
 import contextlib
-import py
 from . import mythread
 from .interfaces import IStorageConnection4
 from .interfaces import IWriter2
@@ -282,23 +281,15 @@ class KeyFS(object):
         self._import_subscriber = None
         self.notifier = TxNotificationThread(self)
         self._storage = storage(
-            py.path.local(self.base_path),
+            self.base_path,
             notify_on_commit=self._notify_on_commit,
-            cache_size=cache_size)
+            cache_size=cache_size,
+        )
         self.io_file_factory = io_file_factory
         self._readonly = readonly
 
     def __repr__(self):
         return f"<{self.__class__.__name__} {self.base_path}>"
-
-    @cached_property
-    def basedir(self):
-        warnings.warn(
-            "The basedir property is deprecated, "
-            "use base_path instead",
-            DeprecationWarning,
-            stacklevel=3)
-        return py.path.local(self.base_path)
 
     def get_connection(self, closing=True, write=False, timeout=30):
         try:
