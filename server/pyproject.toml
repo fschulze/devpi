@@ -131,7 +131,6 @@ exclude = [
     "devpi_server/view_auth.py",
     "devpi_server/views.py",
     "pytest_devpi_server/__init__.py",
-    "test_devpi_server/conftest.py",
     "test_devpi_server/functional.py",
     "test_devpi_server/plugin.py",
     "test_devpi_server/simpypi.py",
@@ -230,9 +229,6 @@ extend-ignore = [
     "I001", # maybe cleanup later - import block unsorted
 ]
 "devpi_server/hookspecs.py" = [
-    "I001", # maybe cleanup later - import block unsorted
-]
-"devpi_server/keyfs.py" = [
     "I001", # maybe cleanup later - import block unsorted
 ]
 "devpi_server/keyfs_sqlite.py" = [

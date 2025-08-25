@@ -12,20 +12,14 @@ import asyncio
 import sys
 import threading
 import time
-import warnings
 
 from collections import defaultdict
-from requests import Response, exceptions
 from devpi_common.terminal import TerminalWriter
 from devpi_common.types import cached_property
-from devpi_common.request import new_requests_session
 from .config import MyArgumentParser
 from .config import parseoptions, get_pluginmanager
-from .exceptions import lazy_format_exception_only
-from .httpclient import FatalResponse
 from .httpclient import HTTPClient
 from .httpclient import OfflineHTTPClient
-from .httpclient import get_caller_location
 from .log import configure_cli_logging
 from .log import configure_logging
 from .log import threadlog
@@ -46,14 +40,6 @@ if TYPE_CHECKING:
 
 class Fatal(Exception):
     pass
-
-
-def fatal(msg, *, exc=None):
-    warnings.warn(
-        "The 'fatal' function is deprecated, raise 'Fatal' exception directly.",
-        DeprecationWarning,
-        stacklevel=2)
-    raise Fatal(msg) from exc
 
 
 class CommandRunner:
@@ -273,7 +259,7 @@ class XOM:
     class Exiting(SystemExit):
         pass
 
-    def __init__(self, config, http=None, httpget=None):
+    def __init__(self, config, http=None):
         self.config = config
         self.thread_pool = mythread.ThreadPool()
         self.async_thread = AsyncioLoopThread(self)
@@ -282,10 +268,6 @@ class XOM:
         if http is not None:
             # overwrite for testing
             self.http = http
-        if httpget is not None:
-            # overwrite for testing
-            self.httpget = httpget  # type: ignore[method-assign]
-            self.async_httpget = httpget.async_httpget  # type: ignore[method-assign]
         self.log = threadlog
         self.polling_replicas = {}
         self._stagecache = {}
@@ -457,86 +439,14 @@ class XOM:
             timeout=getattr(self.config.args, "request_timeout", None),
         )
 
-    def _new_http_session(self, component_name):
-        return new_requests_session(agent=(component_name, server_version))
-
-    def new_http_session(self, component_name):
-        warnings.warn(
-            "The new_http_session method is deprecated, use new_http_client instead",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self._new_http_session(component_name)
-
     @cached_property
     def _http(self):
         return self.new_http_client("server")
 
     @cached_property
-    def _httpsession(self):
-        return self._new_http_session("server")
-
-    def _close_sessions(self):
-        self._http.close()
-        self._httpsession.close()
-
-    @cached_property
     def http(self):
         # this is overwritten for tests, while _http is not
         return self._http
-
-    async def async_httpget(self, url, allow_redirects, timeout=None, extra_headers=None):
-        warnings.warn(
-            "The async_httpget method is deprecated, use http.async_get instead",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return await self.http.async_get(
-            url,
-            allow_redirects=allow_redirects,
-            timeout=timeout,
-            extra_headers=extra_headers,
-        )
-
-    def httpget(self, url, allow_redirects, timeout=None, extra_headers=None):
-        warnings.warn(
-            "The httpget method is deprecated, use http.get instead",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        if self.config.offline_mode:
-            resp = Response()
-            resp.status_code = 503  # service unavailable
-            return resp
-        headers = {}
-        if extra_headers:
-            headers.update(extra_headers)
-        try:
-            resp = self._httpsession.get(
-                url, stream=True,
-                allow_redirects=allow_redirects,
-                headers=headers,
-                timeout=timeout or self.config.args.request_timeout)
-        except OSError as e:
-            location = get_caller_location()
-            threadlog.warn(
-                "OS error during httpget of %s at %s: %s",
-                url, location, lazy_format_exception_only(e))
-            return FatalResponse(url, repr(sys.exc_info()[1]))
-        except exceptions.ConnectionError as e:
-            location = get_caller_location()
-            threadlog.warn(
-                "Connection error during httpget of %s at %s: %s",
-                url, location, lazy_format_exception_only(e))
-            return FatalResponse(url, repr(sys.exc_info()[1]))
-        except self._httpsession.Errors as e:
-            location = get_caller_location()
-            threadlog.warn(
-                "HTTPError during httpget of %s at %s: %s",
-                url, location, lazy_format_exception_only(e))
-            return FatalResponse(url, repr(sys.exc_info()[1]))
-        else:
-            return resp
 
     def view_deriver(self, view, info):
         if self.is_replica():
@@ -692,13 +602,6 @@ class XOM:
         pyramid_config.scan("devpi_server.views")
         app = pyramid_config.make_wsgi_app()
         return OutsideURLMiddleware(app, self)
-
-    def is_master(self):
-        warnings.warn(
-            "is_master is deprecated, use is_primary instead.",
-            DeprecationWarning,
-            stacklevel=2)
-        return self.is_primary
 
     def is_primary(self):
         return self.config.role == "primary"

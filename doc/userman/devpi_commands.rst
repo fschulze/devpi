@@ -511,10 +511,10 @@ devpi command reference (server)
 
     $ devpi-server -h
     usage: devpi-server [-h] [-c CONFIGFILE]
-                        [--role {master,primary,replica,standalone,auto}]
-                        [--version] [--passwd USER] [--debug]
-                        [--logger-cfg LOGGER_CFG] [--host HOST] [--port PORT]
-                        [--listen LISTEN] [--unix-socket UNIX_SOCKET]
+                        [--role {primary,replica,standalone,auto}] [--version]
+                        [--passwd USER] [--debug] [--logger-cfg LOGGER_CFG]
+                        [--host HOST] [--port PORT] [--listen LISTEN]
+                        [--unix-socket UNIX_SOCKET]
                         [--unix-socket-perms UNIX_SOCKET_PERMS]
                         [--threads THREADS] [--connection-limit CONNECTION_LIMIT]
                         [--trusted-proxy TRUSTED_PROXY]
@@ -523,8 +523,7 @@ devpi command reference (server)
                         [--max-request-body-size MAX_REQUEST_BODY_SIZE]
                         [--outside-url URL] [--absolute-urls]
                         [--profile-requests NUM] [--mirror-cache-expiry SECS]
-                        [--primary-url PRIMARY_URL]
-                        [--master-url DEPRECATED_MASTER_URL]
+                        [--primary-url PRIMARY_URL] [--replica-max-retries NUM]
                         [--replica-file-search-path PATH] [--hard-links]
                         [--file-replication-threads NUM] [--proxy-timeout NUM]
                         [--no-replica-streaming] [--request-timeout NUM]
@@ -543,13 +542,12 @@ devpi command reference (server)
       -h, --help            Show this help message and exit.
       -c CONFIGFILE, --configfile CONFIGFILE
                             Config file to use. [None]
-      --role {master,primary,replica,standalone,auto}
+      --role {primary,replica,standalone,auto}
                             set role of this instance. The default 'auto' sets
                             'standalone' by default and 'replica' if the
                             --primary-url option is used. To enable the
                             replication protocol you have to explicitly set the
-                            'primary' role. The 'master' role is the deprecated
-                            variant of 'primary'. [auto]
+                            'primary' role. [auto]
       --version             show devpi_version (7.0.0) [False]
       --passwd USER         (DEPRECATED, use devpi-passwd command) set password
                             for user USER (interactive) [None]
@@ -612,8 +610,6 @@ devpi command reference (server)
       --primary-url PRIMARY_URL
                             run as a replica of the specified primary server
                             [None]
-      --master-url DEPRECATED_MASTER_URL
-                            DEPRECATED, use --primary-url instead [None]
       --replica-file-search-path PATH
                             path to existing files to try before downloading from
                             primary. These could be from a previous replication
@@ -788,9 +784,8 @@ devpi command reference (server)
 
     $ devpi-init -h
     usage: devpi-init [-h] [-c CONFIGFILE] [--debug] [--logger-cfg LOGGER_CFG]
-                      [--role {master,primary,replica,standalone,auto}]
-                      [--primary-url PRIMARY_URL]
-                      [--master-url DEPRECATED_MASTER_URL] [--serverdir DIR]
+                      [--role {primary,replica,standalone,auto}]
+                      [--primary-url PRIMARY_URL] [--serverdir DIR]
                       [--storage NAME] [--keyfs-cache-size NUM] [--no-root-pypi]
                       [--root-passwd ROOT_PASSWD]
                       [--root-passwd-hash ROOT_PASSWD_HASH]
@@ -805,18 +800,15 @@ devpi command reference (server)
       --logger-cfg LOGGER_CFG
                             path to .json or .yaml logger configuration file.
                             [None]
-      --role {master,primary,replica,standalone,auto}
+      --role {primary,replica,standalone,auto}
                             set role of this instance. The default 'auto' sets
                             'standalone' by default and 'replica' if the
                             --primary-url option is used. To enable the
                             replication protocol you have to explicitly set the
-                            'primary' role. The 'master' role is the deprecated
-                            variant of 'primary'. [auto]
+                            'primary' role. [auto]
       --primary-url PRIMARY_URL
                             run as a replica of the specified primary server
                             [None]
-      --master-url DEPRECATED_MASTER_URL
-                            DEPRECATED, use --primary-url instead [None]
       --serverdir DIR       directory for server data. [~/.devpi/server]
       --storage NAME        the storage backend to use. "pg8000": Postgresql
                             backend, "sqlite": SQLite backend with files on the

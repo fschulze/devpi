@@ -15,7 +15,6 @@ from .main import Fatal
 from .model import UpstreamError
 from .normalized import normalize_name
 from .views import FileStreamer
-from .views import H_MASTER_UUID
 from .views import H_PRIMARY_UUID
 from devpi_common.types import cached_property
 from devpi_common.url import URL
@@ -39,7 +38,6 @@ import sys
 import threading
 import time
 import traceback
-import warnings
 
 
 if TYPE_CHECKING:
@@ -444,60 +442,6 @@ class ReplicaThread:
         self.http = HTTPClient(xom)
         self.initial_fetch = True
 
-    def get_master_serial(self):
-        warnings.warn(
-            "get_master_serial is deprecated, use get_primary_serial instead",
-            DeprecationWarning,
-            stacklevel=2)
-        return self.get_primary_serial()
-
-    def get_master_serial_timestamp(self):
-        warnings.warn(
-            "get_master_serial_timestamp is deprecated, use get_primary_serial_timestamp instead",
-            DeprecationWarning,
-            stacklevel=2)
-        return self.get_primary_serial_timestamp()
-
-    @property
-    def _master_serial(self):
-        warnings.warn(
-            "_master_serial is deprecated, use _primary_serial instead",
-            DeprecationWarning,
-            stacklevel=2)
-        return self._primary_serial
-
-    @property
-    def _master_serial_timestamp(self):
-        warnings.warn(
-            "_master_serial_timestamp is deprecated, use _primary_serial_timestamp instead",
-            DeprecationWarning,
-            stacklevel=2)
-        return self._primary_serial_timestamp
-
-    @property
-    def master_contacted_at(self):
-        warnings.warn(
-            "master_contacted_at is deprecated, use primary_contacted_at instead",
-            DeprecationWarning,
-            stacklevel=2)
-        return self.primary_contacted_at
-
-    @property
-    def master_url(self):
-        warnings.warn(
-            "master_url is deprecated, use primary_url instead",
-            DeprecationWarning,
-            stacklevel=2)
-        return self.primary_url
-
-    @property
-    def update_from_master_at(self):
-        warnings.warn(
-            "update_from_master_at is deprecated, use update_from_primary_at instead",
-            DeprecationWarning,
-            stacklevel=2)
-        return self.update_from_primary_at
-
     def get_primary_serial(self):
         return self._primary_serial
 
@@ -565,23 +509,16 @@ class ReplicaThread:
             # we check that the remote instance
             # has the same UUID we saw last time
             primary_uuid = config.get_primary_uuid()
-            remote_primary_uuid = r.headers.get(
-                H_PRIMARY_UUID,
-                r.headers.get(H_MASTER_UUID))
-            if H_MASTER_UUID in r.headers and r.headers.get(H_MASTER_UUID, remote_primary_uuid) != remote_primary_uuid:
-                log.error(
-                    "remote has differing values for %r and %r headers: %s",
-                    H_PRIMARY_UUID, H_MASTER_UUID, r.headers)
-                self.thread.sleep(self.ERROR_SLEEP)
-                return True
+            remote_primary_uuid = r.headers.get(H_PRIMARY_UUID)
             if not remote_primary_uuid:
                 # we don't fatally leave the process because
                 # it might just be a temporary misconfiguration
                 # for example of a nginx frontend
-                log.error("remote provides no %r or %r header, running "
-                          "<devpi-server-2.1?"
-                          " headers were: %s",
-                          H_PRIMARY_UUID, H_MASTER_UUID, r.headers)
+                log.error(
+                    "remote provides no %r header, headers were: %s",
+                    H_PRIMARY_UUID,
+                    r.headers,
+                )
                 self.thread.sleep(self.ERROR_SLEEP)
                 return True
             if primary_uuid and remote_primary_uuid != primary_uuid:

@@ -15,7 +15,6 @@ from devpi_server.log import threadlog
 from devpi_server.markers import absent
 from inspect import currentframe
 from urllib.parse import unquote
-import warnings
 
 
 def _get_default_hash_types():  # this is a function for testing
@@ -188,50 +187,6 @@ def best_available_hash_type(hashes):
         return "md5"
     # return whatever else we got in first position
     return next(iter(hashes))
-
-
-def get_default_hash_algo():
-    warnings.warn(
-        "The get_default_hash_algo function is deprecated",
-        DeprecationWarning,
-        stacklevel=2)
-    return getattr(hashlib, DEFAULT_HASH_TYPE)
-
-
-def get_default_hash_spec(content_or_file):
-    warnings.warn(
-        "The get_default_hash_spec function is deprecated, "
-        "use get_hashes instead",
-        DeprecationWarning,
-        stacklevel=2)
-    return get_hashes(content_or_file, hash_types=(DEFAULT_HASH_TYPE,)).get_default_spec()
-
-
-def get_default_hash_type():
-    warnings.warn(
-        "The get_default_hash_type function is deprecated, "
-        "use get_hashes instead",
-        DeprecationWarning,
-        stacklevel=2)
-    return DEFAULT_HASH_TYPE
-
-
-def get_default_hash_value(content_or_file):
-    warnings.warn(
-        "The get_default_hash_value function is deprecated, "
-        "use get_hashes instead",
-        DeprecationWarning,
-        stacklevel=2)
-    return get_hashes(content_or_file, hash_types=(DEFAULT_HASH_TYPE,)).get_default_value()
-
-
-def get_file_hash(fp, hash_type):
-    warnings.warn(
-        "The get_file_hash function is deprecated, "
-        "use get_hashes instead",
-        DeprecationWarning,
-        stacklevel=2)
-    return get_hashes(fp, hash_types=(hash_type,))[hash_type]
 
 
 def get_hashes(content_or_file, *, hash_types=absent, additional_hash_types=None):
@@ -472,54 +427,8 @@ class BaseFileEntry:
         return Digests() if self._hashes is None else Digests(self._hashes)
 
     @property
-    def hash_algo(self):
-        warnings.warn(
-            "The hash_algo property is deprecated.",
-            DeprecationWarning,
-            stacklevel=2)
-        if hash_spec := self.hashes.best_available_spec:
-            return parse_hash_spec(hash_spec)[0]
-        return get_default_hash_algo()
-
-    @property
-    def hash_spec(self):
-        warnings.warn(
-            "The hash_spec property is deprecated, "
-            "use best_available_hash_spec instead",
-            DeprecationWarning,
-            stacklevel=2)
-        return self.hashes.best_available_spec
-
-    @property
-    def hash_value(self):
-        warnings.warn(
-            "The hash_value property is deprecated, "
-            "use best_available_hash_value instead",
-            DeprecationWarning,
-            stacklevel=2)
-        return self.hashes.best_available_value
-
-    @property
-    def hash_type(self):
-        warnings.warn(
-            "The hash_type property is deprecated, "
-            "use best_available_hash_type instead",
-            DeprecationWarning,
-            stacklevel=2)
-        return self.hashes.best_available_type
-
-    @property
     def ref_hash_spec(self):
         return self.hashes.get_default_spec()
-
-    def file_get_checksum(self, hash_type):
-        warnings.warn(
-            "The file_get_checksum method is deprecated, "
-            "use file_get_hash_errors instead",
-            DeprecationWarning,
-            stacklevel=2)
-        with self.file_open_read() as f:
-            return get_file_hash(f, hash_type)
 
     def file_get_hash_errors(self, hashes=None):
         if hashes is None:
@@ -674,28 +583,3 @@ class MutableFileEntry(BaseFileEntry):
     @property
     def readonly(self):
         return False
-
-
-def get_checksum_error(content_or_hash, relpath, hash_spec):
-    warnings.warn(
-        "The get_checksum_error function is deprecated, "
-        "use get_hashes(...).exception_for instead",
-        DeprecationWarning,
-        stacklevel=2)
-    if not hash_spec:
-        return
-    hash_algo, hash_value = parse_hash_spec(hash_spec)
-    hash_type = hash_spec.split("=")[0]
-    hexdigest = getattr(content_or_hash, "hexdigest", None)
-    if callable(hexdigest):
-        hexdigest = hexdigest()
-        if content_or_hash.name != hash_type:
-            return ChecksumError(
-                f"{relpath}: hash type mismatch, "
-                f"got {content_or_hash.name}, expected {hash_type}")
-    else:
-        hexdigest = hash_algo(content_or_hash).hexdigest()
-    if hexdigest != hash_value:
-        return ChecksumError(
-            f"{relpath}: {hash_type} mismatch, "
-            f"got {hexdigest}, expected {hash_value}")

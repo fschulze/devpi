@@ -1128,21 +1128,6 @@ def test_requests_http_get_negative_status_code(xom, monkeypatch):
     assert l
 
 
-@pytest.mark.filterwarnings("ignore:The httpget")
-@pytest.mark.nomocking
-def test_requests_httpget_negative_status_code(xom, monkeypatch):
-    l = []
-
-    def r(*a, **k):
-        l.append(1)
-        raise requests.exceptions.RequestException()
-
-    monkeypatch.setattr(xom._httpsession, "get", r)
-    r = xom.httpget("http://notexists.qwe", allow_redirects=False)
-    assert r.status_code == -1
-    assert l
-
-
 @pytest.mark.nomocking
 def test_requests_http_get_timeout(xom, monkeypatch):
     def http_get(_url, **kw):
@@ -1154,19 +1139,6 @@ def test_requests_http_get_timeout(xom, monkeypatch):
     assert r.status_code == -1
 
 
-@pytest.mark.filterwarnings("ignore:The httpget")
-@pytest.mark.nomocking
-def test_requests_httpget_timeout(xom, monkeypatch):
-    def httpget(url, **kw):
-        assert kw["timeout"] == 1.2
-        raise requests.exceptions.Timeout()
-
-    monkeypatch.setattr(xom._httpsession, "get", httpget)
-    r = xom.httpget("http://notexists.qwe", allow_redirects=False,
-                              timeout=1.2)
-    assert r.status_code == -1
-
-
 @pytest.mark.nomocking
 @pytest.mark.parametrize("exc", [OSError, requests.exceptions.ConnectionError])
 def test_requests_http_get_error(exc, xom, monkeypatch):
@@ -1175,20 +1147,6 @@ def test_requests_http_get_error(exc, xom, monkeypatch):
 
     monkeypatch.setattr(xom._http.client, "get", http_get)
     r = xom.http.get("http://notexists.qwe", allow_redirects=False)
-    assert r.status_code == -1
-
-
-@pytest.mark.filterwarnings("ignore:The httpget")
-@pytest.mark.nomocking
-@pytest.mark.parametrize("exc", [
-    OSError,
-    requests.exceptions.ConnectionError])
-def test_requests_httpget_error(exc, xom, monkeypatch):
-    def httpget(url, **kw):
-        raise exc()
-
-    monkeypatch.setattr(xom._httpsession, "get", httpget)
-    r = xom.httpget("http://notexists.qwe", allow_redirects=False)
     assert r.status_code == -1
 
 
@@ -1242,22 +1200,6 @@ async def test_http_async_user_agent(server_version, simpypi, xom):
     ((_, headers), *_) = simpypi.requests
     assert headers["User-Agent"] == f"devpi-server/{server_version}"
     simpypi.requests.clear()
-
-
-@pytest.mark.filterwarnings("ignore:The async_httpget")
-@pytest.mark.asyncio
-@pytest.mark.nomocking
-@pytest.mark.parametrize("exc", [
-    OSError(),
-    httpx.RequestError(message="fail")])
-async def test_async_httpget_error(exc, xom, monkeypatch):
-
-    async def async_httpget(self, url, **kw):
-        raise exc
-
-    monkeypatch.setattr(httpx.AsyncClient, "get", async_httpget)
-    r = await xom.async_httpget("http://notexists.qwe", allow_redirects=False)
-    assert r.status_code == -1
 
 
 @pytest.mark.asyncio

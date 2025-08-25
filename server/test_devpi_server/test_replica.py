@@ -8,7 +8,6 @@ from devpi_server.fileutil import loads
 from devpi_server.keyfs import MissingFileException
 from devpi_server.keyfs_types import FilePathInfo
 from devpi_server.log import threadlog, thread_push_log
-from devpi_server.replica import H_EXPECTED_MASTER_ID, H_MASTER_UUID
 from devpi_server.replica import H_EXPECTED_PRIMARY_ID, H_PRIMARY_UUID
 from devpi_server.replica import H_REPLICA_UUID, H_REPLICA_OUTSIDE_URL
 from devpi_server.replica import PrimaryChangelogRequest
@@ -39,7 +38,6 @@ def testapp(testapp):
     assert testapp.xom.config.role == "primary"
     primary_uuid = testapp.xom.config.get_primary_uuid()
     assert primary_uuid
-    testapp.set_header_default(H_EXPECTED_MASTER_ID, primary_uuid)
     testapp.set_header_default(H_EXPECTED_PRIMARY_ID, primary_uuid)
     return testapp
 
@@ -106,17 +104,13 @@ class TestChangelog:
         token = auth_serializer.dumps(self.replica_uuid)
         testapp.xget(400, "/+changelog/0", headers={
             H_REPLICA_UUID: self.replica_uuid,
-            H_EXPECTED_MASTER_ID: "123",
             H_EXPECTED_PRIMARY_ID: "123",
             'Authorization': 'Bearer %s' % token})
         r = testapp.xget(200, "/+changelog/0", headers={
             H_REPLICA_UUID: self.replica_uuid,
-            H_EXPECTED_MASTER_ID: '',
             H_EXPECTED_PRIMARY_ID: '',
             'Authorization': 'Bearer %s' % token})
-        assert r.headers[H_MASTER_UUID]
         assert r.headers[H_PRIMARY_UUID]
-        del testapp.headers[H_EXPECTED_MASTER_ID]
         del testapp.headers[H_EXPECTED_PRIMARY_ID]
         testapp.xget(400, "/+changelog/0")
 
@@ -191,7 +185,6 @@ class TestReplicaThread:
                 headers = {}
             headers = {k.lower(): v for k, v in headers.items()}
             if uuid is not None:
-                headers.setdefault(H_MASTER_UUID.lower(), uuid)
                 headers.setdefault(H_PRIMARY_UUID.lower(), uuid)
             headers.setdefault("x-devpi-serial", str(2))
             if headers["x-devpi-serial"] is None:
@@ -283,30 +276,6 @@ class TestReplicaThread:
         with pytest.raises(ZeroDivisionError):
             rt.thread_run()
         assert caplog.getrecords("primary UUID.*001.*does not match")
-
-    def test_thread_run_ok_uuid_change_master(self, rt, mockchangelog, caplog, xom, monkeypatch):
-        monkeypatch.setattr("os._exit", lambda _n: 0 / 0)
-        rt.thread.sleep = lambda *_x: 0 / 0
-        data = get_raw_changelog_entry(xom, 0)
-        mockchangelog(0, code=200, data=data)
-        mockchangelog(
-            1, code=200, data=data, uuid=None,
-            headers={"x-devpi-master-uuid": "001"})
-        with pytest.raises(ZeroDivisionError):
-            rt.thread_run()
-        assert caplog.getrecords("primary UUID.*001.*does not match")
-
-    def test_thread_run_ok_uuid_change_master_differs(self, rt, mockchangelog, caplog, xom, monkeypatch):
-        monkeypatch.setattr("os._exit", lambda _n: 0 / 0)
-        rt.thread.sleep = lambda *_x: 0 / 0
-        data = get_raw_changelog_entry(xom, 0)
-        mockchangelog(0, code=200, data=data)
-        mockchangelog(
-            1, code=200, data=data,
-            headers={"x-devpi-master-uuid": "001"})
-        with pytest.raises(ZeroDivisionError):
-            rt.thread_run()
-        assert caplog.getrecords("remote has differing values for.*UUID.*001.*")
 
     def test_thread_run_ok_uuid_change_primary(self, rt, mockchangelog, caplog, xom, monkeypatch):
         monkeypatch.setattr("os._exit", lambda _n: 0 / 0)
@@ -402,7 +371,7 @@ def test_clean_response_headers(mock):
     assert 'EGG' in headers
 
 
-class TestProxyViewToMaster:
+class TestProxyViewToPrimary:
     def test_write_proxies(self, makexom, blank_request, monkeypatch):
         xom = makexom(["--primary-url", "http://localhost"])
         monkeypatch.setattr(xom, "_http", xom.http)

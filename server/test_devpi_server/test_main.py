@@ -245,19 +245,6 @@ def test_offline_mode_http_get_returns_server_error(makexom, url, allowRedirect)
     assert r.status_code == 503
 
 
-@pytest.mark.filterwarnings("ignore:The httpget")
-@pytest.mark.nomocking
-@pytest.mark.parametrize("url", [
-    "http://someserver/path",
-    "https://pypi.org/simple/package/",
-])
-@pytest.mark.parametrize("allowRedirect", [True, False])
-def test_offline_mode_httpget_returns_server_error(makexom, url, allowRedirect):
-    xom = makexom(["--offline-mode"], httpget=XOM.httpget)
-    r = xom.httpget(url, allow_redirects=allowRedirect)
-    assert r.status_code == 503
-
-
 @pytest.mark.nomocking
 @pytest.mark.parametrize("input_set", [
     {'timeout': 5, 'arg': [], 'kwarg': None},
@@ -288,26 +275,6 @@ def test_request_args_timeout_handover(makexom, monkeypatch, input_set):
             allow_redirects=False,
             timeout=input_set["kwarg"],
         )
-
-
-@pytest.mark.filterwarnings("ignore:The httpget")
-@pytest.mark.nomocking
-@pytest.mark.parametrize(
-    "input_set",
-    [
-        {"timeout": 5, "arg": [], "kwarg": None},
-        {"timeout": 42, "arg": ["--request-timeout=42"], "kwarg": None},
-        {"timeout": 123, "arg": [], "kwarg": 123},
-    ],
-)
-def test_request_args_timeout_handover_httpget(makexom, monkeypatch, input_set):
-    def mock_httpget(*_args, **kwargs):
-        assert kwargs["timeout"] == input_set["timeout"]
-
-    xom = makexom(input_set["arg"])
-    monkeypatch.setattr(xom._httpsession, "get", mock_httpget)
-
-    xom.httpget("http://whatever", allow_redirects=False, timeout=input_set['kwarg'])
 
 
 def test_no_root_pypi_option(gen_path, makexom, storage_args):
