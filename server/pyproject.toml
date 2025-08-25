@@ -233,13 +233,7 @@ extend-ignore = [
 "devpi_server/fileutil.py" = [
     "I001", # maybe cleanup later - import block unsorted
 ]
-"devpi_server/genconfig.py" = [
-    "I001", # maybe cleanup later - import block unsorted
-]
 "devpi_server/hookspecs.py" = [
-    "I001", # maybe cleanup later - import block unsorted
-]
-"devpi_server/importexport.py" = [
     "I001", # maybe cleanup later - import block unsorted
 ]
 "devpi_server/keyfs.py" = [
@@ -273,9 +267,6 @@ extend-ignore = [
     "I001", # maybe cleanup later - import block unsorted
 ]
 "test_devpi_server/test_config.py" = [
-    "I001", # maybe cleanup later - import block unsorted
-]
-"test_devpi_server/test_filestore.py" = [
     "I001", # maybe cleanup later - import block unsorted
 ]
 "test_devpi_server/test_fileutil.py" = [
