@@ -1339,21 +1339,14 @@ class PrivateStage(BaseStage):
             user=self.username, index=self.index, project=normalize_name(project), **kw
         )
 
-    def key_versionfilelist(self, project, version):
-        return self.keyfs.VERSIONFILELIST(
-            user=self.username,
-            index=self.index,
-            project=normalize_name(project),
-            version=version,
-        )
-
-    def key_versionfile(self, project, version, filename):
+    def key_versionfile(self, project, version, filename=None):
+        kw = {} if filename is None else dict(filename=filename)
         return self.keyfs.VERSIONFILE(
             user=self.username,
             index=self.index,
             project=normalize_name(project),
             version=version,
-            filename=filename,
+            **kw,
         )
 
     def _set_versiondata(self, metadata):
@@ -1393,7 +1386,6 @@ class PrivateStage(BaseStage):
         linkstore = self.get_mutable_linkstore_perstage(project, version)
         linkstore.remove_links()
         self.key_projversion(project, version).delete()
-        self.key_versionfilelist(project, version).delete()
         if cleanup:
             self._regen_simplelinks(project)
             has_versions = (
@@ -1422,10 +1414,10 @@ class PrivateStage(BaseStage):
         return {x.name for x in self.key_projversion(project).iter_ulidkeys()}
 
     def _get_elinks(self, project, version):
-        filenames = self.key_versionfilelist(project, version).get()
+        if not self.key_projversion(project, version).exists():
+            return []
         return [
-            self.key_versionfile(project, version, filename).get()
-            for filename in sorted(filenames)
+            v for k, v in self.key_versionfile(project, version).iter_ulidkey_values()
         ]
 
     def get_has_versiondata_perstage(self, project, version):
@@ -1451,32 +1443,16 @@ class PrivateStage(BaseStage):
             last_serial = max(last_serial, version_keydata.key.last_serial)
             if last_serial >= at_serial:
                 return last_serial
-            version_info = version_keydata.value
-            if version_info in (absent, deleted):
+            if version_keydata.value in (absent, deleted):
                 continue
             version = version_keydata.key.name
-            (versionfiles_serial, versionfiles_info_ulid, versionfiles_info) = (
-                tx.get_last_serial_and_value_at(
-                    self.key_versionfilelist(project, version), at_serial
-                )
-            )
-            if versionfiles_info in (absent, deleted):
-                continue
-            last_serial = max(last_serial, versionfiles_serial)
-            if last_serial >= at_serial:
-                return last_serial
-            for filename in versionfiles_info:
-                (versionfile_serial, versionfile_info_ulid, versionfile_info) = (
-                    tx.get_last_serial_and_value_at(
-                        self.key_versionfile(project, version, filename), at_serial
-                    )
-                )
-                if versionfile_info in (absent, deleted):
-                    continue
-                last_serial = max(last_serial, versionfile_serial)
-                if last_serial >= at_serial:
-                    return last_serial
-                last_serial = max(last_serial, versionfile_serial)
+            for versionfile_key in tx.conn.iter_ulidkeys_at_serial(
+                (self.key_versionfile(project, version),),
+                at_serial=at_serial,
+                fill_cache=False,
+                with_deleted=True,
+            ):
+                last_serial = max(last_serial, versionfile_key.last_serial)
                 if last_serial >= at_serial:
                     return last_serial
         return last_serial
@@ -1626,29 +1602,16 @@ class PrivateStage(BaseStage):
                 last_serial = max(last_serial, version_keydata.key.last_serial)
                 if last_serial >= at_serial:
                     return last_serial
-                version = version_keydata.key.name
-                try:
-                    (versionfiles_serial, versionfilenames) = (
-                        tx.last_serial_and_value_at(
-                            self.key_versionfilelist(project, version), at_serial
-                        )
-                    )
-                except KeyError:
+                if version_keydata.value in (absent, deleted):
                     continue
-                last_serial = max(last_serial, versionfiles_serial)
-                if last_serial >= at_serial:
-                    return last_serial
-                for filename in versionfilenames:
-                    try:
-                        (versionfile_serial, versionfile_info) = (
-                            tx.last_serial_and_value_at(
-                                self.key_versionfile(project, version, filename),
-                                at_serial,
-                            )
-                        )
-                    except KeyError:
-                        continue
-                    last_serial = max(last_serial, versionfile_serial)
+                version = version_keydata.key.name
+                for versionfile_key in tx.conn.iter_ulidkeys_at_serial(
+                    (self.key_versionfile(project, version),),
+                    at_serial=at_serial,
+                    fill_cache=False,
+                    with_deleted=True,
+                ):
+                    last_serial = max(last_serial, versionfile_key.last_serial)
                     if last_serial >= at_serial:
                         return last_serial
         # no project uploaded yet
@@ -1869,24 +1832,17 @@ class MutableLinkStore(LinkStore):
     def remove_links(self, rel=None, basename=None, for_entrypath=None):
         del_links = self.get_links(rel=rel, basename=basename, for_entrypath=for_entrypath)
         was_deleted = []
+        key_versionfile = self.stage.key_versionfile(self.project, self.version)
         if del_links:
-            with self.stage.key_versionfilelist(
-                self.project, self.version
-            ).update() as versionfilenames:
-                for link in del_links:
-                    filename = link.entry.basename
-                    self.verdata["+elinks"].remove(link.linkdict)
-                    link.entry.delete()
-                    versionfilenames.remove(filename)
-                    self.stage.key_versionfile(
-                        self.project, self.version, filename
-                    ).delete()
-                    was_deleted.append(link.relpath)
-                    threadlog.info("deleted %r link %s", link.rel, link.relpath)
-        if (
-            was_deleted
-            and self.stage.key_versionfilelist(self.project, self.version).get()
-        ):
+            for link in del_links:
+                filename = link.entry.basename
+                self.verdata["+elinks"].remove(link.linkdict)
+                link.entry.delete()
+                key_versionfile(filename).delete()
+                was_deleted.append(link.relpath)
+                threadlog.info("deleted %r link %s", link.rel, link.relpath)
+        has_versionfiles = next(key_versionfile.iter_ulidkeys(), absent) is not absent
+        if was_deleted and has_versionfiles:
             for relpath in was_deleted:
                 self.remove_links(for_entrypath=relpath)
 
@@ -1915,11 +1871,10 @@ class MutableLinkStore(LinkStore):
         if for_link:
             assert isinstance(for_link, ELink)
             new_linkdict["for_entrypath"] = for_link.relpath
-        with self.stage.key_versionfilelist(
-            self.project, self.version
-        ).update() as versionfilelist:
-            assert file_entry.basename not in versionfilelist, file_entry.basename
-            versionfilelist.add(file_entry.basename)
+        if self.stage.key_versionfile(
+            self.project, self.version, file_entry.basename
+        ).exists():
+            raise RuntimeError
         self.stage.key_versionfile(self.project, self.version, file_entry.basename).set(
             new_linkdict
         )
@@ -2100,7 +2055,6 @@ def register_keys(xom, keyfs):
     version_key = keyfs.register_named_key(
         "PROJVERSION", "{version}", project_key, dict
     )
-    keyfs.register_anonymous_key("VERSIONFILELIST", version_key, set)
     keyfs.register_named_key("VERSIONFILE", "{filename}", version_key, dict)
     keyfs.register_named_key(
         "STAGEFILE", "+f/{hashdir_a}/{hashdir_b}/{filename}", index_key, dict
