@@ -482,11 +482,12 @@ def replay(xom, replica_xom, events=True):
     # replay notifications
     if events:
         noti_thread = replica_xom.keyfs.notifier
+        noti_thread.log = threadlog
         event_serial = noti_thread.read_event_serial()
         thread_push_log("NOTI")
         while event_serial < replica_xom.keyfs.get_current_serial():
             event_serial += 1
-            noti_thread._execute_hooks(event_serial, threadlog, raising=True)
+            noti_thread._execute_hooks(event_serial, raising=True)
             noti_thread.write_event_serial(event_serial)
         thread_pop_log("NOTI")
 
@@ -885,10 +886,16 @@ class TestFileReplication:
         primary_file_path = primary_url.joinpath(entry.relpath).url
         # simulate some 500 primary server error
         replica_xom.frt.http.mockresponse(primary_file_path, code=500, content=b"")
-        with pytest.raises(MissingFileException) as e:
+        with pytest.raises(
+            MissingFileException, match="missing file .* at serial 2"
+        ) as e:
             # the event handling will stop with an exception
             replay(xom, replica_xom)
-        assert str(e.value) == "missing file 'root/pypi/+e/https_pypi.org_package_some/some-1.8.zip' at serial 2"
+        assert (
+            e.value.key.relpath
+            == "root/pypi/+e/https_pypi.org_package_some/some-1.8.zip"
+        )
+        assert e.value.serial == 2
         assert replica_xom.keyfs.get_current_serial() == xom.keyfs.get_current_serial()
         # event handling hasn't progressed
         assert replica_xom.keyfs.notifier.read_event_serial() == 1

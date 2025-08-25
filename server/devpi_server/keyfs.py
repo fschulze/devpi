@@ -19,7 +19,7 @@ from .keyfs_types import KeyData
 from .keyfs_types import LocatedKey
 from .keyfs_types import PatternedKey
 from .keyfs_types import Record
-from .keyfs_types import ULID
+from .keyfs_types import ULIDKey
 from .log import thread_change_log_prefix
 from .log import thread_pop_log
 from .log import thread_push_log
@@ -35,18 +35,24 @@ from attrs import frozen
 from devpi_common.types import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING
+from typing import cast
+from typing import overload
 import contextlib
 import errno
 import time
 
 
 if TYPE_CHECKING:
-    from .keyfs_types import IKeyFSKey
     from .keyfs_types import KeyFSTypes
     from .keyfs_types import KeyFSTypesRO
+    from .keyfs_types import StorageInfo
+    from .log import TagLogger
     from .markers import Deleted
     from .mythread import MyThread
     from collections.abc import Iterator
+    from collections.abc import Sequence
+    from typing import Any
+    from typing import Callable
 
 
 class KeyfsTimeoutError(TimeoutError):
@@ -54,15 +60,19 @@ class KeyfsTimeoutError(TimeoutError):
 
 
 class MissingFileException(Exception):
-    def __init__(self, relpath, serial):
-        msg = "missing file '%s' at serial %s" % (relpath, serial)
-        super(MissingFileException, self).__init__(msg)
-        self.relpath = relpath
+    def __init__(self, key, serial, missing_source):
+        msg = f"missing file '{key}' at serial {serial}"
+        if missing_source:
+            msg = f"{msg} {missing_source}"
+        super().__init__(msg)
+        self.key = key
         self.serial = serial
 
 
 class TxNotificationThread:
     _get_ixconfig_cache: dict[tuple[str, str], dict | None]
+    _on_key_change: dict[str, list[Callable]]
+    log: TagLogger
     thread: MyThread
 
     def __init__(self, keyfs):
@@ -128,7 +138,7 @@ class TxNotificationThread:
         while event_serial < self.keyfs.get_current_serial():
             self.thread.exit_if_shutdown()
             event_serial += 1
-            self._execute_hooks(event_serial, self.log)
+            self._execute_hooks(event_serial)
             with self.cv_new_event_serial:
                 self.write_event_serial(event_serial)
                 self.cv_new_event_serial.notify_all()
@@ -149,20 +159,22 @@ class TxNotificationThread:
                 raise
             except MissingFileException as e:
                 self.log.warning(
-                    "Waiting for file %s in event serial %s",
-                    e.relpath, e.serial)
+                    "Waiting for file %s in event serial %s", e.key, e.serial
+                )
                 self.thread.sleep(5)
             except Exception:
                 self.log.exception(
                     "Unhandled exception in notification thread.")
                 self.thread.sleep(1.0)
 
-    def get_ixconfig(self, entry, event_serial):
+    def get_ixconfig(
+        self, entry: FileEntry, at_serial: int
+    ) -> dict[str, object] | None:
         user = entry.user
         index = entry.index
-        if getattr(self, '_get_ixconfig_cache_serial', None) != event_serial:
+        if getattr(self, "_get_ixconfig_cache_serial", None) != at_serial:
             self._get_ixconfig_cache = {}
-            self._get_ixconfig_cache_serial = event_serial
+            self._get_ixconfig_cache_serial = at_serial
         cache_key = (user, index)
         if cache_key in self._get_ixconfig_cache:
             return self._get_ixconfig_cache[cache_key]
@@ -182,73 +194,79 @@ class TxNotificationThread:
         self._get_ixconfig_cache[cache_key] = ixconfig
         return ixconfig
 
-    def _execute_hooks(self, event_serial, log, raising=False):
-        log.debug("calling hooks for tx%s", event_serial)
+    def skip_by_index_config(self, ixconfig: dict[str, object] | None) -> bool:
+        if ixconfig is None:
+            # the index doesn't exist (anymore)
+            return True
+        # check if the index uses external URLs now
+        return ixconfig.get("type") == "mirror" and bool(
+            ixconfig.get("mirror_use_external_urls", False)
+        )
+
+    def check_file_change(self, change: KeyData, event_serial: int) -> None:
+        missing_source = ""
+        key = self.keyfs.get_key_instance(change.key.key_name, change.key.relpath)
+        entry = FileEntry(key, change.value)
+        if entry.deleted_or_never_fetched or self.skip_by_index_config(
+            self.get_ixconfig(entry, event_serial)
+        ):
+            # file/index removed or mirror related skip
+            return
+        with self.keyfs.filestore_transaction():
+            if entry.file_exists():
+                # all good
+                return
+        # the file is missing, check whether we can ignore it
+        serial = self.keyfs.get_current_serial()
+        if event_serial < serial:
+            # there are newer serials existing
+            with self.keyfs.read_transaction() as tx:
+                current_val = tx.get(key)
+            if current_val is None:
+                # entry was deleted
+                return
+            current_entry = FileEntry(key, current_val)
+            if current_entry.deleted_or_never_fetched:
+                # the file was removed at some point
+                return
+            current_ixconfig = self.get_ixconfig(entry, serial)
+            if self.skip_by_index_config(current_ixconfig):
+                return
+            if (
+                current_ixconfig
+                and current_ixconfig.get("type") == "mirror"
+                and current_entry.project is None
+            ):
+                # this is an old mirror entry with no
+                # project info, so this can be ignored
+                return
+            missing_source = f"current_entry.meta {current_entry.meta!r}"
+        missing_source = (
+            missing_source if missing_source else f"entry.meta {entry.meta!r}"
+        )
+        raise MissingFileException(change.key, event_serial, missing_source)
+
+    def _execute_hooks(self, event_serial: int, *, raising: bool = False) -> None:
+        self.log.debug("calling hooks for tx%s", event_serial)
         with self.keyfs.get_connection() as conn:
-            changes = list(conn.iter_changes_at(event_serial))
+            changes: list[KeyData] = list(conn.iter_changes_at(event_serial))
         # we first check for missing files before we call subscribers
         for change in changes:
-            if change.keyname in ("STAGEFILE", "PYPIFILE_NOMD5"):
-                key = self.keyfs.get_key_instance(change.keyname, change.relpath)
-                entry = FileEntry(key, change.value)
-                if entry.meta == {} or entry.last_modified is None:
-                    # the file was removed
-                    continue
-                ixconfig = self.get_ixconfig(entry, event_serial)
-                if ixconfig is None:
-                    # the index doesn't exist (anymore)
-                    continue
-                if ixconfig.get("type") == "mirror" and ixconfig.get(
-                    "mirror_use_external_urls", False
-                ):
-                    # the index uses external URLs now
-                    continue
-                with self.keyfs.filestore_transaction():
-                    if entry.file_exists():
-                        # all good
-                        continue
-                # the file is missing, check whether we can ignore it
-                serial = self.keyfs.get_current_serial()
-                if event_serial < serial:
-                    # there are newer serials existing
-                    with self.keyfs.read_transaction() as tx:
-                        current_val = tx.get(key)
-                    if current_val is None:
-                        # entry was deleted
-                        continue
-                    current_entry = FileEntry(key, current_val)
-                    if current_entry.meta == {} or current_entry.last_modified is None:
-                        # the file was removed at some point
-                        continue
-                    current_ixconfig = self.get_ixconfig(entry, serial)
-                    if current_ixconfig is None:
-                        # the index doesn't exist (anymore)
-                        continue
-                    if current_ixconfig.get("type") == "mirror":
-                        if current_ixconfig.get("mirror_use_external_urls", False):
-                            # the index uses external URLs now
-                            continue
-                        if current_entry.project is None:
-                            # this is an old mirror entry with no
-                            # project info, so this can be ignored
-                            continue
-                    log.debug("missing current_entry.meta %r", current_entry.meta)
-                log.debug("missing entry.meta %r", entry.meta)
-                raise MissingFileException(change.relpath, event_serial)
+            if change.key.key_name in ("STAGEFILE", "PYPIFILE_NOMD5"):
+                self.check_file_change(change, event_serial)
         # all files exist or are deleted in a later serial,
         # call subscribers now
         for change in changes:
-            subscribers = self._on_key_change.get(change.keyname, [])
+            subscribers = self._on_key_change.get(change.key.key_name, [])
             if not subscribers:
                 continue
-            key = self.keyfs.get_key_instance(change.keyname, change.relpath)
-            ev = KeyChangeEvent(key=key, data=change, at_serial=event_serial)
+            ev = KeyChangeEvent(data=change, at_serial=event_serial)
             for sub in subscribers:
                 subname = getattr(sub, "__name__", sub)
-                log.debug(
+                self.log.debug(
                     "%s(key=%r, data=%r at_serial=%r",
                     subname,
-                    key,
+                    change.key,
                     change,
                     event_serial,
                 )
@@ -257,20 +275,30 @@ class TxNotificationThread:
                 except Exception:
                     if raising:
                         raise
-                    log.exception("calling %s failed, serial=%s", sub, event_serial)
+                    self.log.exception(
+                        "calling %s failed, serial=%s", sub, event_serial
+                    )
 
-        log.debug("finished calling all hooks for tx%s", event_serial)
+        self.log.debug("finished calling all hooks for tx%s", event_serial)
 
 
 class KeyFS:
     """ singleton storage object. """
 
+    _import_subscriber: Callable | None
     _keys: dict[str, LocatedKey | PatternedKey]
 
     class ReadOnly(Exception):
         """ attempt to open write transaction while in readonly mode. """
 
-    def __init__(self, basedir, storage_info, *, io_file_factory=None, readonly=False):
+    def __init__(
+        self,
+        basedir: Path,
+        storage_info: StorageInfo,
+        *,
+        io_file_factory: Callable | None = None,
+        readonly: bool = False,
+    ) -> None:
         self.base_path = Path(basedir)
         self.base_path.mkdir(parents=True, exist_ok=True)
         self._keys = {}
@@ -297,11 +325,13 @@ class KeyFS:
         return conn
 
     def finalize_init(self):
+        if self.io_file_factory is None:
+            return
         with self.get_connection() as conn:
             io_file = self.io_file_factory(conn)
             io_file.perform_crash_recovery()
 
-    def import_changes(self, serial, changes):
+    def import_changes(self, serial: int, changes: Sequence[KeyData]) -> None:
         with contextlib.ExitStack() as cstack:
             conn = cstack.enter_context(self.get_connection(write=True))
             io_file = (
@@ -312,29 +342,27 @@ class KeyFS:
             fswriter = IWriter(cstack.enter_context(conn.write_transaction(io_file)))
             next_serial = conn.last_changelog_serial + 1
             assert next_serial == serial, (next_serial, serial)
-            records = []
-            subscriber_changes = {}
+            records: list[Record] = []
+            subscriber_changes: dict[ULIDKey, tuple[KeyFSTypesRO | Deleted, int]] = {}
             for change in changes:
                 if not isinstance(change, KeyData):
                     raise TypeError
-                key = self.get_key_instance(change.keyname, change.relpath)
+                old_key: ULIDKey | Absent
+                old_val: KeyFSTypesRO | Absent | Deleted
                 try:
-                    old_data = conn.get_key_at_serial(key, serial - 1)
-                    old_ulid = old_data.ulid
+                    old_data: KeyData = conn.get_key_at_serial(change.key, serial - 1)
+                    old_key = old_data.key
                     old_val = old_data.value
                 except KeyError:
-                    old_ulid = absent
+                    old_key = absent
                     old_val = absent
-                if old_val is None:
-                    old_val = deleted
-                subscriber_changes[key] = (change.value, change.back_serial)
+                subscriber_changes[change.key] = (change.value, change.back_serial)
                 records.append(
                     Record(
-                        key,
-                        change.ulid,
+                        change.key,
                         change.mutable_value,
                         change.back_serial,
-                        old_ulid,
+                        old_key,
                         old_val,
                     )
                 )
@@ -597,7 +625,6 @@ class KeyFS:
 
 @frozen
 class KeyChangeEvent:
-    key: LocatedKey
     data: KeyData
     at_serial: int
 
@@ -687,9 +714,10 @@ class FileStoreTransaction:
 
 
 class Transaction:
-    _dirty: dict[LocatedKey, tuple[ULID, KeyFSTypes | Deleted]]
+    _dirty: dict[ULIDKey, KeyFSTypes | Deleted]
     _model: TransactionRootModel | Absent
-    _original: dict[LocatedKey, tuple[int, ULID | Absent, KeyFSTypesRO | Absent]]
+    _original: dict[ULIDKey, tuple[int, ULIDKey | Absent, KeyFSTypesRO | Absent]]
+    _ulid_keys: dict[LocatedKey, ULIDKey | Absent]
 
     def __init__(self, keyfs, *, at_serial=None, write=False):
         if write and at_serial:
@@ -705,6 +733,7 @@ class Transaction:
             at_serial = self.conn.last_changelog_serial
         self.at_serial = at_serial
         self._original = {}
+        self._ulid_keys = {}
         self._dirty = {}
         self.closed = False
         self.doomed = False
@@ -726,128 +755,255 @@ class Transaction:
             self._model = TransactionRootModel(xom)
         return self._model
 
-    def iter_keys_at_serial(self, keys: IKeyFSKey, at_serial: int) -> Iterator[KeyData]:
-        return self.conn.iter_keys_at_serial(keys, at_serial)
+    def iter_keys_at_serial(
+        self, keys: LocatedKey, at_serial: int
+    ) -> Iterator[KeyData]:
+        return self.conn.iter_keys_at_serial(keys, at_serial, with_deleted=True)
 
     def iter_serial_and_value_backwards(
-        self, key: LocatedKey, last_serial: int
+        self, key: LocatedKey | ULIDKey, last_serial: int
     ) -> Iterator[tuple[int, KeyFSTypesRO]]:
+        if not isinstance(key, ULIDKey):
+            key = self.resolve(key, fetch=True)
         while last_serial >= 0:
             data = self.conn.get_key_at_serial(key, last_serial)
             yield (data.last_serial, data.value)
             last_serial = data.back_serial
 
     def get_last_serial_and_value_at(
-        self, key: LocatedKey, at_serial: int
-    ) -> tuple[int, ULID | Absent, KeyFSTypesRO | Absent]:
+        self, key: LocatedKey | ULIDKey, at_serial: int
+    ) -> tuple[int, ULIDKey | Absent, KeyFSTypesRO | Absent]:
+        if not isinstance(key, ULIDKey):
+            try:
+                key = self.resolve_at(key, at_serial)
+            except KeyError:
+                return (-1, absent, absent)
         try:
             data = self.conn.get_key_at_serial(key, at_serial)
         except KeyError:
             return (-1, absent, absent)
-        return (data.last_serial, ULID(data.ulid), data.value)
+        return (data.last_serial, data.key, data.value)
 
     def get_value_at(self, key: LocatedKey, at_serial: int) -> KeyFSTypesRO:
         (last_serial, val) = self.last_serial_and_value_at(key, at_serial)
         return val
 
-    def last_serial(self, key: LocatedKey) -> int:
+    def back_serial(self, key: LocatedKey | ULIDKey) -> int:
+        if not isinstance(key, ULIDKey):
+            try:
+                key = self.resolve(key, fetch=True)
+            except KeyError:
+                return -1
+        (back_serial, ulid_key, val) = self.get_original(key)
+        return back_serial
+
+    def last_serial(self, key: LocatedKey | ULIDKey) -> int:
+        if not isinstance(key, ULIDKey):
+            try:
+                key = self.resolve(key, fetch=True)
+            except KeyError:
+                return -1
         if key in self._dirty:
             return self.at_serial
-        (last_serial, ulid, val) = self.get_original(key)
+        (last_serial, ulid_key, val) = self.get_original(key)
         return last_serial
 
     def last_serial_and_value_at(
-        self, key: LocatedKey, at_serial: int
+        self, key: LocatedKey | ULIDKey, at_serial: int
     ) -> tuple[int, KeyFSTypesRO]:
+        if not isinstance(key, ULIDKey):
+            key = self.resolve_at(key, at_serial)
         data = self.conn.get_key_at_serial(key, at_serial)
         if data.value is deleted:
             raise KeyError(key)  # was deleted
         return (data.last_serial, data.value)
 
-    def is_dirty(self, key: LocatedKey) -> bool:
+    def is_dirty(self, key: LocatedKey | ULIDKey) -> bool:
+        if not isinstance(key, ULIDKey):
+            try:
+                key = self.resolve(key, fetch=False)
+            except KeyError:
+                return False
         return key in self._dirty
 
     def get_original(
-        self, key: LocatedKey
-    ) -> tuple[int, ULID | Absent, KeyFSTypesRO | Absent]:
+        self, key: LocatedKey | ULIDKey
+    ) -> tuple[int, ULIDKey | Absent, KeyFSTypesRO | Absent]:
         """ Return original value from start of transaction,
             without changes from current transaction."""
+        if not isinstance(key, ULIDKey):
+            key = self.resolve(key, fetch=True)
         if key not in self._original:
-            (serial, ulid, val) = self.get_last_serial_and_value_at(key, self.at_serial)
+            (serial, ulid_key, val) = self.get_last_serial_and_value_at(
+                key, self.at_serial
+            )
             if val not in (absent, deleted):
-                assert isinstance(ulid, ULID)
+                assert isinstance(ulid_key, ULIDKey)
                 assert is_deeply_readonly(val)
-            self._original[key] = (serial, ulid, val)
-        return self._original[key]
+            self._original[key] = (serial, ulid_key, val)
+        (serial, ulid_key, val) = self._original[key]
+        return (serial, ulid_key, val)
 
     def _get(
-        self, key: LocatedKey
-    ) -> tuple[ULID | Absent, KeyFSTypes | KeyFSTypesRO | Absent | Deleted]:
-        ulid: ULID | Absent
+        self, key: LocatedKey | ULIDKey
+    ) -> tuple[ULIDKey | Absent, KeyFSTypes | KeyFSTypesRO | Absent | Deleted]:
         val: KeyFSTypes | KeyFSTypesRO | Absent | Deleted
-        assert isinstance(key, LocatedKey)
+        if not isinstance(key, ULIDKey):
+            try:
+                key = self.resolve(key, fetch=True)
+            except KeyError:
+                return (absent, absent)
+        ulid_key: ULIDKey | Absent
         if key in self._dirty:
-            (ulid, val) = self._dirty[key]
+            val = self._dirty[key]
+            ulid_key = key
         else:
-            (back_serial, ulid, val) = self.get_original(key)
-        return (ulid, val)
+            (back_serial, ulid_key, val) = self.get_original(key)
+        return (ulid_key, val)
 
-    def get(self, typedkey):
-        """Return current read-only value referenced by typedkey."""
-        (ulid, val) = self._get(typedkey)
+    @overload
+    def get(self, key: LocatedKey, default: Absent) -> KeyFSTypesRO: ...
+
+    @overload
+    def get(self, key: ULIDKey, default: Absent) -> KeyFSTypesRO: ...
+
+    def get(self, key: LocatedKey | ULIDKey, default: Any = absent) -> Any:
+        """Return current read-only value referenced by key."""
+        (ulid_key, val) = self._get(key)
         if val in (absent, deleted):
-            # for convenience we return an empty instance
-            val = typedkey.key_type()
+            val = (
+                # for convenience we return an empty instance if no default is given
+                key.key_type() if default is absent else default
+            )
         return ensure_deeply_readonly(val)
 
-    def get_mutable(self, typedkey):
-        """Return current mutable value referenced by typedkey."""
-        (ulid, val) = self._get(typedkey)
+    def get_mutable(self, key: LocatedKey | ULIDKey) -> KeyFSTypes:
+        """Return current mutable value referenced by key."""
+        (ulid_key, val) = self._get(key)
         if val in (absent, deleted):
             # for convenience we return an empty instance
-            val = typedkey.key_type()
+            val = key.key_type()
         return get_mutable_deepcopy(val)
 
-    def get_ulid(self, typedkey):
-        (ulid, val) = self._get(typedkey)
-        return ulid
-
-    def exists(self, key: LocatedKey) -> bool:
-        ulid: ULID | Absent
+    def exists(self, key: LocatedKey | ULIDKey) -> bool:
+        if not isinstance(key, ULIDKey):
+            try:
+                key = self.resolve(key, fetch=True)
+            except KeyError:
+                return False
         val: KeyFSTypes | KeyFSTypesRO | Absent | Deleted
         if key in self._dirty:
-            (ulid, val) = self._dirty[key]
+            val = self._dirty[key]
         else:
-            (serial, ulid, val) = self.get_original(key)
+            (serial, ulid_key, val) = self.get_original(key)
         return val not in (absent, deleted)
 
-    def delete(self, typedkey):
+    def delete(self, key: LocatedKey | ULIDKey) -> None:
         if not self.write:
             raise self.keyfs.ReadOnly
-        (serial, ulid, val) = self.get_original(typedkey)
-        if isinstance(ulid, Absent):
-            if typedkey in self._dirty:
-                del self._dirty[typedkey]
+        if isinstance(key, ULIDKey):
+            ulid_key = key
         else:
-            self._dirty[typedkey] = (ulid, deleted)
+            try:
+                ulid_key = self.resolve(key, fetch=True)
+            except KeyError:
+                return
+        (serial, old_ulid_key, val) = self.get_original(ulid_key)
+        if isinstance(old_ulid_key, Absent):
+            self._dirty.pop(ulid_key, Absent)
+            if isinstance(key, LocatedKey):
+                self._ulid_keys.pop(key, None)
+        else:
+            self._dirty[ulid_key] = deleted
 
-    def set(self, typedkey, val):
+    def resolve(self, key: LocatedKey, *, fetch: bool) -> ULIDKey:
+        try:
+            ulid_key = self._ulid_keys[key]
+        except KeyError:
+            pass
+        else:
+            if isinstance(ulid_key, Absent):
+                raise KeyError(key)
+            return ulid_key
+        fetched_ulid_key: ULIDKey | Absent
+        if fetch:
+            fetched_keydata = next(
+                self.conn.iter_keys_at_serial(
+                    (key,), at_serial=self.at_serial, with_deleted=True
+                ),
+                absent,
+            )
+            if isinstance(fetched_keydata, Absent):
+                fetched_ulid_key = absent
+            else:
+                fetched_ulid_key = cast("ULIDKey", fetched_keydata.key)
+                if fetched_ulid_key not in self._original:
+                    self._original[fetched_ulid_key] = (
+                        fetched_keydata.last_serial,
+                        fetched_ulid_key,
+                        fetched_keydata.value,
+                    )
+        else:
+            fetched_ulid_key = next(
+                self.conn.iter_ulidkeys_at_serial(
+                    (key,), at_serial=self.at_serial, with_deleted=True
+                ),
+                absent,
+            )
+        self._ulid_keys[key] = fetched_ulid_key
+        if isinstance(fetched_ulid_key, Absent):
+            raise KeyError(key)
+        return fetched_ulid_key
+
+    def resolve_at(self, key: LocatedKey, at_serial: int) -> ULIDKey:
+        fetched_ulid_key: ULIDKey | Absent = next(
+            self.conn.iter_ulidkeys_at_serial(
+                (key,), at_serial=at_serial, with_deleted=True
+            ),
+            absent,
+        )
+        if isinstance(fetched_ulid_key, Absent):
+            raise KeyError(key)
+        return fetched_ulid_key
+
+    def set(self, key: LocatedKey | ULIDKey, val: KeyFSTypes) -> None:
+        if not isinstance(val, key.key_type) and not issubclass(
+            key.key_type, type(val)
+        ):
+            raise TypeError(
+                "%r requires value of type %r, got %r"
+                % (key.relpath, key.key_type.__name__, type(val).__name__)
+            )
         if not self.write:
             raise self.keyfs.ReadOnly
         # sanity check for dictionaries: we always want to have unicode
         # keys, not bytes
-        if typedkey.key_type is dict:
+        if key.key_type is dict:
             check_unicode_keys(val)
         assert val not in (None, absent, deleted)
-        (ulid, old_val) = self._get(typedkey)
-        if old_val in (absent, deleted):
-            ulid = ULID.new()
-        assert not isinstance(ulid, Absent)
-        self._dirty[typedkey] = (ulid, val)
+        (old_ulid_key, old_val) = self._get(key)
+        if not isinstance(key, ULIDKey):
+            if old_val in (absent, deleted) or isinstance(old_ulid_key, Absent):
+                cache_key = key.new_ulid()
+            else:
+                cache_key = old_ulid_key
+            self._ulid_keys[key] = cache_key
+        elif old_val in (absent, deleted):
+            cache_key = key.new_ulid()
+            for lkey, ulid_key in self._ulid_keys.items():
+                if ulid_key == key:
+                    self._ulid_keys[lkey] = cache_key
+                    break
+        else:
+            cache_key = key
+        self._dirty[cache_key] = val
 
     def commit(self):
         threadlog.debug(
-            "_original %s, _dirty %s", len(self._original), len(self._dirty)
+            "_original %s, _dirty %s, _ulid_keys %s",
+            len(self._original),
+            len(self._dirty),
+            len(self._ulid_keys),
         )
         if self.doomed:
             threadlog.debug("closing doomed transaction")
@@ -858,16 +1014,18 @@ class Transaction:
             result = self._close()
             self._run_listeners(self._finished_listeners)
             return result
+        # no longer needed
+        self._ulid_keys.clear()
         records = []
-        for typedkey, (ulid, val) in self._dirty.items():
-            assert ulid is not absent
+        while self._dirty:
+            (key, val) = self._dirty.popitem()
             assert val is not absent
-            (back_serial, old_ulid, old_val) = self.get_original(typedkey)
-            if val == old_val and ulid == old_ulid:
+            (back_serial, old_ulid_key, old_val) = self.get_original(key)
+            if val == old_val and key == old_ulid_key:
                 continue
             if val is deleted and old_val in (absent, deleted):
                 continue
-            records.append(Record(typedkey, ulid, val, back_serial, old_ulid, old_val))
+            records.append(Record(key, val, back_serial, old_ulid_key, old_val))
         if not records and not self.io_file.is_dirty():
             threadlog.debug("nothing to commit, just closing tx")
             result = self._close()
@@ -908,6 +1066,7 @@ class Transaction:
             threadlog.debug("closing transaction at %s", self.at_serial)
             del self._model
             del self._original
+            del self._ulid_keys
             del self._dirty
         finally:
             self.conn.close()

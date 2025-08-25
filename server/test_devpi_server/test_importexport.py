@@ -452,9 +452,8 @@ class TestImportExport:
     @pytest.mark.parametrize("norootpypi", [False, True])
     def test_import_no_user(self, impexp, norootpypi):
         from devpi_server.main import _pypi_ixconfig_default
-        options = ()
-        if norootpypi:
-            options = ('--no-root-pypi',)
+
+        options = ("--no-root-pypi",) if norootpypi else ()
         mapp = impexp.import_testdata('nouser', options=options)
         with mapp.xom.keyfs.read_transaction():
             user = mapp.xom.model.get_user("root")
@@ -468,9 +467,8 @@ class TestImportExport:
     @pytest.mark.parametrize("norootpypi", [False, True])
     def test_import_no_root_pypi(self, impexp, norootpypi):
         from devpi_server.main import _pypi_ixconfig_default
-        options = ()
-        if norootpypi:
-            options = ('--no-root-pypi',)
+
+        options = ("--no-root-pypi",) if norootpypi else ()
         mapp = impexp.import_testdata('nouser', options=options)
         with mapp.xom.keyfs.read_transaction():
             user = mapp.xom.model.get_user("root")

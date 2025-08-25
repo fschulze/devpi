@@ -1129,7 +1129,7 @@ def test_requests_http_get_negative_status_code(xom, monkeypatch):
 
     monkeypatch.setattr(xom._http.client, "get", r)
     r = xom.http.get("http://notexists.qwe", allow_redirects=False)
-    assert r.status_code == -1
+    assert r.status_code == -1  # type: ignore[attr-defined]
     assert l
 
 

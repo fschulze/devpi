@@ -107,14 +107,13 @@ def keyfs_changelog_view(request):
         last_changelog_serial = conn.last_changelog_serial
         rel_renames = sorted(conn.iter_rel_renames(serial))
         for keydata in conn.iter_changes_at(serial):
-            key = xom.keyfs.get_key_instance(keydata.keyname, keydata.relpath)
             prev_formatted = ''
             if keydata.back_serial >= 0:
                 prev_formatted = pformat(
                     None
                     if (
                         v := conn.get_key_at_serial(
-                            key, keydata.back_serial
+                            keydata.key, keydata.back_serial
                         ).mutable_value
                     )
                     is deleted
@@ -122,13 +121,13 @@ def keyfs_changelog_view(request):
                 )
             formatted = pformat(None if (v := keydata.value) is deleted else v)
             diffed = diff(prev_formatted, formatted)
-            latest_serial = conn.last_key_serial(key)
+            latest_serial = conn.last_key_serial(keydata.key)
             changes.append(
                 dict(
-                    fragment=f"{keydata.ulid}",
-                    name=keydata.keyname,
-                    type=key.key_type,
-                    relpath=keydata.relpath,
+                    fragment=f"{keydata.key.ulid}",
+                    name=keydata.key.key_name,
+                    type=keydata.key.key_type,
+                    relpath=keydata.key.relpath,
                     previous_serial=keydata.back_serial,
                     latest_serial=latest_serial,
                     diffed=diffed,

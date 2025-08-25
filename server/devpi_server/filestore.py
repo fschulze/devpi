@@ -420,6 +420,10 @@ class BaseFileEntry:
         return self.hashes.best_available_value
 
     @property
+    def deleted_or_never_fetched(self):
+        return self.last_modified is None
+
+    @property
     def hashes(self):
         return Digests() if self._hashes is None else Digests(self._hashes)
 
