@@ -21,6 +21,12 @@ class NormalizedName(str):
         result.original = name
         return result
 
+    @classmethod
+    def from_strings(cls, original: str, normalized: str) -> Self:
+        result = super().__new__(cls, normalized)
+        result.original = original
+        return result
+
     def __repr__(self) -> str:
         orig = super().__repr__()
         return f"<{self.__class__.__name__} {self.original!r} {orig}>"

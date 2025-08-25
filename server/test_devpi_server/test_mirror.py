@@ -7,6 +7,7 @@ import pytest
 from devpi_server.keyfs_types import FilePathInfo
 from devpi_server.mirror import URL, parse_index
 from devpi_server.mirror import ProjectNamesCache, ProjectUpdateCache
+from devpi_server.normalized import normalize_name
 from test_devpi_server.simpypi import getmd5
 
 
@@ -563,7 +564,7 @@ class TestExtPYPIDB:
         )
         projects_future = pypistage.xom.create_future()
         await pypistage._get_remote_projects(projects_future)
-        assert projects_future.result() == (dict(pkg="Pkg"), None)
+        assert projects_future.result() == ({normalize_name("Pkg")}, None)
 
     def test_pypi_mirror_redirect_to_canonical_issue139(self, pypistage):
         # GET https://pypi.org/simple/Hello_World
@@ -747,9 +748,10 @@ class TestMirrorStageprojects:
         await pypistage._get_remote_projects(projects_future)
         (projects, etag) = projects_future.result()
         assert projects == {
-            "ploy-ansible": "ploy_ansible",
-            "devpi-server": "devpi-server",
-            "django": "Django"}
+            normalize_name("ploy_ansible"),
+            normalize_name("devpi-server"),
+            normalize_name("Django"),
+        }
         s = pypistage.list_projects_perstage()
         assert s == {
             "ploy-ansible": "ploy_ansible",
@@ -774,9 +776,10 @@ class TestMirrorStageprojects:
         await pypistage._get_remote_projects(projects_future)
         (projects, etag) = projects_future.result()
         assert projects == {
-            "ploy-ansible": "ploy_ansible",
-            "devpi-server": "devpi-server",
-            "django": "Django"}
+            normalize_name("ploy_ansible"),
+            normalize_name("devpi-server"),
+            normalize_name("Django"),
+        }
         s = pypistage.list_projects_perstage()
         assert s == {
             "ploy-ansible": "ploy_ansible",
@@ -799,7 +802,7 @@ class TestMirrorStageprojects:
         projects_future = pypistage.xom.create_future()
         await pypistage._get_remote_projects(projects_future)
         (projects, etag) = projects_future.result()
-        assert projects == {"devpi-server": "devpi-server"}
+        assert projects == {normalize_name("devpi-server")}
 
     @pytest.mark.asyncio
     async def test_get_remote_projects_etag(self, pypistage):
@@ -840,9 +843,10 @@ class TestMirrorStageprojects:
         pypistage.cache_projectnames.mark_current(etag)
         assert etag == orig_etag
         assert projects == {
-            "ploy-ansible": "ploy_ansible",
-            "devpi-server": "devpi-server",
-            "django": "Django"}
+            normalize_name("ploy_ansible"),
+            normalize_name("devpi-server"),
+            normalize_name("Django"),
+        }
         call = pypistage.xom.http.call_log.pop()
         assert 'If-None-Match' not in call['extra_headers']
         projects_future = pypistage.xom.create_future()
@@ -858,9 +862,10 @@ class TestMirrorStageprojects:
         pypistage.cache_projectnames.mark_current(etag)
         assert etag == changed_etag
         assert projects == {
-            "ploy": "ploy",
-            "devpi-server": "devpi-server",
-            "django": "Django"}
+            normalize_name("ploy"),
+            normalize_name("devpi-server"),
+            normalize_name("Django"),
+        }
         (call,) = pypistage.xom.http.call_log
         assert call['extra_headers']['If-None-Match'] == orig_etag
 
@@ -1307,11 +1312,13 @@ class TestProjectNamesCache:
         return ProjectNamesCache()
 
     def test_get_set(self, cache):
-        assert cache.get() == dict()
-        s = {1: 1, 2: 2, 3: 3}
+        assert cache.get() == set()
+        s = {normalize_name("1"), normalize_name("2"), normalize_name("3")}
         cache.set(s, '"foo"')
-        s[4] = 4
+        # check that the cache uses a copy
+        s.add(normalize_name("4"))
         assert cache.get() == s
+        # check name normalization
         cache.add('Foo')
         assert 'foo' in cache.get()
         cache.discard('foo')
@@ -1319,7 +1326,7 @@ class TestProjectNamesCache:
 
     def test_is_expired(self, cache, monkeypatch):
         expiry_time = 100
-        s = {1: 1, 2: 2, 3: 3}
+        s = {normalize_name("1"), normalize_name("2"), normalize_name("3")}
         assert cache.get_etag() is None
         cache.set(s, '"foo"')
         assert not cache.is_expired(expiry_time)

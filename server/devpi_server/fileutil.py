@@ -126,6 +126,17 @@ def load(fp, _from_bytes=int.from_bytes, _unpack=unpack):
             stack_append(True)  # noqa: FBT003
         elif opcode == b'T':  # complex
             stack_append(complex(_unpack("!d", read(8))[0], _unpack("!d", read(8))[0]))
+        elif opcode == b"z":  # NormalizedName
+            stack_append(
+                NormalizedName.from_strings(
+                    read(_from_bytes(read(4), byteorder="big", signed=True)).decode(
+                        "utf-8"
+                    ),
+                    read(_from_bytes(read(4), byteorder="big", signed=True)).decode(
+                        "utf-8"
+                    ),
+                )
+            )
         else:
             msg = f"unknown opcode {opcode!r} - wire protocol corruption?"
             raise LoadError(msg)
@@ -227,6 +238,19 @@ def _dump_complex(write, obj, _pack=pack):
     write(_pack("!d", obj.imag))
 
 
+def _dump_normalized_name(write, obj, _pack=pack):
+    try:
+        obj_orig = obj.original.encode()
+        obj = obj.encode()
+    except UnicodeEncodeError as e:
+        raise DumpError("NormalizedName must be utf-8 encodable") from e
+    write(b"z")
+    write(_pack("!i", len(obj_orig)))
+    write(obj_orig)
+    write(_pack("!i", len(obj)))
+    write(obj)
+
+
 _dispatch: dict[type, Callable] = {
     tuple: _dump_tuple,
     readonly.TupleViewReadonly: _dump_tuple,
@@ -245,7 +269,7 @@ _dispatch: dict[type, Callable] = {
     set: _dump_set,
     readonly.SetViewReadonly: _dump_set,
     complex: _dump_complex,
-    NormalizedName: _dump_str,
+    NormalizedName: _dump_normalized_name,
 }
 
 
