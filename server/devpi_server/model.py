@@ -1345,6 +1345,10 @@ class PrivateStage(BaseStage):
         assert "+elinks" not in metadata
         project = normalize_name(metadata["name"])
         version = metadata["version"]
+        with self.key_projsimplelinks(project).update():
+            # this triggers creation of the simplelinks dict needed
+            # for child keys
+            pass
         key_projversion = self.key_projversion(project, version)
         with key_projversion.update() as versiondata:
             versiondata.update(metadata)
@@ -1372,6 +1376,7 @@ class PrivateStage(BaseStage):
             projects.remove(project)
         threadlog.info("deleting project %s", project)
         self.key_projversions(project).delete()
+        self.key_projsimplelinks(project).delete()
 
     def del_versiondata(self, project, version, cleanup=True):
         project = normalize_name(project)

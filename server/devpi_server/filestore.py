@@ -253,25 +253,23 @@ def relpath_prefix(content_or_file, hash_type=absent):
     return "/".join(make_splitdir(hash_spec))
 
 
-def key_from_link(keyfs, link, user, index):
+def key_from_link(keyfs, link, index_key):
     if link.hash_spec:
         # we can only create 32K entries per directory
         # so let's take the first 3 bytes which gives
         # us a maximum of 16^3 = 4096 entries in the root dir
         a, b = make_splitdir(link.hash_spec)
         return keyfs.STAGEFILE(
-            user=user, index=index,
-            hashdir_a=a, hashdir_b=b,
-            filename=link.basename)
+            parent_key=index_key, hashdir_a=a, hashdir_b=b, filename=link.basename
+        )
     else:
         parts = link.torelpath().split("/")
         assert parts
         dirname = "_".join(parts[:-1])
         dirname = re.sub('[^a-zA-Z0-9_.-]', '_', dirname)
         return keyfs.PYPIFILE_NOMD5(
-            user=user, index=index,
-            dirname=unquote(dirname),
-            basename=link.basename)
+            parent_key=index_key, dirname=unquote(dirname), basename=link.basename
+        )
 
 
 def unicode_if_bytes(val):
@@ -290,7 +288,8 @@ class FileStore:
         return f"<{self.__class__.__name__} {self.keyfs!r}>"
 
     def maplink(self, link, user, index, project):
-        key = key_from_link(self.keyfs, link, user, index)
+        index_key = self.keyfs.INDEX(user=user, index=index)
+        key = key_from_link(self.keyfs, link, index_key)
         entry = MutableFileEntry(key)
         entry.url = link.geturl_nofragment().url
         if digest := link.hash_value:
@@ -313,9 +312,11 @@ class FileStore:
         if key := self.keyfs.match_key(
             relpath, self.keyfs.PYPIFILE_NOMD5, self.keyfs.STAGEFILE
         ):
-            if key.last_serial < 0:
+            (ulid_key, val) = self.keyfs.tx._get(key)
+            if val is absent:
                 return None
-            return FileEntry(key)
+            val = {} if val is deleted else val
+            return FileEntry(key, val)
         return None
 
     def get_file_entry_from_key(self, key, meta=_nodefault):

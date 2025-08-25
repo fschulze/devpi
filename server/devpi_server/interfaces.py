@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from .keyfs_types import LocatedKey
     from .keyfs_types import PatternedKey
     from .keyfs_types import Record
+    from .keyfs_types import ULID
     from .keyfs_types import ULIDKey
     from collections.abc import Iterable
     from collections.abc import Iterator
@@ -162,6 +163,11 @@ class IStorageConnection(Interface):
         """Returns serialized changes for given serial."""
 
     def get_key_at_serial(key: ULIDKey, serial: int) -> KeyData:
+        """Get tuple of (last_serial, back_serial, value) for given relpath
+        at given serial.
+        Raises KeyError if not found."""
+
+    def get_ulid_at_serial(key: ULID, serial: int) -> KeyData:
         """Get tuple of (last_serial, back_serial, value) for given relpath
         at given serial.
         Raises KeyError if not found."""
