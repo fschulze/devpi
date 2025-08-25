@@ -1882,8 +1882,7 @@ def test_delete_mirror(mapp, monkeypatch, simpypi, testapp, xom):
     with testapp.xom.keyfs.read_transaction():
         stage = testapp.xom.model.getstage(api.stagename)
         assert stage.key_projects.get() == set()
-        assert not getentry(testapp, path).file_exists()
-        assert not getentry(testapp, path).key.exists()
+        assert getentry(testapp, path) is None
 
 
 def test_delete_from_mirror(mapp, pypistage, testapp):

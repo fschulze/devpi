@@ -877,8 +877,10 @@ class MirrorStage(BaseStage):
         newlinks_future = self.xom.create_future()
         # we need to set this up here, as these access the database and
         # the async loop has no transaction
-        _key_from_link = partial(
-            key_from_link, self.keyfs, user=self.user.name, index=self.index)
+        # we don't resolve the key here, as _async_fetch_releaselinks runs
+        # in a separate thread and only needs access to the relpath
+        index_key = self.keyfs.INDEX(user=self.user.name, index=self.index)
+        _key_from_link = partial(key_from_link, self.keyfs, index_key=index_key)
         try:
             self.xom.run_coroutine_threadsafe(
                 self._async_fetch_releaselinks(
