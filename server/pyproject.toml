@@ -243,19 +243,10 @@ extend-ignore = [
 "devpi_server/main.py" = [
     "I001", # maybe cleanup later - import block unsorted
 ]
-"devpi_server/mirror.py" = [
-    "I001", # maybe cleanup later - import block unsorted
-]
 "devpi_server/model.py" = [
     "I001", # maybe cleanup later - import block unsorted
 ]
-"devpi_server/readonly.py" = [
-    "I001", # maybe cleanup later - import block unsorted
-]
 "devpi_server/sizeof.py" = [
-    "I001", # maybe cleanup later - import block unsorted
-]
-"devpi_server/view_auth.py" = [
     "I001", # maybe cleanup later - import block unsorted
 ]
 "devpi_server/views.py" = [
