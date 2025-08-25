@@ -81,7 +81,7 @@ class Record:
     key: LocatedKey
     value: KeyFSTypes | None
     back_serial: int
-    old_value: KeyFSTypesRO | Absent | None
+    old_value: KeyFSTypesRO | Absent | Deleted
 
     def __attrs_post_init__(self):
         if (
@@ -102,7 +102,7 @@ class KeyData:
     keyname: str
     serial: int
     back_serial: int
-    value: KeyFSTypesRO | None
+    value: KeyFSTypesRO | Deleted
 
     @property
     def last_serial(self):
