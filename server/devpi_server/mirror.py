@@ -281,7 +281,7 @@ class MirrorStage(BaseStage):
         # quite large and the primary might take a while to process it
         self.projects_timeout = max(self.timeout, 60 if self.xom.is_replica() else 30)
         # list of locally mirrored projects
-        self.key_projects = self.keyfs.PROJNAMES(user=username, index=index)
+        self.key_projectname = self.keyfs.PROJECTNAME(user=username, index=index)
         # used to log about stale projects only once
         self._offline_logging = set()
 
@@ -412,17 +412,14 @@ class MirrorStage(BaseStage):
 
     def delete(self):
         # delete all projects on this index
-        for name in self.key_projects.get():
-            self.del_project(name)
-        self.key_projects.delete()
+        for key in list(self.key_projectname.iter_ulidkeys()):
+            self.del_project(key.name)
+            key.delete()
         BaseStage.delete(self)
 
     def add_project_name(self, project):
         project = normalize_name(project)
-        projects = self.key_projects.get_mutable()
-        if project not in projects:
-            projects.add(project)
-            self.key_projects.set(projects)
+        self.key_projectname(project).set(project)
 
     def del_project(self, project):
         if not self.is_project_cached(project):
@@ -434,11 +431,8 @@ class MirrorStage(BaseStage):
             for entry in entries:
                 entry.delete()
         self.key_projsimplelinks(project).delete()
-        projects = self.key_projects.get_mutable()
-        if project in projects:
-            projects.remove(project)
-            self.cache_retrieve_times.expire(project)
-            self.key_projects.set(projects)
+        self.cache_retrieve_times.expire(project)
+        self.key_projectname(project).delete()
 
     def del_versiondata(self, project, version, cleanup=True):
         project = normalize_name(project)
@@ -468,10 +462,7 @@ class MirrorStage(BaseStage):
         else:
             has_links = False
         if not has_links and cleanup:
-            projects = self.key_projects.get_mutable()
-            if project in projects:
-                projects.remove(project)
-                self.key_projects.set(projects)
+            self.key_projectname(project).delete()
 
     @property
     def _list_projects_perstage_lock(self):
@@ -529,7 +520,9 @@ class MirrorStage(BaseStage):
         )
 
     def _stale_list_projects_perstage(self):
-        return {normalize_name(x) for x in self.key_projects.get()}
+        return {
+            v for k, v in self.key_projectname.iter_ulidkey_values(fill_cache=False)
+        }
 
     def _update_projects(self):
         projects_future = self.xom.create_future()
@@ -623,6 +616,7 @@ class MirrorStage(BaseStage):
             "serial": serial,
             "yanked": yanked,
         }
+        self.key_projectname(project).set(project)
         key = self.key_projsimplelinks(project)
         old = key.get()
         if old != data:

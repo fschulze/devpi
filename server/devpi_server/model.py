@@ -23,6 +23,7 @@ from .log import threadlog
 from .markers import absent
 from .markers import deleted
 from .markers import unknown
+from .normalized import NormalizedName
 from .normalized import normalize_name
 from .readonly import DictViewReadonly
 from .readonly import ensure_deeply_readonly
@@ -1272,7 +1273,7 @@ class PrivateStage(BaseStage):
 
     def __init__(self, xom, username, index, ixconfig, customizer_cls):
         super().__init__(xom, username, index, ixconfig, customizer_cls)
-        self.key_projects = self.keyfs.PROJNAMES(user=username, index=index)
+        self.key_projectname = self.keyfs.PROJECTNAME(user=username, index=index)
         self.http = xom.http
 
     def get_possible_indexconfig_keys(self):
@@ -1362,10 +1363,7 @@ class PrivateStage(BaseStage):
         assert "+elinks" not in metadata
         project = normalize_name(metadata["name"])
         version = metadata["version"]
-        with self.key_projsimplelinks(project).update():
-            # this triggers creation of the simplelinks dict needed
-            # for child keys
-            pass
+        self.key_projectname(project).set(project)
         key_projversion = self.key_projversion(project, version)
         with key_projversion.update() as versiondata:
             versiondata.update(metadata)
@@ -1377,23 +1375,19 @@ class PrivateStage(BaseStage):
 
     def add_project_name(self, project):
         project = normalize_name(project)
-        projects = self.key_projects.get_mutable()
-        if project not in projects:
-            if self.customizer.readonly:
-                raise ReadonlyIndex("index is marked read only")
-            projects.add(project)
-            self.key_projects.set(projects)
+        if not self.key_projectname(project).exists() and self.customizer.readonly:
+            raise ReadonlyIndex("index is marked read only")
+        self.key_projectname(project).set(project)
 
     def del_project(self, project):
         project = normalize_name(project)
         for version in list(self.key_projversions(project).get()):
             self.del_versiondata(project, version, cleanup=False)
         self._regen_simplelinks(project)
-        with self.key_projects.update() as projects:
-            projects.remove(project)
         threadlog.info("deleting project %s", project)
         self.key_projversions(project).delete()
         self.key_projsimplelinks(project).delete()
+        self.key_projectname(project).delete()
 
     def del_versiondata(self, project, version, cleanup=True):
         project = normalize_name(project)
@@ -1411,9 +1405,9 @@ class PrivateStage(BaseStage):
         self.key_versionfilelist(project, version).delete()
         self.key_projversions(project).set(versions)
         if cleanup:
+            self._regen_simplelinks(project)
             if not versions:
                 self.del_project(project)
-            self._regen_simplelinks(project)
 
     def del_entry(self, entry, cleanup=True):
         # we need to store project and version for use in cleanup part below
@@ -1445,21 +1439,18 @@ class PrivateStage(BaseStage):
         tx = self.keyfs.tx
         if at_serial is None:
             at_serial = tx.at_serial
-        (last_serial, projects_ulid, projects) = tx.get_last_serial_and_value_at(
-            self.key_projects, at_serial
+        (last_serial, projectname_ulid, projectname) = tx.get_last_serial_and_value_at(
+            self.key_projectname(project), at_serial
         )
-        if projects in (absent, deleted):
+        if projectname in (absent, deleted):
             # the whole index never existed or was deleted
-            return -1
+            return last_serial
         (versions_serial, versions_ulid, versions) = tx.get_last_serial_and_value_at(
             self.key_projversions(project), at_serial
         )
         if versions is absent:
-            if project in projects:
-                # no versions ever existed, but the project is known
-                return last_serial
-            # the project never existed or was deleted and didn't have versions
-            return -1
+            # the project never had versions
+            return last_serial
         if versions is deleted:
             # was deleted
             return last_serial
@@ -1536,10 +1527,10 @@ class PrivateStage(BaseStage):
         self.key_projsimplelinks(project).set(data_dict)
 
     def list_projects_perstage(self):
-        return self.key_projects.get()
+        return {x.name for x in self.key_projectname.iter_ulidkeys()}
 
     def has_project_perstage(self, project):
-        return normalize_name(project) in self.list_projects_perstage()
+        return self.key_projectname(project).exists()
 
     def store_releasefile(
         self, project, version, filename, content_or_file, *, hashes, last_modified=None
@@ -1624,16 +1615,19 @@ class PrivateStage(BaseStage):
         tx = self.keyfs.tx
         if at_serial is None:
             at_serial = tx.at_serial
-        try:
-            (last_serial, projects) = tx.last_serial_and_value_at(
-                self.key_projects, at_serial
-            )
-        except KeyError:
-            last_serial = -1
-            projects = ()
-        if last_serial >= at_serial:
-            return last_serial
-        for project in projects:
+        last_serial = -1
+        for project_keydata in tx.conn.iter_keys_at_serial(
+            (self.key_projectname,),
+            at_serial=at_serial,
+            fill_cache=False,
+            with_deleted=True,
+        ):
+            last_serial = max(last_serial, project_keydata.key.last_serial)
+            project = project_keydata.value
+            if last_serial >= at_serial:
+                return last_serial
+            if project is deleted:
+                continue
             (versions_serial, versions) = tx.last_serial_and_value_at(
                 self.key_projversions(project), at_serial
             )
@@ -2114,13 +2108,13 @@ def register_keys(xom, keyfs):
 
     # type "stage" related
     project_key = keyfs.register_named_key(
-        "PROJSIMPLELINKS", "{project}", index_key, dict
+        "PROJECTNAME", "{project}", index_key, NormalizedName
     )
+    keyfs.register_anonymous_key("PROJSIMPLELINKS", project_key, dict)
     keyfs.register_anonymous_key("PROJVERSIONS", project_key, set)
     version_key = keyfs.register_named_key(
         "PROJVERSION", "{version}", project_key, dict
     )
-    keyfs.register_anonymous_key("PROJNAMES", index_key, set)
     keyfs.register_anonymous_key("VERSIONFILELIST", version_key, set)
     keyfs.register_named_key("VERSIONFILE", "{filename}", version_key, dict)
     keyfs.register_named_key(
