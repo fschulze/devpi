@@ -39,7 +39,6 @@ import time
 if TYPE_CHECKING:
     from .keyfs_types import KeyFSTypesRO
     from .markers import Absent
-    from .markers import Deleted
     from .mythread import MyThread
 
 
@@ -704,12 +703,12 @@ class Transaction:
         self,
         typedkey: LocatedKey,
         at_serial: int,
-    ) -> tuple[int, KeyFSTypesRO | None] | None:
+    ) -> tuple[int, KeyFSTypesRO | Absent]:
         relpath = typedkey.relpath
         try:
             data = self.conn.get_relpath_at(relpath, at_serial)
         except KeyError:
-            return None
+            return (-1, absent)
         return (data.last_serial, data.value)
 
     def get_value_at(self, typedkey: LocatedKey, at_serial: int) -> KeyFSTypesRO | None:
@@ -725,7 +724,7 @@ class Transaction:
     def last_serial_and_value_at(self, typedkey, at_serial):
         relpath = typedkey.relpath
         data = self.conn.get_relpath_at(relpath, at_serial)
-        if data.value is None:
+        if data.value is deleted:
             raise KeyError(relpath)  # was deleted
         return (data.last_serial, data.value)
 
@@ -736,16 +735,9 @@ class Transaction:
         """ Return original value from start of transaction,
             without changes from current transaction."""
         if typedkey not in self._original:
-            tup = self.get_last_serial_and_value_at(typedkey, self.at_serial)
-            val: Absent | Deleted | KeyFSTypesRO | None
-            if tup is None:
-                serial = -1
-                val = absent
-            else:
-                (serial, val) = tup
+            (serial, val) = self.get_last_serial_and_value_at(typedkey, self.at_serial)
+            if val not in (absent, deleted):
                 assert is_deeply_readonly(val)
-                if val is None:
-                    val = deleted
             self._original[typedkey] = (serial, val)
         return self._original[typedkey]
 

@@ -96,7 +96,7 @@ class KeyData:
     keyname: str
     serial: int
     back_serial: int
-    value: KeyFSTypesRO | None
+    value: KeyFSTypesRO | Deleted
 
     @property
     def last_serial(self):
