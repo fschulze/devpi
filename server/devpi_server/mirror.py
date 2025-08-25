@@ -973,7 +973,11 @@ class MirrorStage(BaseStage):
         (last_serial, ulid, links) = info
         return last_serial
 
-    def _get_elinks(self, project: str, version: str) -> list:
+    def _get_elinks(
+        self, project: str, version: str, *, rel: Rel | None = None
+    ) -> list:
+        if rel not in (Rel.ReleaseFile, None):
+            return []
         verdata = self.get_versiondata_perstage(project, version, with_elinks=True)
         return verdata["+elinks"]
 
