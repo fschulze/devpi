@@ -186,7 +186,7 @@ class FSIOFile:
         return list(make_rel_renames(basedir, pending_renames))
 
     def perform_crash_recovery(self):
-        rel_renames = self.conn.get_rel_renames(self.conn.last_changelog_serial)
+        rel_renames = list(self.conn.iter_rel_renames(self.conn.last_changelog_serial))
         if rel_renames:
             check_pending_renames(str(self.basedir), rel_renames)
 

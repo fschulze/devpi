@@ -213,12 +213,12 @@ class BaseConnection:
                 value=deleted if val is None else val,
             )
 
-    def get_rel_renames(self, serial):
+    def iter_rel_renames(self, serial: int) -> Iterator[str]:
         if serial == -1:
-            return None
+            return
         data = self.get_raw_changelog_entry(serial)
         (changes, rel_renames) = loads(data)
-        return rel_renames
+        yield from rel_renames
 
     def _get_key_at_serial(self, key: LocatedKey, serial: int) -> KeyData:
         last_serial = self.last_key_serial(key)
