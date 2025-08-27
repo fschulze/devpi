@@ -406,6 +406,9 @@ class KeyFS:
         self._storage.register_key(key)
         return key
 
+    def register_anonymous_key(self, key_name, parent_key, key_type):
+        return self.register_named_key(key_name, "", parent_key, key_type)
+
     def register_located_key(self, key_name, location, name, key_type):
         return self.register_key(LocatedKey(self, key_name, location, name, key_type))
 
