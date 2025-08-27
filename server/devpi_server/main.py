@@ -126,18 +126,20 @@ def main(argv=None):
     return runner.return_code
 
 
-def xom_from_config(config, init=False):
+def xom_from_config(config, *, init=False):
     check_compatible_version(config)
 
     # read/create node UUID and role of this server
     config.init_nodeinfo()
 
-    if not init and config.sqlite_file_needed_but_missing():
+    if not init and not config.storage_exists():
+        name = config.storage_info.name
+        settings = config.storage_info.settings
         msg = (
-            "No sqlite storage found in %s."
-            " Or you need to run with --storage to specify the storage type,"
-            " or you first need to run devpi-init or devpi-import"
-            " in order to create the sqlite database." % config.server_path
+            f"No {name} storage found in {config.server_path} with {settings}. "
+            f"Or you need to run with --storage to specify the storage type, "
+            f"or you first need to run devpi-init or devpi-import "
+            f"in order to create the sqlite database."
         )
         raise Fatal(msg)
 
@@ -412,11 +414,20 @@ class XOM:
 
     @cached_property
     def keyfs(self):
-        from devpi_server.keyfs import KeyFS
-        from devpi_server.model import add_keys
+        from .interfaces import IStorage
+        from .interfaces import IStorageConnection
+        from .interfaces import IWriter
+        from .keyfs import KeyFS
+        from .model import add_keys
+        from zope.interface.verify import verifyClass
+
+        storage_info = self.config.storage_info
+        verifyClass(IStorage, storage_info.storage_cls)
+        verifyClass(IStorageConnection, storage_info.connection_cls)
+        verifyClass(IWriter, storage_info.writer_cls)
         keyfs = KeyFS(
             self.config.server_path,
-            self.config.storage,
+            storage_info,
             io_file_factory=self.config.io_file_factory,
             readonly=self.is_replica(),
             cache_size=self.config.args.keyfs_cache_size,

@@ -1,16 +1,20 @@
 from .config import hookimpl
-from .interfaces import IStorageConnection4
+from .interfaces import IStorage
+from .interfaces import IStorageConnection
 from .keyfs_sqlite import BaseConnection
 from .keyfs_sqlite import BaseStorage
+from .keyfs_sqlite import Writer
+from .keyfs_types import StorageInfo
 from zope.interface import implementer
 
 
-@implementer(IStorageConnection4)
+@implementer(IStorageConnection)
 class Connection(BaseConnection):
     def _write_dirty_files(self):
         return ([], [])
 
 
+@implementer(IStorage)
 class Storage(BaseStorage):
     Connection = Connection
     db_filename = ".sqlite"
@@ -34,13 +38,19 @@ class Storage(BaseStorage):
                 )
             """))
 
+    def perform_crash_recovery(self):
+        pass
+
 
 @hookimpl
-def devpiserver_storage_backend(settings):
-    return dict(
-        storage=Storage,
+def devpiserver_describe_storage_backend(settings):
+    return StorageInfo(
         name="sqlite",
         description="SQLite backend with files on the filesystem",
-        db_filestore=False,
-        _test_markers=["storage_with_filesystem"],
+        exists=Storage.exists,
+        storage_cls=Storage,
+        connection_cls=Connection,
+        writer_cls=Writer,
+        storage_factory=Storage,
+        settings=settings,
     )

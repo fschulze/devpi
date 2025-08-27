@@ -256,20 +256,25 @@ class TestConfig:
         config = make_config(("devpi-server",))
         assert config.args.storage == "sqlite"
         xom = makexom(plugins=(keyfs_sqlite, keyfs_sqlite_fs))
-        assert xom.config.storage is keyfs_sqlite_fs.Storage
+        assert xom.config.storage_info.storage_cls is keyfs_sqlite_fs.Storage
 
     @pytest.mark.no_storage_option
     def test_storage_backend_options(self, makexom):
         class Plugin:
             @hookimpl
-            def devpiserver_storage_backend(self, settings):
+            def devpiserver_describe_storage_backend(self, settings):
                 from devpi_server import keyfs_sqlite_fs
+                from devpi_server.keyfs_types import StorageInfo
+
                 self.settings = settings
-                return dict(
-                    storage=keyfs_sqlite_fs.Storage,
+                return StorageInfo(
+                    connection_cls=keyfs_sqlite_fs.Connection,
+                    writer_cls=keyfs_sqlite_fs.Writer,
+                    storage_cls=keyfs_sqlite_fs.Storage,
+                    storage_factory=keyfs_sqlite_fs.Storage,
                     name="foo",
                     description="Foo backend",
-                    db_filestore=False,
+                    exists=keyfs_sqlite_fs.Storage.exists,
                 )
 
         options = ("--storage", "foo:bar=ham")
@@ -390,14 +395,19 @@ class TestConfigFile:
     def test_storage_backend_options(self, makexom, make_yaml_config):
         class Plugin:
             @hookimpl
-            def devpiserver_storage_backend(self, settings):
+            def devpiserver_describe_storage_backend(self, settings):
                 from devpi_server import keyfs_sqlite_fs
+                from devpi_server.keyfs_types import StorageInfo
+
                 self.settings = settings
-                return dict(
-                    storage=keyfs_sqlite_fs.Storage,
+                return StorageInfo(
+                    connection_cls=keyfs_sqlite_fs.Connection,
+                    writer_cls=keyfs_sqlite_fs.Writer,
+                    storage_cls=keyfs_sqlite_fs.Storage,
+                    storage_factory=keyfs_sqlite_fs.Storage,
                     name="foo",
                     description="Foo backend",
-                    db_filestore=False,
+                    exists=keyfs_sqlite_fs.Storage.exists,
                 )
 
         yaml_path = make_yaml_config(textwrap.dedent("""\
@@ -410,7 +420,7 @@ class TestConfigFile:
         assert isinstance(config.args.storage, dict)
         plugin = Plugin()
         xom = makexom(plugins=(plugin,), opts=options)
-        assert xom.config.storage_info["name"] == "foo"
+        assert xom.config.storage_info.name == "foo"
         assert plugin.settings == {"bar": "ham"}
 
 
