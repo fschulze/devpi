@@ -302,6 +302,11 @@ class KeyFS(object):
         self.io_file_factory = io_file_factory
         self._readonly = readonly
 
+    def __getattr__(self, name):
+        if name not in self._keys:
+            raise AttributeError(name)
+        return self._keys[name]
+
     def __repr__(self):
         return f"<{self.__class__.__name__} {self.base_path}>"
 
@@ -443,7 +448,6 @@ class KeyFS(object):
         if name in self._keys:
             raise ValueError("Duplicate registration for key named '%s'" % name)
         self._keys[name] = key
-        setattr(self, name, key)
         if hasattr(self._storage, 'add_key'):
             self._storage.add_key(key)
         return key

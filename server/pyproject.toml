@@ -271,9 +271,6 @@ extend-ignore = [
 "test_devpi_server/test_nginx_replica.py" = [
     "I001", # maybe cleanup later - import block unsorted
 ]
-"test_devpi_server/test_permissions.py" = [
-    "I001", # maybe cleanup later - import block unsorted
-]
 "test_devpi_server/test_replica.py" = [
     "I001", # maybe cleanup later - import block unsorted
 ]

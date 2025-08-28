@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 from devpi_server.config import hookimpl
 import pytest
+
 
 pytestmark = [pytest.mark.writetransaction]
 
@@ -152,6 +155,8 @@ class TestAuthDenialPlugin:
     @pytest.fixture
     def plugin(self):
         class Plugin:
+            results: list
+
             @hookimpl
             def devpiserver_auth_denials(self, request, acl, user, stage):  # noqa: ARG002
                 return self.results.pop()
@@ -191,7 +196,7 @@ class TestAuthDenialPlugin:
         import json
 
         class Plugin:
-            allowed = None
+            allowed: frozenset | None = None
             called = 0
 
             @hookimpl
