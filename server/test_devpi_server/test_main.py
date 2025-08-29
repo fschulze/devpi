@@ -42,7 +42,7 @@ def test_check_compatible_version_earlier(config, monkeypatch):
         check_compatible_version(config)
 
 
-@pytest.mark.parametrize("version", ["4", "4.8.1"])
+@pytest.mark.parametrize("version", ["5", "5.8.1"])
 def test_check_compatible_version(config, version):
     versionfile = config.server_path / ".serverversion"
     versionfile.write_text(version)
@@ -68,9 +68,10 @@ def test_check_incompatible_minor_version_raises(config, monkeypatch, version):
         check_compatible_version(config)
 
 
-def test_check_incompatible_version_raises(config):
+@pytest.mark.parametrize("version", ["2", "4", "6"])
+def test_check_incompatible_version_raises(config, version):
     versionfile = config.server_path / ".serverversion"
-    versionfile.write_text("5.0.4")
+    versionfile.write_text(version)
     with pytest.raises(Fatal):
         check_compatible_version(config)
 
