@@ -491,6 +491,14 @@ class KeyFS:
         self._storage.register_key(key)
         return key
 
+    def register_anonymous_key(
+        self,
+        key_name: str,
+        parent_key: NamedKey | NamedKeyFactory | None,
+        key_type: type[T],
+    ) -> LocatedKey[T] | NamedKey[T] | NamedKeyFactory[T]:
+        return self.register_named_key(key_name, "", parent_key, key_type)
+
     def register_located_key(
         self,
         key_name: str,
