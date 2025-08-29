@@ -934,7 +934,7 @@ def test_crash_recovery(caplog, keyfs, storage_info):
     assert path.exists()
     assert not tmppath.exists()
     with keyfs.write_transaction() as tx:
-        tx.io_file.delete(file_path_info)
+        tx.io_file.delete(file_path_info, is_last_of_hash=True)
     assert not path.exists()
     assert not tmppath.exists()
     # put file back in place
