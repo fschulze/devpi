@@ -2231,6 +2231,11 @@ class Schema(KeyFSSchema):
         DictViewReadonly,
     )
 
+    # files related
+    DIGESTPATHS = KeyFSSchema.decl_ptypedkey(
+        "DIGESTPATHS", "{digest}", set, SetViewReadonly
+    )
+
     def register_key_subscribers(self, xom: XOM) -> None:
         sub = EventSubscribers(xom)
         self.PROJVERSION.on_key_change(sub.on_changed_version_config)
