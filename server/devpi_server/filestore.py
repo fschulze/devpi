@@ -16,6 +16,7 @@ from devpi_server.log import threadlog
 from devpi_server.markers import absent
 from inspect import currentframe
 from typing import TYPE_CHECKING
+from typing import cast
 from typing import overload
 from urllib.parse import unquote
 import datetime
@@ -28,10 +29,13 @@ import warnings
 
 if TYPE_CHECKING:
     from .interfaces import ContentOrFile
+    from .keyfs import KeyFS
     from .keyfs_types import RelPath
     from .keyfs_types import TypedKey
     from .markers import Absent
+    from .model import Schema
     from .readonly import DictViewReadonly
+    from .readonly import SetViewReadonly
     from typing import Any
 
 
@@ -609,8 +613,10 @@ class BaseFileEntry:
     def file_exists(self):
         return self.tx.io_file.exists(self.file_path_info)
 
-    def file_delete(self):
-        return self.tx.io_file.delete(self.file_path_info)
+    def file_delete(self, *, is_last_of_hash):
+        return self.tx.io_file.delete(
+            self.file_path_info, is_last_of_hash=is_last_of_hash
+        )
 
     def file_size(self):
         return self.tx.io_file.size(self.file_path_info)
@@ -654,6 +660,8 @@ class BaseFileEntry:
         # end up only committing file content without any keys
         # changed which will not replay correctly at a replica.
         self.key.set(self.meta)
+        with self.key_digestpaths.update() as digest_paths:
+            digest_paths.add(self.relpath)
 
     def file_set_content_no_meta(self, content_or_file, *, hashes):
         missing_hash_types = hashes.get_missing_hash_types()
@@ -699,11 +707,25 @@ class BaseFileEntry:
         self._meta = {}
 
     def delete_file_only(self):
-        self.file_delete()
+        key_digestpaths = self.key_digestpaths
+        with key_digestpaths.update() as digest_paths:
+            digest_paths.discard(self.relpath)
+        is_last_of_hash = False
+        if not digest_paths:
+            key_digestpaths.delete()
+            is_last_of_hash = True
+        self.file_delete(is_last_of_hash=is_last_of_hash)
 
     def has_existing_metadata(self):
         return bool(
             self.hashes and self.last_modified and DEFAULT_HASH_TYPE in self.hashes
+        )
+
+    @property
+    def key_digestpaths(self) -> TypedKey[set[str], SetViewReadonly[str]]:
+        keyfs = cast("KeyFS[Schema]", self.key.keyfs)
+        return keyfs.schema.DIGESTPATHS(
+            digest=self.hashes[DEFAULT_HASH_TYPE]
         )
 
     def validate(self, content_or_file=None):

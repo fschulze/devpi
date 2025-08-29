@@ -107,7 +107,7 @@ class CommandRunner:
         return TerminalWriter(sys.stderr)
 
 
-DATABASE_VERSION = "4"
+DATABASE_VERSION = "5"
 
 
 def check_compatible_version(config):
