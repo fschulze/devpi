@@ -118,7 +118,12 @@ class FSIOFileBase:
         if files_commit or files_del:
             threadlog.debug(msg, LazyChangesFormatter({}, files_commit, files_del))
 
-    def delete(self, path: FilePathInfo) -> None:
+    def delete(
+        self,
+        path: FilePathInfo,
+        *,
+        is_last_of_hash: bool,  # noqa: ARG002
+    ) -> None:
         old = self._dirty_files.get(path.relpath, deleted)
         if not isinstance(old, Deleted):
             old.drop()
