@@ -102,7 +102,6 @@ exclude = [
     "devpi_server/config.py",
     "devpi_server/exceptions.py",
     "devpi_server/filestore.py",
-    "devpi_server/filestore_fs.py",
     "devpi_server/fileutil.py",
     "devpi_server/fsck.py",
     "devpi_server/genconfig.py",
@@ -225,13 +224,7 @@ extend-ignore = [
 "devpi_server/__main__.py" = [
     "I001", # maybe cleanup later - import block unsorted
 ]
-"devpi_server/config.py" = [
-    "I001", # maybe cleanup later - import block unsorted
-]
 "devpi_server/filestore.py" = [
-    "I001", # maybe cleanup later - import block unsorted
-]
-"devpi_server/fileutil.py" = [
     "I001", # maybe cleanup later - import block unsorted
 ]
 "devpi_server/genconfig.py" = [
@@ -243,13 +236,7 @@ extend-ignore = [
 "devpi_server/importexport.py" = [
     "I001", # maybe cleanup later - import block unsorted
 ]
-"devpi_server/keyfs.py" = [
-    "I001", # maybe cleanup later - import block unsorted
-]
 "devpi_server/keyfs_sqlite.py" = [
-    "I001", # maybe cleanup later - import block unsorted
-]
-"devpi_server/keyfs_sqlite_fs.py" = [
     "I001", # maybe cleanup later - import block unsorted
 ]
 "devpi_server/main.py" = [

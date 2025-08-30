@@ -6,28 +6,47 @@ write Transaction is ongoing.  Each Transaction will see a consistent
 view of key/values referring to the point in time it was started,
 independent from any future changes.
 """
-import contextlib
-import py
+from __future__ import annotations
+
 from . import mythread
-from .interfaces import IStorageConnection3
+from .filestore import FileEntry
+from .fileutil import read_int_from_file
+from .fileutil import write_int_to_file
+from .interfaces import IStorage
+from .interfaces import IStorageConnection4
 from .interfaces import IWriter2
 from .keyfs_types import PTypedKey
 from .keyfs_types import Record
 from .keyfs_types import TypedKey
-from .log import threadlog, thread_push_log, thread_pop_log
 from .log import thread_change_log_prefix
-from .markers import absent, deleted
+from .log import thread_pop_log
+from .log import thread_push_log
+from .log import threadlog
+from .markers import absent
+from .markers import deleted
 from .model import RootModel
 from .readonly import ensure_deeply_readonly
 from .readonly import get_mutable_deepcopy
 from .readonly import is_deeply_readonly
-from .filestore import FileEntry
-from .fileutil import read_int_from_file, write_int_to_file
 from devpi_common.types import cached_property
+from inspect import getfullargspec
 from pathlib import Path
+from typing import TYPE_CHECKING
+from typing import overload
+import contextlib
 import errno
+import py
 import time
 import warnings
+
+
+if TYPE_CHECKING:
+    from typing import Literal
+    from typing import Union
+
+    KeyFSConn = IStorageConnection4
+    KeyFSConnClosing = contextlib.closing[KeyFSConn]
+    KeyFSConnWithClosing = Union[KeyFSConn, KeyFSConnClosing]
 
 
 def __getattr__(name):
@@ -266,10 +285,13 @@ class KeyFS(object):
         self._cv_new_transaction = mythread.threading.Condition()
         self._import_subscriber = None
         self.notifier = TxNotificationThread(self)
-        self._storage = storage(
-            py.path.local(self.base_path),
-            notify_on_commit=self._notify_on_commit,
-            cache_size=cache_size)
+        self._storage = IStorage(
+            storage(
+                py.path.local(self.base_path),
+                notify_on_commit=self._notify_on_commit,
+                cache_size=cache_size,
+            )
+        )
         self.io_file_factory = io_file_factory
         self._readonly = readonly
 
@@ -285,14 +307,34 @@ class KeyFS(object):
             stacklevel=3)
         return py.path.local(self.base_path)
 
-    def get_connection(self, closing=True, write=False, timeout=30):
-        try:
-            conn = self._storage.get_connection(
-                closing=False, write=write, timeout=timeout)
-        except TypeError:
-            conn = self._storage.get_connection(
-                closing=False, write=write)
-        conn = IStorageConnection3(conn)
+    @overload
+    def get_connection(
+        self,
+        closing: Literal[True] = True,  # noqa: FBT002
+        write: bool = False,  # noqa: FBT001, FBT002 - API
+        timeout: float = 30,
+    ) -> KeyFSConnClosing:
+        pass
+
+    @overload
+    def get_connection(
+        self,
+        closing: Literal[False] = False,  # noqa: FBT002
+        write: bool = False,  # noqa: FBT001, FBT002 - API
+        timeout: float = 30,
+    ) -> KeyFSConn:
+        pass
+
+    def get_connection(
+        self,
+        closing: bool = True,  # noqa: FBT001, FBT002 - API
+        write: bool = False,  # noqa: FBT001, FBT002 - API
+        timeout: float = 30,
+    ) -> KeyFSConnWithClosing:
+        spec = getfullargspec(self._storage.get_connection)
+        kw = {"timeout": timeout} if "timeout" in spec.args else {}
+        conn = self._storage.get_connection(closing=False, write=write, **kw)
+        conn = IStorageConnection4(conn)
         if closing:
             return contextlib.closing(conn)
         return conn
@@ -913,6 +955,8 @@ class Transaction(object):
         try:
             if hasattr(self.conn, 'rollback'):
                 self.conn.rollback()
+            if self.keyfs.io_file_factory is not None:
+                self.io_file.rollback()
             threadlog.debug("transaction rollback at %s" % (self.at_serial))
         finally:
             result = self._close()

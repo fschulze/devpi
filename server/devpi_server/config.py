@@ -1,23 +1,24 @@
+from . import fileutil
+from . import hookspecs
+from .log import threadlog
+from devpi_common.types import cached_property
+from devpi_common.url import URL
+from functools import partial
+from operator import itemgetter
+from pathlib import Path
+from pluggy import HookimplMarker
+from pluggy import PluginManager
+from tempfile import NamedTemporaryFile
 import argon2
-import base64
-import os.path
 import argparse
+import base64
+import devpi_server
+import json
+import os.path
+import py
 import secrets
 import sys
 import uuid
-from operator import itemgetter
-from pathlib import Path
-from tempfile import NamedTemporaryFile
-from pluggy import HookimplMarker, PluginManager
-import py
-from devpi_common.types import cached_property
-from functools import partial
-from .log import threadlog
-from . import fileutil
-from . import hookspecs
-import json
-import devpi_server
-from devpi_common.url import URL
 import warnings
 
 
@@ -658,12 +659,21 @@ class ConfigurationError(Exception):
     """ incorrect configuration or environment settings. """
 
 
-def get_io_file_factory(storage_info):  # noqa: ARG001
-    from .filestore_db import DBIOFile
+def get_io_file_factory(storage_info):
     from .interfaces import IIOFile
     from zope.interface.verify import verifyObject
 
-    _io_file_factory = DBIOFile
+    db_filestore = storage_info.setdefault("db_filestore", True)
+    if db_filestore:
+        from .filestore_db import DBIOFile
+
+        _io_file_factory = DBIOFile
+    else:
+        from .filestore_fs import FSIOFile
+
+        settings = storage_info.get("settings", {})
+        storage_info.setdefault("_test_markers", []).append("storage_with_filesystem")
+        _io_file_factory = partial(FSIOFile, settings=settings)
 
     def io_file_factory(conn):
         result = IIOFile(_io_file_factory(conn))
@@ -1023,7 +1033,7 @@ class Config:
         return get_io_file_factory(self._storage_info())
 
     @property
-    def storage(self):
+    def storage(self) -> type:
         return self._storage_info()["storage"]
 
     def _determine_storage(self):

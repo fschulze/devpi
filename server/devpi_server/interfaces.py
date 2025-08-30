@@ -4,6 +4,7 @@ from .keyfs_types import RelpathInfo
 from contextlib import closing
 from inspect import getfullargspec
 from typing import TYPE_CHECKING
+from typing import overload
 from zope.interface import Attribute
 from zope.interface import Interface
 from zope.interface import classImplements
@@ -24,6 +25,8 @@ if TYPE_CHECKING:
     from typing import Any
     from typing import Callable
     from typing import IO
+    from typing import Literal
+    from typing import Optional
     from typing import Union
 
     ContentOrFile = Union[IO[bytes], bytes]
@@ -113,6 +116,28 @@ class IIOFile(Interface):
         """Returns the size of the file at path."""
 
 
+class IStorage(Interface):
+    basedir = Attribute(""" The base directory as py.path.local. """)
+
+    last_commit_timestamp: float = Attribute("""
+        The timestamp of the last commit. """)
+
+    @overload
+    def get_connection(
+        *, closing: Literal[True], write: bool, timeout: float
+    ) -> AbstractContextManager[Any]:
+        pass
+
+    @overload
+    def get_connection(*, closing: Literal[False], write: bool, timeout: float) -> Any:
+        pass
+
+    def get_connection(
+        *, closing: bool, write: bool, timeout: float
+    ) -> Any | AbstractContextManager[Any]:
+        """Returns a connection to the storage."""
+
+
 class IStorageConnection(Interface):
     last_changelog_serial = Attribute("""
         Like db_read_last_changelog_serial, but cached on the class. """)
@@ -128,7 +153,7 @@ class IStorageConnection(Interface):
     def get_changes(serial: int) -> dict:
         """ Returns deserialized readonly changes for given serial. """
 
-    def get_raw_changelog_entry(serial: int) -> bytes | None:
+    def get_raw_changelog_entry(serial: int) -> Optional[bytes]:
         """ Returns serializes changes for given serial. """
 
     def io_file_delete(path: str) -> None:
@@ -143,14 +168,14 @@ class IStorageConnection(Interface):
     def io_file_open(path: str) -> IO[bytes]:
         """ Returns an open file like object for binary reading. """
 
-    def io_file_os_path(path: str) -> str | None:
+    def io_file_os_path(path: str) -> Optional[str]:
         """ Returns the real path to the file if the storage is filesystem
             based, otherwise None. """
 
     def io_file_set(path: str, content: bytes) -> None:
         """ Set the binary content of the file at path. """
 
-    def io_file_size(path: str) -> int | None:
+    def io_file_size(path: str) -> Optional[int]:
         """ Returns the size of the file at path. """
 
     def commit_files_without_increasing_serial() -> None:
@@ -180,6 +205,47 @@ class IStorageConnection3(IStorageConnection2):
         """ Returns a new open file like object for binary writing. """
 
 
+class IStorageConnection4(Interface):
+    last_changelog_serial: int = Attribute("""
+        Like db_read_last_changelog_serial, but cached on the class. """)
+
+    storage: IStorage = Attribute(""" The storage instance for this connection. """)
+
+    def close() -> None:
+        """Close the storage."""
+
+    def db_read_last_changelog_serial() -> int:
+        """Return last stored serial.
+        Returns -1 if nothing is stored yet."""
+
+    def db_read_typedkey(relpath: str) -> tuple[str, int]:
+        """Return key name and serial for given relpath.
+        Raises KeyError if not found."""
+
+    def get_changes(serial: int) -> dict:
+        """Returns deserialized readonly changes for given serial."""
+
+    def get_raw_changelog_entry(serial: int) -> bytes | None:
+        """Returns serialized changes for given serial."""
+
+    def get_rel_renames(serial: int) -> Iterable | None:
+        """Returns deserialized rel_renames for given serial."""
+
+    def get_relpath_at(relpath: str, serial: int) -> Any:
+        """Get tuple of (last_serial, back_serial, value) for given relpath
+        at given serial.
+        Raises KeyError if not found."""
+
+    def iter_relpaths_at(
+        typedkeys: Iterable[Union[PTypedKey, TypedKey]], at_serial: int
+    ) -> Iterator[RelpathInfo]:
+        """Iterate over all relpaths of the given typed keys starting
+        from at_serial until the first serial in the database."""
+
+    def write_transaction() -> AbstractContextManager:
+        """Returns a context providing class with a IWriter2 interface."""
+
+
 class IWriter(Interface):
     commit_serial = Attribute("""
         The current to be commited serial set when entering the context manager. """)
@@ -188,9 +254,9 @@ class IWriter(Interface):
         pass
 
     def __exit__(  # noqa: PLE0302, PYI036
-        cls: type[BaseException] | None,
-        val: BaseException | None,  # noqa: PYI036
-        tb: TracebackType | None,  # noqa: PYI036
+        cls: Optional[type[BaseException]],
+        val: Optional[BaseException],  # noqa: PYI036
+        tb: Optional[TracebackType],  # noqa: PYI036
     ) -> bool | None:
         pass
 
@@ -208,9 +274,9 @@ class IWriter2(Interface):
         pass
 
     def __exit__(  # noqa: PLE0302 PYI036
-        cls: type[BaseException] | None,
-        val: BaseException | None,  # noqa: PYI036
-        tb: TracebackType | None,  # noqa: PYI036
+        cls: Optional[type[BaseException]],
+        val: Optional[BaseException],  # noqa: PYI036
+        tb: Optional[TracebackType],  # noqa: PYI036
     ) -> bool | None:
         pass
 
@@ -235,7 +301,7 @@ def get_connection_class(obj: Any) -> type:
 
 
 def verify_connection_interface(obj: Any) -> None:
-    verifyObject(IStorageConnection3, unwrap_connection_obj(obj))
+    verifyObject(IStorageConnection4, unwrap_connection_obj(obj))
 
 
 _adapters = {}
@@ -279,13 +345,13 @@ class IOFileConnectionAdapter:
     def io_file_open(self, path: FilePathInfo) -> IO[bytes]:
         return self.conn.io_file_open(path.relpath)
 
-    def io_file_os_path(self, path: FilePathInfo) -> str | None:
+    def io_file_os_path(self, path: FilePathInfo) -> Optional[str]:
         return self.conn.io_file_os_path(path.relpath)
 
     def io_file_set(self, path: FilePathInfo, content_or_file: ContentOrFile) -> None:
         return self.conn.io_file_set(path.relpath, content_or_file)
 
-    def io_file_size(self, path: FilePathInfo) -> int | None:
+    def io_file_size(self, path: FilePathInfo) -> Optional[int]:
         return self.conn.io_file_size(path.relpath)
 
 
@@ -293,6 +359,14 @@ class IOFileConnectionAdapter:
 def adapt_idbiofileconnection(iface: IDBIOFileConnection, obj: Any) -> Any:
     obj = unwrap_connection_obj(obj)
     obj = IOFileConnectionAdapter(obj)
+    verifyObject(iface, obj)
+    return obj
+
+
+@_register_adapter
+def adapt_istorage(iface: IStorage, obj: Any) -> Any:
+    cls = obj.__class__
+    classImplements(cls, iface)  # type: ignore[misc]
     verifyObject(iface, obj)
     return obj
 
@@ -382,6 +456,43 @@ def adapt_istorageconnection3(iface: IStorageConnection3, obj: Any) -> Any:
         return io_file_set(self, path, content_or_file, _io_file_set=orig_io_file_set)
 
     cls.io_file_set = _io_file_set  # type: ignore[attr-defined]
+    # and add the interface
+    classImplements(cls, iface)  # type: ignore[misc]
+    # make sure the object now actually provides this interface
+    verifyObject(iface, _obj)
+    return obj
+
+
+@_register_adapter
+def adapt_istorageconnection4(iface: IStorageConnection4, obj: Any) -> Any:
+    from .fileutil import loads
+
+    # first make sure the old connection interface is implemented
+    obj = IStorageConnection3(obj)
+    _obj = unwrap_connection_obj(obj)
+    cls = get_connection_class(_obj)
+
+    def close(self: Any) -> None:
+        pass
+
+    if not hasattr(cls, "close"):
+        cls.close = close  # type: ignore[attr-defined]
+
+    def _get_rel_renames(self: Any, serial: int) -> Iterable | None:
+        if serial == -1:
+            return None
+        data = self.get_raw_changelog_entry(serial)
+        (changes, rel_renames) = loads(data)
+        return rel_renames
+
+    cls.get_rel_renames = _get_rel_renames  # type: ignore[attr-defined]
+
+    orig_write_transaction = cls.write_transaction  # type: ignore[attr-defined]
+
+    def _write_transaction(self: Any, *, io_file: Any = None) -> AbstractContextManager:  # noqa: ARG001
+        return orig_write_transaction(self)
+
+    cls.write_transaction = _write_transaction  # type: ignore[attr-defined]
     # and add the interface
     classImplements(cls, iface)  # type: ignore[misc]
     # make sure the object now actually provides this interface
