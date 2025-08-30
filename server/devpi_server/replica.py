@@ -1184,7 +1184,7 @@ class InitialQueueThread:
                 for stage in user.getstages():
                     self.shared_data.set_index_type_for(
                         stage.name, stage.ixconfig['type'])
-            relpaths = tx.iter_relpaths_at(keys, tx.at_serial)
+            relpaths = tx.iter_keys_at_serial(keys, tx.at_serial)
             for item in relpaths:
                 self.thread.exit_if_shutdown()
                 if item.value is deleted:
