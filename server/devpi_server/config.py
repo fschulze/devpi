@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from . import fileutil
 from . import hookspecs
 from .log import threadlog
@@ -71,7 +73,7 @@ def traced_pluggy_call(hook, **caller_kwargs):
             if firstresult:
                 break
     if firstresult:
-        results = results[0] if results else None
+        return (results[0] if results else None, plugin_names)
     return (results, plugin_names)
 
 
@@ -459,9 +461,11 @@ def get_parser(pluginmanager):
 
 def find_config_file():
     import platformdirs
-    config_dirs = platformdirs.site_config_dir(
-        'devpi-server', 'devpi', multipath=True)
-    config_dirs = config_dirs.split(os.pathsep)
+
+    config_dirs_str: str = platformdirs.site_config_dir(
+        "devpi-server", "devpi", multipath=True
+    )
+    config_dirs: list[str] = config_dirs_str.split(os.pathsep)
     config_dirs.append(
         platformdirs.user_config_dir('devpi-server', 'devpi'))
     config_files = []
@@ -603,8 +607,8 @@ class MyArgumentParser(argparse.ArgumentParser):
                 action.help += " [%s]" % default
 
     def addgroup(self, *args, **kwargs):
-        grp = super(MyArgumentParser, self).add_argument_group(*args, **kwargs)
-        grp.addoption = grp.add_argument
+        grp = super().add_argument_group(*args, **kwargs)
+        grp.addoption = grp.add_argument  # type: ignore[attr-defined]
         return grp
 
     def add_all_options(self):
@@ -665,6 +669,7 @@ def get_io_file_factory(storage_info):
     from zope.interface.verify import verifyObject
 
     db_filestore = storage_info.setdefault("db_filestore", True)
+    _io_file_factory: type
     if db_filestore:
         from .filestore_db import DBIOFile
 
@@ -672,12 +677,12 @@ def get_io_file_factory(storage_info):
     else:
         from .filestore_fs import FSIOFile
 
-        settings = storage_info.get("settings", {})
         storage_info.setdefault("_test_markers", []).append("storage_with_filesystem")
-        _io_file_factory = partial(FSIOFile, settings=settings)
+        _io_file_factory = FSIOFile
+    settings = storage_info.get("settings", {})
 
     def io_file_factory(conn):
-        result = IIOFile(_io_file_factory(conn))
+        result = IIOFile(_io_file_factory(conn, settings))
         verifyObject(IIOFile, result)
         return result
 
