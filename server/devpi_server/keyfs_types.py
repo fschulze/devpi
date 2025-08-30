@@ -5,13 +5,16 @@ from .markers import Deleted
 from .readonly import ensure_deeply_readonly
 from attrs import define
 from attrs import frozen
+from typing import Generic
 from typing import TYPE_CHECKING
+from typing import TypeVar
 import contextlib
 import re
 import warnings
 
 
 if TYPE_CHECKING:
+    from .keyfs import KeyFS
     from .readonly import DictViewReadonly
     from .readonly import ListViewReadonly
     from .readonly import SetViewReadonly
@@ -65,11 +68,20 @@ class FilePathInfo:
     hash_digest: str | None
 
 
-class PTypedKey:
+T = TypeVar("T")
+
+
+class PTypedKey(Generic[T]):
     __slots__ = ('keyfs', 'name', 'pattern', 'rex_reverse', 'type')
     rex_braces = re.compile(r'\{(.+?)\}')
 
-    def __init__(self, keyfs, key, type, name):
+    def __init__(
+        self,
+        keyfs: KeyFS,
+        key: str,
+        type: type[T],  # noqa: A002
+        name: str,
+    ) -> None:
         self.keyfs = keyfs
         assert isinstance(key, str)
         self.pattern = key
@@ -102,10 +114,17 @@ class PTypedKey:
         return f"<PTypedKey {self.pattern!r} type {self.type.__name__!r}>"
 
 
-class TypedKey:
+class TypedKey(Generic[T]):
     __slots__ = ('keyfs', 'name', 'params', 'relpath', 'type')
 
-    def __init__(self, keyfs, relpath, type, name, params=None):
+    def __init__(
+        self,
+        keyfs: KeyFS,
+        relpath: str,
+        type: type[T],  # noqa: A002
+        name: str,
+        params: dict | None = None,
+    ) -> None:
         self.keyfs = keyfs
         self.relpath = relpath
         self.type = type
