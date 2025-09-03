@@ -45,6 +45,7 @@ import warnings
 
 if TYPE_CHECKING:
     from .keyfs_types import KeyFSTypesRO
+    from .keyfs_types import T
     from .markers import Absent
     from .markers import Deleted
     from .mythread import MyThread
@@ -464,7 +465,12 @@ class KeyFS(object):
     def tx(self):
         return self._threadlocal.tx
 
-    def add_key(self, name, path, type):
+    def add_key(
+        self,
+        name: str,
+        path: str,
+        type: type[T],  # noqa: A002
+    ) -> PTypedKey[T] | TypedKey[T]:
         assert isinstance(path, str)
         key: PTypedKey | TypedKey
         if "{" in path:
