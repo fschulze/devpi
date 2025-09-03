@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from devpi_server.keyfs import KeyFS
 from devpi_server.keyfs import Transaction
 from devpi_server.keyfs_types import FilePathInfo
@@ -5,9 +7,15 @@ from devpi_server.keyfs_types import RelPath
 from devpi_server.mythread import ThreadPool
 from devpi_server.readonly import is_deeply_readonly
 from functools import partial
+from typing import TYPE_CHECKING
+from typing import cast
 import contextlib
 import py
 import pytest
+
+
+if TYPE_CHECKING:
+    from devpi_server.keyfs_types import PTypedKey
 
 
 notransaction = pytest.mark.notransaction
@@ -573,8 +581,8 @@ class TestTransactionIsolation:
         )
         pkey1 = keyfs1.add_key("NAME1", "hello1/{name}", dict)
         pkey2 = keyfs1.add_key("NAME2", "hello2/{name}", dict)
-        D1 = pkey1(name="world1")
-        D2 = pkey2(name="world2")
+        D1 = cast("PTypedKey", pkey1)(name="world1")
+        D2 = cast("PTypedKey", pkey2)(name="world2")
         for i in range(2):
             with keyfs1.write_transaction():
                 assert D1.get() == {}
@@ -608,8 +616,8 @@ class TestTransactionIsolation:
         keyfs2 = KeyFS(tmpdir.join("newkeyfs"), storage)
         pkey1 = keyfs2.add_key("NAME1", "hello1/{name}", dict)
         pkey2 = keyfs2.add_key("NAME2", "hello2/{name}", dict)
-        D1 = pkey1(name="world1")
-        D2 = pkey2(name="world2")
+        D1 = cast("PTypedKey", pkey1)(name="world1")
+        D2 = cast("PTypedKey", pkey2)(name="world2")
 
         # add a subscriber to get into that branch in keyfs2.import_changes
 
