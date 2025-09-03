@@ -29,6 +29,7 @@ from functools import partial
 from html.parser import HTMLParser
 from pyramid.authentication import b64encode
 from typing import TYPE_CHECKING
+from typing import cast
 import asyncio
 import json
 import re
@@ -39,8 +40,18 @@ import weakref
 
 
 if TYPE_CHECKING:
+    from .keyfs_types import PTypedKey
     from .normalized import NormalizedName
     from typing import Any
+    from typing import TypedDict
+    from typing_extensions import NotRequired
+
+    class CacheLinks(TypedDict):
+        links: None
+        requires_python: None
+        yanked: None
+        serial: int
+        etag: NotRequired[str | None]
 
 
 SIMPLE_API_V1_VERSION = parse_version("1.0")
@@ -282,7 +293,9 @@ class MirrorStage(BaseStage):
         # quite large and the primary might take a while to process it
         self.projects_timeout = max(self.timeout, 60 if self.xom.is_replica() else 30)
         # list of locally mirrored projects
-        self.key_projects = self.keyfs.PROJNAMES(user=username, index=index)
+        self.key_projects = cast("PTypedKey[set]", self.keyfs.PROJNAMES)(
+            user=username, index=index
+        )
         # used to log about stale projects only once
         self._offline_logging = set()
 
@@ -586,7 +599,7 @@ class MirrorStage(BaseStage):
         )
 
     def _stale_list_projects_perstage(self):
-        return {normalize_name(x): x for x in self.key_projects.get()}
+        return {normalize_name(x): x for x in cast("set[str]", self.key_projects.get())}
 
     def _update_projects(self):
         projects_future = self.xom.create_future()
@@ -624,7 +637,9 @@ class MirrorStage(BaseStage):
                 # called from the notification thread
                 if not self.keyfs.tx.write:
                     self.keyfs.restart_read_transaction()
-                k = self.keyfs.MIRRORNAMESINIT(user=self.username, index=self.index)
+                k = cast("PTypedKey[int]", self.keyfs.MIRRORNAMESINIT)(
+                    user=self.username, index=self.index
+                )
                 # when 0 it is new, when 1 it is pre 6.6.0 with
                 # only normalized names
                 if k.get() in (0, 1):
@@ -671,7 +686,7 @@ class MirrorStage(BaseStage):
         assert links != ()  # we don't store the old "Not Found" marker anymore
         assert isinstance(serial, int)
         assert project == normalize_name(project), project
-        data = {
+        data: CacheLinks = {
             "etag": etag,
             "links": links,
             "requires_python": requires_python,
@@ -679,10 +694,10 @@ class MirrorStage(BaseStage):
             "yanked": yanked,
         }
         key = self.key_projsimplelinks(project)
-        old = key.get()
+        old = cast("CacheLinks", key.get())
         if old != data:
             threadlog.debug("saving changed simplelinks for %s: %s", project, data)
-            key.set(data)
+            key.set(cast("dict", data))
             # maintain list of currently cached project names to enable
             # deletion and offline mode
             self.add_project_name(project)
@@ -699,7 +714,7 @@ class MirrorStage(BaseStage):
     def _load_cache_links(self, project):
         (is_expired, links_with_data, serial, etag) = (True, None, -1, None)
 
-        cache = self.key_projsimplelinks(project).get()
+        cache = cast("CacheLinks", self.key_projsimplelinks(project).get())
         if cache:
             is_expired = self.cache_retrieve_times.is_expired(project, self.cache_expiry)
             serial = cache["serial"]

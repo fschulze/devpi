@@ -28,6 +28,7 @@ from pyramid.authorization import Everyone
 from time import gmtime
 from time import strftime
 from typing import TYPE_CHECKING
+from typing import cast
 import functools
 import getpass
 import json
@@ -37,6 +38,11 @@ import warnings
 
 
 if TYPE_CHECKING:
+    from .keyfs import KeyFS
+    from .keyfs_types import PTypedKey
+    from .keyfs_types import TypedKey
+    from .main import XOM
+    from .normalized import NormalizedName
     from collections.abc import Sequence
     from typing import Any
     from typing import Literal
@@ -319,6 +325,8 @@ class InvalidUserconfig(Exception):
 
 
 class User:
+    keyfs: KeyFS
+
     # ignored_keys are skipped on create and modify
     ignored_keys = frozenset(('indexes', 'username'))
     # info keys are updated on create and modify and input is ignored
@@ -343,8 +351,8 @@ class User:
         self.name = name
 
     @property
-    def key(self):
-        return self.keyfs.USER(user=self.name)
+    def key(self) -> TypedKey[dict]:
+        return cast("PTypedKey[dict]", self.keyfs.USER)(user=self.name)
 
     def get_cleaned_config(self, **kwargs):
         result = {}
@@ -668,7 +676,9 @@ class SimpleLinks:
         return f"<{clsname} stale={self.stale!r} [{content}]>"
 
 
-class BaseStage(object):
+class BaseStage:
+    keyfs: KeyFS
+
     InvalidIndex = InvalidIndex
     InvalidIndexconfig = InvalidIndexconfig
     InvalidUser = InvalidUser
@@ -801,9 +811,10 @@ class BaseStage(object):
     def delete(self):
         self.model.delete_stage(self.username, self.index)
 
-    def key_projsimplelinks(self, project):
-        return self.keyfs.PROJSIMPLELINKS(user=self.username,
-            index=self.index, project=normalize_name(project))
+    def key_projsimplelinks(self, project: str) -> TypedKey[dict]:
+        return cast("PTypedKey[dict]", self.keyfs.PROJSIMPLELINKS)(
+            user=self.username, index=self.index, project=normalize_name(project)
+        )
 
     def get_releaselinks(self, project):
         # compatibility access method used by devpi-web and tests
@@ -1272,7 +1283,9 @@ class PrivateStage(BaseStage):
 
     def __init__(self, xom, username, index, ixconfig, customizer_cls):
         super().__init__(xom, username, index, ixconfig, customizer_cls)
-        self.key_projects = self.keyfs.PROJNAMES(user=username, index=index)
+        self.key_projects = cast("PTypedKey[set]", self.keyfs.PROJNAMES)(
+            user=username, index=index
+        )
         self.httpget = xom.httpget
         self.async_httpget = xom.async_httpget
         self.http = xom.http
@@ -1333,14 +1346,22 @@ class PrivateStage(BaseStage):
         validate_metadata(dict(metadata))
         self._set_versiondata(metadata)
 
-    def key_projversions(self, project):
-        return self.keyfs.PROJVERSIONS(user=self.username,
-            index=self.index, project=normalize_name(project))
+    def key_projversions(self, project: NormalizedName | str) -> TypedKey[set]:
+        return cast("PTypedKey[set]", self.keyfs.PROJVERSIONS)(
+            user=self.username,
+            index=self.index,
+            project=normalize_name(project),
+        )
 
-    def key_projversion(self, project, version):
-        return self.keyfs.PROJVERSION(
-            user=self.username, index=self.index,
-            project=normalize_name(project), version=version)
+    def key_projversion(
+        self, project: NormalizedName | str, version: str
+    ) -> TypedKey[dict]:
+        return cast("PTypedKey[dict]", self.keyfs.PROJVERSION)(
+            user=self.username,
+            index=self.index,
+            project=normalize_name(project),
+            version=version,
+        )
 
     def _set_versiondata(self, metadata):
         project = normalize_name(metadata["name"])
@@ -2112,7 +2133,7 @@ def normalize_bases(model, bases):
     return tuple(newbases)
 
 
-def add_keys(xom, keyfs):
+def add_keys(xom: XOM, keyfs: KeyFS) -> None:
     # users and index configuration
     keyfs.add_key("USER", "{user}/.config", dict)
     keyfs.add_key("USERLIST", ".config", set)
@@ -2130,10 +2151,10 @@ def add_keys(xom, keyfs):
                   "{user}/{index}/+f/{hashdir_a}/{hashdir_b}/{filename}", dict)
 
     sub = EventSubscribers(xom)
-    keyfs.PROJVERSION.on_key_change(sub.on_changed_version_config)
-    keyfs.STAGEFILE.on_key_change(sub.on_changed_file_entry)
-    keyfs.MIRRORNAMESINIT.on_key_change(sub.on_mirror_initialnames)
-    keyfs.USER.on_key_change(sub.on_userchange)
+    cast("PTypedKey", keyfs.PROJVERSION).on_key_change(sub.on_changed_version_config)
+    cast("PTypedKey", keyfs.STAGEFILE).on_key_change(sub.on_changed_file_entry)
+    cast("PTypedKey", keyfs.MIRRORNAMESINIT).on_key_change(sub.on_mirror_initialnames)
+    cast("PTypedKey", keyfs.USER).on_key_change(sub.on_userchange)
 
 
 class EventSubscribers:
