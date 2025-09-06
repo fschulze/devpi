@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .filestore import Digests
+from .filestore import best_available_hash_type
 from .filestore import get_hashes
 from .log import threadlog
 from .main import CommandRunner
@@ -277,7 +278,7 @@ class IndexDump:
                 linkstore.project,
                 relpath,
                 version=link.version,
-                entrymapping=entry.meta,
+                entrymapping=get_mutable_deepcopy(entry.meta),
             )
 
     def dump_releasefiles(self, linkstore):
@@ -296,7 +297,7 @@ class IndexDump:
                 linkstore.project,
                 relpath,
                 version=linkstore.version,
-                entrymapping=entry.meta,
+                entrymapping=get_mutable_deepcopy(entry.meta),
                 log=link.get_logs(),
             )
 
@@ -306,7 +307,9 @@ class IndexDump:
             relpath = self.exporter.copy_file(
                 tox_link.entry,
                 self.basedir.joinpath(
-                    linkstore.project, reflink._hash_spec, tox_link.basename
+                    linkstore.project,
+                    reflink.best_available_hash_spec,
+                    tox_link.basename,
                 ),
             )
             self.add_filedesc(
@@ -314,7 +317,7 @@ class IndexDump:
                 project=linkstore.project,
                 relpath=relpath,
                 version=linkstore.version,
-                entrymapping=tox_link.entry.meta,
+                entrymapping=get_mutable_deepcopy(tox_link.entry.meta),
                 for_entrypath=reflink.relpath,
                 log=tox_link.get_logs(),
             )
@@ -327,6 +330,10 @@ class IndexDump:
         d["type"] = type
         d["projectname"] = project
         d["relpath"] = str(relpath)
+        # backward compatibility to allow devpi-server 6.x importing 7.x exports
+        hashes = d["entrymapping"]["hashes"]
+        hash_type = best_available_hash_type(hashes)
+        d["entrymapping"]["hash_spec"] = f"{hash_type}={hashes[hash_type]}"
         self.indexmeta["files"].append(d)
         self.exporter.completed(f"{type}: {relpath} ")
 
