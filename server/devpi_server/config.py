@@ -18,7 +18,6 @@ import base64
 import devpi_server
 import json
 import os.path
-import py
 import secrets
 import sys
 import uuid
@@ -800,26 +799,8 @@ class Config:
         return dict(kwargs=kwargs, addresses=addresses)
 
     @cached_property
-    def serverdir(self):
-        warnings.warn(
-            "The serverdir property is deprecated, "
-            "use server_path instead",
-            DeprecationWarning,
-            stacklevel=3)
-        return py.path.local(self.server_path)
-
-    @cached_property
     def server_path(self):
         return Path(self.args.serverdir).expanduser()
-
-    @cached_property
-    def path_nodeinfo(self):
-        warnings.warn(
-            "The path_nodeinfo property is deprecated, "
-            "use nodeinfo_path instead",
-            DeprecationWarning,
-            stacklevel=3)
-        return py.path.local(self.nodeinfo_path)
 
     @cached_property
     def nodeinfo_path(self):
@@ -1127,15 +1108,6 @@ class Config:
             self.storage_info['name'] == 'sqlite'
             and not self.server_path.joinpath(".sqlite").exists()
         )
-
-    @cached_property
-    def secretfile(self):
-        warnings.warn(
-            "The secretfile property is deprecated, "
-            "use secret_path instead",
-            DeprecationWarning,
-            stacklevel=3)
-        return py.path.local(self.secret_path)
 
     @cached_property
     def secret_path(self):
