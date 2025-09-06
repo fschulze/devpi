@@ -14,7 +14,6 @@ from .filestore import FileEntry
 from .filestore import FilePathInfo
 from .fileutil import read_int_from_file
 from .fileutil import write_int_to_file
-from .interfaces import IStorage
 from .interfaces import IStorageConnection4
 from .interfaces import IWriter2
 from .keyfs_types import PTypedKey
@@ -38,7 +37,6 @@ from typing import TYPE_CHECKING
 from typing import overload
 import contextlib
 import errno
-import py
 import time
 import warnings
 
@@ -295,12 +293,10 @@ class KeyFS:
         self._cv_new_transaction = mythread.threading.Condition()
         self._import_subscriber = None
         self.notifier = TxNotificationThread(self)
-        self._storage = IStorage(
-            storage(
-                py.path.local(self.base_path),
-                notify_on_commit=self._notify_on_commit,
-                cache_size=cache_size,
-            )
+        self._storage = storage(
+            self.base_path,
+            notify_on_commit=self._notify_on_commit,
+            cache_size=cache_size,
         )
         self.io_file_factory = io_file_factory
         self._readonly = readonly
@@ -314,15 +310,6 @@ class KeyFS:
 
     def __repr__(self):
         return f"<{self.__class__.__name__} {self.base_path}>"
-
-    @cached_property
-    def basedir(self):
-        warnings.warn(
-            "The basedir property is deprecated, "
-            "use base_path instead",
-            DeprecationWarning,
-            stacklevel=3)
-        return py.path.local(self.base_path)
 
     @overload
     def get_connection(
