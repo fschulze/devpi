@@ -24,7 +24,10 @@ if TYPE_CHECKING:
     from types import TracebackType
     from typing import IO
     from typing import Literal
+    from typing import Union
     from typing_extensions import Self
+
+    RelRenames = Iterable[tuple[Union[str, None], str]]
 
 
 class IFile(Interface):
