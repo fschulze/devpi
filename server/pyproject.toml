@@ -21,6 +21,7 @@ dependencies = [
     "pluggy>=0.6.0,<2.0",
     "pyramid>=2",
     "repoze.lru>=0.6",
+    "sqlalchemy>=2",
     "strenum;python_version<'3.11'",
     "strictyaml",
     "waitress>=1.0.1",
@@ -80,6 +81,8 @@ devpi-server-model = "devpi_server.model"
 devpi-server-replica = "devpi_server.replica"
 devpi-server-view-auth = "devpi_server.view_auth"
 devpi-server-views = "devpi_server.views"
+devpi-server-sqla-lite = "devpi_server.keyfs_sqla_lite"
+devpi-server-sqla-lite-files = "devpi_server.keyfs_sqla_lite_files"
 devpi-server-sqlite = "devpi_server.keyfs_sqlite"
 devpi-server-sqlite-fs = "devpi_server.keyfs_sqlite_fs"
 
