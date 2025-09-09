@@ -63,7 +63,6 @@ exclude = [
 extend-ignore = [
     "FLY002", # maybe cleanup later - f-string instead of join
     "PLR0912", # maybe cleanup later
-    "PLW2901", # maybe cleanup later
     "RUF012", # cleanup later
     "UP032", # cleanup later - f-string instead of format
 ]
