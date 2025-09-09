@@ -8,13 +8,13 @@ from devpi_server.keyfs_types import RelPath
 from devpi_server.log import thread_pop_log
 from devpi_server.log import thread_push_log
 from devpi_server.log import threadlog
+from devpi_server.mirror import iter_remote_file_replica
 from devpi_server.replica import H_EXPECTED_PRIMARY_ID
 from devpi_server.replica import H_PRIMARY_UUID
 from devpi_server.replica import H_REPLICA_OUTSIDE_URL
 from devpi_server.replica import H_REPLICA_UUID
 from devpi_server.replica import PrimaryChangelogRequest
 from devpi_server.replica import proxy_view_to_primary
-from devpi_server.views import iter_remote_file_replica
 from pyramid.httpexceptions import HTTPNotFound
 import os
 import pytest
