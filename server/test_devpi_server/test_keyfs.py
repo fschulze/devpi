@@ -14,7 +14,7 @@ import pytest
 
 
 if TYPE_CHECKING:
-    from devpi_server.keyfs_types import PTypedKey
+    from devpi_server.keyfs_types import NamedKeyFactory
 
 
 notransaction = pytest.mark.notransaction
@@ -182,7 +182,7 @@ class TestGetKey:
     def test_typed_keys(self, keyfs):
         key = keyfs.add_key("NAME", "hello", dict)
         assert key == keyfs.get_key("NAME")
-        assert key.name == "NAME"
+        assert key.key_name == "NAME"
 
     def test_pattern_key(self, keyfs):
         pkey = keyfs.add_key("NAME", "{hello}/{this}", dict)
@@ -190,9 +190,9 @@ class TestGetKey:
         assert found_key == pkey
         assert pkey.extract_params("cat/dog") == dict(hello="cat", this="dog")
         assert pkey.extract_params("cat") == {}
-        assert pkey.name == "NAME"
+        assert pkey.key_name == "NAME"
         key = pkey(hello="cat", this="dog")
-        assert key.name == "NAME"
+        assert key.key_name == "NAME"
 
 
 @pytest.mark.parametrize(("type", "val"),
@@ -344,7 +344,7 @@ def test_trans_get_not_modify(keyfs, type, val, monkeypatch):
 @notransaction
 class TestTransactionIsolation:
     def test_cannot_write_on_read_trans(self, keyfs):
-        key = keyfs.add_key("hello", "hello", dict)
+        key = keyfs.add_key("HELLO", "hello", dict)
         tx_1 = Transaction(keyfs)
         with pytest.raises(keyfs.ReadOnly):
             tx_1.set(key, {})
@@ -585,8 +585,8 @@ class TestTransactionIsolation:
         )
         pkey1 = keyfs1.add_key("NAME1", "hello1/{name}", dict)
         pkey2 = keyfs1.add_key("NAME2", "hello2/{name}", dict)
-        D1 = cast("PTypedKey", pkey1)(name="world1")
-        D2 = cast("PTypedKey", pkey2)(name="world2")
+        D1 = cast("NamedKeyFactory", pkey1)(name="world1")
+        D2 = cast("NamedKeyFactory", pkey2)(name="world2")
         for i in range(2):
             with keyfs1.write_transaction():
                 assert D1.get() == {}
@@ -620,8 +620,8 @@ class TestTransactionIsolation:
         keyfs2 = KeyFS(tmpdir.join("newkeyfs"), storage_info)
         pkey1 = keyfs2.add_key("NAME1", "hello1/{name}", dict)
         pkey2 = keyfs2.add_key("NAME2", "hello2/{name}", dict)
-        D1 = cast("PTypedKey", pkey1)(name="world1")
-        D2 = cast("PTypedKey", pkey2)(name="world2")
+        D1 = cast("NamedKeyFactory", pkey1)(name="world1")
+        D2 = cast("NamedKeyFactory", pkey2)(name="world2")
 
         # add a subscriber to get into that branch in keyfs2.import_changes
 
@@ -800,7 +800,7 @@ class TestSubscriber:
         ev = queue.get()
         assert ev.typedkey == key
         assert ev.typedkey.params == {"name": "hello"}
-        assert ev.typedkey.name == pkey.name
+        assert ev.typedkey.key_name == pkey.key_name
 
     @pytest.mark.parametrize("meth", ["wait_event_serial", "wait_tx_serial"])
     def test_wait_event_serial(self, keyfs, pool, queue, meth):
@@ -871,14 +871,14 @@ class TestSubscriber:
             assert tx.commit_serial is None
         assert tx.commit_serial is None
 
-        key = keyfs.add_key("hello", "hello", dict)
+        key = keyfs.add_key("HELLO", "hello", dict)
         with keyfs.write_transaction() as tx:
             assert tx.at_serial == -1
             tx.set(key, {})
         assert tx.commit_serial == 0
 
     def test_commit_serial_restart(self, keyfs):
-        key = keyfs.add_key("hello", "hello", dict)
+        key = keyfs.add_key("HELLO", "hello", dict)
         with keyfs.read_transaction() as tx:
             keyfs.restart_as_write_transaction()
             tx.set(key, {})
@@ -886,7 +886,7 @@ class TestSubscriber:
         assert tx.write
 
     def test_at_serial_restart(self, keyfs):
-        key = keyfs.add_key("hello", "hello", dict)
+        key = keyfs.add_key("HELLO", "hello", dict)
         with keyfs.read_transaction() as txr:
             tx = Transaction(keyfs, write=True)
             tx.set(key, {1:1})
