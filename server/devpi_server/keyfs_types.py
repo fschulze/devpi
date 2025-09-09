@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING
 from typing import TypeVar
 import contextlib
 import re
-import warnings
 
 
 if TYPE_CHECKING:
@@ -151,19 +150,8 @@ class TypedKey(Generic[T]):
     def __repr__(self):
         return f"<TypedKey {self.name} {self.type.__name__} {self.relpath}>"
 
-    def get(self, *, readonly=None):
-        if readonly is None:
-            readonly = True
-        else:
-            warnings.warn(
-                "The 'readonly' argument is deprecated. "
-                "You should either drop it or use the 'get_mutable' method.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-        if readonly:
-            return self.keyfs.tx.get(self)
-        return self.keyfs.tx.get_mutable(self)
+    def get(self):
+        return self.keyfs.tx.get(self)
 
     def get_mutable(self):
         return self.keyfs.tx.get_mutable(self)
