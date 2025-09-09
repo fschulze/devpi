@@ -84,7 +84,7 @@ def keyfs_changelog_view(request):
                         prev_formatted = pformat(prev_v[2])
             formatted = pformat(v[2])
             diffed = diff(prev_formatted, formatted)
-            (_, latest_serial) = conn.db_read_typedkey(k)
+            latest_serial = conn.last_key_serial(k)
             changes[k] = dict(
                 type=v[0],
                 previous_serial=v[1],
