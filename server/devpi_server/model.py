@@ -1492,11 +1492,7 @@ class PrivateStage(BaseStage):
         tx = self.keyfs.tx
         if at_serial is None:
             at_serial = tx.at_serial
-        info = tx.get_last_serial_and_value_at(
-            self.key_projects,
-            at_serial,
-            raise_on_error=False,
-        )
+        info = tx.get_last_serial_and_value_at(self.key_projects, at_serial)
         if info is None:
             # never existed
             return -1
@@ -1505,9 +1501,7 @@ class PrivateStage(BaseStage):
             # the whole index was deleted
             return -1
         info = tx.get_last_serial_and_value_at(
-            self.key_projversions(project),
-            at_serial,
-            raise_on_error=False,
+            self.key_projversions(project), at_serial
         )
         if info is None:
             if project in projects:
@@ -1523,7 +1517,7 @@ class PrivateStage(BaseStage):
             return last_serial
         for version in versions:
             info = tx.get_last_serial_and_value_at(
-                self.key_projversion(project, version), at_serial, raise_on_error=False
+                self.key_projversion(project, version), at_serial
             )
             if info is None:
                 continue
@@ -1532,9 +1526,7 @@ class PrivateStage(BaseStage):
             if last_serial >= at_serial:
                 return last_serial
             info = tx.get_last_serial_and_value_at(
-                self.key_versionfilelist(project, version),
-                at_serial,
-                raise_on_error=False,
+                self.key_versionfilelist(project, version), at_serial
             )
             if info is None:
                 continue
@@ -1544,9 +1536,7 @@ class PrivateStage(BaseStage):
                 return last_serial
             for filename in versionfiles_info:
                 info = tx.get_last_serial_and_value_at(
-                    self.key_versionfile(project, version, filename),
-                    at_serial,
-                    raise_on_error=False,
+                    self.key_versionfile(project, version, filename), at_serial
                 )
                 if info is None:
                     continue
@@ -1696,21 +1686,23 @@ class PrivateStage(BaseStage):
         if at_serial is None:
             at_serial = tx.at_serial
         try:
-            (last_serial, projects) = tx.get_last_serial_and_value_at(
-                self.key_projects, at_serial)
+            (last_serial, projects) = tx.last_serial_and_value_at(
+                self.key_projects, at_serial
+            )
         except KeyError:
             last_serial = -1
             projects = ()
         if last_serial >= at_serial:
             return last_serial
         for project in projects:
-            (versions_serial, versions) = tx.get_last_serial_and_value_at(
-                self.key_projversions(project), at_serial)
+            (versions_serial, versions) = tx.last_serial_and_value_at(
+                self.key_projversions(project), at_serial
+            )
             last_serial = max(last_serial, versions_serial)
             if last_serial >= at_serial:
                 return last_serial
             for version in versions:
-                (version_serial, _version_value) = tx.get_last_serial_and_value_at(
+                (version_serial, _version_value) = tx.last_serial_and_value_at(
                     self.key_projversion(project, version), at_serial
                 )
                 last_serial = max(last_serial, version_serial)
@@ -1718,7 +1710,7 @@ class PrivateStage(BaseStage):
                     return last_serial
                 try:
                     (versionfiles_serial, versionfilenames) = (
-                        tx.get_last_serial_and_value_at(
+                        tx.last_serial_and_value_at(
                             self.key_versionfilelist(project, version), at_serial
                         )
                     )
@@ -1730,7 +1722,7 @@ class PrivateStage(BaseStage):
                 for filename in versionfilenames:
                     try:
                         (versionfile_serial, _versionfile_info) = (
-                            tx.get_last_serial_and_value_at(
+                            tx.last_serial_and_value_at(
                                 self.key_versionfile(project, version, filename),
                                 at_serial,
                             )
@@ -1742,7 +1734,7 @@ class PrivateStage(BaseStage):
                         return last_serial
         # no project uploaded yet
         index_key = self.key_index
-        (index_serial, _index_config) = tx.get_last_serial_and_value_at(
+        (index_serial, _index_config) = tx.last_serial_and_value_at(
             index_key, at_serial
         )
         if last_serial >= index_serial:
