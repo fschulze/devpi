@@ -34,7 +34,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from collections.abc import Iterator
     from pathlib import Path
-    from typing import Any
     from typing_extensions import Self
 
     KeyFSTypesRO = (
@@ -85,9 +84,9 @@ KeyType = TypeVar("KeyType")
 @frozen
 class Record(Generic[KeyType]):
     key: LocatedKey[KeyType]
-    value: KeyType
+    value: KeyFSTypes | None
     back_serial: int
-    old_value: KeyFSTypesRO | None
+    old_value: KeyFSTypesRO | Absent | None
 
     def __attrs_post_init__(self) -> None:
         if (value := self.value) is not None:
@@ -104,13 +103,17 @@ class Record(Generic[KeyType]):
 RelPath = NewType("RelPath", str)
 
 
-@define
-class RelpathInfo:
+@frozen
+class KeyData:
     relpath: RelPath
     keyname: str
     serial: int
     back_serial: int
-    value: Any
+    value: KeyFSTypesRO | None
+
+    @property
+    def last_serial(self):
+        return self.serial
 
 
 @frozen
