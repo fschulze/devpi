@@ -153,6 +153,10 @@ class TestRenameFileLogic:
         content = b"foo"
         hashes = get_hashes(content)
         with xom.keyfs.write_transaction() as tx:
+            user_key = tx.keyfs.USER(user="user")
+            user_key.set({})
+            index_key = tx.keyfs.INDEX(user="user", index="index")
+            index_key.set({})
             hashdir_a, hashdir_b = make_splitdir(hashes.get_default_spec())
             key = tx.keyfs.STAGEFILE(
                 user="user",
