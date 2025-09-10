@@ -13,9 +13,9 @@ from zope.interface.verify import verifyObject
 if TYPE_CHECKING:
     from .keyfs_types import FilePathInfo
     from .keyfs_types import IKeyFSKey
+    from .keyfs_types import KeyData
     from .keyfs_types import Record
     from .keyfs_types import RelPath
-    from .keyfs_types import RelpathInfo
     from collections.abc import Callable
     from collections.abc import Iterable
     from collections.abc import Iterator
@@ -180,14 +180,14 @@ class IStorageConnection(Interface):
     def get_rel_renames(serial: int) -> Iterable[str] | None:
         """Returns deserialized rel_renames for given serial."""
 
-    def get_relpath_at(relpath: RelPath, serial: int) -> tuple[int, int, Any]:
+    def get_relpath_at(relpath: RelPath, serial: int) -> KeyData:
         """Get tuple of (last_serial, back_serial, value) for given relpath
         at given serial.
         Raises KeyError if not found."""
 
     def iter_relpaths_at(
         typedkeys: Iterable[IKeyFSKey], at_serial: int
-    ) -> Iterator[RelpathInfo]:
+    ) -> Iterator[KeyData]:
         """Iterate over all relpaths of the given typed keys starting
         from at_serial until the first serial in the database."""
 

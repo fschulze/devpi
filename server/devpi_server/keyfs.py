@@ -353,7 +353,7 @@ class KeyFS:
                 relpaths: Iterable[RelPath],
             ) -> Iterable[FilePathInfo]:
                 for relpath in relpaths:
-                    (_, _, val) = conn.get_relpath_at(relpath, serial)
+                    val = conn.get_relpath_at(relpath, serial).value
                     if (
                         isinstance(val, (dict, DictViewReadonly))
                         and "hashes" in val
@@ -380,11 +380,12 @@ class KeyFS:
             fswriter = IWriter(cstack.enter_context(conn.write_transaction(io_file)))
             next_serial = conn.last_changelog_serial + 1
             assert next_serial == serial, (next_serial, serial)
-            records = []
+            records: list[Record] = []
             subscriber_changes = {}
             for relpath, (keyname, back_serial, val) in changes.items():
+                old_val: KeyFSTypesRO | Absent | None
                 try:
-                    (_, _, old_val) = conn.get_relpath_at(relpath, serial - 1)
+                    old_val = conn.get_relpath_at(relpath, serial - 1).value
                 except KeyError:
                     old_val = absent
                 typedkey = self.get_key_instance(keyname, relpath)
@@ -811,10 +812,9 @@ class Transaction:
 
     def iter_serial_and_value_backwards(self, relpath, last_serial):
         while last_serial >= 0:
-            (last_serial, back_serial, val) = self.conn.get_relpath_at(
-                relpath, last_serial)
-            yield (last_serial, val)
-            last_serial = back_serial
+            data = self.conn.get_relpath_at(relpath, last_serial)
+            yield (data.last_serial, data.value)
+            last_serial = data.back_serial
 
     @overload
     def get_last_serial_and_value_at(
@@ -845,14 +845,14 @@ class Transaction:
     ) -> tuple[int, KeyFSTypesRO | None] | None:
         relpath = typedkey.relpath
         try:
-            (last_serial, back_serial, val) = self.conn.get_relpath_at(relpath, at_serial)
+            data = self.conn.get_relpath_at(relpath, at_serial)
         except KeyError:
             if not raise_on_error:
                 return None
             raise
-        if val is None and raise_on_error:
+        if data.value is None and raise_on_error:
             raise KeyError(relpath)  # was deleted
-        return (last_serial, val)
+        return (data.last_serial, data.value)
 
     def get_value_at(self, typedkey: LocatedKey, at_serial: int) -> KeyFSTypesRO | None:
         (last_serial, val) = self.get_last_serial_and_value_at(typedkey, at_serial)
@@ -951,7 +951,7 @@ class Transaction:
             result = self._close()
             self._run_listeners(self._finished_listeners)
             return result
-        records = []
+        records: list[Record] = []
         for typedkey in self.dirty:
             val = self.cache[typedkey]
             assert val is not absent
