@@ -642,9 +642,9 @@ devpi command reference (server)
 
     storage options:
       --serverdir DIR       directory for server data. [~/.devpi/server]
-      --storage NAME        the storage backend to use. "pg8000": Postgresql
-                            backend, "sqlite": SQLite backend with files on the
-                            filesystem [sqlite]
+      --storage NAME        the storage backend to use. "sqla_pg8000": Postgresql
+                            backend using SQLAlchemy with files in DB, "sqlite":
+                            SQLite backend with files on the filesystem [sqlite]
       --keyfs-cache-size NUM
                             size of keyfs cache. If your devpi-server installation
                             gets a lot of writes, then increasing this might
@@ -712,9 +712,9 @@ devpi command reference (server)
                             path to .json or .yaml logger configuration file.
                             [None]
       --serverdir DIR       directory for server data. [~/.devpi/server]
-      --storage NAME        the storage backend to use. "pg8000": Postgresql
-                            backend, "sqlite": SQLite backend with files on the
-                            filesystem [sqlite]
+      --storage NAME        the storage backend to use. "sqla_pg8000": Postgresql
+                            backend using SQLAlchemy with files in DB, "sqlite":
+                            SQLite backend with files on the filesystem [sqlite]
       --keyfs-cache-size NUM
                             size of keyfs cache. If your devpi-server installation
                             gets a lot of writes, then increasing this might
@@ -753,9 +753,9 @@ devpi command reference (server)
                             path to .json or .yaml logger configuration file.
                             [None]
       --serverdir DIR       directory for server data. [~/.devpi/server]
-      --storage NAME        the storage backend to use. "pg8000": Postgresql
-                            backend, "sqlite": SQLite backend with files on the
-                            filesystem [sqlite]
+      --storage NAME        the storage backend to use. "sqla_pg8000": Postgresql
+                            backend using SQLAlchemy with files in DB, "sqlite":
+                            SQLite backend with files on the filesystem [sqlite]
       --keyfs-cache-size NUM
                             size of keyfs cache. If your devpi-server installation
                             gets a lot of writes, then increasing this might
@@ -814,9 +814,9 @@ devpi command reference (server)
                             run as a replica of the specified primary server
                             [None]
       --serverdir DIR       directory for server data. [~/.devpi/server]
-      --storage NAME        the storage backend to use. "pg8000": Postgresql
-                            backend, "sqlite": SQLite backend with files on the
-                            filesystem [sqlite]
+      --storage NAME        the storage backend to use. "sqla_pg8000": Postgresql
+                            backend using SQLAlchemy with files in DB, "sqlite":
+                            SQLite backend with files on the filesystem [sqlite]
       --keyfs-cache-size NUM
                             size of keyfs cache. If your devpi-server installation
                             gets a lot of writes, then increasing this might
@@ -853,9 +853,9 @@ devpi command reference (server)
                             path to .json or .yaml logger configuration file.
                             [None]
       --serverdir DIR       directory for server data. [~/.devpi/server]
-      --storage NAME        the storage backend to use. "pg8000": Postgresql
-                            backend, "sqlite": SQLite backend with files on the
-                            filesystem [sqlite]
+      --storage NAME        the storage backend to use. "sqla_pg8000": Postgresql
+                            backend using SQLAlchemy with files in DB, "sqlite":
+                            SQLite backend with files on the filesystem [sqlite]
       --keyfs-cache-size NUM
                             size of keyfs cache. If your devpi-server installation
                             gets a lot of writes, then increasing this might
@@ -876,9 +876,9 @@ devpi command reference (server)
       -c CONFIGFILE, --configfile CONFIGFILE
                             Config file to use. [None]
       --serverdir DIR       directory for server data. [~/.devpi/server]
-      --storage NAME        the storage backend to use. "pg8000": Postgresql
-                            backend, "sqlite": SQLite backend with files on the
-                            filesystem [sqlite]
+      --storage NAME        the storage backend to use. "sqla_pg8000": Postgresql
+                            backend using SQLAlchemy with files in DB, "sqlite":
+                            SQLite backend with files on the filesystem [sqlite]
       --keyfs-cache-size NUM
                             size of keyfs cache. If your devpi-server installation
                             gets a lot of writes, then increasing this might
