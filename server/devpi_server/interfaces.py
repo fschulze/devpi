@@ -131,6 +131,9 @@ class IStorage(Interface):
     last_commit_timestamp: float = Attribute("""
         The timestamp of the last commit. """)
 
+    def close() -> None:
+        """Close the storage."""
+
     @overload
     def get_connection(
         *, closing: Literal[True], write: bool, timeout: float
