@@ -297,7 +297,7 @@ def add_storage_options(parser, pluginmanager):
         type=str,
         metavar="NAME",
         action="store",
-        default="sqlite",
+        default="sqla_lite",
         help="the storage backend to use.\n"
         + ", ".join(f'"{x.name}": {x.description}' for x in backends),
     )

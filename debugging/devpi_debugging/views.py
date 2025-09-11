@@ -7,6 +7,7 @@ from operator import itemgetter
 from pyramid.httpexceptions import HTTPForbidden
 from pyramid.view import view_config
 import json
+import sqlalchemy as sa
 
 
 @view_config(
@@ -21,12 +22,42 @@ def keyfs_view(request):
     query = request.params.get('query')
     serials = []
     if query:
-        bquery = query.encode('ascii')
-        q = "SELECT serial, data FROM changelog"
         with storage.get_connection() as conn:
-            for serial, data in conn._sqlconn.execute(q):
-                if bquery in data:
-                    serials.append(serial)
+            if conn._sqlaconn.dialect.name == "sqlite":
+                q = (
+                    sa.select(storage.ulid_changelog_table.c.serial)
+                    .where(
+                        sa.func.hex(storage.ulid_changelog_table.c.value).contains(
+                            sa.func.hex(query.encode())
+                        )
+                    )
+                    .order_by(storage.ulid_changelog_table.c.serial)
+                    .distinct()
+                )
+            elif conn._sqlaconn.dialect.name == "postgresql":
+                q = (
+                    sa.select(storage.ulid_changelog_table.c.serial)
+                    .where(
+                        sa.func.position(
+                            sa.literal(query.encode()).op("IN")(
+                                storage.ulid_changelog_table.c.value
+                            )
+                        )
+                        > 0
+                    )
+                    .order_by(storage.ulid_changelog_table.c.serial)
+                    .distinct()
+                )
+            else:
+                q = (
+                    sa.select(storage.ulid_changelog_table.c.serial)
+                    .where(
+                        storage.ulid_changelog_table.c.value.contains(query.encode())
+                    )
+                    .order_by(storage.ulid_changelog_table.c.serial)
+                    .distinct()
+                )
+            serials.extend(x[0] for x in conn._sqlaconn.execute(q))
     else:
         with storage.get_connection() as conn:
             start = range(min(5, conn.last_changelog_serial + 1))
