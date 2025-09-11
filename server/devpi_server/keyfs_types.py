@@ -91,7 +91,7 @@ class Record(Generic[KeyType, KeyTypeRO]):
     key: LocatedKey[KeyType, KeyTypeRO]
     value: KeyType | None
     back_serial: int
-    old_value: KeyTypeRO | Absent | None
+    old_value: KeyTypeRO | Absent | Deleted
 
     def __attrs_post_init__(self) -> None:
         if (value := self.value) is not None:
@@ -114,7 +114,7 @@ class KeyData:
     keyname: str
     serial: int
     back_serial: int
-    value: KeyFSTypesRO | None
+    value: KeyFSTypesRO | Deleted
 
     @property
     def last_serial(self):
