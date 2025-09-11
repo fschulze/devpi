@@ -355,10 +355,7 @@ class KeyFS:
                 return
 
             def iter_rel_renames() -> Iterable[str]:
-                rel_renames = conn.get_rel_renames(serial)
-                if rel_renames is None:
-                    return
-                yield from rel_renames
+                return conn.iter_rel_renames(serial)
 
             def iter_file_path_infos(
                 relpaths: Iterable[RelPath],
