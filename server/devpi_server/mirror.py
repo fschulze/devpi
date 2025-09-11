@@ -964,7 +964,7 @@ class MirrorStage(BaseStage):
         if info is None:
             # never existed
             return -1
-        (last_serial, links) = info
+        (last_serial, _ulid, _links) = info
         return last_serial
 
     def get_versiondata_perstage(self, project, version, *, with_elinks=True):

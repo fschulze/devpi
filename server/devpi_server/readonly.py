@@ -17,6 +17,7 @@ from collections.abc import ValuesView
 from functools import singledispatch
 from functools import total_ordering
 from typing import TYPE_CHECKING
+from typing import TypeVar
 from typing import Union
 from typing import overload
 
@@ -77,8 +78,12 @@ Readonly = Union[
 ]
 
 
+K = TypeVar("K", bound=Hashable)
+V = TypeVar("V", bound=Readonly)
+
+
 @total_ordering
-class DictViewReadonly(ReadonlyView, Mapping[Hashable, Readonly]):
+class DictViewReadonly(ReadonlyView, Mapping[K, V]):
     __slots__ = ()
 
     def __init__(self, data: dict) -> None:
@@ -87,45 +92,45 @@ class DictViewReadonly(ReadonlyView, Mapping[Hashable, Readonly]):
     def __iter__(self) -> Iterator:
         return iter(self._data)
 
-    def __getitem__(self, key: Hashable) -> Readonly:
+    def __getitem__(self, key: K) -> V:
         return ensure_deeply_readonly(self._data[key])
 
-    def items(self) -> ItemsView[Hashable, Readonly]:
+    def items(self) -> ItemsView[K, V]:
         return DictItemsViewReadonly(self)
 
-    def keys(self) -> KeysView[Hashable]:
+    def keys(self) -> KeysView[K]:
         return self._data.keys()
 
     @overload
-    def get(self, key: Hashable) -> Readonly:
+    def get(self, key: K) -> V:
         pass
 
     @overload
-    def get(self, key: Hashable, default: Readonly | Any) -> Readonly:
+    def get(self, key: K, default: V | Any) -> V:
         pass
 
-    def get(self, key: Hashable, default: Readonly | Any = None) -> Readonly:
+    def get(self, key: K, default: V | Any = None) -> V:
         val = self._data.get(key, default)
         return ensure_deeply_readonly(val)
 
-    def values(self) -> ValuesView[Readonly]:
+    def values(self) -> ValuesView[V]:
         return DictValuesViewReadonly(self)
 
 
-class DictItemsViewReadonly(ItemsView[Hashable, Readonly]):
+class DictItemsViewReadonly(ItemsView[K, V]):
     __slots__ = ()
     _mapping: DictViewReadonly
 
-    def __iter__(self) -> Iterator[tuple[Hashable, Readonly]]:
+    def __iter__(self) -> Iterator[tuple[K, V]]:
         for x, y in self._mapping._data.items():
             yield (x, ensure_deeply_readonly(y))
 
 
-class DictValuesViewReadonly(ValuesView[Readonly]):
+class DictValuesViewReadonly(ValuesView[V]):
     __slots__ = ()
     _mapping: DictViewReadonly
 
-    def __iter__(self) -> Iterator[Readonly]:
+    def __iter__(self) -> Iterator[V]:
         yield from (ensure_deeply_readonly(x) for x in self._mapping._data.values())
 
 
