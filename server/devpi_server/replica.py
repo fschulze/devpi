@@ -7,9 +7,11 @@ from .exceptions import lazy_format_exception
 from .filestore import ChecksumError
 from .filestore import FileEntry
 from .fileutil import buffered_iterator
+from .fileutil import dump_iter
+from .fileutil import dumplen
 from .fileutil import dumps
 from .fileutil import load
-from .fileutil import loads
+from .fileutil import load_iter
 from .httpclient import FatalResponse
 from .keyfs_types import KeyData
 from .keyfs_types import ULID
@@ -57,6 +59,7 @@ if TYPE_CHECKING:
     from .keyfs_types import RelPath
     from .keyfs_types import ULIDKey
     from .main import XOM
+    from collections.abc import Iterable
     from collections.abc import Sequence
     from contextlib import ExitStack
 
@@ -291,7 +294,9 @@ class PrimaryChangelogRequest:
             keyfs = self.xom.keyfs
             self._wait_for_serial(serial)
 
-            raw_entry = keyfs.tx.conn.get_raw_changelog_entry(serial)
+            changes = keyfs.tx.conn.iter_serializable_changes(serial)
+            rel_renames = keyfs.tx.conn.iter_rel_renames(serial)
+            raw_entry = dumps((changes, rel_renames))
 
             devpi_serial = keyfs.get_current_serial()
             return Response(
@@ -325,9 +330,8 @@ class PrimaryChangelogRequest:
             raw_size = 0
             start_time = time.time()
             for serial in range(start_serial, devpi_serial + 1):
-                raw_entry = keyfs.tx.conn.get_raw_changelog_entry(serial)
-                raw_size += len(raw_entry)
-                (changes, rel_renames) = loads(raw_entry)
+                changes = list(keyfs.tx.conn.iter_serializable_changes(serial))
+                raw_size += dumplen(changes)
                 all_changes.append((serial, changes))
                 now = time.time()
                 if raw_size > self.MAX_REPLICA_CHANGES_SIZE:
@@ -357,13 +361,12 @@ class PrimaryChangelogRequest:
         threadlog.info("Streaming from %s to %s", start_serial, devpi_serial)
 
         def iter_changelog_entries():
-            for serial in range(start_serial, devpi_serial + 1):
-                with keyfs.get_connection() as conn:
-                    raw = conn.get_raw_changelog_entry(serial)
-                threadlog.debug("Sending serial %s", serial)
-                with self.update_replica_status(serial, streaming=True):
-                    yield dumps(serial)
-                    yield raw
+            with keyfs.get_connection() as conn:
+                for serial in range(start_serial, devpi_serial + 1):
+                    threadlog.debug("Sending serial %s", serial)
+                    with self.update_replica_status(serial, streaming=True):
+                        yield dumps(serial)
+                        yield from dump_iter(conn.iter_serializable_changes(serial))
             # update status again when done
             with self.update_replica_status(devpi_serial + 1, streaming=False):
                 pass
@@ -663,7 +666,7 @@ class ReplicaThread:
                 try:
                     while True:
                         serial = load(stream)
-                        (changes, rel_renames) = load(stream)
+                        changes = load_iter(stream)
                         self.xom.keyfs.import_changes(
                             serial, self.get_changes(serial, changes)
                         )
@@ -673,7 +676,9 @@ class ReplicaThread:
                 except EOFError:
                     pass
         else:
-            all_changes = loads(response.content)
+            readableiterable = ReadableIterabel(response.iter_bytes(65536))
+            stream = io.BufferedReader(readableiterable, buffer_size=65536)
+            all_changes = load_iter(stream)
             for serial, changes in all_changes:
                 self.xom.keyfs.import_changes(serial, self.get_changes(serial, changes))
                 self.update_primary_serial(serial, update_sync=False, ignore_lower=True)
@@ -682,7 +687,7 @@ class ReplicaThread:
         url = self.primary_url.joinpath("+changelog", "%s-" % serial).url
         return self.fetch(self.handler_multi, url)
 
-    def get_changes(self, serial: int, changes: list[tuple]) -> Sequence[KeyData]:
+    def get_changes(self, serial: int, changes: Iterable[tuple]) -> Sequence[KeyData]:
         result = []
         get_key_instance = self.xom.keyfs.get_key_instance
         for keyname, relpath, ulid, parent_ulid, back_serial, val in changes:

@@ -539,6 +539,9 @@ def http(pypiurls):
                 def close(xself):
                     return
 
+                def iter_bytes(xself, chunk_size):
+                    yield xself.raw.read(chunk_size)
+
                 def iter_raw(xself, chunk_size):
                     yield xself.raw.read(chunk_size)
 
