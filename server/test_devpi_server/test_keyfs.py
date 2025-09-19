@@ -917,8 +917,8 @@ class TestSubscriber:
             assert tx.at_serial == -1
 
     def test_last_key_serial(self, keyfs):
-        key1 = keyfs.register_named_key_factory("SOME1", "{some}/1", None, set)
-        key2 = keyfs.register_named_key_factory("SOME2", "{some}/2", None, int)
+        key1 = keyfs.register_named_key_factory("SOME1", "{some}", None, set)
+        key2 = keyfs.register_named_key_factory("SOME2", "{some}", None, int)
         for i in range(10):
             with keyfs.write_transaction() as tx:
                 key1(some="foo").set({i})
