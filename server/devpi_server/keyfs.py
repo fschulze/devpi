@@ -38,7 +38,6 @@ from typing import overload
 import contextlib
 import errno
 import time
-import warnings
 
 
 if TYPE_CHECKING:
@@ -455,26 +454,6 @@ class KeyFS:
     def tx(self):
         return self._threadlocal.tx
 
-    def add_key(
-        self,
-        name: str,
-        path: str,
-        type: type[KeyType],  # noqa: A002
-    ) -> LocatedKey[KeyType] | NamedKeyFactory[KeyType]:
-        warnings.warn(
-            "The add_key method is deprecated, use register*_key instead",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        assert isinstance(path, str)
-        key: LocatedKey[KeyType] | NamedKeyFactory[KeyType]
-        if "{" in path:
-            key = self.register_named_key_factory(name, path, None, type)
-        else:
-            key = self.register_located_key(name, "", path, type)
-        self._storage.add_key(key)
-        return key
-
     @overload
     def register_key(self, key: LocatedKey[KeyType]) -> LocatedKey[KeyType]: ...
 
@@ -497,8 +476,7 @@ class KeyFS:
         if key_name in self._keys:
             raise ValueError("Duplicate registration for key named '%s'" % key_name)
         self._keys[key_name] = key
-        if hasattr(self._storage, "register_key"):
-            self._storage.register_key(key)
+        self._storage.register_key(key)
         return key
 
     def register_located_key(

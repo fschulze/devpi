@@ -2204,7 +2204,7 @@ def normalize_bases(model, bases):
     return tuple(newbases)
 
 
-def add_keys(xom: XOM, keyfs: KeyFS) -> None:
+def register_keys(xom: XOM, keyfs: KeyFS) -> None:
     # users and index configuration
     user_key = keyfs.register_named_key_factory("USER", "{user}/.config", None, dict)
     keyfs.register_located_key("USERLIST", "", ".config", set)

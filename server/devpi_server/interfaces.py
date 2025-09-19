@@ -130,9 +130,6 @@ class IStorage(Interface):
     last_commit_timestamp: float = Attribute("""
         The timestamp of the last commit. """)
 
-    def add_key(key: IKeyFSKey) -> None:
-        """Register key information."""
-
     @overload
     def get_connection(
         *, closing: Literal[True], write: bool, timeout: float
@@ -152,6 +149,9 @@ class IStorage(Interface):
 
     def perform_crash_recovery() -> None:
         """Perform recovery from crash during two phase commit."""
+
+    def register_key(key: IKeyFSKey) -> None:
+        """Register key information."""
 
 
 class IStorageConnection(Interface):
