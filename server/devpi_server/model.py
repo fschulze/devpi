@@ -2197,29 +2197,27 @@ def normalize_bases(model, bases):
 
 def register_keys(xom: XOM, keyfs: KeyFS) -> None:
     # users and index configuration
-    user_key = keyfs.register_named_key_factory("USER", "{user}/.config", None, dict)
-    keyfs.register_located_key("USERLIST", "", ".config", set)
-    index_key = keyfs.register_named_key_factory(
-        "INDEX", "{index}/.config", user_key, dict
-    )
-    keyfs.register_named_key("INDEXLIST", ".indexes", user_key, set)
+    user_key = keyfs.register_named_key_factory("USER", "{user}", None, dict)
+    keyfs.register_anonymous_key("USERLIST", None, set)
+    index_key = keyfs.register_named_key_factory("INDEX", "{index}", user_key, dict)
+    keyfs.register_anonymous_key("INDEXLIST", user_key, set)
 
     # type mirror related data
     keyfs.register_named_key_factory(
         "PYPIFILE_NOMD5", "+e/{dirname}/{basename}", index_key, dict
     )
-    keyfs.register_named_key("MIRRORNAMESINIT", ".mirrornameschange", index_key, int)
+    keyfs.register_anonymous_key("MIRRORNAMESINIT", index_key, int)
 
     # type "stage" related
     project_key = keyfs.register_named_key_factory(
-        "PROJSIMPLELINKS", "{project}/.simple", index_key, dict
+        "PROJSIMPLELINKS", "{project}", index_key, dict
     )
-    keyfs.register_named_key("PROJVERSIONS", ".versions", project_key, set)
+    keyfs.register_anonymous_key("PROJVERSIONS", project_key, set)
     version_key = keyfs.register_named_key_factory(
-        "PROJVERSION", "{version}/.config", project_key, dict
+        "PROJVERSION", "{version}", project_key, dict
     )
-    keyfs.register_named_key("PROJNAMES", ".projects", index_key, set)
-    keyfs.register_named_key("VERSIONFILELIST", ".files", version_key, set)
+    keyfs.register_anonymous_key("PROJNAMES", index_key, set)
+    keyfs.register_anonymous_key("VERSIONFILELIST", version_key, set)
     keyfs.register_named_key_factory("VERSIONFILE", "{filename}", version_key, dict)
     keyfs.register_named_key_factory(
         "STAGEFILE", "+f/{hashdir_a}/{hashdir_b}/{filename}", index_key, dict

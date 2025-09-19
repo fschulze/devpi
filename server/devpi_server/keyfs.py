@@ -492,6 +492,32 @@ class KeyFS:
         self._storage.register_key(key)
         return key
 
+    @overload
+    def register_anonymous_key(
+        self,
+        key_name: str,
+        parent_key: None,
+        key_type: type[KeyType],
+    ) -> LocatedKey[KeyType]: ...
+
+    @overload
+    def register_anonymous_key(
+        self,
+        key_name: str,
+        parent_key: NamedKey | NamedKeyFactory,
+        key_type: type[KeyType],
+    ) -> NamedKey[KeyType]: ...
+
+    def register_anonymous_key(
+        self,
+        key_name: str,
+        parent_key: NamedKey | NamedKeyFactory | None,
+        key_type: type[KeyType],
+    ) -> LocatedKey[KeyType] | NamedKey[KeyType]:
+        if parent_key is None:
+            return self.register_located_key(key_name, "", "", key_type)
+        return self.register_named_key(key_name, "", parent_key, key_type)
+
     def register_located_key(
         self,
         key_name: str,
