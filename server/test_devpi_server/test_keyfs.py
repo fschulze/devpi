@@ -637,8 +637,8 @@ class TestTransactionIsolation:
         )
         pkey1 = keyfs1.register_patterned_key("NAME1", "hello1/{name}", None, dict)
         pkey2 = keyfs1.register_patterned_key("NAME2", "hello2/{name}", None, dict)
-        D1 = cast("PatternedKey", pkey1)(name="world1")
-        D2 = cast("PatternedKey", pkey2)(name="world2")
+        D1 = cast("PatternedKey", pkey1).locate(name="world1")
+        D2 = cast("PatternedKey", pkey2).locate(name="world2")
         for i in range(2):
             with keyfs1.write_transaction():
                 assert D1.get() == {}
@@ -672,8 +672,8 @@ class TestTransactionIsolation:
         keyfs2 = KeyFS(tmpdir.join("newkeyfs"), storage_info)
         pkey1 = keyfs2.register_patterned_key("NAME1", "hello1/{name}", None, dict)
         pkey2 = keyfs2.register_patterned_key("NAME2", "hello2/{name}", None, dict)
-        D1 = cast("PatternedKey", pkey1)(name="world1")
-        D2 = cast("PatternedKey", pkey2)(name="world2")
+        D1 = cast("PatternedKey", pkey1).locate(name="world1")
+        D2 = cast("PatternedKey", pkey2).locate(name="world2")
 
         # add a subscriber to get into that branch in keyfs2.import_changes
 
@@ -1136,14 +1136,20 @@ def test_iter_keys_at_serial(keyfs):
     key = pkey(name="hello")
     with keyfs.read_transaction() as tx:
         assert (
-            list(tx.conn.iter_keys_at_serial([key], tx.at_serial, with_deleted=True))
+            list(
+                tx.conn.iter_keys_at_serial(
+                    [key], tx.at_serial, fill_cache=True, with_deleted=True
+                )
+            )
             == []
         )
     with keyfs.write_transaction():
         key.set(1)
     with keyfs.read_transaction() as tx:
         (keydata,) = list(
-            tx.conn.iter_keys_at_serial([key], tx.at_serial, with_deleted=True)
+            tx.conn.iter_keys_at_serial(
+                [key], tx.at_serial, fill_cache=True, with_deleted=True
+            )
         )
     assert keydata.key.key_name == "NAME1"
     assert keydata.value == 1
@@ -1156,7 +1162,9 @@ def test_iter_ulidkeys_at_serial(keyfs):
     with keyfs.read_transaction() as tx:
         assert (
             list(
-                tx.conn.iter_ulidkeys_at_serial([key], tx.at_serial, with_deleted=True)
+                tx.conn.iter_ulidkeys_at_serial(
+                    [key], tx.at_serial, fill_cache=True, with_deleted=True
+                )
             )
             == []
         )
@@ -1164,6 +1172,8 @@ def test_iter_ulidkeys_at_serial(keyfs):
         key.set(1)
     with keyfs.read_transaction() as tx:
         (key,) = list(
-            tx.conn.iter_ulidkeys_at_serial([key], tx.at_serial, with_deleted=True)
+            tx.conn.iter_ulidkeys_at_serial(
+                [key], tx.at_serial, fill_cache=True, with_deleted=True
+            )
         )
     assert key.key_name == "NAME1"

@@ -641,7 +641,7 @@ class MirrorStage(BaseStage):
                 # called from the notification thread
                 if not self.keyfs.tx.write:
                     self.keyfs.restart_read_transaction()
-                k = cast("PatternedKey[int]", self.keyfs.MIRRORNAMESINIT)(
+                k = cast("PatternedKey[int]", self.keyfs.MIRRORNAMESINIT).locate(
                     user=self.username, index=self.index
                 )
                 # when 0 it is new, when 1 it is pre 6.6.0 with
@@ -737,8 +737,14 @@ class MirrorStage(BaseStage):
                 cache.get("requires_python", []),
                 cache.get("yanked", []))
             if self.offline and links_with_data:
-                links_with_data = ensure_deeply_readonly(list(
-                    filter(self._is_file_cached, links_with_data)))
+                entries = self.get_entries_for_entrypaths(x[1] for x in links_with_data)
+                links_with_data = ensure_deeply_readonly(
+                    [
+                        link
+                        for (link, entry) in zip(links_with_data, entries, strict=True)
+                        if entry is not None and entry.file_exists()
+                    ]
+                )
 
         return (is_expired, links_with_data, serial, etag)
 

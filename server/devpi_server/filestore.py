@@ -372,7 +372,9 @@ class FileStore:
         ):
             (_ulid_key, val) = self.keyfs.tx._get(key)
             if val is absent:
-                return None
+                if not key.deleted():
+                    return None
+                val = deleted
             val = {} if val is deleted else val
             return FileEntry(key, val)
         return None
@@ -629,7 +631,7 @@ class BaseFileEntry:
 
     @property
     def key_digestulids(self) -> LocatedKey[set[int]]:
-        return cast("PatternedKey[set[int]]", self.key.keyfs.DIGESTULIDS)(
+        return cast("PatternedKey[set[int]]", self.key.keyfs.DIGESTULIDS).locate(
             digest=self.hashes[DEFAULT_HASH_TYPE]
         )
 

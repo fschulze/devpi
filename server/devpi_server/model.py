@@ -378,13 +378,15 @@ class User:
         self.keyfs = parent.keyfs
         self.xom = parent.xom
         self.name = name
-        self.key = cast("PatternedKey[dict]", self.keyfs.USER)(user=self.name)
-        self.key_indexes = cast("PatternedKey[set]", self.keyfs.INDEXLIST)(
+        self.key = cast("PatternedKey[dict]", self.keyfs.USER).locate(user=self.name)
+        self.key_indexes = cast("PatternedKey[set]", self.keyfs.INDEXLIST).locate(
             user=self.name
         )
 
     def key_index(self, index: str) -> LocatedKey[dict]:
-        return cast("PatternedKey[dict]", self.keyfs.INDEX)(user=self.name, index=index)
+        return cast("PatternedKey[dict]", self.keyfs.INDEX).locate(
+            user=self.name, index=index
+        )
 
     def get_cleaned_config(self, **kwargs):
         result = {}
@@ -731,10 +733,10 @@ class BaseStage:
         # the following attributes are per-xom singletons
         self.keyfs = xom.keyfs
         self.filestore = xom.filestore
-        self.key_index = cast("PatternedKey[dict]", self.keyfs.INDEX)(
+        self.key_index = cast("PatternedKey[dict]", self.keyfs.INDEX).locate(
             user=username, index=index
         )
-        self.key_projects = cast("PatternedKey[set[str]]", self.keyfs.PROJNAMES)(
+        self.key_projects = cast("PatternedKey[set[str]]", self.keyfs.PROJNAMES).locate(
             user=username, index=index
         )
 
@@ -848,7 +850,7 @@ class BaseStage:
         self.model.delete_stage(self.username, self.index)
 
     def key_projsimplelinks(self, project: str) -> LocatedKey[dict]:
-        return cast("PatternedKey[dict]", self.keyfs.PROJSIMPLELINKS)(
+        return cast("PatternedKey[dict]", self.keyfs.PROJSIMPLELINKS).locate(
             user=self.username, index=self.index, project=normalize_name(project)
         )
 
@@ -887,6 +889,33 @@ class BaseStage:
         if self.customizer.readonly:
             threadlog.warn("index is marked read only")
         return MutableLinkStore(self, name, version)
+
+    def get_keys_for_entrypaths(self, entrypaths):
+        keys = []
+        for entrypath in entrypaths:
+            relpath = entrypath.rsplit("#", 1)[0]
+            keys.append(
+                self.keyfs.match_key(
+                    relpath, self.keyfs.PYPIFILE_NOMD5, self.keyfs.STAGEFILE
+                )
+            )
+        return keys
+
+    def get_entries_for_keys(self, keys):
+        key_to_ulidkey = dict(
+            self.keyfs.tx.resolve_keys(
+                keys, fetch=True, fill_cache=True, new_for_missing=False
+            )
+        )
+        result = []
+        for key in keys:
+            ulid_key = key_to_ulidkey.get(key)
+            result.append(None if ulid_key is None else FileEntry(ulid_key))
+        return result
+
+    def get_entries_for_entrypaths(self, entrypaths):
+        keys = self.get_keys_for_entrypaths(entrypaths)
+        return self.get_entries_for_keys(keys)
 
     def get_link_from_entrypath(self, entrypath):
         relpath = entrypath.rsplit("#", 1)[0]
@@ -1371,7 +1400,7 @@ class PrivateStage(BaseStage):
         self._set_versiondata(metadata)
 
     def key_projversions(self, project: NormalizedName | str) -> LocatedKey[set]:
-        return cast("PatternedKey[set]", self.keyfs.PROJVERSIONS)(
+        return cast("PatternedKey[set]", self.keyfs.PROJVERSIONS).locate(
             user=self.username,
             index=self.index,
             project=normalize_name(project),
@@ -1380,7 +1409,7 @@ class PrivateStage(BaseStage):
     def key_projversion(
         self, project: NormalizedName | str, version: str
     ) -> LocatedKey[dict]:
-        return cast("PatternedKey[dict]", self.keyfs.PROJVERSION)(
+        return cast("PatternedKey[dict]", self.keyfs.PROJVERSION).locate(
             user=self.username,
             index=self.index,
             project=normalize_name(project),
@@ -1390,7 +1419,7 @@ class PrivateStage(BaseStage):
     def key_versionfilelist(
         self, project: NormalizedName | str, version: str
     ) -> LocatedKey[set[str]]:
-        return cast("PatternedKey[set[str]]", self.keyfs.VERSIONFILELIST)(
+        return cast("PatternedKey[set[str]]", self.keyfs.VERSIONFILELIST).locate(
             user=self.username,
             index=self.index,
             project=normalize_name(project),
@@ -1400,7 +1429,7 @@ class PrivateStage(BaseStage):
     def key_versionfile(
         self, project: NormalizedName | str, version: str, filename: str
     ) -> LocatedKey[dict]:
-        return cast("PatternedKey[dict]", self.keyfs.VERSIONFILE)(
+        return cast("PatternedKey[dict]", self.keyfs.VERSIONFILE).locate(
             user=self.username,
             index=self.index,
             project=normalize_name(project),

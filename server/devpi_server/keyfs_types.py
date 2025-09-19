@@ -435,6 +435,7 @@ class LocatedKey(Generic[KeyType]):
 class PatternedKey(Generic[KeyType]):
     __slots__ = (
         "_full_rex_reverse",
+        "_hash",
         "_keyfs",
         "_keys",
         "_rex_reverse",
@@ -445,6 +446,7 @@ class PatternedKey(Generic[KeyType]):
         "pattern",
     )
     _full_rex_reverse: Pattern
+    _hash: int
     _keyfs: weakref.ReferenceType[KeyFS]
     _keys: frozenset[str]
     _rex_reverse: Pattern
@@ -470,7 +472,7 @@ class PatternedKey(Generic[KeyType]):
 
     def __call__(
         self, *args: str, **kw: LocatedKey | ULIDKey | NormalizedName | str
-    ) -> LocatedKey[KeyType]:
+    ) -> LocatedKey[KeyType] | SearchKey[KeyType]:
         given_parent_key = kw.pop("parent_key", absent)
         assert isinstance(given_parent_key, (LocatedKey, ULIDKey, Absent))
         for val in kw.values():
@@ -479,9 +481,10 @@ class PatternedKey(Generic[KeyType]):
                 raise ValueError(val)
         if not isinstance(given_parent_key, Absent):
             kw.update(given_parent_key.params)
-        parent_key: LocatedKey | ULIDKey | None = (
+        parent_key: LocatedKey | SearchKey | ULIDKey | None = (
             None if self.parent_key is None else self.parent_key(**kw)
         )
+        assert parent_key is None or isinstance(parent_key, LocatedKey), parent_key
         if not isinstance(given_parent_key, Absent):
             assert parent_key is not None
             assert given_parent_key.key_name == parent_key.key_name
@@ -496,6 +499,10 @@ class PatternedKey(Generic[KeyType]):
         elif args:
             msg = f"{self.__class__.__name__}.__call__() takes at most 1 positional argument {len(args)} were given"
             raise TypeError(msg)
+        if self.keys.difference(kw):
+            return SearchKey(
+                keyfs, self.key_name, self.pattern, parent_key, self.key_type, params=kw
+            )
         if self.simple_pattern_key is not None:
             name = kw[self.simple_pattern_key]
             assert isinstance(name, str)
@@ -503,6 +510,19 @@ class PatternedKey(Generic[KeyType]):
             name = self.pattern.format_map(kw)
         return LocatedKey(
             keyfs, self.key_name, name, parent_key, self.key_type, params=kw
+        )
+
+    def __hash__(self) -> int:
+        _hash = getattr(self, "_hash", None)
+        if _hash is None:
+            _hash = self._hash = hash((self.key_name, self.full_pattern))
+        return _hash
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, PatternedKey):
+            return NotImplemented
+        return (
+            self.key_name == other.key_name and self.full_pattern == other.full_pattern
         )
 
     def __repr__(self) -> str:
@@ -518,6 +538,13 @@ class PatternedKey(Generic[KeyType]):
         if _keys is None:
             _keys = self._keys = get_pattern_keys(self.pattern)
         return _keys
+
+    def locate(
+        self, *args: str, **kw: LocatedKey | ULIDKey | NormalizedName | str
+    ) -> LocatedKey[KeyType]:
+        key = self(*args, **kw)
+        assert isinstance(key, LocatedKey)
+        return key
 
     def make_ulid_key(
         self,
@@ -590,6 +617,169 @@ class PatternedKey(Generic[KeyType]):
         if _rex_reverse is None:
             _rex_reverse = self._rex_reverse = get_rex_reverse(self.pattern)
         return _rex_reverse
+
+    def search(
+        self, *args: str, **kw: LocatedKey | ULIDKey | NormalizedName | str
+    ) -> SearchKey[KeyType]:
+        key = self(*args, **kw)
+        assert isinstance(key, SearchKey)
+        return key
+
+    @property
+    def simple_pattern_key(self) -> str | None:
+        _simple_pattern_key = getattr(self, "_simple_pattern_key", absent)
+        if isinstance(_simple_pattern_key, Absent):
+            _simple_pattern_key = self._simple_pattern_key = get_simple_pattern_key(
+                self.pattern
+            )
+        return _simple_pattern_key
+
+
+class SearchKey(Generic[KeyType]):
+    __slots__ = (
+        "_hash",
+        "_keyfs",
+        "_keys",
+        "_parent_ulidkey",
+        "_simple_pattern_key",
+        "key_name",
+        "key_type",
+        "params",
+        "parent_key",
+        "pattern",
+    )
+    _hash: int
+    _keyfs: weakref.ReferenceType[KeyFS]
+    _keys: frozenset[str]
+    _parent_ulidkey: ULIDKey | None
+    _simple_pattern_key: str | None
+    key_name: str
+    key_type: type[KeyType]
+    parent_key: LocatedKey | ULIDKey | None
+    pattern: str
+    params: dict[str, str]
+
+    def __init__(
+        self,
+        keyfs: KeyFS,
+        key_name: str,
+        pattern: str,
+        parent_key: LocatedKey | ULIDKey | None,
+        key_type: type[KeyType],
+        params: dict,
+    ) -> None:
+        self._keyfs = weakref.ref(keyfs)
+        self.key_name = key_name
+        self.pattern = pattern
+        self.parent_key = parent_key
+        self.key_type = key_type
+        self.params = params
+
+    def __call__(
+        self, *args: str, **kw: LocatedKey | ULIDKey | str
+    ) -> LocatedKey[KeyType]:
+        given_parent_key = kw.pop("parent_key", absent)
+        assert isinstance(given_parent_key, (LocatedKey, ULIDKey, Absent))
+        for val in kw.values():
+            assert isinstance(val, str)
+            if "/" in val:
+                raise ValueError(val)
+        if not isinstance(given_parent_key, Absent):
+            kw.update(given_parent_key.params)
+        if self.simple_pattern_key and len(args) == 1:
+            name = args[0]
+        else:
+            missing = self.keys.difference(kw)
+            if missing:
+                (k,) = missing
+                (val,) = args
+                kw[k] = val
+            elif args:
+                msg = f"{self.__class__.__name__}.__call__() takes at most 1 positional argument {len(args)} were given"
+                raise TypeError(msg)
+            if set(kw).intersection(self.params):
+                msg = f"{kw!r} overlaps {self.params!r}"
+                raise TypeError(msg)
+            if self.simple_pattern_key:
+                _name = kw[self.simple_pattern_key]
+                assert isinstance(_name, str)
+                name = _name
+            else:
+                name = self.pattern.format_map(kw)
+        keyfs = self._keyfs()
+        assert keyfs is not None
+        return LocatedKey(
+            keyfs,
+            self.key_name,
+            name,
+            self.parent_ulidkey,
+            self.key_type,
+            params=self.params | kw,
+        )
+
+    def __hash__(self) -> int:
+        _hash = getattr(self, "_hash", None)
+        if _hash is None:
+            _hash = self._hash = hash((self.key_name, self.location))
+        return _hash
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, LocatedKey):
+            return NotImplemented
+        return self.key_name == other.key_name and self.location == other.location
+
+    def __repr__(self) -> str:
+        return f"<{self.__class__.__name__} {self.key_name} {self.key_type.__name__} {self.parent_key!r}>"
+
+    def iter_ulidkey_values(
+        self, *, fill_cache: bool = True
+    ) -> Iterator[tuple[ULIDKey[KeyType], KeyType]]:
+        keyfs = self._keyfs()
+        assert keyfs is not None
+        yield from keyfs.tx.iter_ulidkey_values_for((self,), fill_cache=fill_cache)
+
+    def iter_ulidkeys(self, *, fill_cache: bool = True) -> Iterator[ULIDKey[KeyType]]:
+        keyfs = self._keyfs()
+        assert keyfs is not None
+        yield from keyfs.tx.iter_ulidkeys_for((self,), fill_cache=fill_cache)
+
+    @property
+    def keys(self) -> frozenset[str]:
+        _keys = getattr(self, "_keys", None)
+        if _keys is None:
+            _keys = self._keys = get_pattern_keys(self.pattern)
+        return _keys
+
+    @property
+    def location(self) -> str:
+        if self.parent_key is None:
+            return ""
+        return self.parent_key.relpath
+
+    @property
+    def parent_ulid(self) -> ULID | None:
+        parent_ulidkey = self.parent_ulidkey
+        if parent_ulidkey is None:
+            return None
+        return parent_ulidkey.ulid
+
+    @property
+    def parent_ulidkey(self) -> ULIDKey | None:
+        _parent_ulidkey = getattr(self, "_parent_ulidkey", absent)
+        if isinstance(_parent_ulidkey, Absent):
+            parent_key = self.parent_key
+            if isinstance(parent_key, ULIDKey):
+                _parent_ulidkey = self._parent_ulidkey = parent_key
+            else:
+                _parent_ulidkey = self._parent_ulidkey = (
+                    None if parent_key is None else parent_key.resolve(fetch=False)
+                )
+        return _parent_ulidkey
+
+    @property
+    def query_parent_ulid(self) -> int:
+        parent_ulidkey = self.parent_ulidkey
+        return -1 if parent_ulidkey is None else int(parent_ulidkey.ulid)
 
     @property
     def simple_pattern_key(self) -> str | None:
