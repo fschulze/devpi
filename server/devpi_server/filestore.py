@@ -594,7 +594,7 @@ class BaseFileEntry:
 
     @property
     def key_digestulids(self) -> LocatedKey[set[int]]:
-        return cast("PatternedKey[set[int]]", self.key.keyfs.DIGESTULIDS)(
+        return cast("PatternedKey[set[int]]", self.key.keyfs.DIGESTULIDS).locate(
             digest=self.hashes[DEFAULT_HASH_TYPE]
         )
 
