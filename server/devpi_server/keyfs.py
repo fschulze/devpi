@@ -52,11 +52,10 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
     from collections.abc import Iterator
     from typing import Literal
-    from typing import Union
 
     KeyFSConn = IStorageConnection4
     KeyFSConnClosing = contextlib.closing[KeyFSConn]
-    KeyFSConnWithClosing = Union[KeyFSConn, KeyFSConnClosing]
+    KeyFSConnWithClosing = KeyFSConn | KeyFSConnClosing
 
 
 def __getattr__(name):

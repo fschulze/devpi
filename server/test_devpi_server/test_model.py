@@ -1648,7 +1648,8 @@ def test_ensure_boolean():
     def upper_lower_case_permutations(value):
         return tuple(
             "".join(x)
-            for x in itertools.product(*zip(value.lower(), value.upper())))
+            for x in itertools.product(*zip(value.lower(), value.upper(), strict=True))
+        )
     assert ensure_boolean(True) is True  # noqa: FBT003
     for s in upper_lower_case_permutations("yes"):
         assert ensure_boolean(s) is True

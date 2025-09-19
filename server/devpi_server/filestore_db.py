@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
     from types import TracebackType
     from typing import Any
-    from typing_extensions import Self
+    from typing import Self
 
 
 @implementer(IIOFile)
