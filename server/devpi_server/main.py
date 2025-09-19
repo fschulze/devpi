@@ -424,7 +424,7 @@ class XOM:
         from .interfaces import IStorage
         from .interfaces import IStorageConnection
         from .interfaces import IWriter
-        from .model import add_keys
+        from .model import register_keys
         from zope.interface.verify import verifyClass
 
         storage_info = self.config.storage_info
@@ -438,7 +438,7 @@ class XOM:
             readonly=self.is_replica(),
             cache_size=self.config.args.keyfs_cache_size,
         )
-        add_keys(self, keyfs)
+        register_keys(self, keyfs)
         try:
             keyfs.finalize_init()
         except Exception as e:
