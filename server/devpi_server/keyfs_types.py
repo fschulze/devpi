@@ -10,7 +10,6 @@ from typing import Generic
 from typing import NewType
 from typing import TYPE_CHECKING
 from typing import TypeVar
-from typing import Union
 from typing import overload
 import contextlib
 import re
@@ -29,21 +28,21 @@ if TYPE_CHECKING:
     from typing import Any
     from typing import Literal
 
-    KeyFSTypesRO = Union[
-        bool,
-        bytes,
-        DictViewReadonly,
-        float,
-        frozenset,
-        int,
-        ListViewReadonly,
-        SetViewReadonly,
-        str,
-        TupleViewReadonly,
-    ]
+    KeyFSTypesRO = (
+        bool
+        | bytes
+        | DictViewReadonly
+        | float
+        | frozenset
+        | int
+        | ListViewReadonly
+        | SetViewReadonly
+        | str
+        | TupleViewReadonly
+    )
 
 
-KeyFSTypes = Union[bool, bytes, dict, float, frozenset, int, list, set, str, tuple]
+KeyFSTypes = bool | bytes | dict | float | frozenset | int | list | set | str | tuple
 KeyType = TypeVar("KeyType")
 
 

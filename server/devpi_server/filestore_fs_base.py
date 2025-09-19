@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from types import TracebackType
     from typing import IO
     from typing import Literal
-    from typing_extensions import Self
+    from typing import Self
 
 
 class IFile(Interface):

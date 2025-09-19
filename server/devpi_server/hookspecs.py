@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pluggy import HookspecMarker
-from typing import Optional
 from typing import TYPE_CHECKING
 
 
@@ -279,7 +278,9 @@ def devpiserver_on_replicated_file(stage, project, version, link, serial, back_s
 
 
 @hookspec(firstresult=True)
-def devpiserver_on_toxresult_store(request: Request, tox_result_handling: ToxResultHandling) -> Optional[ToxResultHandling]:
+def devpiserver_on_toxresult_store(
+    request: Request, tox_result_handling: ToxResultHandling
+) -> ToxResultHandling | None:
     """Called when a toxresult is about to be stored.
 
     Stops at first non-None result.
@@ -289,7 +290,9 @@ def devpiserver_on_toxresult_store(request: Request, tox_result_handling: ToxRes
 
 
 @hookspec(firstresult=True)
-def devpiserver_on_toxresult_upload_forbidden(request: Request, tox_result_handling: ToxResultHandling) -> Optional[str]:
+def devpiserver_on_toxresult_upload_forbidden(
+    request: Request, tox_result_handling: ToxResultHandling
+) -> str | None:
     """Called when the permission check for toxresult upload failed.
 
     Stops at first non-None result.
