@@ -21,10 +21,6 @@ AGENT_PYTHON_VERSION = f"(py{sys.version.split()[0]}; {sys.platform})"
 if TYPE_CHECKING:
     from collections.abc import Iterator
     from contextlib import ExitStack
-    from typing import Union
-
-    AsyncGetResponse = tuple[Union[httpx.Response, "FatalResponse"], Union[str, None]]
-    GetResponse = Union[httpx.Response, "FatalResponse"]
 
 
 def get_caller_location(stacklevel: int = 2) -> str:
@@ -67,6 +63,11 @@ class FatalResponse:
             stacklevel=2,
         )
         return self.reason_phrase
+
+
+if TYPE_CHECKING:
+    AsyncGetResponse = tuple[httpx.Response | FatalResponse, str | None]
+    GetResponse = httpx.Response | FatalResponse
 
 
 class HTTPClient:
