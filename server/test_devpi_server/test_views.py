@@ -846,9 +846,10 @@ def test_apiconfig_features_plugin(maketestapp, makexom):
 
 
 def test_getchanges(testapp):
+    from devpi_server.replica import REPLICA_CONTENT_TYPE_V2
     # the replica protocol should be disabled by default
-    testapp.xget(403, "/+changelog/0")
-    testapp.xget(403, "/+changelog/0-")
+    testapp.xget(403, "/+changelog/0", headers={"Accept": REPLICA_CONTENT_TYPE_V2})
+    testapp.xget(403, "/+changelog/0-", headers={"Accept": REPLICA_CONTENT_TYPE_V2})
 
 
 def test_apiconfig_with_outside_url(testapp):

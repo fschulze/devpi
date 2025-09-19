@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from devpi_server.fileutil import loads
+from devpi_server.markers import Deleted
 from difflib import SequenceMatcher
 from functools import singledispatch
+from hashlib import sha256
 from itertools import chain
+from operator import itemgetter
 from pyramid.httpexceptions import HTTPForbidden
 from pyramid.view import view_config
 from typing import TYPE_CHECKING
@@ -21,8 +23,8 @@ def pformat(val: Any) -> str:
 
 
 @pformat.register
-def _(val: None) -> str:  # noqa: ARG001
-    return "<deleted>"
+def _(val: Deleted) -> str:
+    return str(val)
 
 
 @pformat.register
@@ -93,30 +95,36 @@ def keyfs_changelog_view(request):
         k: str(v.type).replace(" ", "\xa0") for k, v in xom.keyfs._keys.items()
     }
     storage = xom.keyfs._storage
-    serial = request.matchdict['serial']
+    serial = int(request.matchdict["serial"])
     query = request.params.get('query')
+    changes = []
     with storage.get_connection() as conn:
-        data = conn.get_raw_changelog_entry(serial)
         last_changelog_serial = conn.last_changelog_serial
-        (changes, rel_renames) = loads(data)
-        for k, v in list(changes.items()):
+        rel_renames = sorted(conn.iter_rel_renames(serial))
+        for keydata in conn.iter_changes_at(serial):
+            key = xom.keyfs.get_key_instance(keydata.keyname, keydata.relpath)
             prev_formatted = ''
-            if v[1] >= 0:
-                prev_data = conn.get_raw_changelog_entry(v[1])
-                prev_changes = loads(prev_data)[0]
-                for prev_k, prev_v in sorted(prev_changes.items()):
-                    if prev_k == k and prev_v[0] == v[0]:
-                        prev_formatted = pformat(prev_v[2])
-            formatted = pformat(v[2])
+            if keydata.back_serial >= 0:
+                prev_formatted = pformat(
+                    conn.get_key_at_serial(key, keydata.back_serial).mutable_value
+                )
+            formatted = pformat(keydata.mutable_value)
             diffed = diff(prev_formatted, formatted)
-            latest_serial = conn.last_key_serial(k)
-            changes[k] = dict(
-                name=v[0],
-                type=html_key_types_map[v[0]],
-                previous_serial=v[1],
-                latest_serial=latest_serial,
-                diffed=diffed,
+            latest_serial = conn.last_key_serial(key)
+            changes.append(
+                dict(
+                    fragment=sha256(
+                        f"{keydata.keyname}-{keydata.relpath}".encode()
+                    ).hexdigest(),
+                    name=keydata.keyname,
+                    type=html_key_types_map[keydata.keyname],
+                    relpath=keydata.relpath,
+                    previous_serial=keydata.back_serial,
+                    latest_serial=latest_serial,
+                    diffed=diffed,
+                )
             )
+    changes.sort(key=itemgetter("name", "relpath"))
     return dict(
         changes=changes,
         rel_renames=rel_renames,
