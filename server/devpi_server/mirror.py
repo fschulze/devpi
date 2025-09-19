@@ -863,7 +863,7 @@ class MirrorStage(BaseStage):
                 user=self.user.name, index=self.index, project=project)
             existing_info = set(links or ())
             # calling mapkey on the links creates the entries in the database
-            for newinfo, link in zip(newlinks, info["releaselinks"]):
+            for newinfo, link in zip(newlinks, info["releaselinks"], strict=True):
                 if newinfo in existing_info:
                     continue
                 maplink(link)
