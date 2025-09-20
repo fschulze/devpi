@@ -39,7 +39,7 @@ import weakref
 
 
 if TYPE_CHECKING:
-    from .keyfs_types import PTypedKey
+    from .keyfs_types import NamedKeyFactory
     from .normalized import NormalizedName
     from typing import Any
     from typing import TypedDict
@@ -292,9 +292,9 @@ class MirrorStage(BaseStage):
         # quite large and the primary might take a while to process it
         self.projects_timeout = max(self.timeout, 60 if self.xom.is_replica() else 30)
         # list of locally mirrored projects
-        self.key_projects = cast("PTypedKey[set]", self.keyfs.PROJNAMES)(
-            user=username, index=index
-        )
+        self.key_projects = cast(
+            "NamedKeyFactory[set[NormalizedName]]", self.keyfs.PROJNAMES
+        )(user=username, index=index)
         # used to log about stale projects only once
         self._offline_logging = set()
 
@@ -583,7 +583,7 @@ class MirrorStage(BaseStage):
                 # called from the notification thread
                 if not self.keyfs.tx.write:
                     self.keyfs.restart_read_transaction()
-                k = cast("PTypedKey[int]", self.keyfs.MIRRORNAMESINIT)(
+                k = cast("NamedKeyFactory[int]", self.keyfs.MIRRORNAMESINIT)(
                     user=self.username, index=self.index
                 )
                 # when 0 it is new, when 1 it is pre 6.6.0 with
