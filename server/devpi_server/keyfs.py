@@ -38,7 +38,6 @@ from typing import overload
 import contextlib
 import errno
 import time
-import warnings
 
 
 if TYPE_CHECKING:
@@ -53,19 +52,6 @@ if TYPE_CHECKING:
     KeyFSConn = IStorageConnection4
     KeyFSConnClosing = contextlib.closing[KeyFSConn]
     KeyFSConnWithClosing = KeyFSConn | KeyFSConnClosing
-
-
-def __getattr__(name):
-    if name == 'RelpathInfo':
-        from .keyfs_types import RelpathInfo
-        warnings.warn(
-            'Importing RelpathInfo from devpi_server.keyfs is deprecated. '
-            'Import from devpi_server.keyfs_types instead.',
-            DeprecationWarning,
-            stacklevel=2)
-        return RelpathInfo
-    msg = f"module {__name__!r} has no attribute {name!r}"
-    raise AttributeError(msg)
 
 
 class KeyfsTimeoutError(TimeoutError):
@@ -602,16 +588,6 @@ class KeyFS:
                 yield tx
 
     @contextlib.contextmanager
-    def transaction(self, write=False, at_serial=None):
-        warnings.warn(
-            "The 'transaction' method is deprecated, "
-            "use 'read_transaction' or 'write_transaction' instead.",
-            DeprecationWarning,
-            stacklevel=3)
-        with self._transaction(write=write, at_serial=at_serial) as tx:
-            yield tx
-
-    @contextlib.contextmanager
     def write_transaction(self, *, allow_restart=False):
         """ Get a write transaction.
 
@@ -898,21 +874,9 @@ class Transaction:
             val = typedkey.type()
         return val
 
-    def get(self, typedkey, *, readonly=None):
+    def get(self, typedkey):
         """Return current read-only value referenced by typedkey."""
-        if readonly is None:
-            readonly = True
-        else:
-            warnings.warn(
-                "The 'readonly' argument is deprecated. You should either drop it, "
-                "use the 'get_mutable' method "
-                "or wrap the result in the 'get_mutable_deepcopy' function.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-        if readonly:
-            return ensure_deeply_readonly(self._get(typedkey))
-        return get_mutable_deepcopy(self._get(typedkey))
+        return ensure_deeply_readonly(self._get(typedkey))
 
     def get_mutable(self, typedkey):
         """Return current mutable value referenced by typedkey."""
