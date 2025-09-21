@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 
 if TYPE_CHECKING:
+    from devpi_server.keyfs_types import StorageInfo
     from devpi_server.views import ToxResultHandling
     from pyramid.request import Request
 
@@ -73,15 +74,8 @@ def devpiserver_get_features():
 
 
 @hookspec
-def devpiserver_storage_backend(settings):
-    """ return dict containing storage backend info.
-
-    The following keys are defined:
-
-        "storage" - the class implementing the storage API
-        "name" - name for selection from command line
-        "description" - a short description for the commandline help
-    """
+def devpiserver_describe_storage_backend(settings: dict) -> StorageInfo:  # type:ignore[empty-body]
+    """return StorageInfo instance describing the storage implementation."""
 
 
 @hookspec

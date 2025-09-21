@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from . import filestore
 from . import readonly
+from .compat import SpooledTemporaryFile  # noqa: F401 - for compatibility
 from .markers import nodefault as _nodefault
 from .normalized import NormalizedName
 from io import BytesIO
