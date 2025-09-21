@@ -17,6 +17,10 @@ import sys
 if TYPE_CHECKING:
     from collections.abc import Iterator
     from contextlib import ExitStack
+    from typing import Union
+
+    AsyncGetResponse = tuple[Union[httpx.Response, "FatalResponse"], Union[str, None]]
+    GetResponse = Union[httpx.Response, "FatalResponse"]
 
 
 def get_caller_location(stacklevel: int = 2) -> str:
@@ -60,7 +64,7 @@ class HTTPClient:
         httpx.StreamError,
     )
 
-    def __init__(self, *, component_name: str, timeout: int | None) -> None:
+    def __init__(self, *, component_name: str, timeout: float | None) -> None:
         self.headers = {"User-Agent": f"devpi-{component_name}/{server_version}"}
         self.client = httpx.Client(headers=self.headers, verify=self._ssl_context)
         self.timeout = timeout
@@ -90,9 +94,9 @@ class HTTPClient:
         url: URL | str,
         *,
         allow_redirects: bool,
-        timeout: int | None = None,
+        timeout: float | None = None,
         extra_headers: dict | None = None,
-    ) -> tuple[httpx.Response, str | None] | FatalResponse:
+    ) -> AsyncGetResponse:
         try:
             async with self.async_client() as client:
                 response = await client.get(
@@ -102,7 +106,7 @@ class HTTPClient:
                     timeout=timeout or self.timeout,
                 )
                 text = response.text if response.status_code < 300 else None
-                return response, text
+                return (response, text)
         except self.Errors as e:
             location = get_caller_location()
             threadlog.warn(
@@ -112,7 +116,7 @@ class HTTPClient:
                 location,
                 lazy_format_exception_only(e),
             )
-            return FatalResponse(url, repr(sys.exc_info()[1]))
+            return (FatalResponse(url, repr(sys.exc_info()[1])), None)
 
     def close(self) -> None:
         self.client.close()
@@ -122,9 +126,9 @@ class HTTPClient:
         url: URL | str,
         *,
         allow_redirects: bool,
-        timeout: int | None = None,
+        timeout: float | None = None,
         extra_headers: dict | None = None,
-    ) -> httpx.Response | FatalResponse:
+    ) -> GetResponse:
         headers = {}
         if extra_headers:
             headers.update(extra_headers)
@@ -154,9 +158,9 @@ class HTTPClient:
         *,
         data: dict | None = None,
         files: dict | None = None,
-        timeout: int | None = None,
+        timeout: float | None = None,
         extra_headers: dict | None = None,
-    ) -> httpx.Response | FatalResponse:
+    ) -> GetResponse:
         headers = {}
         if extra_headers:
             headers.update(extra_headers)
@@ -189,9 +193,9 @@ class HTTPClient:
         *,
         allow_redirects: bool,
         content: bytes | None = None,
-        timeout: int | None = None,
+        timeout: float | None = None,
         extra_headers: dict | None = None,
-    ) -> httpx.Response | FatalResponse:
+    ) -> GetResponse:
         headers = {}
         if extra_headers:
             headers.update(extra_headers)
@@ -233,7 +237,7 @@ class OfflineHTTPClient:
         url: URL | str,
         *,
         allow_redirects: bool,  # noqa: ARG002
-        timeout: int | None = None,  # noqa: ARG002
+        timeout: float | None = None,  # noqa: ARG002
         extra_headers: dict | None = None,  # noqa: ARG002
     ) -> FatalResponse:
         if isinstance(url, URL):
@@ -247,7 +251,7 @@ class OfflineHTTPClient:
         url: URL | str,
         *,
         allow_redirects: bool,  # noqa: ARG002
-        timeout: int | None = None,  # noqa: ARG002
+        timeout: float | None = None,  # noqa: ARG002
         extra_headers: dict | None = None,  # noqa: ARG002
     ) -> FatalResponse:
         if isinstance(url, URL):
