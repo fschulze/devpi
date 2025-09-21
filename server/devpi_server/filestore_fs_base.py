@@ -26,6 +26,8 @@ if TYPE_CHECKING:
     from typing import Literal
     from typing import Self
 
+    RelRenames = Iterable[tuple[str | None, str]]
+
 
 class IFile(Interface):
     file_path_info: FilePathInfo = Attribute("The FilePathInfo for this dirty file.")

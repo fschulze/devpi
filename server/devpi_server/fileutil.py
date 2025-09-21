@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from . import filestore
 from . import readonly
+from .compat import SpooledTemporaryFile  # noqa: F401 - for compatibility
 from .normalized import NormalizedName
 from io import BytesIO
 from struct import error as struct_error

@@ -14,8 +14,8 @@ from .filestore import FileEntry
 from .filestore import FilePathInfo
 from .fileutil import read_int_from_file
 from .fileutil import write_int_to_file
-from .interfaces import IStorageConnection4
-from .interfaces import IWriter2
+from .interfaces import IStorageConnection
+from .interfaces import IWriter
 from .keyfs_types import PTypedKey
 from .keyfs_types import Record
 from .keyfs_types import RelPath
@@ -43,14 +43,16 @@ import time
 if TYPE_CHECKING:
     from .keyfs_types import KeyFSTypesRO
     from .keyfs_types import KeyType
+    from .keyfs_types import StorageInfo
     from .markers import Absent
     from .markers import Deleted
     from .mythread import MyThread
+    from collections.abc import Callable
     from collections.abc import Iterable
     from collections.abc import Iterator
     from typing import Literal
 
-    KeyFSConn = IStorageConnection4
+    KeyFSConn = IStorageConnection
     KeyFSConnClosing = contextlib.closing[KeyFSConn]
     KeyFSConnWithClosing = KeyFSConn | KeyFSConnClosing
 
@@ -262,17 +264,18 @@ class KeyFS:
     class ReadOnly(Exception):
         """ attempt to open write transaction while in readonly mode. """
 
+    _import_subscriber: Callable | None
     _keys: dict[str, PTypedKey | TypedKey]
 
     def __init__(
         self,
-        basedir,
-        storage,
+        basedir: Path,
+        storage_info: StorageInfo,
         *,
-        io_file_factory=None,
-        readonly=False,
-        cache_size=10000,
-    ):
+        io_file_factory: Callable | None = None,
+        readonly: bool = False,
+        cache_size: int = 10000,
+    ) -> None:
         self.base_path = Path(basedir)
         self.base_path.mkdir(parents=True, exist_ok=True)
         self._keys = {}
@@ -280,10 +283,11 @@ class KeyFS:
         self._cv_new_transaction = mythread.threading.Condition()
         self._import_subscriber = None
         self.notifier = TxNotificationThread(self)
-        self._storage = storage(
+        self._storage = storage_info.storage_factory(
             self.base_path,
             notify_on_commit=self._notify_on_commit,
             cache_size=cache_size,
+            settings={} if storage_info.settings is None else storage_info.settings,
         )
         self.io_file_factory = io_file_factory
         self._readonly = readonly
@@ -301,8 +305,9 @@ class KeyFS:
     @overload
     def get_connection(
         self,
-        closing: Literal[True] = True,  # noqa: FBT002
-        write: bool = False,  # noqa: FBT001, FBT002 - API
+        *,
+        closing: Literal[True] = True,
+        write: bool = False,
         timeout: float = 30,
     ) -> KeyFSConnClosing:
         pass
@@ -310,20 +315,22 @@ class KeyFS:
     @overload
     def get_connection(
         self,
-        closing: Literal[False] = False,  # noqa: FBT002
-        write: bool = False,  # noqa: FBT001, FBT002 - API
+        *,
+        closing: Literal[False] = False,
+        write: bool = False,
         timeout: float = 30,
     ) -> KeyFSConn:
         pass
 
     def get_connection(
         self,
-        closing: bool = True,  # noqa: FBT001, FBT002 - API
-        write: bool = False,  # noqa: FBT001, FBT002 - API
+        *,
+        closing: bool = True,
+        write: bool = False,
         timeout: float = 30,
     ) -> KeyFSConnWithClosing:
         conn = self._storage.get_connection(closing=False, write=write, timeout=timeout)
-        conn = IStorageConnection4(conn)
+        conn = IStorageConnection(conn)
         if closing:
             return contextlib.closing(conn)
         return conn
@@ -364,7 +371,12 @@ class KeyFS:
     def import_changes(self, serial, changes):
         with contextlib.ExitStack() as cstack:
             conn = cstack.enter_context(self.get_connection(write=True))
-            fswriter = IWriter2(cstack.enter_context(conn.write_transaction()))
+            io_file = (
+                None
+                if self.io_file_factory is None
+                else cstack.enter_context(self.io_file_factory(conn))
+            )
+            fswriter = IWriter(cstack.enter_context(conn.write_transaction(io_file)))
             next_serial = conn.last_changelog_serial + 1
             assert next_serial == serial, (next_serial, serial)
             records = []
@@ -456,8 +468,7 @@ class KeyFS:
         if name in self._keys:
             raise ValueError("Duplicate registration for key named '%s'" % name)
         self._keys[name] = key
-        if hasattr(self._storage, 'add_key'):
-            self._storage.add_key(key)
+        self._storage.add_key(key)
         return key
 
     def get_key(self, name):
@@ -623,36 +634,6 @@ class KeyChangeEvent:
         self.back_serial = back_serial
 
 
-def get_relpath_at(self, relpath, serial):
-    """ Fallback method for legacy storage connections. """
-    (keyname, last_serial) = self.db_read_typedkey(relpath)
-    serials_and_values = iter_serial_and_value_backwards(
-        self, relpath, last_serial)
-    try:
-        (last_serial, back_serial, val) = next(serials_and_values)
-        while last_serial >= 0:
-            if last_serial > serial:
-                (last_serial, back_serial, val) = next(serials_and_values)
-                continue
-            return (last_serial, back_serial, val)
-    except StopIteration:
-        pass
-    raise KeyError(relpath)
-
-
-def iter_serial_and_value_backwards(conn, relpath, last_serial):
-    while last_serial >= 0:
-        tup = conn.get_changes(last_serial).get(relpath)
-        if tup is None:
-            raise RuntimeError("no transaction entry at %s" % (last_serial))
-        keyname, back_serial, val = tup
-        yield (last_serial, back_serial, val)
-        last_serial = back_serial
-
-    # we could not find any change below at_serial which means
-    # the key didn't exist at that point in time
-
-
 class TransactionRootModel(RootModel):
     def __init__(self, xom):
         super().__init__(xom)
@@ -732,8 +713,7 @@ class FileStoreTransaction:
 
     def rollback(self):
         self.io_file.rollback()
-        if hasattr(self.conn, "rollback"):
-            self.conn.rollback()
+        self.conn.rollback()
         threadlog.debug("filestore transaction rollback")
         self._close()
 
@@ -949,13 +929,12 @@ class Transaction:
         with contextlib.ExitStack() as cstack:
             cstack.callback(self._close)
             cstack.enter_context(self.io_file)
-            fswriter = IWriter2(cstack.enter_context(self.conn.write_transaction()))
+            fswriter = IWriter(
+                cstack.enter_context(self.conn.write_transaction(self.io_file))
+            )
             fswriter.set_rel_renames(self.io_file.get_rel_renames())
             fswriter.records_set(records)
-            commit_serial = getattr(fswriter, "commit_serial", absent)
-            if commit_serial is absent:
-                # for storages which don't have the attribute yet
-                commit_serial = self.conn.last_changelog_serial + 1
+            commit_serial = fswriter.commit_serial
         self.commit_serial = commit_serial
         self._run_listeners(self._success_listeners)
         self._run_listeners(self._finished_listeners)
@@ -994,8 +973,7 @@ class Transaction:
 
     def rollback(self):
         try:
-            if hasattr(self.conn, 'rollback'):
-                self.conn.rollback()
+            self.conn.rollback()
             if self.keyfs.io_file_factory is not None:
                 self.io_file.rollback()
             threadlog.debug("transaction rollback at %s" % (self.at_serial))
