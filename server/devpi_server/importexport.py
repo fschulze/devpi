@@ -624,7 +624,7 @@ class Importer:
                 entry.file_set_content(
                     f, hashes=hashes, last_modified=mapping["last_modified"])
                 mirrorlinks = stage._get_mirrorlinks(project)
-                (_, links_with_data, serial, _etag) = mirrorlinks._load_cache_links()
+                (_, links_with_data, cache_info) = mirrorlinks._load_cache_links()
                 if links_with_data is None:
                     links_with_data = []
                 entrypath = entry.relpath
@@ -638,7 +638,7 @@ class Importer:
                     requires_python.append(require_python)
                     yanked.append(is_yanked)
                 mirrorlinks._save_cache_links(
-                    links, requires_python, yanked, serial, None
+                    links, requires_python, yanked, cache_info
                 )
         elif filedesc["type"] == Rel.DocZip:
             version = filedesc["version"]
