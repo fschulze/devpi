@@ -2570,7 +2570,7 @@ class TestOfflineMode:
         assert getlinks(r.text) == []
         with xom.keyfs.read_transaction():
             mirrorlinks = pypistage._get_mirrorlinks("package")
-            (_is_expired, links, _serial, _etag) = mirrorlinks._load_cache_links()
+            (_is_expired, links, _cache_info) = mirrorlinks._load_cache_links()
 
         assert len(links) == 0
 
@@ -2580,7 +2580,7 @@ class TestOfflineMode:
         assert '/package-1.0.zip' in link.get("href")
         with xom.keyfs.read_transaction():
             mirrorlinks = pypistage._get_mirrorlinks("package")
-            (_is_expired, links, _serial, _etag) = mirrorlinks._load_cache_links()
+            (_is_expired, links, _cache_info) = mirrorlinks._load_cache_links()
 
         assert links[0][0] == "package-1.0.zip"
 
