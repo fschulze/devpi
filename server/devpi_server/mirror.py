@@ -561,11 +561,20 @@ class MirrorStage(BaseStage):
         # for the possibility to re-download a release
         (is_expired, links, cache_serial, etag) = self._load_cache_links(project)
         if links is not None:
+            entries_to_check = []
             for entry in (self._entry_from_href(x[1]) for x in links):
                 if entry is None:
                     continue
                 if entry.version == version and entry.file_exists():
                     entry.delete_file_only()
+                elif cleanup:
+                    entries_to_check.append(entry)
+            if cleanup and not any(x.file_exists() for x in entries_to_check):
+                projects = self.key_projects.get_mutable()
+                if project in projects:
+                    projects.remove(project)
+                    self.key_projects.set(projects)
+                self.key_projsimplelinks(project).delete()
 
     def del_entry(self, entry, cleanup=True):
         project = entry.project
