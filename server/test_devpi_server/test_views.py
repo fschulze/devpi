@@ -1666,7 +1666,6 @@ def test_upload_and_delete_project(mapp, testapp):
     mapp.getjson(api.index + "/pkg1/2.7", code=404)
     with mapp.xom.keyfs.read_transaction():
         stage = mapp.xom.model.getstage(api.stagename)
-        assert not stage.key_projversions("pkg1").exists()
         assert not stage.key_projsimplelinks("pkg1").exists()
 
 

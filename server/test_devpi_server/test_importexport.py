@@ -744,8 +744,8 @@ class TestImportExport:
         # simulate a data structure where "version" is missing
         with mapp1.xom.keyfs.write_transaction():
             stage = mapp1.xom.model.getstage(api.stagename)
-            key_projversion = stage.key_projversion("hello", "1.0")
-            with key_projversion.update() as verdata:
+            key_versionmetadata = stage.key_versionmetadata("hello", "1.0")
+            with key_versionmetadata.update() as verdata:
                 del verdata["version"]
         impexp.export()
 
