@@ -2230,7 +2230,7 @@ def register_keys(xom: XOM, keyfs: KeyFS) -> None:
     )
 
     # files related
-    keyfs.register_patterned_key("DIGESTPATHS", "{digest}", None, set)
+    keyfs.register_patterned_key("DIGESTULIDS", "{digest}", None, set)
 
     sub = EventSubscribers(xom)
     keyfs.notifier.on_key_change(

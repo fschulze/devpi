@@ -6,6 +6,7 @@ for all indexes.
 from __future__ import annotations
 
 from .keyfs_types import FilePathInfo
+from .keyfs_types import ULID
 from .log import threadlog
 from .markers import absent
 from .markers import deleted
@@ -561,8 +562,10 @@ class BaseFileEntry:
         # end up only committing file content without any keys
         # changed which will not replay correctly at a replica.
         self.key.set(self.meta)
-        with self.key_digestpaths.update() as digest_paths:
-            digest_paths.add(self.relpath)
+        with self.key_digestulids.update() as digest_ulids:
+            ulid = self.key.ulid
+            assert isinstance(ulid, ULID)
+            digest_ulids.add(int(ulid))
 
     def file_set_content_no_meta(self, content_or_file, *, hashes):
         missing_hash_types = hashes.get_missing_hash_types()
@@ -608,12 +611,14 @@ class BaseFileEntry:
         self._meta = {}
 
     def delete_file_only(self):
-        key_digestpaths = self.key_digestpaths
-        with key_digestpaths.update() as digest_paths:
-            digest_paths.discard(self.relpath)
+        key_digestulids = self.key_digestulids
+        with key_digestulids.update() as digest_ulids:
+            ulid = self.key.ulid
+            assert isinstance(ulid, ULID)
+            digest_ulids.discard(ulid)
         is_last_of_hash = False
-        if not digest_paths:
-            key_digestpaths.delete()
+        if not digest_ulids:
+            key_digestulids.delete()
             is_last_of_hash = True
         self.file_delete(is_last_of_hash=is_last_of_hash)
 
@@ -623,8 +628,8 @@ class BaseFileEntry:
         )
 
     @property
-    def key_digestpaths(self) -> LocatedKey[set[str]]:
-        return cast("PatternedKey[set[str]]", self.key.keyfs.DIGESTPATHS)(
+    def key_digestulids(self) -> LocatedKey[set[int]]:
+        return cast("PatternedKey[set[int]]", self.key.keyfs.DIGESTULIDS)(
             digest=self.hashes[DEFAULT_HASH_TYPE]
         )
 

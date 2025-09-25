@@ -1146,12 +1146,12 @@ class FileReplicationThread:
             # check for existence with metadata from old serial
             with keyfs.read_transaction(at_serial=back_serial):
                 entry = self.xom.filestore.get_file_entry(relpath)
-                key_digestpaths = entry.key_digestpaths
+                key_digestulids = entry.key_digestulids
                 file_exists = entry.file_exists()
             if file_exists:
                 # check if there is no remaining reference at current serial
                 with keyfs.read_transaction():
-                    is_last_of_hash = not key_digestpaths.get()
+                    is_last_of_hash = not key_digestulids.get()
                 with keyfs.filestore_transaction():
                     threadlog.info(
                         "mark for deletion: %s, is_last_of_hash %s",
