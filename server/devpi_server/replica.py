@@ -53,6 +53,7 @@ if TYPE_CHECKING:
     from .keyfs import KeyChangeEvent
     from .keyfs_types import KeyFSTypesRO
     from .keyfs_types import LocatedKey
+    from .keyfs_types import RelPath
     from .main import XOM
     from contextlib import ExitStack
 
@@ -723,7 +724,7 @@ class FileReplicationSharedData:
         self.Empty = Empty
         self.xom = xom
         self.queue: PriorityQueue[
-            tuple[IndexType, int, str, str, KeyFSTypesRO, int]
+            tuple[IndexType, int, RelPath, str, KeyFSTypesRO, int]
         ] = PriorityQueue()
         self.error_queue: PriorityQueue[
             tuple[int, int, str, int, None, str, KeyFSTypesRO, int]
@@ -1314,7 +1315,7 @@ class InitialQueueThread:
                 for stage in user.getstages():
                     self.shared_data.set_index_type_for(
                         stage.name, stage.ixconfig['type'])
-            relpaths = tx.iter_relpaths_at(keys, tx.at_serial)
+            relpaths = tx.iter_keys_at_serial(keys, tx.at_serial)  # type: ignore[arg-type]
             for item in relpaths:
                 self.thread.exit_if_shutdown()
                 if isinstance(item.value, Deleted):
@@ -1335,6 +1336,7 @@ class InitialQueueThread:
                     self.shared_data.initial_processed + 1
                 )
                 key = keyfs.get_key_instance(item.keyname, item.relpath)
+                assert key is not None
                 index_name = self.shared_data.get_index_name_for(key)
                 if index_name in skip_indexes:
                     threadlog.debug(
