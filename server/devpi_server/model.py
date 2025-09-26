@@ -39,8 +39,8 @@ if TYPE_CHECKING:
     from .filestore import FileStore
     from .interfaces import ContentOrFile
     from .keyfs import KeyFS
-    from .keyfs_types import PTypedKey
-    from .keyfs_types import TypedKey
+    from .keyfs_types import LocatedKey
+    from .keyfs_types import NamedKeyFactory
     from .main import XOM
     from .normalized import NormalizedName
     from collections.abc import Sequence
@@ -169,7 +169,7 @@ class RootModel:
         self.keyfs = xom.keyfs
 
     def create_user(self, username, password, **kwargs):
-        userlist = cast("TypedKey[set]", self.keyfs.USERLIST).get_mutable()
+        userlist = cast("LocatedKey[set]", self.keyfs.USERLIST).get_mutable()
         if username in userlist:
             raise InvalidUser("username '%s' already exists" % username)
         if not is_valid_name(username):
@@ -180,7 +180,7 @@ class RootModel:
         kwargs.update(created=strftime("%Y-%m-%dT%H:%M:%SZ", gmtime()))
         user._modify(password=password, **kwargs)
         userlist.add(username)
-        cast("TypedKey[set]", self.keyfs.USERLIST).set(userlist)
+        cast("LocatedKey[set]", self.keyfs.USERLIST).set(userlist)
         if "email" in kwargs:
             threadlog.info("created user %r with email %r" % (username, kwargs["email"]))
         else:
@@ -212,7 +212,7 @@ class RootModel:
         return stage
 
     def delete_user(self, username):
-        with cast("TypedKey[set]", self.keyfs.USERLIST).update() as userlist:
+        with cast("LocatedKey[set]", self.keyfs.USERLIST).update() as userlist:
             userlist.remove(username)
 
     def delete_stage(self, username, index):
@@ -239,7 +239,7 @@ class RootModel:
     def get_userlist(self):
         return [
             User(self, name)
-            for name in cast("TypedKey[set]", self.keyfs.USERLIST).get()
+            for name in cast("LocatedKey[set]", self.keyfs.USERLIST).get()
         ]
 
     def get_usernames(self):
@@ -374,13 +374,15 @@ class User:
         self.keyfs = parent.keyfs
         self.xom = parent.xom
         self.name = name
-        self.key = cast("PTypedKey[dict]", self.keyfs.USER)(user=self.name)
-        self.key_indexes = cast("PTypedKey[set[str]]", self.keyfs.INDEXLIST)(
+        self.key = cast("NamedKeyFactory[dict]", self.keyfs.USER)(user=self.name)
+        self.key_indexes = cast("NamedKeyFactory[set[str]]", self.keyfs.INDEXLIST)(
             user=self.name
         )
 
-    def key_index(self, index: str) -> TypedKey[dict]:
-        return cast("PTypedKey[dict]", self.keyfs.INDEX)(user=self.name, index=index)
+    def key_index(self, index: str) -> LocatedKey[dict]:
+        return cast("NamedKeyFactory[dict]", self.keyfs.INDEX)(
+            user=self.name, index=index
+        )
 
     def get_cleaned_config(self, **kwargs):
         result = {}
@@ -727,10 +729,10 @@ class BaseStage:
         # the following attributes are per-xom singletons
         self.keyfs = xom.keyfs
         self.filestore = xom.filestore
-        self.key_index = cast("PTypedKey[dict]", self.keyfs.INDEX)(
+        self.key_index = cast("NamedKeyFactory[dict]", self.keyfs.INDEX)(
             user=username, index=index
         )
-        self.key_projects = cast("PTypedKey[set[str]]", self.keyfs.PROJNAMES)(
+        self.key_projects = cast("NamedKeyFactory[set[str]]", self.keyfs.PROJNAMES)(
             user=username, index=index
         )
 
@@ -843,8 +845,8 @@ class BaseStage:
     def delete(self):
         self.model.delete_stage(self.username, self.index)
 
-    def key_projsimplelinks(self, project: str) -> TypedKey[dict]:
-        return cast("PTypedKey[dict]", self.keyfs.PROJSIMPLELINKS)(
+    def key_projsimplelinks(self, project: str) -> LocatedKey[dict]:
+        return cast("NamedKeyFactory[dict]", self.keyfs.PROJSIMPLELINKS)(
             user=self.username, index=self.index, project=normalize_name(project)
         )
 
@@ -1366,8 +1368,8 @@ class PrivateStage(BaseStage):
         validate_metadata(dict(metadata))
         self._set_versiondata(metadata)
 
-    def key_projversions(self, project: NormalizedName | str) -> TypedKey[set]:
-        return cast("PTypedKey[set]", self.keyfs.PROJVERSIONS)(
+    def key_projversions(self, project: NormalizedName | str) -> LocatedKey[set[str]]:
+        return cast("NamedKeyFactory[set[str]]", self.keyfs.PROJVERSIONS)(
             user=self.username,
             index=self.index,
             project=normalize_name(project),
@@ -1375,8 +1377,8 @@ class PrivateStage(BaseStage):
 
     def key_projversion(
         self, project: NormalizedName | str, version: str
-    ) -> TypedKey[dict]:
-        return cast("PTypedKey[dict]", self.keyfs.PROJVERSION)(
+    ) -> LocatedKey[dict[str, object]]:
+        return cast("NamedKeyFactory[dict[str, object]]", self.keyfs.PROJVERSION)(
             user=self.username,
             index=self.index,
             project=normalize_name(project),
@@ -1385,8 +1387,8 @@ class PrivateStage(BaseStage):
 
     def key_versionfilelist(
         self, project: NormalizedName | str, version: str
-    ) -> TypedKey[set[str]]:
-        return cast("PTypedKey[set[str]]", self.keyfs.VERSIONFILELIST)(
+    ) -> LocatedKey[set[str]]:
+        return cast("NamedKeyFactory[set[str]]", self.keyfs.VERSIONFILELIST)(
             user=self.username,
             index=self.index,
             project=normalize_name(project),
@@ -1395,8 +1397,8 @@ class PrivateStage(BaseStage):
 
     def key_versionfile(
         self, project: NormalizedName | str, version: str, filename: str
-    ) -> TypedKey[dict]:
-        return cast("PTypedKey[dict]", self.keyfs.VERSIONFILE)(
+    ) -> LocatedKey[dict]:
+        return cast("NamedKeyFactory[dict]", self.keyfs.VERSIONFILE)(
             user=self.username,
             index=self.index,
             project=normalize_name(project),
@@ -1941,12 +1943,12 @@ class MutableLinkStore(LinkStore):
 
     def key_versionfile(
         self, project: NormalizedName | str, version: str, filename: str
-    ) -> TypedKey[dict]:
+    ) -> LocatedKey[dict]:
         return self.stage.key_versionfile(project, version, filename)
 
     def key_versionfilelist(
         self, project: NormalizedName | str, version: str
-    ) -> TypedKey[set[str]]:
+    ) -> LocatedKey[set[str]]:
         return self.stage.key_versionfilelist(project, version)
 
     def new_reflink(
@@ -2204,33 +2206,46 @@ def normalize_bases(model, bases):
 
 def add_keys(xom: XOM, keyfs: KeyFS) -> None:
     # users and index configuration
-    keyfs.add_key("USER", "{user}/.config", dict)
-    keyfs.add_key("USERLIST", ".config", set)
-    keyfs.add_key("INDEX", "{user}/{index}/.config", dict)
-    keyfs.add_key("INDEXLIST", "{user}/.indexes", set)
+    user_key = keyfs.register_named_key_factory("USER", "{user}/.config", None, dict)
+    keyfs.register_located_key("USERLIST", "", ".config", set)
+    index_key = keyfs.register_named_key_factory(
+        "INDEX", "{index}/.config", user_key, dict
+    )
+    keyfs.register_named_key("INDEXLIST", ".indexes", user_key, set)
 
     # type mirror related data
-    keyfs.add_key("PYPIFILE_NOMD5", "{user}/{index}/+e/{dirname}/{basename}", dict)
-    keyfs.add_key("MIRRORNAMESINIT", "{user}/{index}/.mirrornameschange", int)
+    keyfs.register_named_key_factory(
+        "PYPIFILE_NOMD5", "+e/{dirname}/{basename}", index_key, dict
+    )
+    keyfs.register_named_key("MIRRORNAMESINIT", ".mirrornameschange", index_key, int)
 
     # type "stage" related
-    keyfs.add_key("PROJSIMPLELINKS", "{user}/{index}/{project}/.simple", dict)
-    keyfs.add_key("PROJVERSIONS", "{user}/{index}/{project}/.versions", set)
-    keyfs.add_key("PROJVERSION", "{user}/{index}/{project}/{version}/.config", dict)
-    keyfs.add_key("PROJNAMES", "{user}/{index}/.projects", set)
-    keyfs.add_key("VERSIONFILELIST", "{user}/{index}/{project}/{version}/.files", set)
-    keyfs.add_key("VERSIONFILE", "{user}/{index}/{project}/{version}/{filename}", dict)
-    keyfs.add_key("STAGEFILE",
-                  "{user}/{index}/+f/{hashdir_a}/{hashdir_b}/{filename}", dict)
+    project_key = keyfs.register_named_key_factory(
+        "PROJSIMPLELINKS", "{project}/.simple", index_key, dict
+    )
+    keyfs.register_named_key("PROJVERSIONS", ".versions", project_key, set)
+    version_key = keyfs.register_named_key_factory(
+        "PROJVERSION", "{version}/.config", project_key, dict
+    )
+    keyfs.register_named_key("PROJNAMES", ".projects", index_key, set)
+    keyfs.register_named_key("VERSIONFILELIST", ".files", version_key, set)
+    keyfs.register_named_key_factory("VERSIONFILE", "{filename}", version_key, dict)
+    keyfs.register_named_key_factory(
+        "STAGEFILE", "+f/{hashdir_a}/{hashdir_b}/{filename}", index_key, dict
+    )
 
     # files related
-    keyfs.add_key("DIGESTPATHS", "{digest}", set)
+    keyfs.register_named_key_factory("DIGESTPATHS", "{digest}", None, set)
 
     sub = EventSubscribers(xom)
-    cast("PTypedKey", keyfs.PROJVERSION).on_key_change(sub.on_changed_version_config)
-    cast("PTypedKey", keyfs.STAGEFILE).on_key_change(sub.on_changed_file_entry)
-    cast("PTypedKey", keyfs.MIRRORNAMESINIT).on_key_change(sub.on_mirror_initialnames)
-    cast("PTypedKey", keyfs.INDEX).on_key_change(sub.on_changed_index)
+    keyfs.notifier.on_key_change(
+        keyfs.PROJVERSION.key_name, sub.on_changed_version_config
+    )
+    keyfs.notifier.on_key_change(keyfs.STAGEFILE.key_name, sub.on_changed_file_entry)
+    keyfs.notifier.on_key_change(
+        keyfs.MIRRORNAMESINIT.key_name, sub.on_mirror_initialnames
+    )
+    keyfs.notifier.on_key_change(keyfs.INDEX.key_name, sub.on_changed_index)
 
 
 class EventSubscribers:

@@ -25,9 +25,9 @@ import re
 
 if TYPE_CHECKING:
     from .interfaces import ContentOrFile
-    from .keyfs_types import PTypedKey
+    from .keyfs_types import LocatedKey
+    from .keyfs_types import NamedKeyFactory
     from .keyfs_types import RelPath
-    from .keyfs_types import TypedKey
     from .markers import Absent
     from typing import Any
 
@@ -427,7 +427,7 @@ class BaseFileEntry:
 
     BadGateway = BadGateway
     _hashes = metaprop("hashes")  # e.g. dict(md5="120938012")
-    key: TypedKey[dict]
+    key: LocatedKey[dict]
     last_modified = metaprop("last_modified")
     url = metaprop("url")
     project = metaprop("project")
@@ -617,8 +617,8 @@ class BaseFileEntry:
         )
 
     @property
-    def key_digestpaths(self) -> TypedKey[set[str]]:
-        return cast("PTypedKey[set[str]]", self.key.keyfs.DIGESTPATHS)(
+    def key_digestpaths(self) -> LocatedKey[set[str]]:
+        return cast("NamedKeyFactory[set[str]]", self.key.keyfs.DIGESTPATHS)(
             digest=self.hashes[DEFAULT_HASH_TYPE]
         )
 

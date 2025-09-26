@@ -16,10 +16,10 @@ from .fileutil import read_int_from_file
 from .fileutil import write_int_to_file
 from .interfaces import IStorageConnection
 from .interfaces import IWriter
-from .keyfs_types import PTypedKey
+from .keyfs_types import LocatedKey
+from .keyfs_types import NamedKey
+from .keyfs_types import NamedKeyFactory
 from .keyfs_types import Record
-from .keyfs_types import RelPath
-from .keyfs_types import TypedKey
 from .log import thread_change_log_prefix
 from .log import thread_pop_log
 from .log import thread_push_log
@@ -38,11 +38,13 @@ from typing import overload
 import contextlib
 import errno
 import time
+import warnings
 
 
 if TYPE_CHECKING:
     from .keyfs_types import KeyFSTypesRO
     from .keyfs_types import KeyType
+    from .keyfs_types import RelPath
     from .keyfs_types import StorageInfo
     from .markers import Absent
     from .markers import Deleted
@@ -84,9 +86,9 @@ class TxNotificationThread:
         if mythread.has_active_thread(self):
             raise RuntimeError(
                 "cannot register handlers after thread has started")
-        keyname = getattr(key, "name", key)
-        assert isinstance(keyname, str)
-        self._on_key_change.setdefault(keyname, []).append(subscriber)
+        key_name = key if isinstance(key, str) else key.key_name
+        assert isinstance(key_name, str), key_name
+        self._on_key_change.setdefault(key_name, []).append(subscriber)
 
     def wait_event_serial(self, serial):
         with threadlog.around("info", "waiting for event-serial %s", serial):
@@ -265,7 +267,7 @@ class KeyFS:
         """ attempt to open write transaction while in readonly mode. """
 
     _import_subscriber: Callable | None
-    _keys: dict[str, PTypedKey | TypedKey]
+    _keys: dict[str, LocatedKey | NamedKey | NamedKeyFactory]
 
     def __init__(
         self,
@@ -292,7 +294,7 @@ class KeyFS:
         self.io_file_factory = io_file_factory
         self._readonly = readonly
 
-    def __getattr__(self, name: str) -> PTypedKey | TypedKey:
+    def __getattr__(self, name: str) -> LocatedKey | NamedKey | NamedKeyFactory:
         if name not in self._keys:
             raise AttributeError(name)
         assert name not in self.__dict__
@@ -458,25 +460,86 @@ class KeyFS:
         name: str,
         path: str,
         type: type[KeyType],  # noqa: A002
-    ) -> PTypedKey[KeyType] | TypedKey[KeyType]:
+    ) -> LocatedKey[KeyType] | NamedKeyFactory[KeyType]:
+        warnings.warn(
+            "The add_key method is deprecated, use register*_key instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         assert isinstance(path, str)
-        key: PTypedKey | TypedKey
+        key: LocatedKey[KeyType] | NamedKeyFactory[KeyType]
         if "{" in path:
-            key = PTypedKey(self, path, type, name)
+            key = self.register_named_key_factory(name, path, None, type)
         else:
-            key = TypedKey(self, RelPath(path), type, name)
-        if name in self._keys:
-            raise ValueError("Duplicate registration for key named '%s'" % name)
-        self._keys[name] = key
+            key = self.register_located_key(name, "", path, type)
         self._storage.add_key(key)
         return key
+
+    @overload
+    def register_key(self, key: LocatedKey[KeyType]) -> LocatedKey[KeyType]: ...
+
+    @overload
+    def register_key(self, key: NamedKey[KeyType]) -> NamedKey[KeyType]: ...
+
+    @overload
+    def register_key(
+        self, key: NamedKeyFactory[KeyType]
+    ) -> NamedKeyFactory[KeyType]: ...
+
+    def register_key(
+        self, key: LocatedKey[KeyType] | NamedKey[KeyType] | NamedKeyFactory[KeyType]
+    ) -> LocatedKey[KeyType] | NamedKey[KeyType] | NamedKeyFactory[KeyType]:
+        allowed_chars = frozenset("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_")
+        key_name = key.key_name
+        assert not set(key_name).difference(allowed_chars), (
+            f"Invalid key name: {key_name}"
+        )
+        if key_name in self._keys:
+            raise ValueError("Duplicate registration for key named '%s'" % key_name)
+        self._keys[key_name] = key
+        if hasattr(self._storage, "register_key"):
+            self._storage.register_key(key)
+        return key
+
+    def register_located_key(
+        self,
+        key_name: str,
+        location: str,
+        name: str,
+        key_type: type[KeyType],
+    ) -> LocatedKey[KeyType]:
+        return self.register_key(LocatedKey(self, key_name, location, name, key_type))
+
+    def register_named_key(
+        self,
+        key_name: str,
+        pattern_or_name: str,
+        parent_key: NamedKey | NamedKeyFactory,
+        key_type: type[KeyType],
+    ) -> NamedKey[KeyType]:
+        assert "{" not in pattern_or_name
+        return self.register_key(
+            NamedKey(self, key_name, pattern_or_name, parent_key, key_type)
+        )
+
+    def register_named_key_factory(
+        self,
+        key_name: str,
+        pattern_or_name: str,
+        parent_key: NamedKey | NamedKeyFactory | None,
+        key_type: type[KeyType],
+    ) -> NamedKeyFactory[KeyType]:
+        assert "{" in pattern_or_name
+        return self.register_key(
+            NamedKeyFactory(self, key_name, pattern_or_name, parent_key, key_type)
+        )
 
     def get_key(self, name):
         return self._keys.get(name)
 
-    def get_key_instance(self, keyname: str, relpath: RelPath) -> TypedKey:
+    def get_key_instance(self, keyname: str, relpath: RelPath) -> LocatedKey:
         key = self.get_key(keyname)
-        if isinstance(key, PTypedKey):
+        if key is not None and not isinstance(key, LocatedKey):
             key = key(**key.extract_params(relpath))
         return key
 
@@ -778,7 +841,7 @@ class Transaction:
     @overload
     def get_last_serial_and_value_at(
         self,
-        typedkey: TypedKey,
+        typedkey: LocatedKey,
         at_serial: int,
         *,
         raise_on_error: Literal[False],
@@ -788,7 +851,7 @@ class Transaction:
     @overload
     def get_last_serial_and_value_at(
         self,
-        typedkey: TypedKey,
+        typedkey: LocatedKey,
         at_serial: int,
         *,
         raise_on_error: Literal[True] = True,
@@ -797,7 +860,7 @@ class Transaction:
 
     def get_last_serial_and_value_at(
         self,
-        typedkey: TypedKey,
+        typedkey: LocatedKey,
         at_serial: int,
         *,
         raise_on_error: bool = True,
@@ -813,11 +876,11 @@ class Transaction:
             raise KeyError(relpath)  # was deleted
         return (last_serial, val)
 
-    def get_value_at(self, typedkey: TypedKey, at_serial: int) -> KeyFSTypesRO | None:
+    def get_value_at(self, typedkey: LocatedKey, at_serial: int) -> KeyFSTypesRO | None:
         (last_serial, val) = self.get_last_serial_and_value_at(typedkey, at_serial)
         return val
 
-    def last_serial(self, typedkey: TypedKey) -> int:
+    def last_serial(self, typedkey: LocatedKey) -> int:
         if typedkey in self.cache:
             return self.at_serial
         (last_serial, _val) = self.get_original(typedkey)
@@ -845,6 +908,7 @@ class Transaction:
         return self._original[typedkey]
 
     def _get(self, typedkey):
+        assert isinstance(typedkey, LocatedKey)
         if typedkey in self.cache:
             val = self.cache[typedkey]
         else:
@@ -874,6 +938,13 @@ class Transaction:
             raise self.keyfs.ReadOnly()
         self.cache[typedkey] = deleted
         self.dirty.add(typedkey)
+
+    def deleted(self, typedkey):
+        if typedkey in self.cache:
+            val = self.cache[typedkey]
+            return val is deleted
+        (_serial, val) = self.get_original(typedkey)
+        return val is deleted
 
     def set(self, typedkey, val):  # noqa: A003
         if not self.write:
