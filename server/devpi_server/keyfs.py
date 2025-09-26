@@ -28,6 +28,7 @@ from .log import thread_pop_log
 from .log import thread_push_log
 from .log import threadlog
 from .markers import Absent
+from .markers import Deleted
 from .markers import absent
 from .markers import deleted
 from .model import RootModel
@@ -53,7 +54,6 @@ if TYPE_CHECKING:
     from .keyfs_types import RelPath
     from .keyfs_types import StorageInfo
     from .log import TagLogger
-    from .markers import Deleted
     from .mythread import MyThread
     from collections.abc import Callable
     from collections.abc import Iterable
@@ -559,7 +559,7 @@ class KeyFS:
     ) -> LocatedKey[KeyType]:
         assert "{" not in name
         return self.register_key(
-            LocatedKey(self, key_name, f"{location}/{name}", key_type)
+            LocatedKey(self, key_name, f"{location}/{name}", None, key_type)
         )
 
     def register_patterned_key(
@@ -832,7 +832,7 @@ class Transaction:
     _dirty: dict[ULIDKey, KeyFSTypes | Deleted]
     _model: TransactionRootModel | Absent
     _original: dict[ULIDKey, tuple[int, ULIDKey | Absent, KeyFSTypesRO | Absent]]
-    _ulid_keys: dict[LocatedKey, ULIDKey | Absent]
+    _ulid_keys: dict[LocatedKey, ULIDKey | Absent | Deleted]
 
     def __init__(self, keyfs, *, at_serial=None, write=False):
         if write and at_serial:
@@ -967,7 +967,12 @@ class Transaction:
             try:
                 key = self.resolve(key, fetch=True)
             except KeyError:
-                return (absent, absent)
+                val = absent
+                if isinstance(key, LocatedKey) and isinstance(
+                    self._ulid_keys.get(key), Deleted
+                ):
+                    val = deleted
+                return (absent, val)
         ulid_key: ULIDKey | Absent
         if key in self._dirty:
             val = self._dirty[key]
@@ -1031,13 +1036,23 @@ class Transaction:
         else:
             self._dirty[ulid_key] = deleted
 
+    def key_for_ulid(self, ulid: ULID) -> ULIDKey:
+        keydata = self.conn.get_ulid_at_serial(ulid, self.at_serial)
+        if keydata.key not in self._original:
+            self._original[keydata.key] = (
+                keydata.last_serial,
+                keydata.key,
+                keydata.value,
+            )
+        return keydata.key
+
     def resolve(self, key: LocatedKey, *, fetch: bool) -> ULIDKey:
         try:
             ulid_key = self._ulid_keys[key]
         except KeyError:
             pass
         else:
-            if isinstance(ulid_key, Absent):
+            if isinstance(ulid_key, (Absent, Deleted)):
                 raise KeyError(key)
             return ulid_key
         fetched_ulid_key: ULIDKey | Absent
@@ -1052,6 +1067,11 @@ class Transaction:
                 fetched_ulid_key = absent
             else:
                 fetched_ulid_key = cast("ULIDKey", fetched_keydata.key)
+                parent_key = fetched_ulid_key.parent_key
+                if parent_key is not None and not parent_key.exists():
+                    # parent was deleted
+                    self._ulid_keys[key] = deleted
+                    raise KeyError(key)
                 if fetched_ulid_key not in self._original:
                     self._original[fetched_ulid_key] = (
                         fetched_keydata.last_serial,
