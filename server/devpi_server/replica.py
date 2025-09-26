@@ -22,6 +22,7 @@ from .markers import absent
 from .markers import deleted
 from .model import UpstreamError
 from .normalized import normalize_name
+from .readonly import DictViewReadonly
 from .views import FileStreamer
 from .views import H_PRIMARY_UUID
 from devpi_common.types import cached_property
@@ -54,6 +55,7 @@ if TYPE_CHECKING:
     from .keyfs import KeyChangeEvent
     from .keyfs_types import KeyFSTypesRO
     from .keyfs_types import LocatedKey
+    from .keyfs_types import RelPath
     from .main import XOM
     from contextlib import ExitStack
 
@@ -723,7 +725,7 @@ class FileReplicationSharedData:
         self.Empty = Empty
         self.xom = xom
         self.queue: PriorityQueue[
-            tuple[IndexType, int, str, str, KeyFSTypesRO, int]
+            tuple[IndexType, int, RelPath, str, KeyFSTypesRO, int]
         ] = PriorityQueue()
         self.error_queue: PriorityQueue[
             tuple[int, int, str, int, None, str, KeyFSTypesRO, int]
@@ -1315,7 +1317,7 @@ class InitialQueueThread:
                 for stage in user.getstages():
                     self.shared_data.set_index_type_for(
                         stage.name, stage.ixconfig['type'])
-            relpaths = tx.iter_relpaths_at(keys, tx.at_serial)
+            relpaths = tx.iter_keys_at_serial(keys, tx.at_serial)  # type: ignore[arg-type]
             for item in relpaths:
                 self.thread.exit_if_shutdown()
                 if isinstance(item.value, Deleted):
@@ -1347,6 +1349,7 @@ class InitialQueueThread:
                         "Skipping %s because %r in %s.", key, index_type, skip_indexes
                     )
                     continue
+                assert isinstance(item.value, DictViewReadonly)
                 entry = FileEntry(key, item.value)
                 if entry.file_exists() or not entry.last_modified:
                     continue
