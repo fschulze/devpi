@@ -1153,14 +1153,14 @@ def test_keyfs_sqlite_hash_hl(file_digest, gen_path, sorted_serverdir):
 
 
 @notransaction
-def test_iter_relpaths_at(keyfs):
+def test_iter_keys_at_serial(keyfs):
     pkey = keyfs.schema.named_key_factory("NAME1", "{name}", None, int, int)
     key = pkey(name="hello")
     with keyfs.read_transaction() as tx:
-        assert list(tx.iter_relpaths_at([key], tx.at_serial)) == []
+        assert list(tx.iter_keys_at_serial([key], tx.at_serial)) == []
     with keyfs.write_transaction():
         key.set(1)
     with keyfs.read_transaction() as tx:
-        (relpath_info,) = list(tx.iter_relpaths_at([key], tx.at_serial))
+        (relpath_info,) = list(tx.iter_keys_at_serial([key], tx.at_serial))
     assert relpath_info.keyname == "NAME1"
     assert relpath_info.value == 1
