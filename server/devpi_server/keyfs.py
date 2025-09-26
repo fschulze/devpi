@@ -44,6 +44,7 @@ import time
 
 
 if TYPE_CHECKING:
+    from .keyfs_types import IKeyFSKey
     from .keyfs_types import KeyFSTypesRO
     from .keyfs_types import KeyType
     from .keyfs_types import RelPath
@@ -394,6 +395,7 @@ class KeyFS:
                 if not isinstance(change, KeyData):
                     raise TypeError
                 key = self.get_key_instance(change.keyname, change.relpath)
+                assert key is not None
                 old_val: KeyFSTypesRO | Absent | Deleted
                 try:
                     old_val = conn.get_key_at_serial(key, serial - 1).value
@@ -523,10 +525,10 @@ class KeyFS:
             NamedKeyFactory(self, key_name, pattern_or_name, parent_key, key_type)
         )
 
-    def get_key(self, name):
+    def get_key(self, name: str) -> LocatedKey | NamedKey | NamedKeyFactory | None:
         return self._keys.get(name)
 
-    def get_key_instance(self, keyname: str, relpath: RelPath) -> LocatedKey:
+    def get_key_instance(self, keyname: str, relpath: RelPath) -> LocatedKey | None:
         key = self.get_key(keyname)
         if key is not None and not isinstance(key, LocatedKey):
             key = key(**key.extract_params(relpath))
@@ -816,8 +818,8 @@ class Transaction:
             self._model = TransactionRootModel(xom)
         return self._model
 
-    def iter_relpaths_at(self, typedkeys, at_serial):
-        return self.conn.iter_relpaths_at(typedkeys, at_serial)
+    def iter_keys_at_serial(self, keys: IKeyFSKey, at_serial: int) -> Iterator[KeyData]:
+        return self.conn.iter_keys_at_serial(keys, at_serial)
 
     def iter_serial_and_value_backwards(
         self, key: LocatedKey, last_serial: int
