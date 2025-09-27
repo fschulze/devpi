@@ -21,6 +21,7 @@ from devpi_server import __version__ as server_version
 from devpi_server.model import get_stage_customizer_classes
 from devpi_server.model import is_valid_name
 from pathlib import Path
+import datetime
 import itertools
 import json
 import logging
@@ -670,6 +671,20 @@ class Importer:
             if history_log is None:
                 link.add_log('upload', '<import>', dst=stage.name)
             else:
+                for history_entry in history_log:
+                    if "when" in history_entry and isinstance(
+                        when := history_entry["when"], (list, tuple)
+                    ):
+                        (year, month, day, hour, minute, second) = when
+                        history_entry["when"] = datetime.datetime(
+                            year,
+                            month,
+                            day,
+                            hour,
+                            minute,
+                            second,
+                            tzinfo=datetime.timezone.utc,
+                        ).strftime("%Y-%m-%dT%H:%M:%SZ")
                 link.add_logs(history_log)
         f.close()
 

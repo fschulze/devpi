@@ -1888,7 +1888,7 @@ class ELink:
         "version",
     )
 
-    _log = linkdictprop("_log")
+    _log = linkdictprop("log")
     index_relpath = linkdictprop("relpath")
     for_relpath = linkdictprop("for_relpath", default=None)
     _hashes = linkdictprop("hashes", default=None)
@@ -1968,7 +1968,7 @@ class ELink:
         return self._entry
 
     def add_log(self, what, who, **kw):
-        d = {"what": what, "who": who, "when": gmtime()[:6]}
+        d = {"what": what, "who": who, "when": strftime("%Y-%m-%dT%H:%M:%SZ", gmtime())}
         d.update(kw)
         self._log.append(d)
 
@@ -2168,7 +2168,7 @@ class MutableLinkStore(LinkStore):
         new_linkdict = {
             "relpath": file_entry.index_relpath,
             "hashes": file_entry.hashes,
-            "_log": [],
+            "log": [],
         }
         if for_link:
             assert isinstance(for_link, ELink)
