@@ -593,7 +593,7 @@ class Importer:
 
     def import_filedesc(self, stage: BaseStage, filedesc: dict, versions: dict) -> None:  # noqa: PLR0912
         rel = filedesc["relpath"]
-        project = filedesc["projectname"]
+        project = normalize_name(filedesc["projectname"])
         p = self.import_rootdir / rel
         if not p.is_file():
             msg = f"The file at {p} is missing."

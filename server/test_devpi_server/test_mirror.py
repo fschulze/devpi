@@ -1440,14 +1440,14 @@ def test_cleanup_after_last_entry_deletion(mapp, simpypi):
     assert r == content
     with mapp.xom.keyfs.write_transaction():
         stage = mapp.xom.model.getstage("mirror/mirror")
-        assert stage.key_projects.get() == {"pkg"}
+        assert stage.key_project("pkg").exists()
         assert stage.key_projsimplelinks("pkg").exists()
         ls = stage.get_linkstore_perstage("pkg", "1.0")
         (link,) = ls.get_links()
         stage.del_entry(link.entry)
     with mapp.xom.keyfs.read_transaction():
         stage = mapp.xom.model.getstage("mirror/mirror")
-        assert not stage.key_projects.get()
+        assert not stage.key_project("pkg").exists()
         assert not stage.key_projsimplelinks("pkg").exists()
 
 
@@ -1471,12 +1471,12 @@ def test_cleanup_after_last_version_deletion(mapp, simpypi):
     assert r == content1
     with mapp.xom.keyfs.write_transaction():
         stage = mapp.xom.model.getstage("mirror/mirror")
-        assert stage.key_projects.get() == {"pkg"}
+        assert stage.key_project("pkg").exists()
         assert stage.key_projsimplelinks("pkg").exists()
         stage.del_versiondata("pkg", "1.0")
     with mapp.xom.keyfs.read_transaction():
         stage = mapp.xom.model.getstage("mirror/mirror")
-        assert not stage.key_projects.get()
+        assert not stage.key_project("pkg").exists()
         assert not stage.key_projsimplelinks("pkg").exists()
 
 

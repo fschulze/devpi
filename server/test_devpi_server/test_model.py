@@ -15,11 +15,17 @@ from devpi_server.model import run_passwd
 from devpi_server.model import unknown
 from io import BytesIO
 from typing import TYPE_CHECKING
+from typing import cast
 import getpass
 import inspect
 import itertools
 import json
 import pytest
+
+
+if TYPE_CHECKING:
+    from devpi_server.keyfs_types import PatternedKey
+    from devpi_server.main import XOM
 
 
 pytestmark = [pytest.mark.writetransaction]
@@ -234,14 +240,67 @@ class TestStage:
         assert not stage.has_project("someproject")
         assert not stage.list_projects_perstage()
 
+    @pytest.mark.notransaction
+    def test_normalized_project_name(self, xom: XOM) -> None:
+        from devpi_server.normalized import NormalizedName
+        from devpi_server.normalized import normalize_name
+
+        keyfs = xom.keyfs
+        with keyfs.write_transaction():
+            user = xom.model.create_user("hello", password="123")
+            stage = user.create_stage(index="world")
+            stage.set_versiondata(udict(name="Mr.Foo", version="1.0"))
+            key_project = cast("PatternedKey[dict]", keyfs.PROJECT).search(
+                user=stage.username, index=stage.index
+            )
+        with keyfs.read_transaction():
+            name = normalize_name("Mr.Foo")
+            ((k, v),) = key_project.iter_ulidkey_values()
+            assert type(k.name) is str
+            assert not isinstance(k.name, NormalizedName)
+            assert k.name == "mr-foo"
+            assert k.name == name
+            assert v["name"] == name.original
+            assert type(v["name"]) is str
+            assert not isinstance(v["name"], NormalizedName)
+            projects = stage.list_projects_perstage()
+            assert isinstance(projects, dict)
+            ((proj, orig),) = projects.items()
+            assert isinstance(proj, str)
+            assert isinstance(orig, str)
+            assert proj == "mr-foo"
+            assert proj == name
+            assert orig == name.original
+
+        with keyfs.write_transaction():
+            stage.set_versiondata(udict(name="mr.foo", version="1.0"))
+        with keyfs.read_transaction():
+            name = normalize_name("mr.foo")
+            ((k, v),) = key_project.iter_ulidkey_values()
+            assert type(k.name) is str
+            assert not isinstance(k.name, NormalizedName)
+            assert k.name == "mr-foo"
+            assert k.name == name
+            assert v["name"] == name.original
+            assert type(v["name"]) is str
+            assert not isinstance(v["name"], NormalizedName)
+            projects = stage.list_projects_perstage()
+            assert isinstance(projects, dict)
+            ((proj, orig),) = projects.items()
+            assert isinstance(proj, str)
+            assert isinstance(orig, str)
+            assert proj == "mr-foo"
+            assert proj == name
+            assert orig == name.original
+
     def test_inheritance_simple(self, pypistage, stage):
         stage.modify(bases=("root/pypi",), mirror_whitelist=['someproject'])
         pypistage.mock_simple("someproject", "<a href='someproject-1.0.zip' /a>")
-        assert stage.list_projects_perstage() == set()
+        assert stage.list_projects_perstage() == {}
         links = stage.get_releaselinks("someproject")
         assert len(links) == 1
         stage.set_versiondata(udict(name="someproject", version="1.1"))
-        assert stage.list_projects_perstage() == set(["someproject"])
+        assert stage.list_projects_perstage() == {"someproject": "someproject"}
 
     def test_inheritance_twice(self, pypistage, stage, user):
         user.create_stage(index="dev2", bases=("root/pypi",))
@@ -257,8 +316,8 @@ class TestStage:
         assert links[0].basename == "someproject-1.2.tar.gz"
         assert links[1].basename == "someproject-1.1.tar.gz"
         assert links[2].basename == "someproject-1.0.zip"
-        assert stage.list_projects_perstage() == set()
-        assert stage_dev2.list_projects_perstage() == set(["someproject"])
+        assert stage.list_projects_perstage() == {}
+        assert stage_dev2.list_projects_perstage() == {"someproject": "someproject"}
 
     def test_inheritance_complex_issue_214(self, model):
         prov_user = model.create_user('provider', password="123")
@@ -334,7 +393,7 @@ class TestStage:
         assert links[0].basename == "some_project-1.2.tar.gz"
         assert links[1].basename == "some_project-1.0.zip"
         assert links[2].basename == "some_project-1.0.tar.gz"
-        assert stage.list_projects_perstage() == set(["some-project"])
+        assert stage.list_projects_perstage() == {"some-project": "some-project"}
 
     def test_inheritance_tolerance_on_different_names(self, stage, user):
         register_and_store(stage, "some_project-1.2.tar.gz",
@@ -391,7 +450,7 @@ class TestStage:
         assert len(entries) == 1
         assert entries[0].best_available_hash_spec == entry.best_available_hash_spec
         assert entries[0].hashes.items() <= entry.hashes.items()
-        assert stage.list_projects_perstage() == set(["some"])
+        assert stage.list_projects_perstage() == {"some": "some"}
         verdata = stage.get_versiondata("some", "1.0")
         links = verdata["+elinks"]
         assert len(links) == 1
@@ -1299,13 +1358,13 @@ class TestStage:
         # committed transactions
         with xom.keyfs.read_transaction() as tx:
             first_serial = tx.at_serial
-            assert stage.list_projects_perstage() == set()
+            assert stage.list_projects_perstage() == {}
             assert stage.get_last_project_change_serial_perstage('pkg') == -1
         with xom.keyfs.write_transaction() as tx:
             # no change in db yet
             assert tx.at_serial == first_serial
             stage.add_project_name('pkg')
-            assert stage.list_projects_perstage() == {'pkg'}
+            assert stage.list_projects_perstage() == {"pkg": "pkg"}
         with xom.keyfs.read_transaction() as tx:
             # the addition of the project name updated the db
             assert tx.at_serial == (first_serial + 1)
@@ -1313,30 +1372,31 @@ class TestStage:
         with xom.keyfs.write_transaction() as tx:
             # no change in db yet
             assert tx.at_serial == (first_serial + 1)
-            with stage.key_projects.update() as projects:
-                projects.remove('pkg')
-            assert stage.list_projects_perstage() == set()
+            stage.key_project("pkg").delete()
+            assert stage.list_projects_perstage() == {}
         with xom.keyfs.read_transaction() as tx:
             # the deletion of the project name updated the db
             assert tx.at_serial == (first_serial + 2)
-            # and we can't know when it happened, checking all changes in the
-            # project name set would be too expensive
-            assert stage.get_last_project_change_serial_perstage('pkg') == -1
+            assert stage.get_last_project_change_serial_perstage("pkg") == (
+                first_serial + 2
+            )
         with xom.keyfs.write_transaction() as tx:
             # no change in db yet
             assert tx.at_serial == (first_serial + 2)
             stage.set_versiondata(udict(name='pkg', version='1.0'))
-            assert stage.list_projects_perstage() == {'pkg'}
+            assert stage.list_projects_perstage() == {"pkg": "pkg"}
             assert stage.list_versions_perstage('pkg') == {'1.0'}
         with xom.keyfs.read_transaction() as tx:
             # the addition of the version updated the db
             assert tx.at_serial == (first_serial + 3)
+            assert stage.list_projects_perstage() == {"pkg": "pkg"}
+            assert stage.list_versions_perstage("pkg") == {"1.0"}
             assert stage.get_last_project_change_serial_perstage('pkg') == (first_serial + 3)
         with xom.keyfs.write_transaction() as tx:
             # no change in db yet
             assert tx.at_serial == (first_serial + 3)
             stage.set_versiondata(udict(name='other', version='1.1'))
-            assert stage.list_projects_perstage() == {'other', 'pkg'}
+            assert stage.list_projects_perstage() == {"other": "other", "pkg": "pkg"}
             assert stage.list_versions_perstage('other') == {'1.1'}
         with xom.keyfs.read_transaction() as tx:
             # the addition of the version in another project updated the db
@@ -1347,7 +1407,7 @@ class TestStage:
             # no change in db yet
             assert tx.at_serial == (first_serial + 4)
             stage.set_versiondata(udict(name='pkg', version='2.0'))
-            assert stage.list_projects_perstage() == {'other', 'pkg'}
+            assert stage.list_projects_perstage() == {"other": "other", "pkg": "pkg"}
             assert stage.list_versions_perstage('pkg') == {'1.0', '2.0'}
         with xom.keyfs.read_transaction() as tx:
             # the addition of a second version updated the db
@@ -1357,7 +1417,7 @@ class TestStage:
             # no change in db yet
             assert tx.at_serial == (first_serial + 5)
             stage.del_versiondata('pkg', '2.0')
-            assert stage.list_projects_perstage() == {'other', 'pkg'}
+            assert stage.list_projects_perstage() == {"other": "other", "pkg": "pkg"}
             assert stage.list_versions_perstage('pkg') == {'1.0'}
         with xom.keyfs.read_transaction() as tx:
             # the deletion of the version updated the db

@@ -468,17 +468,15 @@ class MirrorStage(BaseStage):
 
     def delete(self):
         # delete all projects on this index
-        for name in self.key_projects.get():
-            self.del_project(name)
-        self.key_projects.delete()
+        for key in list(self.key_project.iter_ulidkeys()):
+            self.del_project(key.name)
+            key.delete()
         BaseStage.delete(self)
 
     def add_project_name(self, project):
         project = normalize_name(project)
-        projects = self.key_projects.get_mutable()
-        if project not in projects:
-            projects.add(project)
-            self.key_projects.set(projects)
+        with self.key_project(project).update() as projectdata:
+            projectdata["name"] = project.original
 
     def del_project(self, project):
         if not self.is_project_cached(project):
@@ -491,11 +489,8 @@ class MirrorStage(BaseStage):
                 if entry.file_exists():
                     entry.delete()
         self.key_projsimplelinks(project).delete()
-        projects = self.key_projects.get_mutable()
-        if project in projects:
-            projects.remove(project)
-            self.cache_retrieve_times.expire(project)
-            self.key_projects.set(projects)
+        self.cache_retrieve_times.expire(project)
+        self.key_project(project).delete()
 
     def del_versiondata(self, project, version, cleanup=True):
         project = normalize_name(project)
@@ -516,11 +511,8 @@ class MirrorStage(BaseStage):
                 elif cleanup:
                     entries_to_check.append(entry)
             if cleanup and not any(x.file_exists() for x in entries_to_check):
-                projects = self.key_projects.get_mutable()
-                if project in projects:
-                    projects.remove(project)
-                    self.key_projects.set(projects)
                 self.key_projsimplelinks(project).delete()
+                self.key_project(project).delete()
 
     def del_entry(self, entry, cleanup=True):
         project = entry.project
@@ -534,11 +526,7 @@ class MirrorStage(BaseStage):
             if links is None:
                 return
             if not any(self._is_file_cached(x) for x in links):
-                projects = self.key_projects.get_mutable()
-                if project in projects:
-                    projects.remove(project)
-                    self.key_projects.set(projects)
-                self.key_projsimplelinks(project).delete()
+                self.key_project(project).delete()
 
     @property
     def _list_projects_perstage_lock(self):
@@ -600,7 +588,10 @@ class MirrorStage(BaseStage):
         )
 
     def _stale_list_projects_perstage(self):
-        return {normalize_name(x) for x in self.key_projects.get()}
+        return {
+            normalize_name(v["name"])
+            for k, v in self.key_project.iter_ulidkey_values(fill_cache=False)
+        }
 
     def _update_projects(self):
         projects_future = self.xom.create_future()
@@ -694,8 +685,8 @@ class MirrorStage(BaseStage):
         serial: int,
         etag: str | None,
     ) -> None:
-        assert isinstance(serial, int)
-        assert project == normalize_name(project), project
+        assert isinstance(serial, int), serial
+        assert isinstance(project, NormalizedName), project
         data: CacheLinks = {
             "etag": etag,
             "links": links,
@@ -703,6 +694,8 @@ class MirrorStage(BaseStage):
             "serial": serial,
             "yanked": yanked,
         }
+        with self.key_project(project).update() as projectdata:
+            projectdata["name"] = project.original
         key = self.key_projsimplelinks(project)
         old = cast("CacheLinks", key.get())
         if old != data:
@@ -1062,14 +1055,14 @@ class MirrorStage(BaseStage):
 
     def has_project_perstage(self, project):
         project = normalize_name(project)
-        if self.is_project_cached(project):
+        if self.key_project(project).exists():
             return True
         if self.no_project_list:
-            if project in self._stale_list_projects_perstage():
-                return True
             return unknown
         # recheck full project list while abiding to expiration etc
         # use the internal method to avoid a copy
+        if self.offline:
+            return unknown
         return project in self._list_projects_perstage()
 
     def list_versions_perstage(self, project):
