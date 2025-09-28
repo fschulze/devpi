@@ -1285,10 +1285,14 @@ async def test_get_simplelinks_perstage_when_http_error(exc, pypistage, monkeypa
     # to reach the code path in question, we must have cached links
     links = [("key", "href", "req_py", "yanked")]
 
-    def mock_load_cache_links(project):
-        return (True, links, 42, '"foo"')
+    class MockMirrorData:
+        def __init__(self, stage, project):
+            pass
 
-    monkeypatch.setattr(pypistage, "_load_cache_links", mock_load_cache_links)
+        def _load_cache_links(self):
+            return (True, links, 42, '"foo"')
+
+    monkeypatch.setattr("devpi_server.mirror.MirrorData", MockMirrorData)
 
     async def async_httpget(self, url, **kw):
         raise exc

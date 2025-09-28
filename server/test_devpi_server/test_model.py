@@ -1288,12 +1288,13 @@ class TestStage:
             (link,) = stage2.get_releaselinks_perstage('hello')
             entry = link.entry
         actions = [
-            ('del_entry', entry, False),
-            ('del_versiondata', 'hello', '1.0', False),
-            ('del_project', 'hello')]
-        for action, *args in actions:
+            ("del_entry", (entry,), dict(cleanup=False)),
+            ("del_versiondata", ("hello", "1.0"), dict(cleanup=False)),
+            ("del_project", ("hello",), {}),
+        ]
+        for action, args, kwargs in actions:
             with xom.keyfs.write_transaction():
-                getattr(stage2, action)(*args)
+                getattr(stage2, action)(*args, **kwargs)
                 # inside the transaction there is no change yet
                 assert stage2.get_last_change_serial_perstage() == current_serial
             assert current_serial == xom.keyfs.get_current_serial() - 1

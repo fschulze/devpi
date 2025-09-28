@@ -1517,7 +1517,7 @@ class PrivateStage(BaseStage):
         with self.key_project(project).update() as projectdata:
             projectdata["name"] = project.original
 
-    def del_project(self, project):
+    def del_project(self, project: NormalizedName | str) -> None:
         project = normalize_name(project)
         versions = {x.name for x in self.key_version(project).iter_ulidkeys()}
         for version in versions:
@@ -1527,7 +1527,9 @@ class PrivateStage(BaseStage):
         self.key_projsimplelinks(project).delete()
         self.key_project(project).delete()
 
-    def del_versiondata(self, project, version, cleanup=True):
+    def del_versiondata(
+        self, project: NormalizedName | str, version: str, *, cleanup: bool = True
+    ) -> None:
         project = normalize_name(project)
         if not self.has_project_perstage(project):
             raise self.NotFound("project %r not found on stage %r" %
@@ -1547,7 +1549,7 @@ class PrivateStage(BaseStage):
             if not has_versions:
                 self.del_project(project)
 
-    def del_entry(self, entry, cleanup=True):
+    def del_entry(self, entry: BaseFileEntry, *, cleanup: bool = True) -> None:
         # we need to store project and version for use in cleanup part below
         project = entry.project
         version = entry.version
