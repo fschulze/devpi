@@ -18,6 +18,7 @@ from .model import BaseStageCustomizer
 from .model import Rel
 from .model import ensure_boolean
 from .model import join_links_data
+from .normalized import NormalizedName
 from .normalized import normalize_name
 from .readonly import ensure_deeply_readonly
 from .views import SIMPLE_API_V1_JSON
@@ -51,7 +52,6 @@ if TYPE_CHECKING:
     from .model import RequiresPythonList
     from .model import SimpleLinks
     from .model import YankedList
-    from .normalized import NormalizedName
     from collections.abc import Callable
     from typing import Any
     from typing import NotRequired
@@ -596,14 +596,11 @@ class MirrorStage(BaseStage):
             parser = ProjectHTMLParser(response.url)
             parser.feed(text)
         projects_future.set_result(
-            (
-                {normalize_name(x): x for x in parser.projects},
-                response.headers.get("ETag"),
-            )
+            ({normalize_name(x) for x in parser.projects}, response.headers.get("ETag"))
         )
 
     def _stale_list_projects_perstage(self):
-        return {normalize_name(x): x for x in self.key_projects.get()}
+        return {normalize_name(x) for x in self.key_projects.get()}
 
     def _update_projects(self):
         projects_future = self.xom.create_future()
@@ -632,7 +629,7 @@ class MirrorStage(BaseStage):
             # mark current without updating contents
             self.cache_projectnames.mark_current(etag)
         else:
-            self.cache_projectnames.set(projects, etag)
+            self.cache_projectnames.set(set(projects), etag)
 
             # trigger an initial-load event on primary
             if not self.xom.is_replica():
@@ -680,7 +677,9 @@ class MirrorStage(BaseStage):
         """ Return the project names. """
         # return a read-only version of the cached data,
         # so it can't be modified accidentally and we avoid a copy
-        return ensure_deeply_readonly(self._list_projects_perstage())
+        return ensure_deeply_readonly(
+            {v: v.original for v in self._list_projects_perstage()}
+        )
 
     def is_project_cached(self, project):
         """ return True if we have some cached simpelinks information. """
@@ -1130,7 +1129,7 @@ def devpiserver_get_stage_customizer_classes():
 class ProjectNamesCache:
     """ Helper class for maintaining project names from a mirror. """
 
-    _data: dict[NormalizedName, str]
+    _data: set[NormalizedName]
     _etag: str | None
     _lock: threading.RLock
     _timestamp: float
@@ -1138,7 +1137,7 @@ class ProjectNamesCache:
     def __init__(self) -> None:
         self._lock = threading.RLock()
         self._timestamp = -1
-        self._data = dict()
+        self._data = set()
         self._etag = None
 
     def exists(self) -> bool:
@@ -1153,7 +1152,7 @@ class ProjectNamesCache:
         with self._lock:
             return (time.time() - self._timestamp) >= expiry_time
 
-    def get(self) -> dict[NormalizedName, str]:
+    def get(self) -> set[NormalizedName]:
         return self._data
 
     def get_etag(self) -> str | None:
@@ -1162,18 +1161,20 @@ class ProjectNamesCache:
     def add(self, project: NormalizedName | str) -> None:
         """ Add project to cache. """
         with self._lock:
-            self._data[normalize_name(project)] = project
+            self._data.add(normalize_name(project))
 
     def discard(self, project: NormalizedName | str) -> None:
         """ Remove project from cache. """
         with self._lock:
-            del self._data[normalize_name(project)]
+            self._data.discard(normalize_name(project))
 
-    def set(self, data: dict[NormalizedName, str], etag: str) -> None:
+    def set(self, data: set[NormalizedName], etag: str) -> None:
         """ Set data and update timestamp. """
         with self._lock:
             if data != self._data:
-                assert isinstance(data, dict)
+                assert isinstance(data, set)
+                if len(data):
+                    assert isinstance(next(iter(data)), NormalizedName)
                 self._data = data
             self.mark_current(etag)
 

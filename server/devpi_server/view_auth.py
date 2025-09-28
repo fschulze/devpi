@@ -153,6 +153,7 @@ class RootFactory:
     def list_versions(self, project=None, perstage=False):
         if project is None:
             project = self.project
+        project = normalize_name(project)
         try:
             if perstage:
                 res = self.stage.list_versions_perstage(project)
