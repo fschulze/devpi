@@ -623,23 +623,21 @@ class Importer:
                     url, stage.username, stage.index, project)
                 entry.file_set_content(
                     f, hashes=hashes, last_modified=mapping["last_modified"])
-                mirrorlinks = stage._get_mirrorlinks(project)
-                (_, links_with_data, cache_info) = mirrorlinks._load_cache_links()
-                if links_with_data is None:
-                    links_with_data = []
                 entrypath = entry.relpath
-                if hash_spec := entry.best_available_hash_spec:
-                    entrypath = f"{entrypath}#{hash_spec}"
-                links = [(url.basename, entrypath)]
-                requires_python = [versions[version].get('requires_python')]
-                yanked = [versions[version].get('yanked')]
-                for key, href, require_python, is_yanked in links_with_data:
-                    links.append((key, href))
-                    requires_python.append(require_python)
-                    yanked.append(is_yanked)
-                mirrorlinks._save_cache_links(
-                    links, requires_python, yanked, cache_info
-                )
+                with stage.key_mirrorfile(
+                    project, url.basename
+                ).update() as mirrorfiledata:
+                    assert not mirrorfiledata
+                    mirrorfiledata["entrypath"] = entrypath
+                    if entry.hashes is not None:
+                        mirrorfiledata["hashes"] = entry.hashes
+                    if (
+                        requires_python := versions[version].get("requires_python")
+                    ) is not None:
+                        mirrorfiledata["requires_python"] = requires_python
+                    if (yanked := versions[version].get("yanked")) is not None:
+                        mirrorfiledata["yanked"] = yanked
+                threadlog.info("added mirror file %s", entry.relpath)
         elif filedesc["type"] == Rel.DocZip:
             version = filedesc["version"]
             # docs didn't always have entrymapping in export dump
