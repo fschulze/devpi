@@ -345,8 +345,8 @@ class TestExtPYPIDB:
 
     def test_parse_project_nomd5(self, pypistage):
         pypistage.mock_simple("pytest", pkgver="pytest-1.0.zip")
-        links = pypistage.get_releaselinks("pytest")
-        link, = links
+        (link,) = pypistage.get_releaselinks("pytest")
+        assert link.rel == "releasefile"
         assert link.version == "1.0"
         assert link.entry.url == "https://pypi.org/pytest/pytest-1.0.zip"
         assert link.best_available_hash_spec is None
@@ -357,13 +357,15 @@ class TestExtPYPIDB:
     def test_parse_project_replaced_md5(self, pypistage, hash_type):
         x = pypistage.mock_simple("pytest", pypiserial=10, hash_type=hash_type,
                                    pkgver="pytest-1.0.zip")
-        links = pypistage.get_releaselinks("pytest")
-        assert links[0].best_available_hash_spec == x.hash_spec
+        (link,) = pypistage.get_releaselinks("pytest")
+        assert link.rel == "releasefile"
+        assert link.best_available_hash_spec == x.hash_spec
 
         y = pypistage.mock_simple("pytest", pypiserial=11, hash_type=hash_type,
                                    pkgver="pytest-1.0.zip")
-        links = pypistage.get_releaselinks("pytest")
-        assert links[0].best_available_hash_spec == y.hash_spec
+        (link,) = pypistage.get_releaselinks("pytest")
+        assert link.rel == "releasefile"
+        assert link.best_available_hash_spec == y.hash_spec
         assert x.hash_spec != y.hash_spec
 
     def test_get_versiondata_inexistent(self, pypistage):

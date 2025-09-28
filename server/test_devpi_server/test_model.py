@@ -446,10 +446,10 @@ class TestStage:
         assert entry.best_available_hash_spec is not None
         assert entry.hashes
         assert entry.last_modified is not None
-        entries = stage.get_releaselinks("some")
-        assert len(entries) == 1
-        assert entries[0].best_available_hash_spec == entry.best_available_hash_spec
-        assert entries[0].hashes.items() <= entry.hashes.items()
+        (entry,) = stage.get_releaselinks("some")
+        assert entry.rel == "releasefile"
+        assert entry.best_available_hash_spec == entry.best_available_hash_spec
+        assert entry.hashes.items() <= entry.hashes.items()
         assert stage.list_projects_perstage() == {"some": "some"}
         verdata = stage.get_versiondata("some", "1.0")
         links = verdata["+elinks"]

@@ -920,6 +920,7 @@ class TestImportExport:
         with mapp1.xom.keyfs.read_transaction():
             stage = mapp1.xom.model.getstage(api.stagename)
             link = stage.get_doczip_link("hello", "1.0")
+            assert link.rel == "doczip"
             last_modified = link.entry.last_modified
             (log,) = link.get_logs()
             what = log["what"]
@@ -933,6 +934,7 @@ class TestImportExport:
         with mapp2.xom.keyfs.read_transaction():
             stage = mapp2.xom.model.getstage(api.stagename)
             link = stage.get_doczip_link("hello", "1.0")
+            assert link.rel == "doczip"
             assert link.entry.last_modified == last_modified
             (log,) = link.get_logs()
             assert log["what"] == what
