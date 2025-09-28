@@ -49,7 +49,7 @@ class LoadError(DataFormatError):
     """Error while unserializing an object."""
 
 
-def load(fp, _from_bytes=int.from_bytes, _unpack=unpack):
+def _load_iter(fp, *, mode, _from_bytes=int.from_bytes, _unpack=unpack):  # noqa: PLR0912
     read = fp.read
     stack: list = []
     stack_append = stack.append
@@ -64,6 +64,7 @@ def load(fp, _from_bytes=int.from_bytes, _unpack=unpack):
         else:
             stack_append(type_())
 
+    count = 0
     stopped = False
     while True:
         opcode = read(1)
@@ -103,7 +104,17 @@ def load(fp, _from_bytes=int.from_bytes, _unpack=unpack):
                 key = stack_pop()
             except IndexError as e:
                 raise LoadError("not enough items for setitem") from e
-            stack[-1][key] = value
+            if not stack:
+                if mode != "list":
+                    msg = f"setitem on empty stack with {mode=}"
+                    raise LoadError(msg)
+                if count != key:
+                    msg = f"{count=} != {key=}"
+                    raise LoadError(msg)
+                yield value
+                count += 1
+            else:
+                stack[-1][key] = value
         elif opcode == b'Q':  # stop
             stopped = True
             break
@@ -112,9 +123,14 @@ def load(fp, _from_bytes=int.from_bytes, _unpack=unpack):
         elif opcode == b'T':  # complex
             stack_append(complex(_unpack("!d", read(8))[0], _unpack("!d", read(8))[0]))
         elif opcode == b"y":  # check len and return
-            if (slen := len(stack[-1])) != (
-                rlen := _from_bytes(read(4), byteorder="big", signed=True)
-            ):
+            if not stack:
+                if mode != "iter":
+                    msg = f"length check on empty stack with {mode=}"
+                    raise LoadError(msg)
+                slen = count
+            else:
+                slen = len(stack[-1])
+            if slen != (rlen := _from_bytes(read(4), byteorder="big", signed=True)):
                 msg = f"length {slen} of list on stack doesn't match expected length {rlen}"
                 raise LoadError(msg)
         elif opcode == b"z":  # append
@@ -122,19 +138,50 @@ def load(fp, _from_bytes=int.from_bytes, _unpack=unpack):
                 value = stack_pop()
             except IndexError as e:
                 raise LoadError("not enough items for append") from e
-            stack[-1].append(value)
+            if not stack:
+                if mode != "iter":
+                    msg = f"append on empty stack with {mode=}"
+                    raise LoadError(msg)
+                yield value
+                count += 1
+            else:
+                stack[-1].append(value)
         else:
             msg = f"unknown opcode {opcode!r} - wire protocol corruption?"
             raise LoadError(msg)
     if not stopped:
         raise LoadError("didn't get STOP")
-    if len(stack) != 1:
+    if mode == "stack":
+        if len(stack) != 1:
+            raise LoadError("internal unserialization error")
+        yield stack_pop(0)
+    if stack:
         raise LoadError("internal unserialization error")
-    return stack_pop(0)
+
+
+def load(fp, *, _from_bytes=int.from_bytes, _unpack=unpack):
+    (result,) = _load_iter(fp, mode="stack")
+    return result
+
+
+def load_iter(fp, *, _from_bytes=int.from_bytes, _unpack=unpack):
+    read = fp.read
+    opcode = read(1)
+    if not opcode:
+        raise EOFError
+    if opcode != b"K":
+        raise LoadError("not a list")
+    expected_length = _from_bytes(read(4), byteorder="big", signed=True)
+    mode = "iter" if expected_length == 0 else "list"
+    yield from _load_iter(fp, mode=mode)
 
 
 def loads(data):
     return load(BytesIO(data))
+
+
+def loads_iter(data):
+    return load_iter(BytesIO(data))
 
 
 def _dump_tuple(write, obj, _pack=pack):
