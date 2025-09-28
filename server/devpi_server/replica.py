@@ -741,9 +741,7 @@ class ReplicaThread:
 
 
 def register_key_subscribers(xom):
-    xom.keyfs.notifier.on_key_change(
-        xom.keyfs.PROJSIMPLELINKS, SimpleLinksChanged(xom).handler
-    )
+    xom.keyfs.notifier.on_key_change(xom.keyfs.PROJECT, ProjectChanged(xom).handler)
 
 
 class FileReplicationSharedData:
@@ -1408,7 +1406,7 @@ class InitialQueueThread:
         )
 
 
-class SimpleLinksChanged:
+class ProjectChanged:
     """ Event executed in notification thread based on a pypi link change.
     It allows a replica to sync up the local full projectnames list."""
 
@@ -1416,7 +1414,7 @@ class SimpleLinksChanged:
         self.xom = xom
 
     def handler(self, ev: KeyChangeEvent) -> None:
-        threadlog.debug("SimpleLinksChanged %s", ev.data.key)
+        threadlog.debug("ProjectChanged %s", ev.data.key)
         cache = ev.data.value
         # get the normalized project (PYPILINKS uses it)
         username = ev.data.key.params["user"]
