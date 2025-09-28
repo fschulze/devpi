@@ -1563,6 +1563,14 @@ class PrivateStage(BaseStage):
             return set()
         return {x.name for x in self.key_version(project).iter_ulidkeys()}
 
+    @cached_property
+    def _key_name_rel_map(self) -> dict[str, str]:
+        return {
+            self.keyfs.DOCZIP.key_name: str(Rel.DocZip),
+            self.keyfs.TOXRESULT.key_name: str(Rel.ToxResult),
+            self.keyfs.VERSIONFILE.key_name: str(Rel.ReleaseFile),
+        }
+
     def _get_elink_from_entry(self, entry: BaseFileEntry) -> ELink | None:
         project = entry.project
         version = entry.version
@@ -1572,11 +1580,12 @@ class PrivateStage(BaseStage):
             self.key_toxresult(project, version, basename),
             self.key_versionfile(project, version, basename),
         }
+        key_name_rel_map = self._key_name_rel_map
         result = []
-        for _k, v in self.keyfs.tx.iter_ulidkey_values_for(keys):
+        for k, v in self.keyfs.tx.iter_ulidkey_values_for(keys):
             if Path(v["entrypath"]).name != basename:
                 continue
-            result.append(v)
+            result.append(dict((*v.items(), ("rel", key_name_rel_map[k.key_name]))))
         if not result:
             return None
         (data,) = result
@@ -1595,7 +1604,11 @@ class PrivateStage(BaseStage):
             keys.add(self.key_toxresult(project, version))
         if Rel.ReleaseFile in rels:
             keys.add(self.key_versionfile(project, version))
-        return [v for k, v in self.keyfs.tx.iter_ulidkey_values_for(keys)]
+        key_name_rel_map = self._key_name_rel_map
+        return [
+            dict((*v.items(), ("rel", key_name_rel_map[k.key_name])))
+            for k, v in self.keyfs.tx.iter_ulidkey_values_for(keys)
+        ]
 
     def get_last_project_change_serial_perstage(self, project, at_serial=None):
         project = normalize_name(project)
@@ -2126,7 +2139,6 @@ class MutableLinkStore(LinkStore):
 
     def _add_link_to_file_entry(self, rel, file_entry, for_link=None):
         new_linkdict = {
-            "rel": str(rel),
             "entrypath": file_entry.relpath,
             "hashes": file_entry.hashes,
             "_log": [],
