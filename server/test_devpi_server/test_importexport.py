@@ -317,10 +317,13 @@ class TestImportExport:
         assert users["root"]["created"] == "2020-01-01T11:11:00Z"
         assert users["root"]["modified"] == "2020-01-02T12:12:00Z"
 
+    @pytest.mark.slow
     def test_created_and_modified_roundtrip(self, impexp):
+        from time import sleep
         mapp1 = impexp.mapp1
         mapp1.create_and_use()
         first_user = mapp1.api.user
+        sleep(2)  # we need to wait, so modified timestamp is different
         mapp1.modify_user(first_user, email='foo@example.com')
         mapp1.create_and_use()
         second_user = mapp1.api.user
