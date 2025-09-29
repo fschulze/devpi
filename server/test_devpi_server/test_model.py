@@ -438,6 +438,25 @@ class TestStage:
             "<a href='someproject-1.0.zip' /a>")
         assert not stage.get_versiondata("someproject", "2.0")
 
+    def test_long_description(self, stage):
+        from devpi_server.model import VERSIONDATA_DESCRIPTION_SIZE_THRESHOLD
+
+        snippet = "this is some description repeated many times"
+        count = (VERSIONDATA_DESCRIPTION_SIZE_THRESHOLD // len(snippet)) + 1
+        description = snippet * count
+        assert len(description) > VERSIONDATA_DESCRIPTION_SIZE_THRESHOLD
+        stage.set_versiondata(dict(name="foo", version="1.0", description=description))
+        metadata = stage.key_versionmetadata("foo", "1.0").get_mutable()
+        assert isinstance(metadata["description"], dict)
+        entry = stage.filestore.get_file_entry(
+            f"{stage.username}/{stage.index}/{metadata['description']['relpath']}"
+        )
+        assert entry.file_get_content().decode() == description
+        verdata = stage.get_versiondata("foo", "1.0")
+        assert verdata["description"] == description
+        stage.del_versiondata("foo", "1.0")
+        assert not entry.file_exists()
+
     @pytest.mark.usefixtures("bases")
     def test_store_and_get_releasefile(self, stage):
         content = b"123"
