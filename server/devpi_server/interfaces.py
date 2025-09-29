@@ -17,6 +17,7 @@ emptyset = cast("set", frozenset())
 if TYPE_CHECKING:
     from .keyfs_types import FilePathInfo
     from .keyfs_types import KeyData
+    from .keyfs_types import KeyFSTypes
     from .keyfs_types import LocatedKey
     from .keyfs_types import PatternedKey
     from .keyfs_types import Record
@@ -96,8 +97,8 @@ class IIOFile(Interface):
     def get_content(path: FilePathInfo) -> bytes:
         """Returns binary content of the file at path."""
 
-    def get_rel_renames() -> list[str]:
-        """Returns deserialized rel_renames for given serial."""
+    def get_crash_actions() -> list[KeyFSTypes]:
+        """Returns deserialized crash actions for given serial."""
 
     def is_dirty() -> bool:
         """Indicate whether there are any file changes pending."""
@@ -117,7 +118,7 @@ class IIOFile(Interface):
         based, otherwise None."""
 
     def perform_crash_recovery(
-        iter_rel_renames: Callable[[], Iterable[RelPath]],
+        iter_crash_actions: Callable[[], Iterable[KeyFSTypes]],
         iter_file_path_infos: Callable[[Iterable[RelPath]], Iterable[FilePathInfo]],
     ) -> None:
         """Perform recovery from crash during two phase commit."""
@@ -198,6 +199,9 @@ class IStorageConnection(Interface):
     def iter_changes_at(serial: int) -> Iterator[KeyData]:
         """Returns deserialized readonly changes for given serial."""
 
+    def iter_crash_actions(serial: int) -> Iterator[KeyFSTypes]:
+        """Returns deserialized crash actions for given serial."""
+
     def iter_keys_at_serial(
         typedkeys: Iterable[LocatedKey | PatternedKey | SearchKey | ULIDKey],
         at_serial: int,
@@ -209,10 +213,9 @@ class IStorageConnection(Interface):
         """Iterate over all relpaths of the given typed keys starting
         from at_serial until the first serial in the database."""
 
-    def iter_rel_renames(serial: int) -> Iterator[str]:
-        """Returns deserialized rel_renames for given serial."""
-
-    def iter_serializable_changes(serial: int) -> Iterator[tuple]:
+    def iter_serializable_changes(
+        serial: int,
+    ) -> Iterator[tuple[str, RelPath, int, int | None, int, KeyFSTypes]]:
         """Returns pure Python tuples serializable for replications."""
 
     def iter_ulidkeys_at_serial(
@@ -246,7 +249,7 @@ class IWriter(Interface):
     def records_set(records: Sequence[Record]) -> None:
         pass
 
-    def set_rel_renames(rel_renames: Sequence[str]) -> None:
+    def set_crash_actions(actions: Sequence[KeyFSTypes]) -> None:
         pass
 
 
