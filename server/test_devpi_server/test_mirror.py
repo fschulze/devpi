@@ -1282,7 +1282,7 @@ async def test_get_simplelinks_perstage_when_http_error(exc, pypistage, monkeypa
     from devpi_server.model import SimpleLinks
 
     # to reach the code path in question, we must have cached links
-    links = [("key", "href", "req_py", "yanked")]
+    links = [("key", "user/index/href", "req_py", "yanked")]
 
     class MockMirrorLinks:
         def __init__(self, stage, project):

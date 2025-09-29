@@ -627,9 +627,7 @@ def test_simple_refresh(xom, pypistage, testapp):
         projects = {k.name: v for k, v in key_mirrorfile.iter_ulidkey_values()}
         cache_info = pypistage.key_projectcacheinfo("hello").get()
     assert projects == {
-        "hello-1.0.zip": dict(
-            entrypath="root/pypi/+e/https_pypi.org_hello/hello-1.0.zip"
-        )
+        "hello-1.0.zip": dict(relpath="+e/https_pypi.org_hello/hello-1.0.zip")
     }
     assert cache_info["serial"] == 10001
 

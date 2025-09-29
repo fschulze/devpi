@@ -623,12 +623,11 @@ class Importer:
                     url, stage.username, stage.index, project)
                 entry.file_set_content(
                     f, hashes=hashes, last_modified=mapping["last_modified"])
-                entrypath = entry.relpath
                 with stage.key_mirrorfile(
                     project, url.basename
                 ).update() as mirrorfiledata:
                     assert not mirrorfiledata
-                    mirrorfiledata["entrypath"] = entrypath
+                    mirrorfiledata["relpath"] = entry.index_relpath
                     if entry.hashes is not None:
                         mirrorfiledata["hashes"] = entry.hashes
                     if (
