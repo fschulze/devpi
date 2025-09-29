@@ -39,6 +39,7 @@ import warnings
 
 if TYPE_CHECKING:
     from .interfaces import IIOFile
+    from .keyfs_types import KeyFSTypes
     from .keyfs_types import Record
     from collections.abc import Callable
     from collections.abc import Iterable
@@ -441,7 +442,7 @@ class BaseConnection:
             for c in self.iter_changes_at(serial)
         )
 
-    def iter_rel_renames(self, serial: int) -> Iterator[str]:
+    def iter_crash_actions(self, serial: int) -> Iterator[KeyFSTypes]:
         data = self._sqlaconn.execute(
             sa.select(self.renames_table.c.data).where(
                 self.renames_table.c.serial == serial
@@ -914,7 +915,7 @@ class BaseConnection:
 @implementer(IWriter)
 class Writer:
     records: Sequence[Record]
-    rel_renames: Sequence[str]
+    crash_actions: Sequence[KeyFSTypes]
 
     def __init__(
         self, storage: BaseStorage, conn: BaseConnection, io_file: IIOFile | None
@@ -922,7 +923,7 @@ class Writer:
         self.conn = conn
         self.io_file = io_file
         self.storage = storage
-        self.rel_renames = []
+        self.crash_actions = []
 
     def __enter__(self) -> Self:
         self.commit_serial = self.conn.get_next_serial()
@@ -961,10 +962,10 @@ class Writer:
         del self.records
         execute(
             sa.insert(self.conn.renames_table).values(
-                (commit_serial, dumps(self.rel_renames))
+                (commit_serial, dumps(self.crash_actions))
             )
         )
-        del self.rel_renames
+        del self.crash_actions
         records_info: Counter | set
         num_records = len(records)
         if num_records > 20:
@@ -1117,10 +1118,10 @@ class Writer:
             del self.records
         self.conn.rollback()
 
-    def set_rel_renames(self, rel_renames: Sequence[str]) -> None:
-        assert rel_renames is not None
-        assert self.rel_renames == []
-        self.rel_renames = rel_renames
+    def set_crash_actions(self, actions: Sequence[KeyFSTypes]) -> None:
+        assert actions is not None
+        assert self.crash_actions == []
+        self.crash_actions = actions
 
 
 class BaseStorage:

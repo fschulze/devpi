@@ -9,6 +9,7 @@ from zope.interface import provider
 
 if TYPE_CHECKING:
     from .keyfs_types import FilePathInfo
+    from .keyfs_types import KeyFSTypes
     from .keyfs_types import RelPath
     from collections.abc import Callable
     from collections.abc import Iterable
@@ -54,7 +55,7 @@ class DBIOFile:
     def get_content(self, path: FilePathInfo) -> bytes:
         return self.conn.io_file_get(path)
 
-    def get_rel_renames(self) -> list:
+    def get_crash_actions(self) -> list:
         return []
 
     def is_dirty(self) -> bool:
@@ -74,7 +75,7 @@ class DBIOFile:
 
     def perform_crash_recovery(
         self,
-        iter_rel_renames: Callable[[], Iterable[RelPath]],  # noqa: ARG002 - API
+        iter_crash_actions: Callable[[], Iterable[KeyFSTypes]],  # noqa: ARG002 - API
         iter_file_path_infos: Callable[[Iterable[RelPath]], Iterable[FilePathInfo]],  # noqa: ARG002 - API
     ) -> None:
         return self.conn.storage.perform_crash_recovery()

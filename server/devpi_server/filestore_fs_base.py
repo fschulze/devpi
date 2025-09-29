@@ -19,6 +19,7 @@ import re
 if TYPE_CHECKING:
     from .interfaces import ContentOrFile
     from .keyfs_types import FilePathInfo
+    from .keyfs_types import KeyFSTypes
     from collections.abc import Callable
     from collections.abc import Iterable
     from types import TracebackType
@@ -211,7 +212,7 @@ class FSIOFileBase:
         self._dirty_files.clear()
         self._relpath_file_path_info_map.clear()
 
-    def iter_rel_renames(self) -> Iterable[str]:
+    def iter_crash_actions(self) -> Iterable[str]:
         _relpath_file_path_info_map = self._relpath_file_path_info_map
         basedir = self.basedir
         for relpath, dirty_file in self._dirty_files.items():
@@ -223,21 +224,21 @@ class FSIOFileBase:
             else:
                 yield dirty_file.get_rel_rename()
 
-    def get_rel_renames(self) -> list[str]:
+    def get_crash_actions(self) -> list[KeyFSTypes]:
         # produce a list of strings which are
         # - paths relative to basedir
         # - if they have "-tmp" at the end it means they should be renamed
         #   to the path without the "-tmp" suffix
         # - if they don't have "-tmp" they should be removed
-        return list(self.iter_rel_renames())
+        return list(self.iter_crash_actions())
 
     def perform_crash_recovery(
         self,
-        iter_rel_renames: Callable[[], Iterable[RelPath]],
+        iter_crash_actions: Callable[[], Iterable[KeyFSTypes]],
         iter_file_path_infos: Callable[[Iterable[RelPath]], Iterable[FilePathInfo]],
     ) -> None:
         rel_rename_relpath_is_deleted_map = {
-            rel_rename: (
+            (rel_rename := str(_rel_rename)): (
                 RelPath(
                     Path(
                         rel_rename
@@ -249,7 +250,7 @@ class FSIOFileBase:
                 ),
                 suffix is None,
             )
-            for rel_rename in iter_rel_renames()
+            for _rel_rename in iter_crash_actions()
         }
         rel_renames_needing_file_path_info_map = (
             self.rel_renames_needing_file_path_info(rel_rename_relpath_is_deleted_map)

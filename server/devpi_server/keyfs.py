@@ -411,8 +411,8 @@ class KeyFS:
             if (serial := conn.last_changelog_serial) == -1:
                 return
 
-            def iter_rel_renames() -> Iterable[str]:
-                return conn.iter_rel_renames(serial)
+            def iter_crash_actions() -> Iterable[KeyFSTypes]:
+                return conn.iter_crash_actions(serial)
 
             def iter_file_path_infos(
                 relpaths: Iterable[RelPath],
@@ -437,7 +437,7 @@ class KeyFS:
                     yield FilePathInfo(relpath, digests.get_default_value(None))
 
             io_file = self.io_file_factory(conn)
-            io_file.perform_crash_recovery(iter_rel_renames, iter_file_path_infos)
+            io_file.perform_crash_recovery(iter_crash_actions, iter_file_path_infos)
 
     def import_changes(self, serial: int, changes: Sequence[KeyData]) -> None:
         changes = list(changes)
@@ -1440,7 +1440,7 @@ class Transaction:
         with contextlib.ExitStack() as cstack:
             cstack.callback(self._close)
             with self.io_file, self.conn.write_transaction(self.io_file) as writer:
-                writer.set_rel_renames(self.io_file.get_rel_renames())
+                writer.set_crash_actions(self.io_file.get_crash_actions())
                 writer.records_set(records)
                 commit_serial = writer.commit_serial
             self.commit_serial = commit_serial

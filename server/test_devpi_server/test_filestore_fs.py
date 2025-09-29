@@ -23,7 +23,7 @@ class TestRenameFileLogic:
             assert fs.get_content(hello_path_info) == hello_content
             this_path_info = FilePathInfo(RelPath("file1"), this_digest)
             fs.set_content(this_path_info, this_content)
-            (rel_rename,) = list(fs.iter_rel_renames())
+            (rel_rename,) = list(fs.iter_crash_actions())
             file1_tmp = tmpdir.join(rel_rename)
             rel_parts = Path(rel_rename).parts
             assert rel_parts[0] == "+files"
@@ -56,7 +56,7 @@ class TestRenameFileLogic:
             assert fs.get_content(hello_path_info) == hello_content
             this_path_info = FilePathInfo(RelPath("file1"), this_digest)
             fs.set_content(this_path_info, this_content)
-            (rel_rename,) = list(fs.iter_rel_renames())
+            (rel_rename,) = list(fs.iter_crash_actions())
             file1_tmp = tmpdir.join(rel_rename)
             rel_parts = Path(rel_rename).parts
             assert rel_parts[0] == "+files"
@@ -88,7 +88,7 @@ class TestRenameFileLogic:
             assert fs.os_path(hello_path_info) == str(file1)
             assert fs.get_content(hello_path_info) == hello_content
             fs.delete(hello_path_info, is_last_of_hash=True)
-            (rel_rename,) = list(fs.iter_rel_renames())
+            (rel_rename,) = list(fs.iter_crash_actions())
             assert tmpdir.join(rel_rename) == str(file1)
             assert file1.exists()
         assert not file1.exists()
@@ -110,7 +110,7 @@ class TestRenameFileLogic:
             assert fs.os_path(hello_path_info) == str(file1)
             assert fs.get_content(hello_path_info) == hello_content
             fs.delete(hello_path_info, is_last_of_hash=True)
-            (rel_rename,) = list(fs.iter_rel_renames())
+            (rel_rename,) = list(fs.iter_crash_actions())
             assert tmpdir.join(rel_rename) == str(file1)
             assert file1.exists()
             # simulate a crash
@@ -168,7 +168,7 @@ class TestRenameFileLogic:
             entry = MutableFileEntry(key)
             entry.file_set_content(content, hashes=hashes)
             path = Path(tx.io_file.os_path(entry.file_path_info))
-            (rel_rename,) = tx.io_file.get_rel_renames()
+            (rel_rename,) = tx.io_file.get_crash_actions()
         assert _commit.called
         # due to the monkeypatch above the file renames shouldn't be done yet
         assert not path.exists()

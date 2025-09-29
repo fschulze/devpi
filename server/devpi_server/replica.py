@@ -296,8 +296,7 @@ class PrimaryChangelogRequest:
             self._wait_for_serial(serial)
 
             changes = keyfs.tx.conn.iter_serializable_changes(serial)
-            rel_renames = keyfs.tx.conn.iter_rel_renames(serial)
-            raw_entry = dumps((changes, rel_renames))
+            raw_entry = dumps((changes, []))
 
             devpi_serial = keyfs.get_current_serial()
             return Response(
