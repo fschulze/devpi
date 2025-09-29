@@ -483,7 +483,7 @@ class Importer:
                     user = self.xom.model.create_user(username, password="")
                     # missing creation time is set to epoch for regular users
                     userconfig.setdefault("created", "1970-01-01T00:00:00Z")
-                user._set(userconfig)
+                user._modify(**{k: v for k, v in userconfig.items() if k != "username"})
 
         # memorize index inheritance structure
         tree = IndexTree()

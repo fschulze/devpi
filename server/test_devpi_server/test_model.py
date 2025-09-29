@@ -1654,7 +1654,7 @@ class TestUsers:
 def test_user_set_without_indexes(model):
     user = model.create_user("user", "password", email="some@email.com")
     user.create_stage("hello")
-    user._set({"password": "pass2"})
+    user._modify(password="pass2")
     assert model.getstage("user/hello")
 
 
