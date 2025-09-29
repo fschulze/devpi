@@ -1403,6 +1403,27 @@ class PrivateStage(BaseStage):
         self._set_versiondata(metadata)
 
     @overload
+    def key_doczip(
+        self, project: NormalizedName | str, version: str
+    ) -> LocatedKey[dict]: ...
+
+    @overload
+    def key_doczip(
+        self, project: NormalizedName | str, version: None = None
+    ) -> SearchKey[dict]: ...
+
+    def key_doczip(
+        self, project: NormalizedName | str, version: str | None = None
+    ) -> LocatedKey[dict] | SearchKey[dict]:
+        key = cast("PatternedKey[dict]", self.keyfs.DOCZIP)
+        (kw, meth) = (
+            ({}, key.search) if version is None else (dict(version=version), key.locate)
+        )
+        return meth(
+            user=self.username, index=self.index, project=normalize_name(project), **kw
+        )
+
+    @overload
     def key_versionfile(
         self, project: NormalizedName | str, version: str, filename: str
     ) -> LocatedKey[dict]: ...
@@ -1517,17 +1538,35 @@ class PrivateStage(BaseStage):
         return {x.name for x in self.key_version(project).iter_ulidkeys()}
 
     def _get_elink_from_entry(self, entry: BaseFileEntry) -> ELink | None:
-        key = self.key_versionfile(entry.project, entry.version, entry.basename)
-        if not key.exists():
+        project = entry.project
+        version = entry.version
+        basename = entry.basename
+        keys = {
+            self.key_doczip(project, version),
+            self.key_versionfile(project, version, basename),
+        }
+        result = []
+        for _k, v in self.keyfs.tx.iter_ulidkey_values_for(keys):
+            if Path(v["entrypath"]).name != basename:
+                continue
+            result.append(v)
+        if not result:
             return None
-        return ELink.from_entry(self.filestore, entry, key.get())
+        (data,) = result
+        return ELink.from_entry(self.filestore, entry, data)
 
-    def _get_elinks(self, project, version):
+    def _get_elinks(
+        self, project: str, version: str, *, rel: Rel | None = None
+    ) -> list:
         if not self.key_versionmetadata(project, version).exists():
             return []
-        return [
-            v for k, v in self.key_versionfile(project, version).iter_ulidkey_values()
-        ]
+        rels = set(Rel) if rel is None else {rel}
+        keys: set[LocatedKey | SearchKey] = set()
+        if Rel.DocZip in rels:
+            keys.add(self.key_doczip(project, version))
+        if Rel.ReleaseFile in rels or Rel.ToxResult in rels:
+            keys.add(self.key_versionfile(project, version))
+        return [v for k, v in self.keyfs.tx.iter_ulidkey_values_for(keys)]
 
     def get_last_project_change_serial_perstage(self, project, at_serial=None):
         project = normalize_name(project)
@@ -1670,9 +1709,9 @@ class PrivateStage(BaseStage):
                     "derive one from", project)
             threadlog.info("store_doczip: derived version of %s is %s",
                            project, version)
-        basename = "%s-%s.doc.zip" % (project, version)
-        if not self.has_version_perstage(project, version):
-            self.set_versiondata({'name': project, 'version': version})
+        basename = f"{project}-{version}.doc.zip"
+        with self.key_project(project).update() as projectdata:
+            projectdata["name"] = project
         linkstore = self.get_mutable_linkstore_perstage(project, version)
         return linkstore.create_linked_entry(
             rel=Rel.DocZip,
@@ -1684,19 +1723,10 @@ class PrivateStage(BaseStage):
 
     def get_doczip_link(self, project, version):
         """ get link of documentation zip or None if no docs exists. """
-        linkstore = self.get_linkstore_perstage(project, version)
-        links = linkstore.get_links(rel=Rel.DocZip)
-        link = links[-1] if links else None
-        if len(links) > 1 and link is not None:
-            # the order is not defined, but since devpi-server 2.4.0 it
-            # shouldn't be possible to get into this case anyway
-            threadlog.warn(
-                "Multiple documentation files for %s-%s, returning %s",
-                project,
-                version,
-                link.entrypath,
-            )
-        return link
+        doczip = self.key_doczip(project, version).get()
+        if not doczip:
+            return None
+        return ELink(self.filestore, doczip, project, version)
 
     def get_doczip_entry(self, project, version):
         """ get entry of documentation zip or None if no docs exists. """
@@ -1726,6 +1756,15 @@ class PrivateStage(BaseStage):
             if projectdata is deleted:
                 continue
             project = projectdata["name"]
+            for doczip_keydata in tx.conn.iter_keys_at_serial(
+                (self.key_doczip(project),),
+                at_serial=at_serial,
+                fill_cache=False,
+                with_deleted=True,
+            ):
+                last_serial = max(last_serial, doczip_keydata.key.last_serial)
+                if last_serial >= at_serial:
+                    return last_serial
             for version_keydata in tx.conn.iter_keys_at_serial(
                 (self.key_version(project),),
                 at_serial=at_serial,
@@ -1904,13 +1943,19 @@ class LinkStore:
     def __repr__(self):
         return f"<{self.__class__.__name__} {self.project} {self.stage.name} {self.version}>"
 
-    def get_links(self, rel=None, basename=None, entrypath=None, for_entrypath=None):
+    def get_links(
+        self,
+        rel: Rel | None = None,
+        basename: str | None = None,
+        entrypath: str | None = None,
+        for_entrypath: ELink | str | None = None,
+    ) -> list[ELink]:
         if isinstance(for_entrypath, ELink):
             for_entrypath = for_entrypath.relpath
         elif for_entrypath is not None:
             assert "#" not in for_entrypath
 
-        elinks = self.stage._get_elinks(self.project, self.version)
+        elinks = self.stage._get_elinks(self.project, self.version, rel=rel)
 
         def fil(link):
             return (
@@ -1969,6 +2014,9 @@ class MutableLinkStore(LinkStore):
             link.add_log("overwrite", None, count=overwrite + 1)
         return link
 
+    def key_doczip(self) -> LocatedKey[dict]:
+        return self.stage.key_doczip(self.project, self.version)
+
     @overload
     def key_versionfile(self, filename: str) -> LocatedKey[dict]: ...
 
@@ -2017,12 +2065,17 @@ class MutableLinkStore(LinkStore):
             rel=rel, basename=basename, for_entrypath=for_entrypath
         )
         was_deleted = []
+        key_doczip = self.key_doczip()
         key_versionfile = self.key_versionfile()
         if del_links:
             for link in del_links:
                 filename = link.entry.basename
                 link.entry.delete()
-                key_versionfile(filename).delete()
+                match link.rel:
+                    case Rel.DocZip:
+                        key_doczip.delete()
+                    case _:
+                        key_versionfile(filename).delete()
                 was_deleted.append(link.relpath)
                 threadlog.info("deleted %r link %s", link.rel, link.relpath)
         has_versionfiles = next(key_versionfile.iter_ulidkeys(), absent) is not absent
@@ -2064,9 +2117,14 @@ class MutableLinkStore(LinkStore):
         if for_link:
             assert isinstance(for_link, ELink)
             new_linkdict["for_entrypath"] = for_link.relpath
-        if self.key_versionfile(file_entry.basename).exists():
+        match rel:
+            case Rel.DocZip:
+                key = self.key_doczip()
+            case _:
+                key = self.key_versionfile(file_entry.basename)
+        if key.exists():
             raise RuntimeError
-        self.key_versionfile(file_entry.basename).set(new_linkdict)
+        key.set(new_linkdict)
         threadlog.info("added %r link %s", rel, file_entry.relpath)
         return ELink(self.filestore, new_linkdict, self.project, self.version)
 
@@ -2242,6 +2300,7 @@ def register_keys(xom: XOM, keyfs: KeyFS) -> None:
         "VERSION", "{version}", project_key, dict
     )
     keyfs.register_patterned_key("VERSIONMETADATA", "{version}", project_key, dict)
+    keyfs.register_patterned_key("DOCZIP", "{version}", project_key, dict)
     keyfs.register_patterned_key("VERSIONFILE", "{filename}", version_key, dict)
     keyfs.register_patterned_key(
         "FILE", "+f/{hashdir_a}/{hashdir_b}/{filename}", index_key, dict
