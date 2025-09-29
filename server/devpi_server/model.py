@@ -1424,6 +1424,33 @@ class PrivateStage(BaseStage):
         )
 
     @overload
+    def key_toxresult(
+        self, project: NormalizedName | str, version: str, filename: str
+    ) -> LocatedKey[dict]: ...
+
+    @overload
+    def key_toxresult(
+        self, project: NormalizedName | str, version: str, filename: None = None
+    ) -> SearchKey[dict]: ...
+
+    def key_toxresult(
+        self, project: NormalizedName | str, version: str, filename: str | None = None
+    ) -> LocatedKey[dict] | SearchKey[dict]:
+        key = cast("PatternedKey[dict]", self.keyfs.TOXRESULT)
+        (kw, meth) = (
+            ({}, key.search)
+            if filename is None
+            else (dict(filename=filename), key.locate)
+        )
+        return meth(
+            user=self.username,
+            index=self.index,
+            project=normalize_name(project),
+            version=version,
+            **kw,
+        )
+
+    @overload
     def key_versionfile(
         self, project: NormalizedName | str, version: str, filename: str
     ) -> LocatedKey[dict]: ...
@@ -1543,6 +1570,7 @@ class PrivateStage(BaseStage):
         basename = entry.basename
         keys = {
             self.key_doczip(project, version),
+            self.key_toxresult(project, version, basename),
             self.key_versionfile(project, version, basename),
         }
         result = []
@@ -1564,7 +1592,9 @@ class PrivateStage(BaseStage):
         keys: set[LocatedKey | SearchKey] = set()
         if Rel.DocZip in rels:
             keys.add(self.key_doczip(project, version))
-        if Rel.ReleaseFile in rels or Rel.ToxResult in rels:
+        if Rel.ToxResult in rels:
+            keys.add(self.key_toxresult(project, version))
+        if Rel.ReleaseFile in rels:
             keys.add(self.key_versionfile(project, version))
         return [v for k, v in self.keyfs.tx.iter_ulidkey_values_for(keys)]
 
@@ -1787,6 +1817,13 @@ class PrivateStage(BaseStage):
                     pass
                 else:
                     last_serial = max(last_serial, versionmetadata_serial)
+                for toxresult_key in tx.conn.iter_ulidkeys_at_serial(
+                    (self.key_toxresult(project, version),),
+                    at_serial=at_serial,
+                    fill_cache=False,
+                    with_deleted=True,
+                ):
+                    last_serial = max(last_serial, toxresult_key.last_serial)
                     if last_serial >= at_serial:
                         return last_serial
                 for versionfile_key in tx.conn.iter_ulidkeys_at_serial(
@@ -2018,6 +2055,17 @@ class MutableLinkStore(LinkStore):
         return self.stage.key_doczip(self.project, self.version)
 
     @overload
+    def key_toxresult(self, filename: str) -> LocatedKey[dict]: ...
+
+    @overload
+    def key_toxresult(self, filename: None = None) -> SearchKey[dict]: ...
+
+    def key_toxresult(
+        self, filename: str | None = None
+    ) -> LocatedKey[dict] | SearchKey[dict]:
+        return self.stage.key_toxresult(self.project, self.version, filename)
+
+    @overload
     def key_versionfile(self, filename: str) -> LocatedKey[dict]: ...
 
     @overload
@@ -2066,6 +2114,7 @@ class MutableLinkStore(LinkStore):
         )
         was_deleted = []
         key_doczip = self.key_doczip()
+        key_toxresult = self.key_toxresult()
         key_versionfile = self.key_versionfile()
         if del_links:
             for link in del_links:
@@ -2074,8 +2123,12 @@ class MutableLinkStore(LinkStore):
                 match link.rel:
                     case Rel.DocZip:
                         key_doczip.delete()
-                    case _:
+                    case Rel.ToxResult:
+                        key_toxresult(filename).delete()
+                    case Rel.ReleaseFile:
                         key_versionfile(filename).delete()
+                    case _:
+                        raise RuntimeError(link.rel)
                 was_deleted.append(link.relpath)
                 threadlog.info("deleted %r link %s", link.rel, link.relpath)
         has_versionfiles = next(key_versionfile.iter_ulidkeys(), absent) is not absent
@@ -2120,8 +2173,12 @@ class MutableLinkStore(LinkStore):
         match rel:
             case Rel.DocZip:
                 key = self.key_doczip()
-            case _:
+            case Rel.ToxResult:
+                key = self.key_toxresult(file_entry.basename)
+            case Rel.ReleaseFile:
                 key = self.key_versionfile(file_entry.basename)
+            case _:
+                raise RuntimeError(rel)
         if key.exists():
             raise RuntimeError
         key.set(new_linkdict)
@@ -2301,6 +2358,7 @@ def register_keys(xom: XOM, keyfs: KeyFS) -> None:
     )
     keyfs.register_patterned_key("VERSIONMETADATA", "{version}", project_key, dict)
     keyfs.register_patterned_key("DOCZIP", "{version}", project_key, dict)
+    keyfs.register_patterned_key("TOXRESULT", "{filename}", version_key, dict)
     keyfs.register_patterned_key("VERSIONFILE", "{filename}", version_key, dict)
     keyfs.register_patterned_key(
         "FILE", "+f/{hashdir_a}/{hashdir_b}/{filename}", index_key, dict
