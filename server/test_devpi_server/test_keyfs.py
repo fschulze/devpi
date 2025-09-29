@@ -1013,7 +1013,7 @@ def test_crash_recovery(caplog, keyfs, storage_info):
         tx.io_file.set_content(file_path_info, content)
     with keyfs.read_transaction() as tx:
         path = Path(tx.io_file.os_path(file_path_info))
-        (rel_rename,) = tx.conn.iter_rel_renames(tx.at_serial)
+        (rel_rename,) = tx.conn.iter_crash_actions(tx.at_serial)
         tmpname = Path(rel_rename).name
     tmppath = path.with_name(tmpname)
     assert path.exists()
