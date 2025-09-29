@@ -726,6 +726,27 @@ class BaseStage:
     def __repr__(self):
         return f"<{self.__class__.__name__} {self.name}>"
 
+    @overload
+    def key_version(
+        self, project: NormalizedName | str, version: str
+    ) -> LocatedKey[dict]: ...
+
+    @overload
+    def key_version(
+        self, project: NormalizedName | str, version: None = None
+    ) -> SearchKey[dict]: ...
+
+    def key_version(
+        self, project: NormalizedName | str, version: str | None = None
+    ) -> LocatedKey[dict] | SearchKey[dict]:
+        key = cast("PatternedKey[dict]", self.keyfs.VERSION)
+        (kw, meth) = (
+            ({}, key.search) if version is None else (dict(version=version), key.locate)
+        )
+        return meth(
+            user=self.username, index=self.index, project=normalize_name(project), **kw
+        )
+
     @property
     def model(self):
         return self.xom.model
@@ -1422,6 +1443,9 @@ class PrivateStage(BaseStage):
         project = normalize_name(metadata["name"])
         version = metadata["version"]
         self.key_project(project).set({"name": project})
+        with self.key_version(project, version).update() as versiondata:
+            # only copy what we need to serve simple API pages
+            versiondata["requires_python"] = metadata.get("requires_python")
         with self.key_versionmetadata(project, version).update() as versiondata:
             versiondata.update(metadata)
         threadlog.info("set_metadata %s-%s", project, version)
@@ -1436,7 +1460,7 @@ class PrivateStage(BaseStage):
 
     def del_project(self, project):
         project = normalize_name(project)
-        versions = {x.name for x in self.key_versionmetadata(project).iter_ulidkeys()}
+        versions = {x.name for x in self.key_version(project).iter_ulidkeys()}
         for version in versions:
             self.del_versiondata(project, version, cleanup=False)
         self._regen_simplelinks(project)
@@ -1456,11 +1480,11 @@ class PrivateStage(BaseStage):
         linkstore.remove_links()
         self.key_versionmetadata(project, version).delete()
         self.key_versionfilelist(project, version).delete()
+        self.key_version(project, version).delete()
         if cleanup:
             self._regen_simplelinks(project)
             has_versions = (
-                next(self.key_versionmetadata(project).iter_ulidkeys(), absent)
-                is not absent
+                next(self.key_version(project).iter_ulidkeys(), absent) is not absent
             )
             if not has_versions:
                 self.del_project(project)
@@ -1481,7 +1505,7 @@ class PrivateStage(BaseStage):
         project = normalize_name(project)
         if not self.has_project_perstage(project):
             return set()
-        return {x.name for x in self.key_versionmetadata(project).iter_ulidkeys()}
+        return {x.name for x in self.key_version(project).iter_ulidkeys()}
 
     def _get_elinks(self, project, version):
         filenames = self.key_versionfilelist(project, version).get()
@@ -1493,7 +1517,7 @@ class PrivateStage(BaseStage):
     def get_has_versiondata_perstage(self, project, version):
         return self.key_versionmetadata(project, version).exists()
 
-    def get_last_project_change_serial_perstage(self, project, at_serial=None):
+    def get_last_project_change_serial_perstage(self, project, at_serial=None):  # noqa: PLR0911
         project = normalize_name(project)
         tx = self.keyfs.tx
         if at_serial is None:
@@ -1505,7 +1529,7 @@ class PrivateStage(BaseStage):
             # the whole index never existed or was deleted
             return last_serial
         for version_keydata in tx.conn.iter_keys_at_serial(
-            (self.key_versionmetadata(project),),
+            (self.key_version(project),),
             at_serial=at_serial,
             fill_cache=False,
             with_deleted=True,
@@ -1517,6 +1541,16 @@ class PrivateStage(BaseStage):
             if version_info in (absent, deleted):
                 continue
             version = version_keydata.key.name
+            (
+                versionmetadata_serial,
+                _versionmetadata_info_ulid,
+                _versionmetadata_info,
+            ) = tx.get_last_serial_and_value_at(
+                self.key_versionmetadata(project, version), at_serial
+            )
+            last_serial = max(last_serial, versionmetadata_serial)
+            if last_serial >= at_serial:
+                return last_serial
             (versionfiles_serial, _versionfiles_info_ulid, versionfiles_info) = (
                 tx.get_last_serial_and_value_at(
                     self.key_versionfilelist(project, version), at_serial
@@ -1681,7 +1715,7 @@ class PrivateStage(BaseStage):
                 continue
             project = projectdata["name"]
             for version_keydata in tx.conn.iter_keys_at_serial(
-                (self.key_versionmetadata(project),),
+                (self.key_version(project),),
                 at_serial=at_serial,
                 fill_cache=False,
                 with_deleted=True,
@@ -1690,6 +1724,18 @@ class PrivateStage(BaseStage):
                 if last_serial >= at_serial:
                     return last_serial
                 version = version_keydata.key.name
+                try:
+                    (versionmetadata_serial, _versionmetadata) = (
+                        tx.last_serial_and_value_at(
+                            self.key_versionmetadata(project, version), at_serial
+                        )
+                    )
+                except KeyError:
+                    pass
+                else:
+                    last_serial = max(last_serial, versionmetadata_serial)
+                    if last_serial >= at_serial:
+                        return last_serial
                 try:
                     (versionfiles_serial, versionfilenames) = (
                         tx.last_serial_and_value_at(
@@ -2168,8 +2214,9 @@ def register_keys(xom: XOM, keyfs: KeyFS) -> None:
     project_key = keyfs.register_patterned_key("PROJECT", "{project}", index_key, dict)
     keyfs.register_anonymous_key("PROJSIMPLELINKS", project_key, dict)
     version_key = keyfs.register_patterned_key(
-        "VERSIONMETADATA", "{version}", project_key, dict
+        "VERSION", "{version}", project_key, dict
     )
+    keyfs.register_patterned_key("VERSIONMETADATA", "{version}", project_key, dict)
     keyfs.register_anonymous_key("VERSIONFILELIST", version_key, set)
     keyfs.register_patterned_key("VERSIONFILE", "{filename}", version_key, dict)
     keyfs.register_patterned_key(
