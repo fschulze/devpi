@@ -655,6 +655,7 @@ class TestImportExport:
             (release,) = ls.get_links(rel="releasefile")
             (toxresult,) = ls.get_links(rel="toxresult")
             assert toxresult.for_entrypath == release.relpath
+            assert toxresult.for_relpath == release.index_relpath
             # we expect the name from the imported data
             assert toxresult.basename == "hello-0.9.tar.gz.toxresult0"
 
