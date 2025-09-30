@@ -1003,15 +1003,15 @@ def test_crash_recovery(caplog, keyfs, storage_info):
         keyfs.finalize_init()
 
 
-def test_keyfs_sqlite(file_digest, gen_path, sorted_serverdir):
-    from devpi_server import keyfs_sqlite
+def test_keyfs_sqla_lite_files(file_digest, gen_path, sorted_serverdir):
+    from devpi_server import keyfs_sqla_lite_files
     from devpi_server.filestore_db import DBIOFile
 
     tmp = gen_path()
     io_file_factory = partial(DBIOFile, settings={})
     keyfs = KeyFS(
         tmp,
-        keyfs_sqlite.devpiserver_describe_storage_backend({}),
+        keyfs_sqla_lite_files.devpiserver_describe_storage_backend({}),
         io_file_factory=io_file_factory,
     )
     content = b"bar"
@@ -1019,22 +1019,22 @@ def test_keyfs_sqlite(file_digest, gen_path, sorted_serverdir):
     with keyfs.write_transaction() as tx:
         assert tx.io_file.os_path(file_path_info) is None
         tx.io_file.set_content(file_path_info, content)
-        tx.conn._sqlconn.commit()
+        tx.conn._sqlaconn.commit()
     with keyfs.read_transaction() as tx:
         assert tx.io_file.os_path(file_path_info) is None
         assert tx.io_file.get_content(file_path_info) == content
-    assert sorted_serverdir(tmp) == [".sqlite_db"]
+    assert sorted_serverdir(tmp) == [".sqlite_alchemy_files"]
 
 
-def test_keyfs_sqlite_fs(file_digest, gen_path, sorted_serverdir):
-    from devpi_server import keyfs_sqlite_fs
+def test_keyfs_sqla_lite(file_digest, gen_path, sorted_serverdir):
+    from devpi_server import keyfs_sqla_lite
     from devpi_server.filestore_fs import fsiofile_factory
 
     tmp = gen_path()
     io_file_factory = partial(fsiofile_factory, settings={})
     keyfs = KeyFS(
         tmp,
-        keyfs_sqlite_fs.devpiserver_describe_storage_backend({}),
+        keyfs_sqla_lite.devpiserver_describe_storage_backend({}),
         io_file_factory=io_file_factory,
     )
     content = b"bar"
@@ -1042,24 +1042,24 @@ def test_keyfs_sqlite_fs(file_digest, gen_path, sorted_serverdir):
     with keyfs.write_transaction() as tx:
         assert tx.io_file.os_path(file_path_info) == str(tmp / "+files" / "foo")
         tx.io_file.set_content(file_path_info, content)
-        tx.conn._sqlconn.commit()
+        tx.conn._sqlaconn.commit()
     with keyfs.read_transaction() as tx:
         assert tx.io_file.get_content(file_path_info) == content
         with open(tx.io_file.os_path(file_path_info), "rb") as f:
             assert f.read() == content
-    assert sorted_serverdir(tmp) == ["+files", ".sqlite"]
+    assert sorted_serverdir(tmp) == ["+files", ".sqlite_alchemy"]
     assert sorted_serverdir(tmp / "+files") == ["foo"]
 
 
-def test_keyfs_sqlite_hash_hl(file_digest, gen_path, sorted_serverdir):
-    from devpi_server import keyfs_sqlite_fs
+def test_keyfs_sqla_lite_hash_hl(file_digest, gen_path, sorted_serverdir):
+    from devpi_server import keyfs_sqla_lite
     from devpi_server.filestore_hash_hl import fsiofile_factory
 
     tmp = gen_path()
     io_file_factory = partial(fsiofile_factory, settings={})
     keyfs = KeyFS(
         tmp,
-        keyfs_sqlite_fs.devpiserver_describe_storage_backend({}),
+        keyfs_sqla_lite.devpiserver_describe_storage_backend({}),
         io_file_factory=io_file_factory,
     )
     content = b"bar"
@@ -1068,12 +1068,12 @@ def test_keyfs_sqlite_hash_hl(file_digest, gen_path, sorted_serverdir):
     with keyfs.write_transaction() as tx:
         assert tx.io_file.os_path(file_path_info) == str(tmp / "+files" / "foo")
         tx.io_file.set_content(file_path_info, content)
-        tx.conn._sqlconn.commit()
+        tx.conn._sqlaconn.commit()
     with keyfs.read_transaction() as tx:
         assert tx.io_file.get_content(file_path_info) == content
         with open(tx.io_file.os_path(file_path_info), "rb") as f:
             assert f.read() == content
-    assert sorted_serverdir(tmp) == ["+files", "+h", ".sqlite"]
+    assert sorted_serverdir(tmp) == ["+files", "+h", ".sqlite_alchemy"]
     assert sorted_serverdir(tmp / "+files") == ["foo"]
     assert sorted_serverdir(tmp / "+h") == [content_hash[:3]]
     assert sorted_serverdir(tmp / "+h" / content_hash[:3]) == [content_hash[3:]]
