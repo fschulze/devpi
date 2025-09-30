@@ -644,13 +644,16 @@ class Importer:
                 filedesc["projectname"], filedesc["version"])
             # we can not search for the full relative path because
             # it might use a different checksum
-            basename = posixpath.basename(filedesc["for_entrypath"])
+            for_basename = posixpath.basename(filedesc["for_entrypath"])
             # toxresults didn't always have entrymapping in export dump
             last_modified = mapping.get("last_modified")
-            link, = linkstore.get_links(basename=basename)
+            (link,) = linkstore.get_links(basename=for_basename)
+            filename = posixpath.basename(filedesc["relpath"])
+            print(for_basename, link, filename, filedesc)  # noqa: T201 - debugging
             link = stage.store_toxresult(
-                link, f, filename=posixpath.basename(filedesc["relpath"]),
-                hashes=hashes, last_modified=last_modified)
+                link, f, filename=filename, hashes=hashes, last_modified=last_modified
+            )
+            print(filename, link)  # noqa: T201 - debugging
             entry = link.entry
         else:
             msg = f"unknown file type: {type}"

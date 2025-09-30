@@ -641,6 +641,7 @@ class TestImportExport:
             linkstore = stage.get_linkstore_perstage(
                 link.project, link.version)
             (tox_link,) = linkstore.get_links(rel="toxresult", for_entrypath=link)
+            assert '\\' not in tox_link.entrypath, tox_link
             assert tox_link.best_available_hash_value == toxresult_hash
             assert tox_link.hashes == toxresult_hashes
             assert tox_link.entry.last_modified == last_modified
@@ -648,6 +649,7 @@ class TestImportExport:
             assert history_log['what'] == 'upload'
             assert history_log['who'] == 'user1'
             assert history_log['dst'] == 'user1/dev'
+            assert False
 
     def test_import_with_old_toxresult_naming_scheme(self, impexp):
         mapp = impexp.import_testdata('toxresult_naming_scheme')
