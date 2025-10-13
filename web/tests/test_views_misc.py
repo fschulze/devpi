@@ -104,7 +104,8 @@ def test_root_pypi_upstream_error(url, mapp, testapp, pypistage):
 def test_error_html_only(mapp, testapp, monkeypatch):
     def error(self):
         from pyramid.httpexceptions import HTTPBadGateway
-        raise HTTPBadGateway()
+
+        raise HTTPBadGateway
     monkeypatch.setattr("devpi_server.views.PyPIView.user_list", error)
     r = testapp.get_json("/")
     assert r.status_code == 502

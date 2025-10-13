@@ -137,7 +137,7 @@ class ThreadPool:
 
     def exit_if_shutdown(self):
         if self._shutdown.is_set():
-            raise self.Shutdown()
+            raise self.Shutdown
 
     def shutdown(self):
         self._shutdown.set()
