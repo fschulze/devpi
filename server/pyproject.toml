@@ -125,7 +125,6 @@ exclude = [
     "devpi_server/replica.py",
     "devpi_server/view_auth.py",
     "devpi_server/views.py",
-    "test_devpi_server/conftest.py",
     "test_devpi_server/functional.py",
     "test_devpi_server/plugin.py",
     "test_devpi_server/simpypi.py",

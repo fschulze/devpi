@@ -13,7 +13,6 @@ from typing import TypeVar
 from typing import overload
 import contextlib
 import re
-import warnings
 
 
 if TYPE_CHECKING:
@@ -25,7 +24,6 @@ if TYPE_CHECKING:
     from .readonly import TupleViewReadonly
     from collections.abc import Iterator
     from typing import Any
-    from typing import Literal
 
     KeyFSTypesRO = (
         bool
@@ -162,110 +160,37 @@ class TypedKey(Generic[KeyType]):
         return f"<TypedKey {self.name} {self.type.__name__} {self.relpath}>"
 
     @overload
-    def get(self: TypedKey[bool], *, readonly: None = None) -> bool: ...
+    def get(self: TypedKey[bool]) -> bool: ...
 
     @overload
-    def get(self: TypedKey[bytes], *, readonly: None = None) -> bytes: ...
+    def get(self: TypedKey[bytes]) -> bytes: ...
 
     @overload
-    def get(self: TypedKey[dict], *, readonly: None = None) -> DictViewReadonly: ...
+    def get(self: TypedKey[dict]) -> DictViewReadonly: ...
 
     @overload
-    def get(self: TypedKey[float], *, readonly: None = None) -> float: ...
+    def get(self: TypedKey[float]) -> float: ...
 
     @overload
-    def get(self: TypedKey[frozenset], *, readonly: None = None) -> frozenset: ...
+    def get(self: TypedKey[frozenset]) -> frozenset: ...
 
     @overload
-    def get(self: TypedKey[int], *, readonly: None = None) -> int: ...
+    def get(self: TypedKey[int]) -> int: ...
 
     @overload
-    def get(self: TypedKey[list], *, readonly: None = None) -> ListViewReadonly: ...
+    def get(self: TypedKey[list]) -> ListViewReadonly: ...
 
     @overload
-    def get(self: TypedKey[set], *, readonly: None = None) -> SetViewReadonly: ...
+    def get(self: TypedKey[set[H]]) -> SetViewReadonly[H]: ...
 
     @overload
-    def get(self: TypedKey[str], *, readonly: None = None) -> str: ...
+    def get(self: TypedKey[str]) -> str: ...
 
     @overload
-    def get(self: TypedKey[tuple], *, readonly: None = None) -> TupleViewReadonly: ...
+    def get(self: TypedKey[tuple]) -> TupleViewReadonly: ...
 
-    @overload
-    def get(self: TypedKey[bool], *, readonly: Literal[True]) -> bool: ...
-
-    @overload
-    def get(self: TypedKey[bytes], *, readonly: Literal[True]) -> bytes: ...
-
-    @overload
-    def get(self: TypedKey[dict], *, readonly: Literal[True]) -> DictViewReadonly: ...
-
-    @overload
-    def get(self: TypedKey[float], *, readonly: Literal[True]) -> float: ...
-
-    @overload
-    def get(self: TypedKey[frozenset], *, readonly: Literal[True]) -> frozenset: ...
-
-    @overload
-    def get(self: TypedKey[int], *, readonly: Literal[True]) -> int: ...
-
-    @overload
-    def get(self: TypedKey[list], *, readonly: Literal[True]) -> ListViewReadonly: ...
-
-    @overload
-    def get(
-        self: TypedKey[set[H]], *, readonly: Literal[True]
-    ) -> SetViewReadonly[H]: ...
-
-    @overload
-    def get(self: TypedKey[str], *, readonly: Literal[True]) -> str: ...
-
-    @overload
-    def get(self: TypedKey[tuple], *, readonly: Literal[True]) -> TupleViewReadonly: ...
-
-    @overload
-    def get(self: TypedKey[bool], *, readonly: Literal[False]) -> bool: ...
-
-    @overload
-    def get(self: TypedKey[bytes], *, readonly: Literal[False]) -> bytes: ...
-
-    @overload
-    def get(self: TypedKey[dict], *, readonly: Literal[False]) -> dict: ...
-
-    @overload
-    def get(self: TypedKey[float], *, readonly: Literal[False]) -> float: ...
-
-    @overload
-    def get(self: TypedKey[frozenset], *, readonly: Literal[False]) -> frozenset: ...
-
-    @overload
-    def get(self: TypedKey[int], *, readonly: Literal[False]) -> int: ...
-
-    @overload
-    def get(self: TypedKey[list], *, readonly: Literal[False]) -> list: ...
-
-    @overload
-    def get(self: TypedKey[set], *, readonly: Literal[False]) -> set: ...
-
-    @overload
-    def get(self: TypedKey[str], *, readonly: Literal[False]) -> str: ...
-
-    @overload
-    def get(self: TypedKey[tuple], *, readonly: Literal[False]) -> tuple: ...
-
-    def get(self, *, readonly: bool | None = None) -> KeyFSTypesRO | KeyFSTypes:
-        if readonly is None:
-            readonly = True
-        else:
-            warnings.warn(
-                "The 'readonly' argument is deprecated. "
-                "You should either drop it or use the 'get_mutable' method.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-        if readonly:
-            return self.keyfs.tx.get(self)
-        return self.keyfs.tx.get_mutable(self)
+    def get(self) -> KeyFSTypesRO:
+        return self.keyfs.tx.get(self)
 
     def get_mutable(self) -> KeyType:
         return self.keyfs.tx.get_mutable(self)
