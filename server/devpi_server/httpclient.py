@@ -12,7 +12,6 @@ import inspect
 import os
 import ssl
 import sys
-import warnings
 
 
 AGENT_PYTHON_VERSION = f"(py{sys.version.split()[0]}; {sys.platform})"
@@ -54,15 +53,6 @@ class FatalResponse:
 
     def close(self) -> None:
         pass
-
-    @property
-    def reason(self) -> str:
-        warnings.warn(
-            "The reason attribute is deprecated, use reason_phrase instead",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.reason_phrase
 
 
 if TYPE_CHECKING:
