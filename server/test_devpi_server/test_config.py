@@ -522,6 +522,15 @@ class TestConfigFile:
         assert xom.config.storage_info["name"] == "foo"
         assert plugin.settings == {"bar": "ham"}
 
+    def test_unknown_option(self, make_yaml_config):
+        yaml_path = make_yaml_config(
+            textwrap.dedent("""\
+            devpi-server:
+              foo: bar""")
+        )
+        with pytest.raises(Fatal, match="Unknown devpi-server option 'foo' in"):
+            make_config(["devpi-server", "-c", yaml_path])
+
 
 @pytest.mark.parametrize(
     ("nodeinfo", "expected"),

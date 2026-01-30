@@ -1,0 +1,1 @@
+Exit with error message when an unknown option is found in config file.
