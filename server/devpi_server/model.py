@@ -171,10 +171,10 @@ class RootModel:
     def __init__(self, xom: XOM):
         self.xom = xom
         self.keyfs = xom.keyfs
+        self.key_user = cast("PatternedKey[dict]", self.keyfs.USER)
 
     def create_user(self, username, password, **kwargs):
-        userlist = cast("LocatedKey[set]", self.keyfs.USERLIST).get_mutable()
-        if username in userlist:
+        if self.key_user.locate(username).exists():
             raise InvalidUser("username '%s' already exists" % username)
         if not is_valid_name(username):
             raise InvalidUser(
@@ -183,8 +183,6 @@ class RootModel:
         user = User(self, username)
         kwargs.update(created=strftime("%Y-%m-%dT%H:%M:%SZ", gmtime()))
         user._modify(password=password, **kwargs)
-        userlist.add(username)
-        cast("LocatedKey[set]", self.keyfs.USERLIST).set(userlist)
         if "email" in kwargs:
             threadlog.info("created user %r with email %r" % (username, kwargs["email"]))
         else:
@@ -194,7 +192,7 @@ class RootModel:
         return user
 
     def create_stage(self, user, index, type="stage", **kwargs):
-        if index in user.key_indexes.get():
+        if user.key_index(index).exists():
             raise InvalidIndex("indexname '%s' already exists" % index)
         if not is_valid_name(index):
             raise InvalidIndex(
@@ -210,44 +208,34 @@ class RootModel:
         for key, value in stage.customizer.get_default_config_items():
             kwargs.setdefault(key, value)
         stage._modify(**kwargs)
-        with user.key_indexes.update() as indexes:
-            indexes.add(index)
         threadlog.debug("created index %s: %s", stage.name, stage.ixconfig)
         return stage
 
     def delete_user(self, username):
-        with cast("LocatedKey[set]", self.keyfs.USERLIST).update() as userlist:
-            userlist.remove(username)
+        self.key_user.locate(username).delete()
 
     def delete_stage(self, username, index):
-        user = self.get_user(username)
-        if user is None:
-            threadlog.info("user %s does not exist", username)
-            return
         stage = self.getstage(username, index)
         if stage is None:
             threadlog.info("index %s/%s does not exist", username, index)
             return
         stage.key_index.delete()
-        with user.key_indexes.update() as indexes:
-            if index not in indexes:
-                threadlog.info("index %s/%s does not exist", username, index)
-                return
-            indexes.remove(index)
-            self.xom.del_singletons(f"{username}/{index}")
+        self.xom.del_singletons(f"{username}/{index}")
 
     def get_user(self, name: str) -> User | None:
         user = User(self, name)
         return user if user.key.exists() else None
 
     def get_userlist(self):
+        # using iter_ulidkey_values pre-fetches values of users
+        # which are then used in User
         return [
-            User(self, name)
-            for name in cast("LocatedKey[set]", self.keyfs.USERLIST).get()
+            User(self, key.name)
+            for key, v in self.key_user.search().iter_ulidkey_values()
         ]
 
     def get_usernames(self):
-        return set(user.name for user in self.get_userlist())
+        return {key.params["user"] for key in self.key_user.search().iter_ulidkeys()}
 
     def _get_user_and_index(self, user, index=None):
         assert isinstance(user, str)
@@ -378,15 +366,8 @@ class User:
         self.keyfs = parent.keyfs
         self.xom = parent.xom
         self.name = name
-        self.key = cast("PatternedKey[dict]", self.keyfs.USER).locate(user=self.name)
-        self.key_indexes = cast("PatternedKey[set]", self.keyfs.INDEXLIST).locate(
-            user=self.name
-        )
-
-    def key_index(self, index: str) -> LocatedKey[dict]:
-        return cast("PatternedKey[dict]", self.keyfs.INDEX).locate(
-            user=self.name, index=index
-        )
+        self.key = cast("PatternedKey[dict]", self.keyfs.USER).locate(name)
+        self.key_index = cast("PatternedKey[dict]", self.keyfs.INDEX).search(user=name)
 
     def get_cleaned_config(self, **kwargs):
         result = {}
@@ -453,8 +434,8 @@ class User:
 
     def delete(self):
         # delete all projects on the index
-        for name in self.key_indexes.get():
-            stage = self.getstage(name)
+        for key in list(self.key_index.iter_ulidkeys()):
+            stage = self.getstage(key.params["index"])
             assert stage is not None
             stage.delete()
         # delete the user information itself
@@ -489,10 +470,10 @@ class User:
         return d
 
     def get_indexes(self):
-        indexes = {}
-        for index in self.key_indexes.get():
-            indexes[index] = self.key_index(index).get_mutable()
-        return indexes
+        return {
+            key.params["index"]: get_mutable_deepcopy(value)
+            for key, value in self.key_index.iter_ulidkey_values()
+        }
 
     def create_stage(self, index, type="stage", **kwargs):
         return self.parent.create_stage(self, index, type=type, **kwargs)
@@ -2233,9 +2214,7 @@ def normalize_bases(model, bases):
 def register_keys(xom: XOM, keyfs: KeyFS) -> None:
     # users and index configuration
     user_key = keyfs.register_patterned_key("USER", "{user}", None, dict)
-    keyfs.register_anonymous_key("USERLIST", None, set)
     index_key = keyfs.register_patterned_key("INDEX", "{index}", user_key, dict)
-    keyfs.register_anonymous_key("INDEXLIST", user_key, set)
 
     # type mirror related data
     keyfs.register_patterned_key(
