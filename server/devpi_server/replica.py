@@ -438,7 +438,7 @@ class ReplicaThread:
     _primary_serial: int | None
     _primary_serial_timestamp: float | None
     primary_contacted_at: float | None
-    replica_in_sync_at: float | None
+    replica_metadata_in_sync_at: float | None
     started_at: float | None
     thread: mythread.MyThread
     update_from_primary_at: float | None
@@ -469,9 +469,13 @@ class ReplicaThread:
         # updated on valid reply or 202 from primary
         self.update_from_primary_at = None
         # set whenever the primary serial and current replication serial match
-        self.replica_in_sync_at = None
+        self.replica_metadata_in_sync_at = None
         self.http = ReplicaHTTPClient(xom)
         self.initial_fetch = True
+
+    @property
+    def replica_files_in_sync_at(self):
+        return self.shared_data.files_in_sync_at
 
     def get_master_serial(self):
         warnings.warn(
@@ -539,9 +543,9 @@ class ReplicaThread:
         # information about the connection to primary
         self.update_from_primary_at = now
         if update_sync and self.xom.keyfs.get_current_serial() == serial:
-            with self.shared_data._replica_in_sync_cv:
-                self.replica_in_sync_at = now
-                self.shared_data._replica_in_sync_cv.notify_all()
+            with self.shared_data._replica_metadata_in_sync_cv:
+                self.replica_metadata_in_sync_at = now
+                self.shared_data._replica_metadata_in_sync_cv.notify_all()
         if self._primary_serial is not None and serial <= self._primary_serial:
             if serial < self._primary_serial and not ignore_lower:
                 self.log.error(
@@ -742,6 +746,7 @@ class FileReplicationSharedData:
     ERROR_QUEUE_DELAY_MULTIPLIER = 1.5
     ERROR_QUEUE_REPORT_DELAY = 2 * 60
     ERROR_QUEUE_MAX_DELAY = 60 * 60
+    files_in_sync_at: float | None
     last_added: float | None
     last_errored: float | None
     last_processed: float | None
@@ -762,7 +767,9 @@ class FileReplicationSharedData:
         self.deleted = LRUCache(100)
         self.index_types = LRUCache(1000)
         self.errors = ReplicationErrors()
-        self._replica_in_sync_cv = threading.Condition()
+        # set whenever the download and error queue is empty
+        self.files_in_sync_at = None
+        self._replica_metadata_in_sync_cv = threading.Condition()
         self.last_added = None
         self.last_errored = None
         self.last_processed = None
@@ -806,7 +813,7 @@ class FileReplicationSharedData:
                 "Skipping %s because %r in %s.", key, index_type, skip_indexes
             )
             return
-        if self.xom.replica_thread.replica_in_sync_at is None:
+        if self.xom.replica_thread.replica_metadata_in_sync_at is None:
             # Don't queue files from mirrors until we have been in sync first.
             # The InitialQueueThread will queue in one go on initial sync
             if index_type == IndexType("mirror"):
@@ -884,6 +891,8 @@ class FileReplicationSharedData:
             # were already/still items in the queue
             info = self.error_queue.get(timeout=self.QUEUE_TIMEOUT)
         except self.Empty:
+            if self.queue.empty():
+                self.files_in_sync_at = time.time()
             return
         (ts, delay, index_type, serial, key, keyname, value, back_serial) = info
         try:
@@ -1258,8 +1267,8 @@ class InitialQueueThread:
         processed = 0
         queued = 0
         # wait until we are in sync for the first time
-        with self.shared_data._replica_in_sync_cv:
-            self.shared_data._replica_in_sync_cv.wait()
+        with self.shared_data._replica_metadata_in_sync_cv:
+            self.shared_data._replica_metadata_in_sync_cv.wait()
         skip_indexes = self.shared_data.skip_indexes
         if "all" in skip_indexes:
             return
