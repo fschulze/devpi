@@ -11,7 +11,7 @@ def mapp(makemapp, monkeypatch, nginx_host_port, secretfile):
     app = makemapp(options=[
         '--primary-url', 'http://%s:%s' % nginx_host_port,
         '--secretfile', secretfile])
-    monkeypatch.setattr(app.xom.replica_thread, "REPLICA_REQUEST_TIMEOUT", 5)
+    monkeypatch.setattr(app.xom.replica_thread.connection, "REPLICA_REQUEST_TIMEOUT", 5)
     app.xom.thread_pool.start_one(app.xom.replica_thread)
     try:
         yield app
