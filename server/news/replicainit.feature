@@ -1,0 +1,1 @@
+Add ``replica-init-queue-finished-at`` to status view.
