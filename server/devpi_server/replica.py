@@ -12,7 +12,6 @@ from .fileutil import load
 from .fileutil import loads
 from .httpclient import FatalResponse
 from .keyfs_types import KeyData
-from .keyfs_types import ULID
 from .log import thread_push_log
 from .log import threadlog
 from .main import Fatal
@@ -54,9 +53,10 @@ if TYPE_CHECKING:
     from .httpclient import HTTPClient
     from .keyfs import KeyChangeEvent
     from .keyfs_types import KeyFSTypesRO
-    from .keyfs_types import LocatedKey
     from .keyfs_types import RelPath
+    from .keyfs_types import ULIDKey
     from .main import XOM
+    from collections.abc import Sequence
     from contextlib import ExitStack
 
 
@@ -664,7 +664,7 @@ class ReplicaThread:
                         serial = load(stream)
                         (changes, rel_renames) = load(stream)
                         self.xom.keyfs.import_changes(
-                            serial, self.iter_changes(serial, changes)
+                            serial, self.get_changes(serial, changes)
                         )
                         self.update_primary_serial(serial, update_sync=False, ignore_lower=True)
                 except StopIteration:
@@ -674,25 +674,29 @@ class ReplicaThread:
         else:
             all_changes = loads(response.content)
             for serial, changes in all_changes:
-                self.xom.keyfs.import_changes(
-                    serial, self.iter_changes(serial, changes)
-                )
+                self.xom.keyfs.import_changes(serial, self.get_changes(serial, changes))
                 self.update_primary_serial(serial, update_sync=False, ignore_lower=True)
 
     def fetch_multi(self, serial):
         url = self.primary_url.joinpath("+changelog", "%s-" % serial).url
         return self.fetch(self.handler_multi, url)
 
-    def iter_changes(self, serial, changes):
+    def get_changes(self, serial: int, changes: list[tuple]) -> Sequence[KeyData]:
+        result = []
+        get_key_instance = self.xom.keyfs.get_key_instance
         for keyname, relpath, ulid, back_serial, val in changes:
-            yield KeyData(
-                relpath=relpath,
-                keyname=keyname,
-                ulid=ULID(ulid),
-                serial=serial,
-                back_serial=back_serial,
-                value=deleted if val is None else val,
+            key = get_key_instance(keyname, relpath)
+            assert key is not None
+            ulidkey = key.make_ulid_key(ulid)
+            result.append(
+                KeyData(
+                    key=ulidkey,
+                    serial=serial,
+                    back_serial=back_serial,
+                    value=deleted if val is None else val,
+                )
             )
+        return result
 
     def tick(self):
         self.thread.exit_if_shutdown()
@@ -869,11 +873,11 @@ class FileReplicationSharedData:
             (ts, delay, index_type, serial, key, keyname, value, back_serial))
         self.last_errored = time.time()
 
-    def get_index_name_for(self, key: LocatedKey) -> str:
+    def get_index_name_for(self, key: ULIDKey) -> str:
         return f"{key.params['user']}/{key.params['index']}"
 
     def get_index_type_for(
-        self, key: LocatedKey, default: IndexType | Absent = absent
+        self, key: ULIDKey, default: IndexType | Absent = absent
     ) -> IndexType:
         result = self.index_types.get(self.get_index_name_for(key), absent)
         if isinstance(result, Absent):
@@ -1081,7 +1085,7 @@ class FileReplicationThread:
         self.xom = xom
         self.shared_data = shared_data
         self.http = ReplicaHTTPClient(xom)
-        self.file_search_path = None
+        self.file_search_path: str | None = None
         if self.xom.config.replica_file_search_path is not None:
             search_path = os.path.join(
                 self.xom.config.replica_file_search_path, '+files')
@@ -1153,7 +1157,7 @@ class FileReplicationThread:
                     entry.file_delete(is_last_of_hash=is_last_of_hash)
             self.shared_data.errors.remove(entry)
             return
-        if entry.last_modified is None:
+        if entry.deleted_or_never_fetched:
             # there is no remote file
             self.shared_data.errors.remove(entry)
             return
@@ -1369,8 +1373,7 @@ class InitialQueueThread:
                 self.shared_data.initial_processed = (
                     self.shared_data.initial_processed + 1
                 )
-                key = keyfs.get_key_instance(item.keyname, item.relpath)
-                assert key is not None
+                key = item.key
                 index_name = self.shared_data.get_index_name_for(key)
                 if index_name in skip_indexes:
                     threadlog.debug(
@@ -1388,9 +1391,16 @@ class InitialQueueThread:
                     continue
                 # note the negated serial for the PriorityQueue
                 # the index_type boolean will prioritize non mirrors
-                self.shared_data.queue.put((
-                    index_type, -item.serial, item.relpath,
-                    item.keyname, item.value, item.back_serial))
+                self.shared_data.queue.put(
+                    (
+                        index_type,
+                        -item.serial,
+                        item.key.relpath,
+                        item.key.key_name,
+                        item.value,
+                        item.back_serial,
+                    )
+                )
                 queued = queued + 1
         self.shared_data.init_queue_finished_at = time.time()
         threadlog.info(
@@ -1408,12 +1418,12 @@ class SimpleLinksChanged:
         self.xom = xom
 
     def handler(self, ev: KeyChangeEvent) -> None:
-        threadlog.debug("SimpleLinksChanged %s", ev.key)
+        threadlog.debug("SimpleLinksChanged %s", ev.data.key)
         cache = ev.data.value
         # get the normalized project (PYPILINKS uses it)
-        username = ev.key.params["user"]
-        index = ev.key.params["index"]
-        project = ev.key.params["project"]
+        username = ev.data.key.params["user"]
+        index = ev.data.key.params["index"]
+        project = ev.data.key.params["project"]
         if not project:
             threadlog.error("project %r missing", project)
             return
