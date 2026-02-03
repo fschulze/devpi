@@ -134,6 +134,7 @@ install`` of a pypi package using the index from our already running server::
     --> .$ /tmp/docenv/bin/pip --version
     --> .$ /tmp/docenv/bin/pip install -U pytest==6.2.4 attrs==23.1.0 iniconfig==2.0.0 pluggy==0.13.1 py==1.11.0 toml==0.10.2  [PIP_INDEX_URL=URL('http://****:****@localhost:3141/testuser/dev/+simple/'),PIP_PRE='1',PIP_USE_WHEEL='1']
     Looking in indexes: http://testuser:****@localhost:3141/testuser/dev/+simple/
+
     Collecting pytest==6.2.4
       Downloading http://localhost:3141/root/pypi/%2Bf/91e/f2131a9bd6be8/pytest-6.2.4-py3-none-any.whl (280 kB)
     Collecting attrs==23.1.0
@@ -146,7 +147,7 @@ install`` of a pypi package using the index from our already running server::
       Downloading http://localhost:3141/root/pypi/%2Bf/607/c53218732647d/py-1.11.0-py2.py3-none-any.whl (98 kB)
     Collecting toml==0.10.2
       Downloading http://localhost:3141/root/pypi/%2Bf/806/143ae5bfb6a3c/toml-0.10.2-py2.py3-none-any.whl (16 kB)
-    Requirement already satisfied: packaging in /tmp/docenv/lib/python3.9/site-packages (from pytest==6.2.4) (25.0)
+    Requirement already satisfied: packaging in /tmp/docenv/lib/python3.9/site-packages (from pytest==6.2.4) (26.0)
     Installing collected packages: toml, py, pluggy, iniconfig, attrs, pytest
     Successfully installed attrs-23.1.0 iniconfig-2.0.0 pluggy-0.13.1 py-1.11.0 pytest-6.2.4 toml-0.10.2
 

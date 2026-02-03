@@ -87,6 +87,7 @@ Let's install the ``pg8000`` package as a test from our cache::
 
     $ pip install -i http://localhost:3141/root/pypi/+simple/ pg8000==1.30.2 scramp==1.4.4 python-dateutil==2.8.2 six==1.16.0 asn1crypto==1.5.1
     Looking in indexes: http://localhost:3141/root/pypi/+simple/
+
     Collecting pg8000==1.30.2
       Downloading http://localhost:3141/root/pypi/%2Bf/2fc/6bf2d81d70255/pg8000-1.30.2-py3-none-any.whl (54 kB)
     Collecting scramp==1.4.4

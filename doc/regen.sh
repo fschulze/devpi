@@ -34,6 +34,7 @@ regendoc \
     --normalize "@/private/tmp@/tmp@" \
     --normalize "@/tmp/devpi-test-[a-z0-9_]+\b@/tmp/devpi-test0@" \
     --normalize "@/tmp/devpi(?!-test)-[a-z0-9_]+\b@/tmp/devpi0@" \
+    --normalize "@pytest-\d+\.\d+\.\d+@pytest-8.3.5@" \
     --normalize "@python3\.\d+@python3.9@" \
     --normalize "@Python 3\.\d+\.\d+@Python 3.9.22@" \
     --normalize "@platform .+ --@platform linux --@" \
