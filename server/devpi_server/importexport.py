@@ -641,21 +641,19 @@ class Importer:
                     url, stage.username, stage.index, project)
                 entry.file_set_content(
                     f, hashes=hashes, last_modified=mapping["last_modified"])
-                mirrordata = stage._get_mirrordata(project)
-                (_, links_with_data, cache_info) = mirrordata._load_cache_links()
-                if links_with_data is None:
-                    links_with_data = []
                 entrypath = entry.relpath
-                if hash_spec := entry.best_available_hash_spec:
-                    entrypath = f"{entrypath}#{hash_spec}"
-                links = [(url.basename, entrypath)]
-                requires_python = [versions[version].get('requires_python')]
-                yanked = [versions[version].get('yanked')]
-                for key, href, require_python, is_yanked in links_with_data:
-                    links.append((key, href))
-                    requires_python.append(require_python)
-                    yanked.append(is_yanked)
-                mirrordata._save_cache_links(links, requires_python, yanked, cache_info)
+                mirrordata = stage._get_mirrordata(project)
+                with mirrordata.link_setter(url.basename) as linkdata:
+                    linkdata["entrypath"] = entrypath
+                    if entry.hashes is not None:
+                        linkdata["hashes"] = entry.hashes
+                    if (
+                        requires_python := versions[version].get("requires_python")
+                    ) is not None:
+                        linkdata["requires_python"] = requires_python
+                    if (yanked := versions[version].get("yanked")) is not None:
+                        linkdata["yanked"] = yanked
+                threadlog.info("added mirror file %s", entry.relpath)
         elif filedesc["type"] == Rel.DocZip:
             stage = cast("PrivateStage", stage)
             version = filedesc["version"]

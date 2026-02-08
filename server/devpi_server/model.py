@@ -728,6 +728,34 @@ class BaseStage:
         return f"<{self.__class__.__name__} {self.name}>"
 
     @overload
+    def key_simpledata(
+        self, project: NormalizedName | str, version_filename: tuple[str, str]
+    ) -> LocatedKey[dict]: ...
+
+    @overload
+    def key_simpledata(
+        self, project: NormalizedName | str, version_filename: None = None
+    ) -> SearchKey[dict]: ...
+
+    def key_simpledata(
+        self,
+        project: NormalizedName | str,
+        version_filename: tuple[str, str] | None = None,
+    ) -> LocatedKey[dict] | SearchKey[dict]:
+        key = cast("PatternedKey[dict]", self.keyfs.SIMPLEDATA)
+        (version, filename) = (
+            (None, None) if version_filename is None else version_filename
+        )
+        (kw, meth) = (
+            ({}, key.search)
+            if version is None or filename is None
+            else (dict(version=version, filename=filename), key.locate)
+        )
+        return meth(
+            user=self.username, index=self.index, project=normalize_name(project), **kw
+        )
+
+    @overload
     def key_version(
         self, project: NormalizedName | str, version: str
     ) -> LocatedKey[dict]: ...
@@ -853,11 +881,6 @@ class BaseStage:
 
     def delete(self):
         self.model.delete_stage(self.username, self.index)
-
-    def key_projsimplelinks(self, project: str) -> LocatedKey[dict]:
-        return cast("PatternedKey[dict]", self.keyfs.PROJSIMPLELINKS).locate(
-            user=self.username, index=self.index, project=normalize_name(project)
-        )
 
     def get_releaselinks(self, project):
         # compatibility access method used by devpi-web and tests
@@ -1522,9 +1545,7 @@ class PrivateStage(BaseStage):
         versions = {x.name for x in self.key_version(project).iter_ulidkeys()}
         for version in versions:
             self.del_versiondata(project, version, cleanup=False)
-        self._regen_simplelinks(project)
         threadlog.info("deleting project %s", project)
-        self.key_projsimplelinks(project).delete()
         self.key_project(project).delete()
 
     def del_versiondata(
@@ -1542,7 +1563,6 @@ class PrivateStage(BaseStage):
         self.key_versionmetadata(project, version).delete()
         self.key_version(project, version).delete()
         if cleanup:
-            self._regen_simplelinks(project)
             has_versions = (
                 next(self.key_version(project).iter_ulidkeys(), absent) is not absent
             )
@@ -1556,10 +1576,8 @@ class PrivateStage(BaseStage):
         linkstore = self.get_mutable_linkstore_perstage(project, version)
         linkstore.remove_links(basename=entry.basename)
         entry.delete()
-        if cleanup:
-            if not linkstore.get_links():
-                self.del_versiondata(project, version)
-            self._regen_simplelinks(project)
+        if cleanup and not linkstore.get_links():
+            self.del_versiondata(project, version)
 
     def list_versions_perstage(self, project):
         project = normalize_name(project)
@@ -1670,27 +1688,17 @@ class PrivateStage(BaseStage):
         return ensure_deeply_readonly(verdata)
 
     def get_simplelinks_perstage(self, project: NormalizedName | str) -> SimpleLinks:
-        data = self.key_projsimplelinks(project).get()
-        links = cast("LinksList", data.get("links", []))
-        requires_python = cast("RequiresPythonList", data.get("requires_python", []))
-        yanked: YankedList = []  # PEP 592 isn't supported for private stages yet
-        return self.SimpleLinks(
-            join_links_data(links, requires_python, yanked))
-
-    def _regen_simplelinks(self, project_input):
-        project = normalize_name(project_input)
-        links: list = []
-        requires_python = []
-        for version in self.list_versions_perstage(project):
-            linkstore = self.get_linkstore_perstage(project, version)
-            releases = linkstore.get_links(Rel.ReleaseFile)
-            links.extend(map(make_key_and_href, releases))
-            require_python = self.get_versiondata_perstage(
-                project, version, with_elinks=False
-            ).get("requires_python")
-            requires_python.extend([require_python] * len(releases))
-        data_dict = {u"links":links, u"requires_python":requires_python}
-        self.key_projsimplelinks(project).set(data_dict)
+        links = self.SimpleLinks([])
+        for k, v in self.key_simpledata(project).iter_ulidkey_values():
+            href = v["entrypath"]
+            if hash_spec := Digests(v["hashes"]).best_available_spec:
+                href += "#" + hash_spec
+            links.append(
+                SimplelinkMeta(
+                    (k.params["filename"], href, v.get("requires_python"), None)
+                )
+            )
+        return links
 
     def list_projects_perstage(self):
         return {k.name: v["name"] for k, v in self.key_project.iter_ulidkey_values()}
@@ -1732,7 +1740,14 @@ class PrivateStage(BaseStage):
             hashes=hashes,
             last_modified=last_modified,
         )
-        self._regen_simplelinks(project)
+        versiondata = (
+            {} if version is None else self.key_version(project, version).get()
+        )
+        with self.key_simpledata(project, (version, filename)).update() as simpledata:
+            simpledata["entrypath"] = link.entry.relpath
+            simpledata["hashes"] = link.entry.hashes
+            if "requires_python" in versiondata:
+                simpledata["requires_python"] = versiondata["requires_python"]
         return link
 
     def store_doczip(
@@ -2071,6 +2086,19 @@ class MutableLinkStore(LinkStore):
         return self.stage.key_doczip(self.project, self.version)
 
     @overload
+    def key_simpledata(self, filename: str) -> LocatedKey[dict]: ...
+
+    @overload
+    def key_simpledata(self, filename: None = None) -> SearchKey[dict]: ...
+
+    def key_simpledata(
+        self, filename: str | None = None
+    ) -> LocatedKey[dict] | SearchKey[dict]:
+        if filename is None:
+            return self.stage.key_simpledata(self.project)
+        return self.stage.key_simpledata(self.project, (self.version, filename))
+
+    @overload
     def key_toxresult(self, filename: str) -> LocatedKey[dict]: ...
 
     @overload
@@ -2143,6 +2171,7 @@ class MutableLinkStore(LinkStore):
                         key_toxresult(filename).delete()
                     case Rel.ReleaseFile:
                         key_versionfile(filename).delete()
+                        self.key_simpledata(filename).delete()
                     case _:
                         raise RuntimeError(link.rel)
                 was_deleted.append(link.relpath)
@@ -2326,15 +2355,6 @@ class SimplelinkMeta:
             f"yanked={self.yanked!r}>")
 
 
-def make_key_and_href(entry):
-    # entry is either an ELink or a filestore.FileEntry instance.
-    # both provide a "relpath" attribute which points to a file entry.
-    href = entry.relpath
-    if hash_spec := entry.best_available_hash_spec:
-        href += "#" + hash_spec
-    return entry.basename, href
-
-
 def normalize_bases(model, bases):
     # check and normalize base indices
     messages = []
@@ -2355,19 +2375,23 @@ def normalize_bases(model, bases):
 
 
 def register_keys(xom: XOM, keyfs: KeyFS) -> None:
-    # users and index configuration
+    # users, index and project configuration
     user_key = keyfs.register_patterned_key("USER", "{user}", None, dict)
     index_key = keyfs.register_patterned_key("INDEX", "{index}", user_key, dict)
+    project_key = keyfs.register_patterned_key("PROJECT", "{project}", index_key, dict)
 
     # mirror related data
     keyfs.register_patterned_key(
         "FILE_NOHASH", "+e/{dirname}/{basename}", index_key, dict
     )
+    keyfs.register_anonymous_key("PROJECTCACHEINFO", project_key, dict)
+    keyfs.register_patterned_key("MIRRORFILE", "{filename}", project_key, dict)
     keyfs.register_anonymous_key("MIRRORNAMESINIT", index_key, int)
 
-    # "stage" related
-    project_key = keyfs.register_patterned_key("PROJECT", "{project}", index_key, dict)
-    keyfs.register_anonymous_key("PROJSIMPLELINKS", project_key, dict)
+    # project and version related
+    keyfs.register_patterned_key(
+        "SIMPLEDATA", "{version}/{filename}", project_key, dict
+    )
     version_key = keyfs.register_patterned_key(
         "VERSION", "{version}", project_key, dict
     )

@@ -485,15 +485,15 @@ class TestExtPYPIDB:
 
         with pypistage.keyfs.read_transaction():
             assert "mirror_ignore_serial_header" not in pypistage.get()
-            assert pypistage.key_projsimplelinks("pytest").get() == {}
+            assert pypistage.key_projectcacheinfo("pytest").get() == {}
             assert len(pypistage.get_releaselinks("pytest")) == 1
-            assert pypistage.key_projsimplelinks("pytest").get()["serial"] == 10
+            assert pypistage.key_projectcacheinfo("pytest").get()["serial"] == 10
         pypistage.mock_simple("pytest", text="", pypiserial=9)
         with pypistage.keyfs.read_transaction():
             assert "mirror_ignore_serial_header" not in pypistage.get()
-            assert pypistage.key_projsimplelinks("pytest").get()["serial"] == 10
+            assert pypistage.key_projectcacheinfo("pytest").get()["serial"] == 10
             assert len(pypistage.get_releaselinks("pytest")) == 1
-            assert pypistage.key_projsimplelinks("pytest").get()["serial"] == 10
+            assert pypistage.key_projectcacheinfo("pytest").get()["serial"] == 10
         recs = caplog.getrecords(".*serving stale links.*")
         assert len(recs) >= 1
         with pypistage.keyfs.write_transaction():
@@ -504,9 +504,9 @@ class TestExtPYPIDB:
                 ]
                 is True
             )
-            assert pypistage.key_projsimplelinks("pytest").get()["serial"] == 10
+            assert pypistage.key_projectcacheinfo("pytest").get()["serial"] == 10
             assert len(pypistage.get_releaselinks("pytest")) == 0
-            assert pypistage.key_projsimplelinks("pytest").get()["serial"] == -1
+            assert pypistage.key_projectcacheinfo("pytest").get()["serial"] == -1
 
     def test_get_releaselinks_cache_no_fresh_write(self, pypistage):
         pypistage.mock_simple("pytest", text='''
@@ -1448,14 +1448,16 @@ def test_cleanup_after_last_entry_deletion(mapp, simpypi):
     with mapp.xom.keyfs.write_transaction():
         stage = mapp.xom.model.getstage("mirror/mirror")
         assert stage.key_project("pkg").exists()
-        assert stage.key_projsimplelinks("pkg").exists()
+        assert list(stage.key_mirrorfile("pkg").iter_ulidkeys())
+        assert list(stage.key_simpledata("pkg").iter_ulidkeys())
         ls = stage.get_linkstore_perstage("pkg", "1.0")
         (link,) = ls.get_links()
         stage.del_entry(link.entry)
     with mapp.xom.keyfs.read_transaction():
         stage = mapp.xom.model.getstage("mirror/mirror")
         assert not stage.key_project("pkg").exists()
-        assert not stage.key_projsimplelinks("pkg").exists()
+        assert not list(stage.key_mirrorfile("pkg").iter_ulidkeys())
+        assert not list(stage.key_simpledata("pkg").iter_ulidkeys())
 
 
 @pytest.mark.notransaction
@@ -1479,12 +1481,14 @@ def test_cleanup_after_last_version_deletion(mapp, simpypi):
     with mapp.xom.keyfs.write_transaction():
         stage = mapp.xom.model.getstage("mirror/mirror")
         assert stage.key_project("pkg").exists()
-        assert stage.key_projsimplelinks("pkg").exists()
+        assert list(stage.key_mirrorfile("pkg").iter_ulidkeys())
+        assert list(stage.key_simpledata("pkg").iter_ulidkeys())
         stage.del_versiondata("pkg", "1.0")
     with mapp.xom.keyfs.read_transaction():
         stage = mapp.xom.model.getstage("mirror/mirror")
         assert not stage.key_project("pkg").exists()
-        assert not stage.key_projsimplelinks("pkg").exists()
+        assert not list(stage.key_mirrorfile("pkg").iter_ulidkeys())
+        assert not list(stage.key_simpledata("pkg").iter_ulidkeys())
 
 
 @pytest.mark.notransaction
