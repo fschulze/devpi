@@ -369,21 +369,25 @@ class MirrorData:
         self.project = project
         self.key_project = stage.key_project(self.project)
 
+    def are_expired(self) -> bool:
+        if self.key_project.exists():
+            stage = self.get_stage()
+            return stage.cache_retrieve_times.is_expired(
+                self.project, stage.cache_expiry
+            )
+        return True
+
     def get_cache_info(self) -> CacheInfo:
         cache_info = self.get_stage().key_projectcacheinfo(self.project).get_mutable()
         cache_info.setdefault("serial", -1)
         cache_info.setdefault("etag", None)
         return cast("CacheInfo", cache_info)
 
-    def _load_cache_links(self) -> tuple[bool, list | None, CacheInfo]:
-        (is_expired, links_with_data, cache_info) = (
-            True,
-            None,
-            CacheInfo(serial=-1, etag=None),
-        )
+    def _load_cache_links(self) -> tuple[list | None, CacheInfo]:
+        (links_with_data, cache_info) = (None, CacheInfo(serial=-1, etag=None))
 
+        stage = self.get_stage()
         if self.key_project.exists():
-            stage = self.get_stage()
             cache_info = self.get_cache_info()
             key_simpledata = stage.key_simpledata(project=self.project)
             username = stage.username
@@ -405,23 +409,17 @@ class MirrorData:
                         v.get("yanked"),
                     )
                 )
-        if links_with_data is not None:
-            is_expired = stage.cache_retrieve_times.is_expired(
-                self.project, stage.cache_expiry
+        if stage.offline and links_with_data is not None:
+            entries = stage.get_entries_for_entrypaths(x[1] for x in links_with_data)
+            links_with_data = ensure_deeply_readonly(
+                [
+                    link
+                    for (link, entry) in zip(links_with_data, entries, strict=True)
+                    if entry is not None and entry.file_exists()
+                ]
             )
-            if stage.offline and links_with_data is not None:
-                entries = stage.get_entries_for_entrypaths(
-                    x[1] for x in links_with_data
-                )
-                links_with_data = ensure_deeply_readonly(
-                    [
-                        link
-                        for (link, entry) in zip(links_with_data, entries, strict=True)
-                        if entry is not None and entry.file_exists()
-                    ]
-                )
 
-        return (is_expired, links_with_data, cache_info)
+        return (links_with_data, cache_info)
 
     def get_stage(self) -> MirrorStage:
         stage = self._stage()
@@ -787,7 +785,7 @@ class MirrorStage(BaseStage):
         if not self.is_project_cached(project):
             raise KeyError("project not found")
         mirrorlinks = self._get_mirrordata(project)
-        (_is_expired, links, _cache_info) = mirrorlinks._load_cache_links()
+        (links, _cache_info) = mirrorlinks._load_cache_links()
         if links is not None:
             for entry in (self._entry_from_href(x[1]) for x in links):
                 if entry is None:
@@ -811,7 +809,7 @@ class MirrorStage(BaseStage):
         # metadata, so only delete the files and keep the simple links
         # for the possibility to re-download a release
         mirrorlinks = self._get_mirrordata(project)
-        (_is_expired, links, _cache_info) = mirrorlinks._load_cache_links()
+        (links, _cache_info) = mirrorlinks._load_cache_links()
         if links is not None:
             entries_to_check = []
             for entry in (self._entry_from_href(x[1]) for x in links):
@@ -838,7 +836,7 @@ class MirrorStage(BaseStage):
         entry.delete()
         if cleanup:
             mirrorlinks = self._get_mirrordata(project)
-            (_is_expired, links, _cache_info) = mirrorlinks._load_cache_links()
+            (links, _cache_info) = mirrorlinks._load_cache_links()
             if links is None:
                 return
             if not any(self._is_file_cached(x) for x in links):
@@ -1122,7 +1120,7 @@ class MirrorStage(BaseStage):
                 # XXX raise TransactionRestart to get a consistent clean view
                 self.keyfs.restart_read_transaction()
                 mirrorlinks = self._get_mirrordata(project)
-                (_is_expired, links, _cache_info) = mirrorlinks._load_cache_links()
+                (links, _cache_info) = mirrorlinks._load_cache_links()
             if links is not None:
                 self.keyfs.tx.on_commit_success(
                     partial(
@@ -1159,7 +1157,7 @@ class MirrorStage(BaseStage):
             self.keyfs.tx.on_finished(lock.release)
             # fetch current links
             mirrorlinks = self._get_mirrordata(project)
-            (_is_expired, links, _cache_info) = mirrorlinks._load_cache_links()
+            (links, _cache_info) = mirrorlinks._load_cache_links()
             if links is None or set(links) != set(newlinks):
                 # we got changes, so store them
                 self._update_simplelinks(project, info, links, newlinks)
@@ -1181,10 +1179,11 @@ class MirrorStage(BaseStage):
         if lock is not None:
             self.keyfs.tx.on_finished(lock.release)
         mirrorlinks = self._get_mirrordata(project)
-        (is_expired, links, cache_info) = mirrorlinks._load_cache_links()
+        is_expired = mirrorlinks.are_expired()
         if not is_expired and lock is not None:
             lock.release()
 
+        (links, cache_info) = mirrorlinks._load_cache_links()
         if lock is None:
             if links is not None:
                 threadlog.warn(
