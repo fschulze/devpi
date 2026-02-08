@@ -6,6 +6,7 @@ from .compat import StrEnum
 from .config import hookimpl
 from .filestore import Digests
 from .filestore import FileEntry
+from .keyfs_types import RelPath
 from .log import threadlog
 from .markers import absent
 from .markers import deleted
@@ -901,12 +902,14 @@ class BaseStage:
         return ELink(
             self.filestore,
             dict(
-                entrypath=link_meta.path,
+                relpath=link_meta.relpath,
                 hashes=link_meta.hashes,
                 rel=Rel.ReleaseFile,
                 require_python=link_meta.require_python,
                 yanked=link_meta.yanked,
             ),
+            link_meta.user,
+            link_meta.index,
             project,
             link_meta.version,
         )
@@ -1603,11 +1606,17 @@ class PrivateStage(BaseStage):
             self.key_versionfile(project, version, basename),
         }
         key_name_rel_map = self._key_name_rel_map
+        username = self.username
+        index = self.index
         result = []
         for k, v in self.keyfs.tx.iter_ulidkey_values_for(keys):
-            if Path(v["entrypath"]).name != basename:
+            if Path(v["relpath"]).name != basename:
                 continue
-            result.append(dict((*v.items(), ("rel", key_name_rel_map[k.key_name]))))
+            data = dict((*v.items(), ("rel", key_name_rel_map[k.key_name])))
+            data["entrypath"] = f"{username}/{index}/{data['relpath']}"
+            if "for_relpath" in data:
+                data["for_entrypath"] = f"{username}/{index}/{data['for_relpath']}"
+            result.append(data)
         if not result:
             return None
         (data,) = result
@@ -1626,11 +1635,17 @@ class PrivateStage(BaseStage):
             keys.add(self.key_toxresult(project, version))
         if Rel.ReleaseFile in rels:
             keys.add(self.key_versionfile(project, version))
+        username = self.username
+        index = self.index
         key_name_rel_map = self._key_name_rel_map
-        return [
-            dict((*v.items(), ("rel", key_name_rel_map[k.key_name])))
-            for k, v in self.keyfs.tx.iter_ulidkey_values_for(keys)
-        ]
+        result = []
+        for k, v in self.keyfs.tx.iter_ulidkey_values_for(keys):
+            data = dict((*v.items(), ("rel", key_name_rel_map[k.key_name])))
+            data["entrypath"] = f"{username}/{index}/{data['relpath']}"
+            if "for_relpath" in data:
+                data["for_entrypath"] = f"{username}/{index}/{data['for_relpath']}"
+            result.append(data)
+        return result
 
     def get_last_project_change_serial_perstage(self, project, at_serial=None):
         project = normalize_name(project)
@@ -1689,8 +1704,10 @@ class PrivateStage(BaseStage):
 
     def get_simplelinks_perstage(self, project: NormalizedName | str) -> SimpleLinks:
         links = self.SimpleLinks([])
+        username = self.username
+        index = self.index
         for k, v in self.key_simpledata(project).iter_ulidkey_values():
-            href = v["entrypath"]
+            href = f"{username}/{index}/{v['relpath']}"
             if hash_spec := Digests(v["hashes"]).best_available_spec:
                 href += "#" + hash_spec
             links.append(
@@ -1744,7 +1761,7 @@ class PrivateStage(BaseStage):
             {} if version is None else self.key_version(project, version).get()
         )
         with self.key_simpledata(project, (version, filename)).update() as simpledata:
-            simpledata["entrypath"] = link.entry.relpath
+            simpledata["relpath"] = link.entry.index_relpath
             simpledata["hashes"] = link.entry.hashes
             if rp := versiondata.get("requires_python"):
                 simpledata["requires_python"] = rp
@@ -1787,7 +1804,14 @@ class PrivateStage(BaseStage):
         doczip = self.key_doczip(project, version).get()
         if not doczip:
             return None
-        return ELink(self.filestore, dict(doczip, rel=Rel.DocZip), project, version)
+        return ELink(
+            self.filestore,
+            dict(doczip, rel=Rel.DocZip),
+            self.username,
+            self.index,
+            project,
+            version,
+        )
 
     def get_doczip_entry(self, project, version):
         """ get entry of documentation zip or None if no docs exists. """
@@ -1902,39 +1926,44 @@ def linkdictprop(name, default=notset):
 class ELink:
     """ model Link using entrypathes for referencing. """
 
-    __slots__ = ("_basename", "_entry", "filestore", "linkdict", "project", "version")
+    __slots__ = (
+        "_basename",
+        "_entry",
+        "filestore",
+        "index",
+        "linkdict",
+        "project",
+        "user",
+        "version",
+    )
 
     _log = linkdictprop("_log")
-    relpath = linkdictprop("entrypath")
-    for_entrypath = linkdictprop("for_entrypath", default=None)
+    index_relpath = linkdictprop("relpath")
+    for_relpath = linkdictprop("for_relpath", default=None)
     _hashes = linkdictprop("hashes", default=None)
     rel = linkdictprop("rel", default=None)
     require_python = linkdictprop("require_python")
     yanked = linkdictprop("yanked")
 
-    def __init__(self, filestore, linkdict, project, version):
+    def __init__(self, filestore, linkdict, user, index, project, version):
         assert "hash_spec" not in linkdict
         self._entry = notset
         self.filestore = filestore
         self.linkdict = linkdict
-        if self.for_entrypath is not None:
-            assert "#" not in self.for_entrypath
+        if self.for_relpath is not None:
+            assert "#" not in self.for_relpath
+        self.user = user
+        self.index = index
         self.project = project
         self.version = version
 
     @classmethod
     def from_entry(cls, filestore, entry, linkdict):
-        elink = ELink(filestore, linkdict, entry.project, entry.version)
+        elink = ELink(
+            filestore, linkdict, entry.user, entry.index, entry.project, entry.version
+        )
         elink._entry = entry
         return elink
-
-    @property
-    def index(self):
-        return self.entry.index
-
-    @property
-    def user(self):
-        return self.entry.user
 
     @property
     def best_available_hash_type(self):
@@ -1969,6 +1998,14 @@ class ELink:
 
     def matches_hashes(self, hashes):
         return self.hashes == hashes
+
+    @property
+    def for_entrypath(self) -> RelPath:
+        return RelPath(f"{self.user}/{self.index}/{self.for_relpath}")
+
+    @property
+    def relpath(self) -> RelPath:
+        return RelPath(f"{self.user}/{self.index}/{self.index_relpath}")
 
     def __repr__(self):
         return "<ELink rel=%r entrypath=%r>" % (self.rel, self.entrypath)
@@ -2033,10 +2070,17 @@ class LinkStore:
                 and (not for_entrypath or for_entrypath == link.for_entrypath)
             )
 
+        filestore = self.filestore
+        username = self.stage.username
+        index = self.stage.index
+        project = self.project
+        version = self.version
         return [
             elink
             for linkdict in elinks
-            if fil(elink := ELink(self.filestore, linkdict, self.project, self.version))
+            if fil(
+                elink := ELink(filestore, linkdict, username, index, project, version)
+            )
         ]
 
     @property
@@ -2207,13 +2251,13 @@ class MutableLinkStore(LinkStore):
         self, rel: Rel, file_entry: FileEntry, for_link: ELink | str | None = None
     ) -> ELink:
         new_linkdict = {
-            "entrypath": file_entry.relpath,
+            "relpath": file_entry.index_relpath,
             "hashes": file_entry.hashes,
             "_log": [],
         }
         if for_link:
             assert isinstance(for_link, ELink)
-            new_linkdict["for_entrypath"] = for_link.relpath
+            new_linkdict["for_relpath"] = for_link.index_relpath
         match rel:
             case Rel.DocZip:
                 key = self.key_doczip()
@@ -2227,7 +2271,15 @@ class MutableLinkStore(LinkStore):
             raise RuntimeError
         key.set(new_linkdict)
         threadlog.info("added %r link %s", rel, file_entry.relpath)
-        return ELink(self.filestore, new_linkdict, self.project, self.version)
+        stage = self.stage
+        return ELink(
+            self.filestore,
+            new_linkdict,
+            stage.username,
+            stage.index,
+            self.project,
+            self.version,
+        )
 
 
 @total_ordering
@@ -2239,9 +2291,11 @@ class SimplelinkMeta:
         "__cmpval",
         "__ext",
         "__hashes",
+        "__index",
         "__name",
-        "__path",
+        "__relpath",
         "__url",
+        "__user",
         "__version",
         "href",
         "key",
@@ -2254,9 +2308,11 @@ class SimplelinkMeta:
         self.__cmpval = notset
         self.__ext = notset
         self.__hashes = notset
+        self.__index = notset
         self.__name = notset
-        self.__path = notset
+        self.__relpath = notset
         self.__url = notset
+        self.__user = notset
         self.__version = notset
         (self.key, self.href, self.require_python, self.yanked) = link_info
 
@@ -2267,9 +2323,11 @@ class SimplelinkMeta:
                 self.__cmpval,
                 self.__ext,
                 self.__hashes,
+                self.__index,
                 self.__name,
-                self.__path,
+                self.__relpath,
                 self.__url,
+                self.__user,
                 self.__version,
                 self.href,
                 self.key,
@@ -2298,7 +2356,10 @@ class SimplelinkMeta:
         self.__hashes = Digests()
         if hash_type := url.hash_type:
             self.__hashes[hash_type] = url.hash_value
-        self.__path = url.path
+        parts = url.path.split("/")
+        self.__user = parts[0]
+        self.__index = parts[1]
+        self.__relpath = "/".join(parts[2:])
 
     @property
     def basename(self):
@@ -2313,10 +2374,28 @@ class SimplelinkMeta:
         return self.__hashes
 
     @property
-    def path(self):
-        if self.__path is notset:
+    def index(self):
+        if self.__index is notset:
             self.__parse_url()
-        return self.__path
+        return self.__index
+
+    @property
+    def path(self):
+        if self.__relpath is notset:
+            self.__parse_url()
+        return f"{self.user}/{self.index}/{self.__relpath}"
+
+    @property
+    def relpath(self):
+        if self.__relpath is notset:
+            self.__parse_url()
+        return self.__relpath
+
+    @property
+    def user(self):
+        if self.__user is notset:
+            self.__parse_url()
+        return self.__user
 
     @property
     def name(self):

@@ -6,6 +6,7 @@ for all indexes.
 from __future__ import annotations
 
 from .keyfs_types import FilePathInfo
+from .keyfs_types import RelPath
 from .keyfs_types import ULID
 from .log import threadlog
 from .markers import absent
@@ -15,6 +16,7 @@ from contextlib import suppress
 from devpi_common.metadata import splitbasename
 from devpi_common.types import parse_hash_spec
 from inspect import currentframe
+from pathlib import Path
 from typing import TYPE_CHECKING
 from typing import cast
 from typing import overload
@@ -30,7 +32,6 @@ if TYPE_CHECKING:
     from .interfaces import ContentOrFile
     from .keyfs_types import LocatedKey
     from .keyfs_types import PatternedKey
-    from .keyfs_types import RelPath
     from .markers import Absent
     from collections.abc import Iterator
     from collections.abc import Sequence
@@ -287,6 +288,10 @@ def get_hash_spec(content_or_file, hash_type):
     return get_hashes(content_or_file, hash_types=(hash_type,)).get_spec(hash_type)
 
 
+def index_relpath(user: str, index: str, relpath: RelPath) -> RelPath:
+    return RelPath(Path(relpath).relative_to(Path(f"{user}/{index}")).as_posix())
+
+
 def make_splitdir(hash_spec):
     parts = hash_spec.split("=")
     assert len(parts) == 2
@@ -486,6 +491,10 @@ class BaseFileEntry:
     @property
     def index(self):
         return self.key.params['index']
+
+    @property
+    def index_relpath(self) -> RelPath:
+        return index_relpath(self.user, self.index, self.key.relpath)
 
     @property
     def relpath(self) -> RelPath:

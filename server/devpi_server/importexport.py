@@ -641,10 +641,9 @@ class Importer:
                     url, stage.username, stage.index, project)
                 entry.file_set_content(
                     f, hashes=hashes, last_modified=mapping["last_modified"])
-                entrypath = entry.relpath
                 mirrordata = stage._get_mirrordata(project)
                 with mirrordata.link_setter(url.basename) as linkdata:
-                    linkdata["entrypath"] = entrypath
+                    linkdata["relpath"] = entry.index_relpath
                     if entry.hashes is not None:
                         linkdata["hashes"] = entry.hashes
                     if (
