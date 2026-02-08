@@ -389,7 +389,7 @@ def test_project_pep_691(mapp, testapp):
     assert item['filename'] == 'pkg1-2.6.tgz'
     assert item['url'] == f'../+f/{hashdir}/pkg1-2.6.tgz'
     assert item['hashes'] == {hashes.get_default_type(): hash_value}
-    assert item['requires-python'] == ''
+    assert "requires-python" not in item
     assert 'yanked' not in item
 
 
@@ -426,12 +426,12 @@ def test_project_pep_691_multiple(mapp, testapp):
     assert item1['filename'] == 'pkg1-2.6.tgz'
     assert item1['url'] == f'../+f/{hashdir1}/pkg1-2.6.tgz'
     assert item1['hashes'] == {hashes1.get_default_type(): hash_value1}
-    assert item1['requires-python'] == ''
+    assert "requires-python" not in item1
     assert 'yanked' not in item1
     assert item2['filename'] == 'pkg1-2.7.tgz'
     assert item2['url'] == f'../+f/{hashdir2}/pkg1-2.7.tgz'
     assert item2['hashes'] == {hashes2.get_default_type(): hash_value2}
-    assert item2['requires-python'] == ''
+    assert "requires-python" not in item2
     assert 'yanked' not in item2
 
 

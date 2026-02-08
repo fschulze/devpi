@@ -425,7 +425,7 @@ class MirrorData:
             link_data = data[fn] = CacheLink(entrypath=entrypath)
             if sep == "#" and hash_spec:
                 link_data["hashes"] = Digests.from_spec(hash_spec)
-            if rp is not None:
+            if rp:
                 link_data["requires_python"] = rp
             if y is not None:
                 link_data["yanked"] = y
