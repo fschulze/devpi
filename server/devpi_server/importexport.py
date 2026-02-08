@@ -642,7 +642,7 @@ class Importer:
                 entry.file_set_content(
                     f, hashes=hashes, last_modified=mapping["last_modified"])
                 mirrordata = stage._get_mirrordata(project)
-                (_, links_with_data, serial, _etag) = mirrordata._load_cache_links()
+                (_, links_with_data, cache_info) = mirrordata._load_cache_links()
                 if links_with_data is None:
                     links_with_data = []
                 entrypath = entry.relpath
@@ -655,9 +655,7 @@ class Importer:
                     links.append((key, href))
                     requires_python.append(require_python)
                     yanked.append(is_yanked)
-                mirrordata._save_cache_links(
-                    links, requires_python, yanked, serial, None
-                )
+                mirrordata._save_cache_links(links, requires_python, yanked, cache_info)
         elif filedesc["type"] == Rel.DocZip:
             stage = cast("PrivateStage", stage)
             version = filedesc["version"]

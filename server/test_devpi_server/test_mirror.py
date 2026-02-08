@@ -1280,6 +1280,7 @@ async def test_http_async_user_agent(server_version, simpypi, xom):
     OSError(),
     httpx.RequestError(message="fail")])
 async def test_get_simplelinks_perstage_when_http_error(exc, pypistage, monkeypatch):
+    from devpi_server.mirror import CacheInfo
     from devpi_server.model import SimpleLinks
 
     # to reach the code path in question, we must have cached links
@@ -1290,7 +1291,7 @@ async def test_get_simplelinks_perstage_when_http_error(exc, pypistage, monkeypa
             pass
 
         def _load_cache_links(self):
-            return (True, links, 42, '"foo"')
+            return (True, links, CacheInfo(serial=42, etag='"foo"'))
 
     monkeypatch.setattr("devpi_server.mirror.MirrorData", MockMirrorData)
 

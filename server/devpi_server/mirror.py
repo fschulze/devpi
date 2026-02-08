@@ -57,7 +57,6 @@ if TYPE_CHECKING:
     from .model import YankedList
     from collections.abc import Callable
     from typing import Any
-    from typing import NotRequired
     import asyncio
 
     ReleaseLinks = list["Link"]
@@ -67,18 +66,22 @@ if TYPE_CHECKING:
         requires_python: RequiresPythonList
         yanked: YankedList
         serial: int
-        etag: NotRequired[str | None]
+        etag: str | None
+
+
+class CacheInfo(TypedDict):
+    serial: int
+    etag: str | None
 
 
 @frozen
 class NewLinks:
-    serial: int
+    cache_info: CacheInfo
     releaselinks: ReleaseLinks
     key_hrefs: LinksList
     requires_python: RequiresPythonList
     yanked: YankedList
     devpi_serial: str | None
-    etag: str | None
 
 
 NewLinksFuture = Future[NewLinks]
@@ -337,8 +340,12 @@ class MirrorData:
         self.key_project = stage.key_project(self.project)
         self.key_projsimplelinks = stage.key_projsimplelinks(self.project)
 
-    def _load_cache_links(self) -> tuple[bool, list | None, int, str | None]:
-        (is_expired, links_with_data, serial, etag) = (True, None, -1, None)
+    def _load_cache_links(self) -> tuple[bool, list | None, CacheInfo]:
+        (is_expired, links_with_data, cache_info) = (
+            True,
+            None,
+            CacheInfo(serial=-1, etag=None),
+        )
 
         cache = cast("CacheLinks", self.key_projsimplelinks.get())
         if cache:
@@ -346,8 +353,7 @@ class MirrorData:
             is_expired = stage.cache_retrieve_times.is_expired(
                 self.project, stage.cache_expiry
             )
-            serial = cache["serial"]
-            etag = cache.get("etag", None)
+            cache_info = CacheInfo(serial=cache["serial"], etag=cache.get("etag", None))
             links_with_data = join_links_data(
                 cache["links"],
                 cache.get("requires_python", []),
@@ -365,7 +371,7 @@ class MirrorData:
                     ]
                 )
 
-        return (is_expired, links_with_data, serial, etag)
+        return (is_expired, links_with_data, cache_info)
 
     def get_stage(self) -> MirrorStage:
         stage = self._stage()
@@ -377,23 +383,25 @@ class MirrorData:
         links: LinksList,
         requires_python: RequiresPythonList,
         yanked: YankedList,
-        serial: int,
-        etag: str | None,
+        cache_info: CacheInfo | None,
     ) -> None:
-        assert isinstance(serial, int), serial
         project = self.project
         stage = self.get_stage()
-        data: CacheLinks = {
-            "etag": etag,
-            "links": links,
-            "requires_python": requires_python,
-            "serial": serial,
-            "yanked": yanked,
-        }
         with self.key_project.update() as projectdata:
             projectdata["name"] = project.original
         key = self.key_projsimplelinks
         old = cast("CacheLinks", key.get())
+        if cache_info is None:
+            cache_info = CacheInfo(
+                serial=old.get("serial", -1), etag=old.get("etag", None)
+            )
+        data: CacheLinks = {
+            "etag": cache_info["etag"],
+            "links": links,
+            "requires_python": requires_python,
+            "serial": cache_info["serial"],
+            "yanked": yanked,
+        }
         if old != data:
             threadlog.debug("saving changed simplelinks for %s: %s", project, data)
             key.set(cast("dict", data))
@@ -403,7 +411,7 @@ class MirrorData:
 
         def on_commit():
             threadlog.debug("setting projects cache for %r", project)
-            stage.cache_retrieve_times.refresh(project, etag)
+            stage.cache_retrieve_times.refresh(project, cache_info["etag"])
             # make project appear in projects list even
             # before we next check up the full list with remote
             stage.cache_projectnames.add(project)
@@ -569,7 +577,7 @@ class MirrorStage(BaseStage):
         if not self.is_project_cached(project):
             raise KeyError("project not found")
         mirrorlinks = self._get_mirrordata(project)
-        (_is_expired, links, _cache_serial, _etag) = mirrorlinks._load_cache_links()
+        (_is_expired, links, _cache_info) = mirrorlinks._load_cache_links()
         if links is not None:
             for entry in (self._entry_from_href(x[1]) for x in links):
                 if entry is None:
@@ -591,7 +599,7 @@ class MirrorStage(BaseStage):
         # metadata, so only delete the files and keep the simple links
         # for the possibility to re-download a release
         mirrorlinks = self._get_mirrordata(project)
-        (_is_expired, links, _cache_serial, _etag) = mirrorlinks._load_cache_links()
+        (_is_expired, links, _cache_info) = mirrorlinks._load_cache_links()
         if links is not None:
             entries_to_check = []
             for entry in (self._entry_from_href(x[1]) for x in links):
@@ -614,7 +622,7 @@ class MirrorStage(BaseStage):
         entry.delete()
         if cleanup:
             mirrorlinks = self._get_mirrordata(project)
-            (_is_expired, links, _cache_serial, _etag) = mirrorlinks._load_cache_links()
+            (_is_expired, links, _cache_info) = mirrorlinks._load_cache_links()
             if links is None:
                 return
             if not any(self._is_file_cached(x) for x in links):
@@ -788,8 +796,7 @@ class MirrorStage(BaseStage):
         self,
         newlinks_future: NewLinksFuture,
         project: NormalizedName | str,
-        cache_serial: int,
-        etag: str | None,
+        cache_info: CacheInfo,
         _key_from_link: Callable,
     ) -> None:
         # get the simple page for the project
@@ -797,7 +804,7 @@ class MirrorStage(BaseStage):
         get_url = self.mirror_url_without_auth.joinpath(project).asdir()
         threadlog.debug("reading index %r", url)
         headers = {"Accept": SIMPLE_API_ACCEPT}
-        etag = self.cache_retrieve_times.get_etag(project) or etag
+        etag = self.cache_retrieve_times.get_etag(project) or cache_info["etag"]
         if etag is not None:
             headers["If-None-Match"] = etag
         (response, text) = await self.http.async_get(
@@ -832,7 +839,7 @@ class MirrorStage(BaseStage):
             # handle missing or invalid X-PYPI-LAST-SERIAL header
             serial = -1
 
-        if serial < cache_serial:
+        if serial < (cache_serial := cache_info["serial"]):
             if not self.ignore_serial_header:
                 msg = (
                     f"serial mismatch on GET {url!r}, "
@@ -869,13 +876,12 @@ class MirrorStage(BaseStage):
             yanked[index] = None if releaselink.yanked is False else releaselink.yanked
         newlinks_future.set_result(
             NewLinks(
-                serial=serial,
+                cache_info=CacheInfo(serial=serial, etag=response.headers.get("ETag")),
                 releaselinks=releaselinks,
                 key_hrefs=key_hrefs,
                 requires_python=requires_python,
                 yanked=yanked,
                 devpi_serial=response.headers.get("X-DEVPI-SERIAL"),
-                etag=response.headers.get("ETag"),
             )
         )
 
@@ -911,12 +917,14 @@ class MirrorStage(BaseStage):
                 # XXX raise TransactionRestart to get a consistent clean view
                 self.keyfs.restart_read_transaction()
                 mirrorlinks = self._get_mirrordata(project)
-                (_is_expired, links, _cache_serial, _etag) = (
-                    mirrorlinks._load_cache_links()
-                )
+                (_is_expired, links, _cache_info) = mirrorlinks._load_cache_links()
             if links is not None:
                 self.keyfs.tx.on_commit_success(
-                    partial(self.cache_retrieve_times.refresh, project, info.etag)
+                    partial(
+                        self.cache_retrieve_times.refresh,
+                        project,
+                        info.cache_info["etag"],
+                    )
                 )
                 return self.SimpleLinks(links)
             raise self.UpstreamError("no cache links from primary for %s" %
@@ -938,8 +946,7 @@ class MirrorStage(BaseStage):
                 info.key_hrefs,
                 info.requires_python,
                 info.yanked,
-                info.serial,
-                info.etag,
+                info.cache_info,
             )
             return self.SimpleLinks(newlinks)
 
@@ -958,7 +965,7 @@ class MirrorStage(BaseStage):
             self.keyfs.tx.on_finished(lock.release)
             # fetch current links
             mirrorlinks = self._get_mirrordata(project)
-            (_is_expired, links, _cache_serial, _etag) = mirrorlinks._load_cache_links()
+            (_is_expired, links, _cache_info) = mirrorlinks._load_cache_links()
             if links is None or set(links) != set(newlinks):
                 # we got changes, so store them
                 self._update_simplelinks(project, info, links, newlinks)
@@ -980,7 +987,7 @@ class MirrorStage(BaseStage):
         if lock is not None:
             self.keyfs.tx.on_finished(lock.release)
         mirrorlinks = self._get_mirrordata(project)
-        (is_expired, links, cache_serial, etag) = mirrorlinks._load_cache_links()
+        (is_expired, links, cache_info) = mirrorlinks._load_cache_links()
         if not is_expired and lock is not None:
             lock.release()
 
@@ -1030,7 +1037,7 @@ class MirrorStage(BaseStage):
         try:
             self.xom.run_coroutine_threadsafe(
                 self._async_fetch_releaselinks(
-                    newlinks_future, project, cache_serial, etag, _key_from_link
+                    newlinks_future, project, cache_info, _key_from_link
                 ),
                 timeout=self.timeout,
             )
@@ -1084,7 +1091,7 @@ class MirrorStage(BaseStage):
         newlinks = join_links_data(info.key_hrefs, info.requires_python, info.yanked)
         if links is not None and set(links) == set(newlinks):
             # no changes
-            self.cache_retrieve_times.refresh(project, info.etag)
+            self.cache_retrieve_times.refresh(project, info.cache_info["etag"])
             return self.SimpleLinks(links)
 
         return self._update_simplelinks(project, info, links, newlinks)
