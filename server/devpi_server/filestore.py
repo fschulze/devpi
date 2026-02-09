@@ -8,6 +8,7 @@ from __future__ import annotations
 from .keyfs_types import FilePathInfo
 from .log import threadlog
 from .markers import absent
+from .markers import deleted
 from .readonly import get_mutable_deepcopy
 from devpi_common.metadata import splitbasename
 from devpi_common.types import parse_hash_spec
@@ -437,7 +438,7 @@ class BaseFileEntry:
         self.key = key
         self._meta = _nodefault
         if meta is not _nodefault:
-            self._meta = meta or {}
+            self._meta = {} if meta in (absent, deleted) or not meta else meta
 
     @property
     def basename(self):
