@@ -11,12 +11,15 @@ from .fileutil import dumps
 from .fileutil import load
 from .fileutil import loads
 from .httpclient import FatalResponse
+from .keyfs_types import KeyData
 from .log import TimeDeltaChecker
 from .log import thread_push_log
 from .log import threadlog
 from .main import Fatal
 from .markers import Absent
+from .markers import Deleted
 from .markers import absent
+from .markers import deleted
 from .model import UpstreamError
 from .normalized import normalize_name
 from .views import FileStreamer
@@ -48,6 +51,7 @@ import traceback
 if TYPE_CHECKING:
     from .httpclient import GetResponse
     from .httpclient import HTTPClient
+    from .keyfs import KeyChangeEvent
     from .keyfs_types import KeyFSTypesRO
     from .keyfs_types import LocatedKey
     from .main import XOM
@@ -626,7 +630,9 @@ class ReplicaThread:
                     while True:
                         serial = load(stream)
                         (changes, rel_renames) = load(stream)
-                        self.xom.keyfs.import_changes(serial, changes)
+                        self.xom.keyfs.import_changes(
+                            serial, self.iter_changes(serial, changes)
+                        )
                         self.update_primary_serial(serial, update_sync=False, ignore_lower=True)
                 except StopIteration:
                     pass
@@ -635,12 +641,24 @@ class ReplicaThread:
         else:
             all_changes = loads(response.content)
             for serial, changes in all_changes:
-                self.xom.keyfs.import_changes(serial, changes)
+                self.xom.keyfs.import_changes(
+                    serial, self.iter_changes(serial, changes)
+                )
                 self.update_primary_serial(serial, update_sync=False, ignore_lower=True)
 
     def fetch_multi(self, serial):
         url = self.primary_url.joinpath("+changelog", "%s-" % serial).url
         return self.fetch(self.handler_multi, url)
+
+    def iter_changes(self, serial, changes):
+        for relpath, (keyname, back_serial, val) in changes.items():
+            yield KeyData(
+                relpath=relpath,
+                keyname=keyname,
+                serial=serial,
+                back_serial=back_serial,
+                value=deleted if val is None else val,
+            )
 
     def tick(self):
         self.thread.exit_if_shutdown()
@@ -680,7 +698,9 @@ class ReplicaThread:
 
 
 def register_key_subscribers(xom: XOM) -> None:
-    xom.keyfs.notifier.on_key_change(xom.keyfs.schema.PROJSIMPLELINKS, SimpleLinksChanged(xom))
+    xom.keyfs.notifier.on_key_change(
+        xom.keyfs.schema.PROJSIMPLELINKS, SimpleLinksChanged(xom).handler
+    )
 
 
 class FileReplicationSharedData:
@@ -780,7 +800,7 @@ class FileReplicationSharedData:
         self.last_added = time.time()
 
     def update_index_types(self, keyfs, serial, key, val, back_serial):
-        if val is None:
+        if isinstance(val, Deleted):
             val = {}
         current_index_types = {
             name: config["type"]
@@ -1079,7 +1099,7 @@ class FileReplicationThread:
         keyfs = self.xom.keyfs
         relpath = key.relpath
         entry = self.xom.filestore.get_file_entry_from_key(key, meta=val)
-        if val is None and back_serial >= 0:
+        if isinstance(val, Deleted) and back_serial >= 0:
             # check for existence with metadata from old serial
             with keyfs.read_transaction(at_serial=back_serial):
                 entry = self.xom.filestore.get_file_entry(relpath)
@@ -1219,7 +1239,7 @@ class FileReplicationThread:
 
     def handler(self, index_type, serial, key, keyname, value, back_serial):
         keyfs = self.xom.keyfs
-        if value is None:
+        if isinstance(value, Deleted):
             self.shared_data.deleted.put(key, serial)
         else:
             deleted_serial = self.shared_data.deleted.get(key)
@@ -1298,7 +1318,7 @@ class InitialQueueThread:
             relpaths = tx.iter_relpaths_at(keys, tx.at_serial)
             for item in relpaths:
                 self.thread.exit_if_shutdown()
-                if item.value is None:
+                if isinstance(item.value, Deleted):
                     continue
                 if self.shared_data.queue.qsize() > self.shared_data.num_threads:
                     # let the queue be processed before filling it further
@@ -1351,13 +1371,13 @@ class SimpleLinksChanged:
     def __init__(self, xom: XOM) -> None:
         self.xom = xom
 
-    def __call__(self, ev):
-        threadlog.debug("SimpleLinksChanged %s", ev.typedkey)
-        cache = ev.value
+    def handler(self, ev: KeyChangeEvent) -> None:
+        threadlog.debug("SimpleLinksChanged %s", ev.key)
+        cache = ev.data.value
         # get the normalized project (PYPILINKS uses it)
-        username = ev.typedkey.params["user"]
-        index = ev.typedkey.params["index"]
-        project = ev.typedkey.params["project"]
+        username = ev.key.params["user"]
+        index = ev.key.params["index"]
+        project = ev.key.params["project"]
         if not project:
             threadlog.error("project %r missing", project)
             return
@@ -1367,7 +1387,7 @@ class SimpleLinksChanged:
             mirror_stage = self.xom.model.getstage(username, index)
             if mirror_stage and mirror_stage.ixconfig["type"] == "mirror":
                 cache_projectnames = mirror_stage.cache_projectnames
-                if cache is None:  # deleted
+                if isinstance(cache, Deleted):  # deleted
                     cache_projectnames.discard(project)
                 else:
                     cache_projectnames.add(project)

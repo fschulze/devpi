@@ -8,6 +8,7 @@ from .filestore import Digests
 from .filestore import FileEntry
 from .keyfs_schema import KeyFSSchema
 from .log import threadlog
+from .markers import Deleted
 from .markers import absent
 from .markers import deleted
 from .markers import notset
@@ -44,6 +45,7 @@ import re
 if TYPE_CHECKING:
     from .filestore import FileStore
     from .interfaces import ContentOrFile
+    from .keyfs import KeyChangeEvent
     from .keyfs import KeyFS
     from .keyfs_types import KeyFSTypes
     from .keyfs_types import KeyFSTypesRO
@@ -2245,37 +2247,39 @@ class EventSubscribers:
     def __init__(self, xom):
         self.xom = xom
 
-    def on_changed_version_config(self, ev):
+    def on_changed_version_config(self, ev: KeyChangeEvent) -> None:
         """ when version config is changed for a project in a stage"""
-        params = ev.typedkey.params
-        user = params["user"]
-        index = params["index"]
+        params = ev.key.params
         keyfs = self.xom.keyfs
         hook = self.xom.config.hook
         with keyfs.read_transaction(at_serial=ev.at_serial) as tx:
             # find out if metadata changed
-            if ev.back_serial == -1:
+            if ev.data.back_serial == -1:
                 old = {}
             else:
-                assert ev.back_serial < ev.at_serial
+                assert ev.data.back_serial < ev.at_serial
                 try:
-                    old = tx.get_value_at(ev.typedkey, ev.back_serial)
+                    old = tx.get_value_at(ev.key, ev.data.back_serial)
                 except KeyError:
                     old = {}
 
             # XXX slightly flaky logic for detecting metadata changes
-            metadata = ev.value
-            source = metadata or old
-            project, version = source["name"], source["version"]
+            metadata = ev.data.value
             if metadata != old:
-                stage = self.xom.model.getstage(user, index)
+                source = old if metadata is deleted else metadata
+                if not isinstance(source, (dict, DictViewReadonly)):
+                    return
+                stage = self.xom.model.getstage(params["user"], params["index"])
                 hook.devpiserver_on_changed_versiondata(
-                    stage=stage, project=project,
-                    version=version, metadata=metadata)
+                    stage=stage,
+                    project=source["name"],
+                    version=source["version"],
+                    metadata=None if metadata is deleted else metadata,
+                )
 
-    def on_changed_file_entry(self, ev):
+    def on_changed_file_entry(self, ev: KeyChangeEvent) -> None:
         """ when a file entry is modified. """
-        params = ev.typedkey.params
+        params = ev.key.params
         user = params.get("user")
         index = params.get("index")
         keyfs = self.xom.keyfs
@@ -2283,12 +2287,13 @@ class EventSubscribers:
             stage = self.xom.model.getstage(user, index)
             if stage is not None and stage.ixconfig["type"] == "mirror":
                 return  # we don't trigger on file changes of pypi mirror
-            entry = FileEntry(ev.typedkey, meta=ev.value)
+            assert isinstance(ev.data.value, (Deleted, DictViewReadonly))
+            entry = FileEntry(ev.key, meta=ev.data.value)
             if not entry.project or not entry.version:
                 # the entry was deleted
                 self.xom.config.hook.devpiserver_on_remove_file(
                     stage=stage,
-                    relpath=ev.typedkey.relpath
+                    relpath=ev.key.relpath,
                 )
                 return
             name = entry.project
@@ -2301,9 +2306,9 @@ class EventSubscribers:
                     version=entry.version,
                     link=links[0])
 
-    def on_mirror_initialnames(self, ev):
+    def on_mirror_initialnames(self, ev: KeyChangeEvent) -> None:
         """ when projectnames are first loaded into a mirror. """
-        params = ev.typedkey.params
+        params = ev.key.params
         user = params.get("user")
         index = params.get("index")
         keyfs = self.xom.keyfs
@@ -2315,17 +2320,16 @@ class EventSubscribers:
                     projectnames=stage.list_projects_perstage()
                 )
 
-    def on_changed_index(self, ev):
+    def on_changed_index(self, ev: KeyChangeEvent) -> None:
         """when index data changes."""
-        params = ev.typedkey.params
+        params = ev.key.params
         username = params.get("user")
         indexname = params.get("index")
         keyfs = self.xom.keyfs
         with keyfs.read_transaction(at_serial=ev.at_serial) as tx:
-
-            if ev.back_serial > -1:
+            if ev.data.back_serial > -1:
                 try:
-                    old = tx.get_value_at(ev.typedkey, ev.back_serial)
+                    old = tx.get_value_at(ev.key, ev.data.back_serial)
                 except KeyError:
                     # the user was previously deleted
                     old = None

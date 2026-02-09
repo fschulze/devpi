@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from .keyfs_types import FilePathInfo
 from .log import threadlog
+from .markers import Absent
 from .markers import Deleted
 from .markers import NoDefault
 from .markers import absent
@@ -31,7 +32,6 @@ if TYPE_CHECKING:
     from .keyfs import KeyFS
     from .keyfs_types import LocatedKey
     from .keyfs_types import RelPath
-    from .markers import Absent
     from .model import Schema
     from .readonly import DictViewReadonly
     from .readonly import SetViewReadonly
@@ -442,12 +442,12 @@ class BaseFileEntry:
     def __init__(
         self,
         key: LocatedKey[dict, DictViewReadonly],
-        meta: DictViewReadonly | dict | Deleted | NoDefault = _nodefault,
+        meta: DictViewReadonly | dict | Absent | Deleted | NoDefault = _nodefault,
     ) -> None:
         self.key = key
         self._meta = _nodefault
         if not isinstance(meta, NoDefault):
-            self._meta = {} if isinstance(meta, Deleted) or not meta else meta
+            self._meta = {} if isinstance(meta, (Absent, Deleted)) or not meta else meta
 
     @property
     def basename(self):

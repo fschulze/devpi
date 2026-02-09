@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from devpi_common.archive import Archive
 from devpi_common.archive import zip_dict
 from devpi_common.metadata import splitbasename
@@ -12,6 +14,7 @@ from devpi_server.model import ensure_list
 from devpi_server.model import run_passwd
 from devpi_server.model import unknown
 from io import BytesIO
+from typing import TYPE_CHECKING
 import getpass
 import inspect
 import itertools
@@ -1047,14 +1050,21 @@ class TestStage:
     @pytest.mark.storage_with_filesystem
     def test_mirror_stage_missing_file_ignored_for_subscribers(self, mapp, pypistage):
         from devpi_server.filestore import FileEntry
+        from devpi_server.readonly import DictViewReadonly
+
+        if TYPE_CHECKING:
+            from devpi_server.keyfs import KeyChangeEvent
 
         results = []
 
-        def subscriber(ev):
-            if "last_modified" not in ev.value:
+        def subscriber(ev: KeyChangeEvent) -> None:
+            if (
+                not isinstance(ev.data.value, (DictViewReadonly, dict))
+                or "last_modified" not in ev.data.value
+            ):
                 return
-            with ev.typedkey.keyfs.filestore_transaction():
-                entry = FileEntry(ev.typedkey, ev.value)
+            with ev.key.keyfs.filestore_transaction():
+                entry = FileEntry(ev.key, meta=ev.data.value)
                 results.append((entry.basename, entry.file_exists()))
 
         mapp.xom.keyfs.notifier.on_key_change(mapp.xom.keyfs.schema.PYPIFILE_NOMD5, subscriber)
