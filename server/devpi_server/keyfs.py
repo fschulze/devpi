@@ -57,6 +57,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from collections.abc import Iterable
     from collections.abc import Iterator
+    from typing import Any
     from typing import Literal
 
     KeyFSConn = IStorageConnection
@@ -373,15 +374,15 @@ class KeyFS(Generic[Schema]):
                 relpaths: Iterable[RelPath],
             ) -> Iterable[FilePathInfo]:
                 for relpath in relpaths:
-                    val = conn.get_relpath_at(relpath, serial).value
                     if (
-                        isinstance(val, (dict, DictViewReadonly))
-                        and "hashes" in val
-                        and isinstance(
-                            hashes := val["hashes"], (dict, DictViewReadonly)
+                        key := self.match_key(
+                            relpath, self.schema.PYPIFILE_NOMD5, self.schema.STAGEFILE  # type: ignore[attr-defined]
                         )
+                    ) is not None and isinstance(
+                        val := conn.get_key_at_serial(key, serial).value,
+                        (dict, DictViewReadonly),
                     ):
-                        digests = Digests(get_mutable_deepcopy(hashes))
+                        digests = Digests(get_mutable_deepcopy(val["hashes"]))
                     else:
                         digests = Digests()
                     yield FilePathInfo(relpath, digests.get_default_value(None))
@@ -403,16 +404,16 @@ class KeyFS(Generic[Schema]):
             records: list[Record] = []
             subscriber_changes = {}
             for relpath, (keyname, back_serial, val) in changes.items():
+                key = self.get_key_instance(keyname, relpath)
                 old_val: KeyFSTypesRO | Absent | Deleted
                 try:
-                    old_val = conn.get_relpath_at(relpath, serial - 1).value
+                    old_val = conn.get_key_at_serial(key, serial - 1).value
                 except KeyError:
                     old_val = absent
-                typedkey = self.get_key_instance(keyname, relpath)
-                subscriber_changes[typedkey] = (val, back_serial)
+                subscriber_changes[key] = (val, back_serial)
                 records.append(
                     Record(
-                        typedkey,
+                        key,
                         deleted if val is None else get_mutable_deepcopy(val),
                         back_serial,
                         old_val,
@@ -780,69 +781,69 @@ class Transaction:
     def iter_relpaths_at(self, typedkeys, at_serial):
         return self.conn.iter_relpaths_at(typedkeys, at_serial)
 
-    def iter_serial_and_value_backwards(self, relpath, last_serial):
+    def iter_serial_and_value_backwards(
+        self, key: LocatedKey, last_serial: int
+    ) -> Iterator[tuple[int, KeyFSTypesRO]]:
         while last_serial >= 0:
-            data = self.conn.get_relpath_at(relpath, last_serial)
+            data = self.conn.get_key_at_serial(key, last_serial)
             yield (data.last_serial, data.value)
             last_serial = data.back_serial
 
     def get_last_serial_and_value_at(
-        self,
-        typedkey: LocatedKey[KeyType, KeyTypeRO],
-        at_serial: int,
+        self, key: LocatedKey[KeyType, KeyTypeRO], at_serial: int
     ) -> tuple[int, KeyTypeRO | Absent]:
-        relpath = typedkey.relpath
         try:
-            data = self.conn.get_relpath_at(relpath, at_serial)
+            data = self.conn.get_key_at_serial(key, at_serial)
         except KeyError:
             return (-1, absent)
         return (data.last_serial, data.value)
 
-    def get_value_at(self, typedkey: LocatedKey[KeyType, KeyTypeRO], at_serial: int) -> KeyTypeRO | None:
-        return self.last_serial_and_value_at(typedkey, at_serial)[1]
+    def get_value_at(self, key: LocatedKey[KeyType, KeyTypeRO], at_serial: int) -> KeyTypeRO:
+        return self.last_serial_and_value_at(key, at_serial)[1]
 
-    def last_serial(self, typedkey: LocatedKey[KeyType, KeyTypeRO]) -> int:
-        if typedkey in self.cache:
+    def last_serial(self, key: LocatedKey[KeyType, KeyTypeRO]) -> int:
+        if key in self.cache:
             return self.at_serial
-        return self.get_original(typedkey)[0]
+        return self.get_original(key)[0]
 
-    def last_serial_and_value_at(self, typedkey, at_serial):
-        relpath = typedkey.relpath
-        data = self.conn.get_relpath_at(relpath, at_serial)
+    def last_serial_and_value_at(
+        self, key: LocatedKey, at_serial: int
+    ) -> tuple[int, Any]:
+        data = self.conn.get_key_at_serial(key, at_serial)
         if data.value is deleted:
-            raise KeyError(relpath)  # was deleted
+            raise KeyError(key)  # was deleted
         return (data.last_serial, data.value)
 
-    def is_dirty(self, typedkey):
-        return typedkey in self.dirty
+    def is_dirty(self, key: LocatedKey) -> bool:
+        return key in self.dirty
 
-    def get_original(self, typedkey: LocatedKey[KeyType, KeyTypeRO]) -> tuple[int, KeyTypeRO | Absent | Deleted]:
+    def get_original(self, key: LocatedKey[KeyType, KeyTypeRO]) -> tuple[int, KeyTypeRO | Absent | Deleted]:
         """ Return original value from start of transaction,
             without changes from current transaction."""
-        if typedkey not in self._original:
-            tup = self.get_last_serial_and_value_at(typedkey, self.at_serial)
+        if key not in self._original:
+            tup = self.get_last_serial_and_value_at(key, self.at_serial)
             # make mypy happy
             (serial, val) = tup
             if val not in (absent, deleted):
                 assert is_deeply_readonly(val)
             if TYPE_CHECKING:
                 assert isinstance(val, (KeyFSTypesRO, Absent, Deleted))
-            self._original[typedkey] = (serial, val)
-        (rserial, rval) = self._original[typedkey]
+            self._original[key] = (serial, val)
+        (rserial, rval) = self._original[key]
         if TYPE_CHECKING:
             assert isinstance(rval, (KeyFSTypesRO, Absent, Deleted))
         return (rserial, cast("KeyTypeRO | Absent | Deleted", rval))
 
-    def _get(self, typedkey: LocatedKey[KeyType, KeyTypeRO]) -> KeyType | KeyTypeRO:
-        assert isinstance(typedkey, LocatedKey)
+    def _get(self, key: LocatedKey[KeyType, KeyTypeRO]) -> KeyType | KeyTypeRO:
+        assert isinstance(key, LocatedKey)
         val: KeyType | KeyTypeRO | Absent | Deleted
-        if typedkey in self.cache:
-            val = cast("KeyTypeRO | Deleted", self.cache[typedkey])
+        if key in self.cache:
+            val = cast("KeyTypeRO | Deleted", self.cache[key])
         else:
-            val = self.get_original(typedkey)[1]
+            val = self.get_original(key)[1]
         if isinstance(val, (Absent, Deleted)):
             # for convenience we return an empty instance
-            val = typedkey.type()
+            val = key.type()
         return val
 
     def get(self, typedkey: LocatedKey[KeyType, KeyTypeRO]) -> KeyTypeRO:
