@@ -673,8 +673,7 @@ def test_changelog(keyfs):
     with keyfs.write_transaction():
         D.set({2: 2})
     with keyfs.read_transaction() as tx:
-        changes = list(
-            tx.iter_serial_and_value_backwards(D.relpath, tx.at_serial))
+        changes = list(tx.iter_serial_and_value_backwards(D, tx.at_serial))
     assert changes == [
         (1, {2: 2}),
         (0, {1: 1})]
@@ -905,6 +904,23 @@ class TestSubscriber:
         with keyfs.read_transaction(at_serial=-1) as tx:
             assert tx.at_serial == -1
 
+    def test_last_key_serial(self, keyfs):
+        key1 = keyfs.register_named_key_factory("SOME1", "{some}/1", None, set)
+        key2 = keyfs.register_named_key_factory("SOME2", "{some}/2", None, int)
+        for i in range(10):
+            with keyfs.write_transaction() as tx:
+                key1(some="foo").set({i})
+                if not (i % 2):
+                    key2(some="foo").set(i)
+            last_serial = tx.commit_serial
+        with keyfs.read_transaction(at_serial=5) as tx:
+            v1 = key1(some="foo").get()
+            v2 = key2(some="foo").get()
+            assert v1 == {tx.at_serial}
+            assert v2 == (tx.at_serial - 1)
+            assert tx.conn.last_key_serial(key1(some="foo")) == last_serial
+            assert tx.conn.last_key_serial(key2(some="foo")) == (last_serial - 1)
+
 
 @notransaction
 def test_file_rollback(file_digest, keyfs, monkeypatch, storage_info):
@@ -927,7 +943,8 @@ def test_crash_recovery(caplog, keyfs, storage_info):
         pytest.skip("The storage doesn't have marker 'storage_with_filesystem'.")
     content = b'foo'
     hashes = get_hashes(content)
-    key = keyfs.register_named_key_factory("STAGEFILE", "{path}", None, dict)
+    key = keyfs.register_named_key_factory("PYPIFILE_NOMD5", "+e/{path}", None, dict)
+    key = keyfs.register_named_key_factory("STAGEFILE", "+f/{path}", None, dict)
     file_path_info = FilePathInfo(RelPath("+f/foo"), hashes.get_default_value())
     with keyfs.write_transaction() as tx:
         key(path="foo").set(dict(hashes=hashes))
