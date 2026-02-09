@@ -27,7 +27,7 @@ import re
 if TYPE_CHECKING:
     from .interfaces import ContentOrFile
     from .keyfs_types import LocatedKey
-    from .keyfs_types import NamedKeyFactory
+    from .keyfs_types import PatternedKey
     from .keyfs_types import RelPath
     from .markers import Absent
     from typing import Any
@@ -619,7 +619,7 @@ class BaseFileEntry:
 
     @property
     def key_digestpaths(self) -> LocatedKey[set[str]]:
-        return cast("NamedKeyFactory[set[str]]", self.key.keyfs.DIGESTPATHS)(
+        return cast("PatternedKey[set[str]]", self.key.keyfs.DIGESTPATHS)(
             digest=self.hashes[DEFAULT_HASH_TYPE]
         )
 

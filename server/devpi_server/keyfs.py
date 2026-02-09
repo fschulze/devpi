@@ -19,13 +19,14 @@ from .interfaces import IStorageConnection
 from .interfaces import IWriter
 from .keyfs_types import KeyData
 from .keyfs_types import LocatedKey
-from .keyfs_types import NamedKey
-from .keyfs_types import NamedKeyFactory
+from .keyfs_types import PatternedKey
 from .keyfs_types import Record
+from .keyfs_types import ULID
 from .log import thread_change_log_prefix
 from .log import thread_pop_log
 from .log import thread_push_log
 from .log import threadlog
+from .markers import Absent
 from .markers import absent
 from .markers import deleted
 from .model import RootModel
@@ -45,17 +46,16 @@ import time
 
 if TYPE_CHECKING:
     from .keyfs_types import IKeyFSKey
+    from .keyfs_types import KeyFSTypes
     from .keyfs_types import KeyFSTypesRO
     from .keyfs_types import KeyType
     from .keyfs_types import RelPath
     from .keyfs_types import StorageInfo
-    from .markers import Absent
     from .markers import Deleted
     from .mythread import MyThread
     from collections.abc import Callable
     from collections.abc import Iterable
     from collections.abc import Iterator
-    from typing import Any
     from typing import Literal
 
     KeyFSConn = IStorageConnection
@@ -274,11 +274,13 @@ class TxNotificationThread:
 class KeyFS:
     """ singleton storage object. """
 
+    _used_ulids: set[ULID]
+
     class ReadOnly(Exception):
         """ attempt to open write transaction while in readonly mode. """
 
     _import_subscriber: Callable | None
-    _keys: dict[str, LocatedKey | NamedKey | NamedKeyFactory]
+    _keys: dict[str, LocatedKey | PatternedKey]
 
     def __init__(
         self,
@@ -302,8 +304,10 @@ class KeyFS:
         )
         self.io_file_factory = io_file_factory
         self._readonly = readonly
+        self._current_ulid_ts = -1
+        self._used_ulids = set()
 
-    def __getattr__(self, name: str) -> LocatedKey | NamedKey | NamedKeyFactory:
+    def __getattr__(self, name: str) -> LocatedKey | PatternedKey:
         if name not in self._keys:
             raise AttributeError(name)
         assert name not in self.__dict__
@@ -312,6 +316,19 @@ class KeyFS:
 
     def __repr__(self):
         return f"<{self.__class__.__name__} {self.base_path}>"
+
+    def _new_ulid(self) -> ULID:
+        _current_ulid_ts = self._current_ulid_ts
+        _used_ulids = self._used_ulids
+        while 1:
+            ulid = ULID.new()
+            if ulid not in _used_ulids:
+                if (ts_part := ulid.ts_part) != _current_ulid_ts:
+                    _used_ulids.clear()
+                    _current_ulid_ts = self._current_ulid_ts = ts_part
+                _used_ulids.add(ulid)
+                return ulid
+        raise RuntimeError
 
     @overload
     def get_connection(
@@ -394,14 +411,25 @@ class KeyFS:
                     raise TypeError
                 key = self.get_key_instance(change.keyname, change.relpath)
                 assert key is not None
+                old_ulid: ULID | Absent
                 old_val: KeyFSTypesRO | Absent | Deleted
                 try:
-                    old_val = conn.get_key_at_serial(key, serial - 1).value
+                    old_data = conn.get_key_at_serial(key, serial - 1)
+                    old_ulid = old_data.ulid
+                    old_val = old_data.value
                 except KeyError:
+                    old_ulid = absent
                     old_val = absent
                 subscriber_changes[key] = (change.value, change.back_serial)
                 records.append(
-                    Record(key, change.mutable_value, change.back_serial, old_val)
+                    Record(
+                        key,
+                        change.ulid,
+                        change.mutable_value,
+                        change.back_serial,
+                        old_ulid,
+                        old_val,
+                    )
                 )
             fswriter.records_set(records)
         if callable(self._import_subscriber):
@@ -469,16 +497,11 @@ class KeyFS:
     def register_key(self, key: LocatedKey[KeyType]) -> LocatedKey[KeyType]: ...
 
     @overload
-    def register_key(self, key: NamedKey[KeyType]) -> NamedKey[KeyType]: ...
-
-    @overload
-    def register_key(
-        self, key: NamedKeyFactory[KeyType]
-    ) -> NamedKeyFactory[KeyType]: ...
+    def register_key(self, key: PatternedKey[KeyType]) -> PatternedKey[KeyType]: ...
 
     def register_key(
-        self, key: LocatedKey[KeyType] | NamedKey[KeyType] | NamedKeyFactory[KeyType]
-    ) -> LocatedKey[KeyType] | NamedKey[KeyType] | NamedKeyFactory[KeyType]:
+        self, key: LocatedKey[KeyType] | PatternedKey[KeyType]
+    ) -> LocatedKey[KeyType] | PatternedKey[KeyType]:
         allowed_chars = frozenset("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_")
         key_name = key.key_name
         assert not set(key_name).difference(allowed_chars), (
@@ -492,64 +515,43 @@ class KeyFS:
 
     @overload
     def register_anonymous_key(
-        self,
-        key_name: str,
-        parent_key: None,
-        key_type: type[KeyType],
+        self, key_name: str, parent_key: None, key_type: type[KeyType]
     ) -> LocatedKey[KeyType]: ...
 
     @overload
     def register_anonymous_key(
-        self,
-        key_name: str,
-        parent_key: NamedKey | NamedKeyFactory,
-        key_type: type[KeyType],
-    ) -> NamedKey[KeyType]: ...
+        self, key_name: str, parent_key: PatternedKey, key_type: type[KeyType]
+    ) -> PatternedKey[KeyType]: ...
 
     def register_anonymous_key(
-        self,
-        key_name: str,
-        parent_key: NamedKey | NamedKeyFactory | None,
-        key_type: type[KeyType],
-    ) -> LocatedKey[KeyType] | NamedKey[KeyType]:
+        self, key_name: str, parent_key: PatternedKey | None, key_type: type[KeyType]
+    ) -> LocatedKey[KeyType] | PatternedKey[KeyType]:
         if parent_key is None:
             return self.register_located_key(key_name, "", "", key_type)
-        return self.register_named_key(key_name, "", parent_key, key_type)
+        return self.register_patterned_key(key_name, "", parent_key, key_type)
 
     def register_located_key(
-        self,
-        key_name: str,
-        location: str,
-        name: str,
-        key_type: type[KeyType],
+        self, key_name: str, location: str, name: str, key_type: type[KeyType]
     ) -> LocatedKey[KeyType]:
-        return self.register_key(LocatedKey(self, key_name, location, name, key_type))
-
-    def register_named_key(
-        self,
-        key_name: str,
-        pattern_or_name: str,
-        parent_key: NamedKey | NamedKeyFactory,
-        key_type: type[KeyType],
-    ) -> NamedKey[KeyType]:
-        assert "{" not in pattern_or_name
+        assert "{" not in name
         return self.register_key(
-            NamedKey(self, key_name, pattern_or_name, parent_key, key_type)
+            LocatedKey(self, key_name, f"{location}/{name}", key_type)
         )
 
-    def register_named_key_factory(
+    def register_patterned_key(
         self,
         key_name: str,
-        pattern_or_name: str,
-        parent_key: NamedKey | NamedKeyFactory | None,
+        pattern: str,
+        parent_key: PatternedKey | None,
         key_type: type[KeyType],
-    ) -> NamedKeyFactory[KeyType]:
-        assert "{" in pattern_or_name
+    ) -> PatternedKey[KeyType]:
+        assert "{" in pattern or not pattern
+        assert not isinstance(parent_key, LocatedKey)
         return self.register_key(
-            NamedKeyFactory(self, key_name, pattern_or_name, parent_key, key_type)
+            PatternedKey(self, key_name, pattern, parent_key, key_type)
         )
 
-    def get_key(self, name: str) -> LocatedKey | NamedKey | NamedKeyFactory | None:
+    def get_key(self, name: str) -> LocatedKey | PatternedKey | None:
         return self._keys.get(name)
 
     def get_key_instance(self, keyname: str, relpath: RelPath) -> LocatedKey | None:
@@ -576,7 +578,7 @@ class KeyFS:
         self, *, write: bool = False, at_serial: int | None = None
     ) -> Transaction:
         if write and self._readonly:
-            raise self.ReadOnly()
+            raise self.ReadOnly
         assert not hasattr(self._threadlocal, "tx")
         tx = Transaction(self, write=write, at_serial=at_serial)
         self._threadlocal.tx = tx
@@ -590,7 +592,7 @@ class KeyFS:
 
     def restart_as_write_transaction(self):
         if self._readonly:
-            raise self.ReadOnly()
+            raise self.ReadOnly
         tx = self.tx
         if tx.write:
             raise RuntimeError("Can't restart a write transaction.")
@@ -804,9 +806,11 @@ class FileStoreTransaction:
 
 
 class Transaction:
+    _dirty: dict[LocatedKey, tuple[ULID, KeyFSTypes | Deleted]]
     _model: TransactionRootModel | Absent
+    _original: dict[LocatedKey, tuple[int, ULID | Absent, KeyFSTypesRO | Absent]]
 
-    def __init__(self, keyfs, at_serial=None, write=False):
+    def __init__(self, keyfs, *, at_serial=None, write=False):
         if write and at_serial:
             raise RuntimeError(
                 "Can't open write transaction with 'at_serial'.")
@@ -820,8 +824,7 @@ class Transaction:
             at_serial = self.conn.last_changelog_serial
         self.at_serial = at_serial
         self._original = {}
-        self.cache = {}
-        self.dirty = set()
+        self._dirty = {}
         self.closed = False
         self.doomed = False
         self._model = absent
@@ -855,100 +858,124 @@ class Transaction:
 
     def get_last_serial_and_value_at(
         self, key: LocatedKey, at_serial: int
-    ) -> tuple[int, Any]:
+    ) -> tuple[int, ULID | Absent, KeyFSTypesRO | Absent]:
         try:
             data = self.conn.get_key_at_serial(key, at_serial)
         except KeyError:
-            return (-1, absent)
-        return (data.last_serial, data.value)
+            return (-1, absent, absent)
+        return (data.last_serial, ULID(data.ulid), data.value)
 
     def get_value_at(self, key: LocatedKey, at_serial: int) -> KeyFSTypesRO:
         (_last_serial, val) = self.last_serial_and_value_at(key, at_serial)
         return val
 
     def last_serial(self, key: LocatedKey) -> int:
-        if key in self.cache:
+        if key in self._dirty:
             return self.at_serial
-        (last_serial, _val) = self.get_original(key)
+        (last_serial, _ulid, _val) = self.get_original(key)
         return last_serial
 
     def last_serial_and_value_at(
         self, key: LocatedKey, at_serial: int
-    ) -> tuple[int, Any]:
+    ) -> tuple[int, KeyFSTypesRO]:
         data = self.conn.get_key_at_serial(key, at_serial)
         if data.value is deleted:
             raise KeyError(key)  # was deleted
         return (data.last_serial, data.value)
 
     def is_dirty(self, key: LocatedKey) -> bool:
-        return key in self.dirty
+        return key in self._dirty
 
-    def get_original(self, key: LocatedKey) -> tuple[int, Any]:
+    def get_original(
+        self, key: LocatedKey
+    ) -> tuple[int, ULID | Absent, KeyFSTypesRO | Absent]:
         """ Return original value from start of transaction,
             without changes from current transaction."""
         if key not in self._original:
-            (serial, val) = self.get_last_serial_and_value_at(key, self.at_serial)
+            (serial, ulid, val) = self.get_last_serial_and_value_at(key, self.at_serial)
             if val not in (absent, deleted):
+                assert isinstance(ulid, ULID)
                 assert is_deeply_readonly(val)
-            self._original[key] = (serial, val)
+            self._original[key] = (serial, ulid, val)
         return self._original[key]
 
-    def _get(self, key: LocatedKey) -> Any:
+    def _get(
+        self, key: LocatedKey
+    ) -> tuple[ULID | Absent, KeyFSTypes | KeyFSTypesRO | Absent | Deleted]:
+        ulid: ULID | Absent
+        val: KeyFSTypes | KeyFSTypesRO | Absent | Deleted
         assert isinstance(key, LocatedKey)
-        if key in self.cache:
-            val = self.cache[key]
+        if key in self._dirty:
+            (ulid, val) = self._dirty[key]
         else:
-            (_back_serial, val) = self.get_original(key)
-        if val in (absent, deleted):
-            # for convenience we return an empty instance
-            val = key.type()
-        return val
+            (_back_serial, ulid, val) = self.get_original(key)
+        return (ulid, val)
 
     def get(self, typedkey):
         """Return current read-only value referenced by typedkey."""
-        return ensure_deeply_readonly(self._get(typedkey))
+        (_ulid, val) = self._get(typedkey)
+        if val in (absent, deleted):
+            # for convenience we return an empty instance
+            val = typedkey.key_type()
+        return ensure_deeply_readonly(val)
 
     def get_mutable(self, typedkey):
         """Return current mutable value referenced by typedkey."""
-        return get_mutable_deepcopy(self._get(typedkey))
+        (_ulid, val) = self._get(typedkey)
+        if val in (absent, deleted):
+            # for convenience we return an empty instance
+            val = typedkey.key_type()
+        return get_mutable_deepcopy(val)
 
-    def exists(self, typedkey):
-        if typedkey in self.cache:
-            val = self.cache[typedkey]
-            return val not in (absent, deleted)
-        (serial, val) = self.get_original(typedkey)
+    def get_ulid(self, typedkey):
+        (ulid, _val) = self._get(typedkey)
+        return ulid
+
+    def exists(self, key: LocatedKey) -> bool:
+        _ulid: ULID | Absent
+        val: KeyFSTypes | KeyFSTypesRO | Absent | Deleted
+        if key in self._dirty:
+            (_ulid, val) = self._dirty[key]
+        else:
+            (_serial, _ulid, val) = self.get_original(key)
         return val not in (absent, deleted)
 
     def delete(self, typedkey):
         if not self.write:
-            raise self.keyfs.ReadOnly()
-        self.cache[typedkey] = deleted
-        self.dirty.add(typedkey)
+            raise self.keyfs.ReadOnly
+        (_serial, ulid, _val) = self.get_original(typedkey)
+        if isinstance(ulid, Absent):
+            if typedkey in self._dirty:
+                del self._dirty[typedkey]
+        else:
+            self._dirty[typedkey] = (ulid, deleted)
 
-    def deleted(self, typedkey):
-        if typedkey in self.cache:
-            val = self.cache[typedkey]
-            return val is deleted
-        (_serial, val) = self.get_original(typedkey)
+    def deleted(self, key: LocatedKey) -> bool:
+        _ulid: ULID | Absent
+        val: KeyFSTypes | KeyFSTypesRO | Absent | Deleted
+        if key in self._dirty:
+            (_ulid, val) = self._dirty[key]
+        else:
+            (_serial, _ulid, val) = self.get_original(key)
         return val is deleted
 
-    def set(self, typedkey, val):  # noqa: A003
+    def set(self, typedkey, val):
         if not self.write:
-            raise self.keyfs.ReadOnly()
+            raise self.keyfs.ReadOnly
         # sanity check for dictionaries: we always want to have unicode
         # keys, not bytes
-        if typedkey.type is dict:
+        if typedkey.key_type is dict:
             check_unicode_keys(val)
-        assert val is not None
-        self.cache[typedkey] = val
-        self.dirty.add(typedkey)
+        assert val not in (None, absent, deleted)
+        (ulid, old_val) = self._get(typedkey)
+        if old_val in (absent, deleted):
+            ulid = self.keyfs._new_ulid()
+        assert not isinstance(ulid, Absent)
+        self._dirty[typedkey] = (ulid, val)
 
     def commit(self):
         threadlog.debug(
-            "_original %s, cache %s, dirty %s",
-            len(self._original),
-            len(self.cache),
-            len(self.dirty),
+            "_original %s, _dirty %s", len(self._original), len(self._dirty)
         )
         if self.doomed:
             threadlog.debug("closing doomed transaction")
@@ -960,15 +987,15 @@ class Transaction:
             self._run_listeners(self._finished_listeners)
             return result
         records: list[Record] = []
-        for typedkey in self.dirty:
-            val = self.cache[typedkey]
+        for typedkey, (ulid, val) in self._dirty.items():
+            assert ulid is not absent
             assert val is not absent
-            (back_serial, old_val) = self.get_original(typedkey)
-            if val == old_val:
+            (back_serial, old_ulid, old_val) = self.get_original(typedkey)
+            if val == old_val and ulid == old_ulid:
                 continue
             if val is deleted and old_val in (absent, deleted):
                 continue
-            records.append(Record(typedkey, val, back_serial, old_val))
+            records.append(Record(typedkey, ulid, val, back_serial, old_ulid, old_val))
         if not records and not self.io_file.is_dirty():
             threadlog.debug("nothing to commit, just closing tx")
             result = self._close()
@@ -1009,8 +1036,7 @@ class Transaction:
             threadlog.debug("closing transaction at %s", self.at_serial)
             del self._model
             del self._original
-            del self.cache
-            del self.dirty
+            del self._dirty
         finally:
             self.conn.close()
             self.closed = True

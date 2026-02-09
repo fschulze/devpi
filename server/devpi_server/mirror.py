@@ -45,7 +45,7 @@ if TYPE_CHECKING:
     from .filestore import FileEntry
     from .httpclient import AsyncGetResponse
     from .httpclient import HTTPClient
-    from .keyfs_types import NamedKeyFactory
+    from .keyfs_types import PatternedKey
     from .model import JoinedLinkList
     from .model import LinksList
     from .model import RequiresPythonList
@@ -641,7 +641,7 @@ class MirrorStage(BaseStage):
                 # called from the notification thread
                 if not self.keyfs.tx.write:
                     self.keyfs.restart_read_transaction()
-                k = cast("NamedKeyFactory[int]", self.keyfs.MIRRORNAMESINIT)(
+                k = cast("PatternedKey[int]", self.keyfs.MIRRORNAMESINIT)(
                     user=self.username, index=self.index
                 )
                 # when 0 it is new, when 1 it is pre 6.6.0 with
@@ -1080,7 +1080,7 @@ class MirrorStage(BaseStage):
         if info is None:
             # never existed
             return -1
-        (last_serial, links) = info
+        (last_serial, _ulid, _links) = info
         return last_serial
 
     def get_versiondata_perstage(self, project, version, *, with_elinks=True):

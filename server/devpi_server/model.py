@@ -44,7 +44,7 @@ if TYPE_CHECKING:
     from .keyfs import KeyChangeEvent
     from .keyfs import KeyFS
     from .keyfs_types import LocatedKey
-    from .keyfs_types import NamedKeyFactory
+    from .keyfs_types import PatternedKey
     from .main import XOM
     from .normalized import NormalizedName
     from collections.abc import Sequence
@@ -378,15 +378,13 @@ class User:
         self.keyfs = parent.keyfs
         self.xom = parent.xom
         self.name = name
-        self.key = cast("NamedKeyFactory[dict]", self.keyfs.USER)(user=self.name)
-        self.key_indexes = cast("NamedKeyFactory[set[str]]", self.keyfs.INDEXLIST)(
+        self.key = cast("PatternedKey[dict]", self.keyfs.USER)(user=self.name)
+        self.key_indexes = cast("PatternedKey[set]", self.keyfs.INDEXLIST)(
             user=self.name
         )
 
     def key_index(self, index: str) -> LocatedKey[dict]:
-        return cast("NamedKeyFactory[dict]", self.keyfs.INDEX)(
-            user=self.name, index=index
-        )
+        return cast("PatternedKey[dict]", self.keyfs.INDEX)(user=self.name, index=index)
 
     def get_cleaned_config(self, **kwargs):
         result = {}
@@ -733,10 +731,10 @@ class BaseStage:
         # the following attributes are per-xom singletons
         self.keyfs = xom.keyfs
         self.filestore = xom.filestore
-        self.key_index = cast("NamedKeyFactory[dict]", self.keyfs.INDEX)(
+        self.key_index = cast("PatternedKey[dict]", self.keyfs.INDEX)(
             user=username, index=index
         )
-        self.key_projects = cast("NamedKeyFactory[set[str]]", self.keyfs.PROJNAMES)(
+        self.key_projects = cast("PatternedKey[set[str]]", self.keyfs.PROJNAMES)(
             user=username, index=index
         )
 
@@ -850,7 +848,7 @@ class BaseStage:
         self.model.delete_stage(self.username, self.index)
 
     def key_projsimplelinks(self, project: str) -> LocatedKey[dict]:
-        return cast("NamedKeyFactory[dict]", self.keyfs.PROJSIMPLELINKS)(
+        return cast("PatternedKey[dict]", self.keyfs.PROJSIMPLELINKS)(
             user=self.username, index=self.index, project=normalize_name(project)
         )
 
@@ -1372,8 +1370,8 @@ class PrivateStage(BaseStage):
         validate_metadata(dict(metadata))
         self._set_versiondata(metadata)
 
-    def key_projversions(self, project: NormalizedName | str) -> LocatedKey[set[str]]:
-        return cast("NamedKeyFactory[set[str]]", self.keyfs.PROJVERSIONS)(
+    def key_projversions(self, project: NormalizedName | str) -> LocatedKey[set]:
+        return cast("PatternedKey[set]", self.keyfs.PROJVERSIONS)(
             user=self.username,
             index=self.index,
             project=normalize_name(project),
@@ -1381,8 +1379,8 @@ class PrivateStage(BaseStage):
 
     def key_projversion(
         self, project: NormalizedName | str, version: str
-    ) -> LocatedKey[dict[str, object]]:
-        return cast("NamedKeyFactory[dict[str, object]]", self.keyfs.PROJVERSION)(
+    ) -> LocatedKey[dict]:
+        return cast("PatternedKey[dict]", self.keyfs.PROJVERSION)(
             user=self.username,
             index=self.index,
             project=normalize_name(project),
@@ -1392,7 +1390,7 @@ class PrivateStage(BaseStage):
     def key_versionfilelist(
         self, project: NormalizedName | str, version: str
     ) -> LocatedKey[set[str]]:
-        return cast("NamedKeyFactory[set[str]]", self.keyfs.VERSIONFILELIST)(
+        return cast("PatternedKey[set[str]]", self.keyfs.VERSIONFILELIST)(
             user=self.username,
             index=self.index,
             project=normalize_name(project),
@@ -1402,7 +1400,7 @@ class PrivateStage(BaseStage):
     def key_versionfile(
         self, project: NormalizedName | str, version: str, filename: str
     ) -> LocatedKey[dict]:
-        return cast("NamedKeyFactory[dict]", self.keyfs.VERSIONFILE)(
+        return cast("PatternedKey[dict]", self.keyfs.VERSIONFILE)(
             user=self.username,
             index=self.index,
             project=normalize_name(project),
@@ -1493,13 +1491,13 @@ class PrivateStage(BaseStage):
         tx = self.keyfs.tx
         if at_serial is None:
             at_serial = tx.at_serial
-        (last_serial, projects) = tx.get_last_serial_and_value_at(
+        (last_serial, _projects_ulid, projects) = tx.get_last_serial_and_value_at(
             self.key_projects, at_serial
         )
         if projects in (absent, deleted):
             # the whole index never existed or was deleted
             return -1
-        (versions_serial, versions) = tx.get_last_serial_and_value_at(
+        (versions_serial, _versions_ulid, versions) = tx.get_last_serial_and_value_at(
             self.key_projversions(project), at_serial
         )
         if versions is absent:
@@ -1513,16 +1511,20 @@ class PrivateStage(BaseStage):
             return last_serial
         last_serial = versions_serial
         for version in versions:
-            (version_serial, version_info) = tx.get_last_serial_and_value_at(
-                self.key_projversion(project, version), at_serial
+            (version_serial, _version_info_ulid, version_info) = (
+                tx.get_last_serial_and_value_at(
+                    self.key_projversion(project, version), at_serial
+                )
             )
             if version_info in (absent, deleted):
                 continue
             last_serial = max(last_serial, version_serial)
             if last_serial >= at_serial:
                 return last_serial
-            (versionfiles_serial, versionfiles_info) = tx.get_last_serial_and_value_at(
-                self.key_versionfilelist(project, version), at_serial
+            (versionfiles_serial, _versionfiles_info_ulid, versionfiles_info) = (
+                tx.get_last_serial_and_value_at(
+                    self.key_versionfilelist(project, version), at_serial
+                )
             )
             if versionfiles_info in (absent, deleted):
                 continue
@@ -1530,7 +1532,7 @@ class PrivateStage(BaseStage):
             if last_serial >= at_serial:
                 return last_serial
             for filename in versionfiles_info:
-                (versionfile_serial, versionfile_info) = (
+                (versionfile_serial, _versionfile_info_ulid, versionfile_info) = (
                     tx.get_last_serial_and_value_at(
                         self.key_versionfile(project, version, filename), at_serial
                     )
@@ -2197,34 +2199,34 @@ def normalize_bases(model, bases):
 
 def register_keys(xom: XOM, keyfs: KeyFS) -> None:
     # users and index configuration
-    user_key = keyfs.register_named_key_factory("USER", "{user}", None, dict)
+    user_key = keyfs.register_patterned_key("USER", "{user}", None, dict)
     keyfs.register_anonymous_key("USERLIST", None, set)
-    index_key = keyfs.register_named_key_factory("INDEX", "{index}", user_key, dict)
+    index_key = keyfs.register_patterned_key("INDEX", "{index}", user_key, dict)
     keyfs.register_anonymous_key("INDEXLIST", user_key, set)
 
     # type mirror related data
-    keyfs.register_named_key_factory(
+    keyfs.register_patterned_key(
         "PYPIFILE_NOMD5", "+e/{dirname}/{basename}", index_key, dict
     )
     keyfs.register_anonymous_key("MIRRORNAMESINIT", index_key, int)
 
     # type "stage" related
-    project_key = keyfs.register_named_key_factory(
+    project_key = keyfs.register_patterned_key(
         "PROJSIMPLELINKS", "{project}", index_key, dict
     )
     keyfs.register_anonymous_key("PROJVERSIONS", project_key, set)
-    version_key = keyfs.register_named_key_factory(
+    version_key = keyfs.register_patterned_key(
         "PROJVERSION", "{version}", project_key, dict
     )
     keyfs.register_anonymous_key("PROJNAMES", index_key, set)
     keyfs.register_anonymous_key("VERSIONFILELIST", version_key, set)
-    keyfs.register_named_key_factory("VERSIONFILE", "{filename}", version_key, dict)
-    keyfs.register_named_key_factory(
+    keyfs.register_patterned_key("VERSIONFILE", "{filename}", version_key, dict)
+    keyfs.register_patterned_key(
         "STAGEFILE", "+f/{hashdir_a}/{hashdir_b}/{filename}", index_key, dict
     )
 
     # files related
-    keyfs.register_named_key_factory("DIGESTPATHS", "{digest}", None, set)
+    keyfs.register_patterned_key("DIGESTPATHS", "{digest}", None, set)
 
     sub = EventSubscribers(xom)
     keyfs.notifier.on_key_change(
