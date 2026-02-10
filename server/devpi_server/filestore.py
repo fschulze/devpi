@@ -434,14 +434,14 @@ class FileStore:
         basename,
         content_or_file,
         *,
-        dir_hash_spec=None,
+        ref_hash_spec=None,
         hashes,
         last_modified=None,
     ):
-        # dir_hash_spec is set for toxresult files
-        if dir_hash_spec is None:
-            dir_hash_spec = hashes.get_default_spec()
-        hashdir_a, hashdir_b = make_splitdir(dir_hash_spec)
+        # ref_hash_spec is set for toxresult files to store them alongside the tested release
+        if ref_hash_spec is None:
+            ref_hash_spec = hashes.get_default_spec()
+        hashdir_a, hashdir_b = make_splitdir(ref_hash_spec)
         key = self.keyfs.schema.STAGEFILE(
             user=user, index=index,
             hashdir_a=hashdir_a, hashdir_b=hashdir_b, filename=basename)
@@ -576,6 +576,10 @@ class BaseFileEntry:
             DeprecationWarning,
             stacklevel=2)
         return self.hashes.best_available_type
+
+    @property
+    def ref_hash_spec(self):
+        return self.hashes.get_default_spec()
 
     def file_get_checksum(self, hash_type):
         warnings.warn(
