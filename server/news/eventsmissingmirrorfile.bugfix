@@ -1,0 +1,1 @@
+Any missing file on mirrors will be ignored during event processing as is already the case in other places.

@@ -250,13 +250,8 @@ class TxNotificationThread:
                         # the index doesn't exist (anymore)
                         continue
                     if current_ixconfig.get("type") == "mirror":
-                        if current_ixconfig.get("mirror_use_external_urls", False):
-                            # the index uses external URLs now
-                            continue
-                        if current_entry.project is None:
-                            # this is an old mirror entry with no
-                            # project info, so this can be ignored
-                            continue
+                        # any missing file on mirrors will be ignored
+                        continue
                     log.debug("missing current_entry.meta %r", current_entry.meta)
                 log.debug("missing entry.meta %r", entry.meta)
                 raise MissingFileException(relpath, event_serial)
