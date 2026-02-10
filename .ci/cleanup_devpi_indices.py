@@ -51,9 +51,9 @@ def run() -> None:
                     file=sys.stderr)
             else:
                 all_dates = all_dates.union(dates)
-        now = datetime.datetime.now(tz=datetime.timezone.utc)
+        now = datetime.datetime.now(tz=datetime.UTC)
         if all_dates:
-            date = datetime.datetime(*max(all_dates), tzinfo=datetime.timezone.utc)
+            date = datetime.datetime(*max(all_dates), tzinfo=datetime.UTC)
         else:
             date = now
         if (now - date) > datetime.timedelta(days=MAXDAYS):
