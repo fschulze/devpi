@@ -156,6 +156,13 @@ def import_(pluginmanager=None, argv=None):
     return runner.return_code or 0
 
 
+def makeentrymapping(entry):
+    result = get_mutable_deepcopy(entry.meta)
+    if "last_modified" in result:
+        result["last_modified"] = entry.gethttpheaders()["last-modified"]
+    return result
+
+
 class Exporter:
     DUMPVERSION = "2"
 
@@ -284,7 +291,7 @@ class IndexDump:
                 linkstore.project,
                 relpath,
                 version=link.version,
-                entrymapping=entry.meta,
+                entrymapping=makeentrymapping(entry),
                 log=link.get_logs(),
             )
 
@@ -304,7 +311,7 @@ class IndexDump:
                 linkstore.project,
                 relpath,
                 version=linkstore.version,
-                entrymapping=entry.meta,
+                entrymapping=makeentrymapping(entry),
                 log=link.get_logs(),
             )
 
@@ -322,7 +329,7 @@ class IndexDump:
                 project=linkstore.project,
                 relpath=relpath,
                 version=linkstore.version,
-                entrymapping=tox_link.entry.meta,
+                entrymapping=makeentrymapping(tox_link.entry),
                 for_entrypath=reflink.relpath,
                 log=tox_link.get_logs(),
             )
