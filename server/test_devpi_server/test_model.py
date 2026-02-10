@@ -1063,8 +1063,8 @@ class TestStage:
                 or "last_modified" not in ev.data.value
             ):
                 return
-            with ev.key.keyfs.filestore_transaction():
-                entry = FileEntry(ev.key, meta=ev.data.value)
+            with ev.data.key.keyfs.filestore_transaction():
+                entry = FileEntry(ev.data.key, meta=ev.data.value)
                 results.append((entry.basename, entry.file_exists()))
 
         mapp.xom.keyfs.notifier.on_key_change(mapp.xom.keyfs.PYPIFILE_NOMD5, subscriber)
@@ -1191,7 +1191,7 @@ class TestStage:
         with xom.keyfs.write_transaction():
             stage = user.create_stage(**udict(
                 index="world", bases=(), type="stage", volatile=True))
-            with pytest.raises(KeyError, match=r"LocatedKey.*INDEX.*hello.*world"):
+            with pytest.raises(KeyError, match=r"Key.*INDEX.*hello.*world"):
                 stage.get_last_change_serial_perstage()
         assert current_serial == xom.keyfs.get_current_serial() - 1
         current_serial = xom.keyfs.get_current_serial()
