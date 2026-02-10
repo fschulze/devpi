@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .filestore import Digests
+from .filestore import best_available_hash_type
 from .filestore import get_hashes
 from .log import threadlog
 from .main import CommandRunner
@@ -321,7 +322,9 @@ class IndexDump:
             relpath = self.exporter.copy_file(
                 tox_link.entry,
                 self.basedir.joinpath(
-                    linkstore.project, reflink._hash_spec, tox_link.basename
+                    linkstore.project,
+                    reflink.best_available_hash_spec,
+                    tox_link.basename,
                 ),
             )
             self.add_filedesc(
@@ -342,6 +345,10 @@ class IndexDump:
         d["type"] = type
         d["projectname"] = project
         d["relpath"] = str(relpath)
+        # backward compatibility to allow devpi-server 6.x importing 7.x exports
+        hashes = d["entrymapping"]["hashes"]
+        hash_type = best_available_hash_type(hashes)
+        d["entrymapping"]["hash_spec"] = f"{hash_type}={hashes[hash_type]}"
         self.indexmeta["files"].append(d)
         self.exporter.completed(f"{type}: {relpath} ")
 
