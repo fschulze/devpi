@@ -15,8 +15,9 @@ from inspect import currentframe
 from typing import TYPE_CHECKING
 from typing import overload
 from urllib.parse import unquote
-from wsgiref.handlers import format_date_time
+import datetime
 import hashlib
+import httpdate
 import mimetypes
 import re
 import warnings
@@ -358,6 +359,19 @@ def key_from_link(keyfs, link, user, index):
             basename=link.basename)
 
 
+def parse_last_modified(last_modified):
+    try:
+        _last_modified = datetime.datetime.strptime(
+            last_modified, "%Y-%m-%dT%H:%M:%S%z"
+        )
+    except ValueError:
+        _last_modified = datetime.datetime.fromtimestamp(
+            httpdate.httpdate_to_unixtime(last_modified),
+            tz=datetime.UTC,
+        )
+    return _last_modified.astimezone(datetime.UTC)
+
+
 def unicode_if_bytes(val):
     if isinstance(val, bytes):
         return val.decode('ascii')
@@ -410,7 +424,17 @@ class FileStore:
     def get_file_entry_from_key(self, key, meta=_nodefault):
         return MutableFileEntry(key, meta=meta)
 
-    def store(self, user, index, basename, content_or_file, *, dir_hash_spec=None, hashes=None):
+    def store(
+        self,
+        user,
+        index,
+        basename,
+        content_or_file,
+        *,
+        dir_hash_spec=None,
+        hashes=None,
+        last_modified=None,
+    ):
         # dir_hash_spec is set for toxresult files
         if dir_hash_spec is None:
             if hashes is None:
@@ -426,7 +450,9 @@ class FileStore:
             user=user, index=index,
             hashdir_a=hashdir_a, hashdir_b=hashdir_b, filename=basename)
         entry = MutableFileEntry(key)
-        entry.file_set_content(content_or_file, hashes=hashes)
+        entry.file_set_content(
+            content_or_file, hashes=hashes, last_modified=last_modified
+        )
         return entry
 
 
@@ -613,9 +639,13 @@ class BaseFileEntry:
 
     def file_set_content(self, content_or_file, *, last_modified=None, hash_spec=None, hashes=None):
         if last_modified != -1:
-            if last_modified is None:
-                last_modified = unicode_if_bytes(format_date_time(None))
-            self.last_modified = last_modified
+            self.last_modified = (
+                datetime.datetime.now(tz=datetime.UTC)
+                if last_modified is None
+                else parse_last_modified(last_modified)
+            ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        else:
+            raise RuntimeError
         hashes = Digests() if hashes is None else Digests(hashes)
         if hash_spec:
             hashes.add_spec(hash_spec)
@@ -653,7 +683,14 @@ class BaseFileEntry:
     def gethttpheaders(self):
         assert self.file_exists()
         headers = {}
-        headers["last-modified"] = str(self.last_modified)
+        if last_modified := self.last_modified:
+            headers["last-modified"] = httpdate.unixtime_to_httpdate(
+                int(
+                    datetime.datetime.strptime(
+                        last_modified, "%Y-%m-%dT%H:%M:%S%z"
+                    ).timestamp()
+                )
+            )
         m = mimetypes.guess_type(self.basename)[0]
         headers["content-type"] = str(m)
         headers["content-length"] = str(self.file_size())

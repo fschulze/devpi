@@ -1904,9 +1904,9 @@ class LinkStore:
             overwrite = sum(x.get('count', 0)
                             for x in link.get_logs() if x.get('what') == 'overwrite')
         self.remove_links(rel=rel, basename=basename)
-        file_entry = self._create_file_entry(basename, content_or_file, hashes=hashes)
-        if last_modified is not None:
-            file_entry.last_modified = last_modified
+        file_entry = self._create_file_entry(
+            basename, content_or_file, hashes=hashes, last_modified=last_modified
+        )
         link = self._add_link_to_file_entry(rel, file_entry)
         if overwrite is not None:
             link.add_log('overwrite', None, count=overwrite + 1)
@@ -1935,11 +1935,12 @@ class LinkStore:
             filename = "%s.%s-%s-%d" % (
                 base_entry.basename, rel, timestamp, len(other_reflinks))
         entry = self._create_file_entry(
-            filename, content_or_file,
+            filename,
+            content_or_file,
             hashes=hashes,
-            ref_hash_spec=base_entry._hash_spec)
-        if last_modified is not None:
-            entry.last_modified = last_modified
+            last_modified=last_modified,
+            ref_hash_spec=base_entry._hash_spec,
+        )
         return self._add_link_to_file_entry(
             rel, entry, for_entrypath=for_entrypath)
 
@@ -1981,13 +1982,24 @@ class LinkStore:
         return list(filter(fil, [ELink(self.filestore, linkdict, self.project, self.version)
                            for linkdict in self.verdata.get("+elinks", [])]))
 
-    def _create_file_entry(self, basename, content_or_file, *, hashes=None, ref_hash_spec=None):
+    def _create_file_entry(
+        self,
+        basename,
+        content_or_file,
+        *,
+        hashes=None,
+        last_modified=None,
+        ref_hash_spec=None,
+    ):
         entry = self.filestore.store(
-            user=self.stage.username, index=self.stage.index,
+            user=self.stage.username,
+            index=self.stage.index,
             basename=basename,
             content_or_file=content_or_file,
             dir_hash_spec=ref_hash_spec,
-            hashes=hashes)
+            hashes=hashes,
+            last_modified=last_modified,
+        )
         entry.project = self.project
         entry.version = self.version
         return entry
