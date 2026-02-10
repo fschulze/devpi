@@ -960,6 +960,20 @@ class TestImportExport:
         (fileinfo,) = data["indexes"][api.stagename]["files"]
         assert httpdate.is_valid_httpdate(fileinfo["entrymapping"]["last_modified"])
 
+    def test_log_as_list(self, impexp):
+        mapp = impexp.mapp1
+        api = mapp.create_and_use()
+        content = b"content"
+        mapp.upload_file_pypi("he-llo-1.0.tar.gz", content, "he_llo", "1.0")
+
+        impexp.export()
+
+        data = json.loads(impexp.exportdir.joinpath("dataindex.json").read_bytes())
+        (fileinfo,) = data["indexes"][api.stagename]["files"]
+        (log,) = fileinfo["log"]
+        assert isinstance(log["when"], list)
+        assert len(log["when"]) == 6
+
     def test_name_mangling_relates_to_issue132(self, impexp):
         mapp1 = impexp.mapp1
         api = mapp1.create_and_use()
