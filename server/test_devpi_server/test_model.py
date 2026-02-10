@@ -1043,6 +1043,35 @@ class TestStage:
         assert stage2.name == stage.name
         assert not metadata
 
+    @pytest.mark.notransaction
+    @pytest.mark.storage_with_filesystem
+    def test_mirror_stage_missing_file_ignored_for_subscribers(self, mapp, pypistage):
+        from devpi_server.filestore import FileEntry
+
+        results = []
+
+        def subscriber(ev):
+            if "last_modified" not in ev.value:
+                return
+            with ev.typedkey.keyfs.filestore_transaction():
+                entry = FileEntry(ev.typedkey, ev.value)
+                results.append((entry.basename, entry.file_exists()))
+
+        mapp.xom.keyfs.PYPIFILE_NOMD5.on_key_change(subscriber)
+        content = b"123"
+        pypistage.mock_extfile("/simple/pytest/pytest-1.0.zip", content)
+        pypistage.mock_simple("pytest", '<a href="pytest-1.0.zip" /a>')
+        mapp.use(pypistage.name)
+        (path,) = mapp.get_release_paths("pytest")
+        r = mapp.testapp.get(path)
+        assert r.body == content
+        with mapp.xom.keyfs.write_transaction():
+            (link,) = pypistage.get_releaselinks("pytest")
+            link.entry.delete_file_only()
+        mapp.xom.thread_pool.start(ignore_running=True)
+        mapp.xom.keyfs.notifier.wait_event_serial(mapp.xom.keyfs.get_current_serial())
+        assert results == [("pytest-1.0.zip", False)]
+
     @pytest.mark.start_threads
     @pytest.mark.notransaction
     def test_stage_created_hook(self, xom, queue):
