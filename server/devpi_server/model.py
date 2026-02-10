@@ -1931,7 +1931,7 @@ class LinkStore:
             content_or_file,
             hashes=hashes,
             last_modified=last_modified,
-            ref_hash_spec=base_entry.best_available_hash_spec,
+            ref_hash_spec=base_entry.ref_hash_spec,
         )
         return self._add_link_to_file_entry(
             rel, entry, for_entrypath=for_entrypath)
@@ -1988,9 +1988,9 @@ class LinkStore:
             index=self.stage.index,
             basename=basename,
             content_or_file=content_or_file,
-            dir_hash_spec=ref_hash_spec,
-            hashes=hashes,
             last_modified=last_modified,
+            ref_hash_spec=ref_hash_spec,
+            hashes=hashes,
         )
         entry.project = self.project
         entry.version = self.version
