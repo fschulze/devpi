@@ -958,7 +958,7 @@ def test_crash_recovery(caplog, keyfs, storage_info):
     key = keyfs.schema.ptypedkey("STAGEFILE", "+f/{path}", dict, DictViewReadonly)
     file_path_info = FilePathInfo(RelPath("+f/foo"), hashes.get_default_value())
     with keyfs.write_transaction() as tx:
-        key(path="foo").set(dict(hash_spec=hashes.get_default_spec()))
+        key(path="foo").set(dict(hashes=hashes))
         tx.io_file.set_content(file_path_info, content)
     with keyfs.read_transaction() as tx:
         path = Path(tx.io_file.os_path(file_path_info))

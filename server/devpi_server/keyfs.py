@@ -397,10 +397,12 @@ class KeyFS(Generic[Schema]):
                     (_, _, val) = conn.get_relpath_at(relpath, serial)
                     if (
                         isinstance(val, (dict, DictViewReadonly))
-                        and "hash_spec" in val
-                        and isinstance(hash_spec := val["hash_spec"], str)
+                        and "hashes" in val
+                        and isinstance(
+                            hashes := val["hashes"], (dict, DictViewReadonly)
+                        )
                     ):
-                        digests = Digests.from_spec(hash_spec)
+                        digests = Digests(get_mutable_deepcopy(hashes))
                     else:
                         digests = Digests()
                     yield FilePathInfo(relpath, digests.get_default_value(None))
