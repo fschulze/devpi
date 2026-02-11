@@ -40,6 +40,7 @@ import warnings
 
 if TYPE_CHECKING:
     from .filestore import FileStore
+    from .interfaces import ContentOrFile
     from .keyfs import KeyFS
     from .keyfs_types import PTypedKey
     from .keyfs_types import TypedKey
@@ -47,6 +48,7 @@ if TYPE_CHECKING:
     from .markers import NotSet
     from .normalized import NormalizedName
     from collections.abc import Sequence
+    from devpi_common.metadata import Version
     from typing import Any
     from typing import Literal
     from typing import Union
@@ -159,7 +161,7 @@ class MissesVersion(ModelException):
 class NonVolatile(ModelException):
     """ A release is overwritten on a non volatile index. """
 
-    link: ELink | None = None  # the conflicting link
+    link: ELink  # the conflicting link
 
 
 class RootModel:
@@ -898,8 +900,14 @@ class BaseStage:
         raise NotImplementedError
 
     def store_toxresult(
-        self, link, content_or_file, *, filename=None, hashes=None, last_modified=None
-    ):
+        self,
+        link: ELink,
+        content_or_file: ContentOrFile,
+        *,
+        filename: str | None = None,
+        hashes: Digests | None = None,
+        last_modified: str | None = None,
+    ) -> ELink:
         if self.customizer.readonly:
             raise ReadonlyIndex("index is marked read only")
         assert not isinstance(content_or_file, dict)
@@ -1544,8 +1552,16 @@ class PrivateStage(BaseStage):
     def has_project_perstage(self, project):
         return normalize_name(project) in self.list_projects_perstage()
 
-    def store_releasefile(self, project, version, filename, content_or_file,
-                          *, hashes=None, last_modified=None):
+    def store_releasefile(
+        self,
+        project: NormalizedName | str,
+        version: str,
+        filename: str,
+        content_or_file: ContentOrFile,
+        *,
+        hashes: Digests | None = None,
+        last_modified: str | None = None,
+    ) -> ELink:
         if self.customizer.readonly:
             raise ReadonlyIndex("index is marked read only")
         project = normalize_name(project)
@@ -1570,8 +1586,15 @@ class PrivateStage(BaseStage):
         self._regen_simplelinks(project)
         return link
 
-    def store_doczip(self, project, version, content_or_file,
-                     *, hashes=None, last_modified=None):
+    def store_doczip(
+        self,
+        project: NormalizedName | str,
+        version: str,
+        content_or_file: ContentOrFile,
+        *,
+        hashes: Digests | None = None,
+        last_modified: str | None = None,
+    ) -> ELink:
         if self.customizer.readonly:
             raise ReadonlyIndex("index is marked read only")
         project = normalize_name(project)
@@ -1858,7 +1881,15 @@ class LinkStore:
     def get_file_entry(self, relpath):
         return self.filestore.get_file_entry(relpath)
 
-    def create_linked_entry(self, rel, basename, content_or_file, *, hashes=None, last_modified=None):
+    def create_linked_entry(
+        self,
+        rel: Rel,
+        basename: str,
+        content_or_file: ContentOrFile,
+        *,
+        hashes: Digests | None = None,
+        last_modified: str | None = None,
+    ) -> ELink:
         overwrite = None
         for link in self.get_links(rel=rel, basename=basename):
             if not self.stage.ixconfig.get("volatile"):
@@ -1878,8 +1909,16 @@ class LinkStore:
             link.add_log('overwrite', None, count=overwrite + 1)
         return link
 
-    def new_reflink(self, rel, content_or_file, for_entrypath,
-                    *, filename=None, hashes=None, last_modified=None):
+    def new_reflink(
+        self,
+        rel: Rel,
+        content_or_file: ContentOrFile,
+        for_entrypath: ELink | str | None,
+        *,
+        filename: str | None = None,
+        hashes: Digests | None = None,
+        last_modified: str | None = None,
+    ) -> ELink:
         if isinstance(for_entrypath, ELink):
             for_entrypath = for_entrypath.relpath
         elif for_entrypath is not None:
@@ -1920,7 +1959,7 @@ class LinkStore:
         self,
         rel: Rel | None = None,
         basename: str | None = None,
-        entrypath: str | None = None,
+        entrypath: ELink | str | None = None,
         for_entrypath: ELink | str | None = None,
     ) -> list[ELink]:
         if isinstance(for_entrypath, ELink):
@@ -1956,7 +1995,9 @@ class LinkStore:
     def _get_inplace_linkdicts(self):
         return self.verdata.setdefault("+elinks", [])
 
-    def _add_link_to_file_entry(self, rel, file_entry, for_entrypath=None):
+    def _add_link_to_file_entry(
+        self, rel: Rel, file_entry: FileEntry, for_entrypath: ELink | str | None = None
+    ) -> ELink:
         if isinstance(for_entrypath, ELink):
             for_entrypath = for_entrypath.relpath
         elif for_entrypath is not None:
@@ -2017,7 +2058,7 @@ class SimplelinkMeta:
         self.__version = notset
         (self.key, self.href, self.require_python, self.yanked) = link_info
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash(
             (
                 self.__basename,
@@ -2036,12 +2077,12 @@ class SimplelinkMeta:
             )
         )
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         if isinstance(other, type(self)):
             other = other.cmpval
         return self.cmpval == other
 
-    def __lt__(self, other):
+    def __lt__(self, other: Any) -> bool:
         if isinstance(other, type(self)):
             other = other.cmpval
         return self.cmpval < other
@@ -2062,11 +2103,11 @@ class SimplelinkMeta:
             return self.yanked
         raise IndexError(f"{self.__class__.__name__} index out of range")
 
-    def __splitbasename(self):
+    def __splitbasename(self) -> None:
         (self.__name, self.__version, self.__ext) = splitbasename(
             self.basename, checkarch=False)
 
-    def __parse_url(self):
+    def __parse_url(self) -> None:
         url = URL(self.href)
         self.__basename = url.basename
         self.__hash_spec = url.hash_spec
@@ -2076,57 +2117,76 @@ class SimplelinkMeta:
         self.__path = url.path
 
     @property
-    def basename(self):
+    def basename(self) -> str:
         if self.__basename is notset:
             self.__parse_url()
+        if TYPE_CHECKING:
+            assert isinstance(self.__basename, str)
         return self.__basename
 
     @property
-    def hash_spec(self):
+    def hash_spec(self) -> str:
         if self.__hash_spec is notset:
             self.__parse_url()
+        if TYPE_CHECKING:
+            assert isinstance(self.__hash_spec, str)
         return self.__hash_spec
 
     @property
-    def hashes(self):
+    def hashes(self) -> Digests:
         if self.__hashes is notset:
             self.__parse_url()
+        if TYPE_CHECKING:
+            assert isinstance(self.__hashes, Digests)
         return self.__hashes
 
     @property
-    def path(self):
+    def path(self) -> str:
         if self.__path is notset:
             self.__parse_url()
+        if TYPE_CHECKING:
+            assert isinstance(self.__path, str)
         return self.__path
 
     @property
-    def name(self):
+    def name(self) -> str:
         if self.__name is notset:
             self.__splitbasename()
+        if TYPE_CHECKING:
+            assert isinstance(self.__name, str)
         return self.__name
 
     @property
-    def version(self):
+    def version(self) -> str:
         if self.__version is notset:
             self.__splitbasename()
+        if TYPE_CHECKING:
+            assert isinstance(self.__version, str)
         return self.__version
 
     @property
-    def ext(self):
+    def ext(self) -> str:
         if self.__ext is notset:
             self.__splitbasename()
+        if TYPE_CHECKING:
+            assert isinstance(self.__ext, str)
         return self.__ext
 
     @property
-    def cmpval(self):
+    def cmpval(self) -> tuple[Version, NormalizedName, str]:
         if self.__cmpval is notset:
             self.__cmpval = (
                 parse_version(self.version),
                 normalize_name(self.name),
                 self.ext)
+        if TYPE_CHECKING:
+            assert isinstance(self.__cmpval, tuple)
+            assert isinstance(self.__cmpval[0], Version)
+            assert isinstance(self.__cmpval[1], NormalizedName)
+            assert isinstance(self.__cmpval[2], str)
         return self.__cmpval
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         clsname = f"{self.__class__.__module__}.{self.__class__.__name__}"
         return (
             f"<{clsname} "

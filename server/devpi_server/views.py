@@ -53,6 +53,8 @@ from pyramid.traversal import DefaultRootFactory
 from pyramid.view import exception_view_config
 from pyramid.view import view_config
 from time import time
+from typing import TYPE_CHECKING
+from typing import cast
 from urllib.parse import urlparse
 import attrs
 import contextlib
@@ -62,6 +64,15 @@ import json
 import os
 import re
 import warnings
+
+
+if TYPE_CHECKING:
+    from .main import XOM
+    from .model import BaseStage
+    from .model import ELink
+    from .model import PrivateStage
+    from collections.abc import Iterator
+    from typing import NoReturn
 
 
 devpiweb_hookimpl = HookimplMarker("devpiweb")
@@ -104,7 +115,7 @@ def is_simple_json_or_requested_by_installer(request):
     return is_simple_json(request) or is_requested_by_installer(request)
 
 
-def abort(request, code, body):
+def abort(request: Request, code: int, body: str) -> NoReturn:
     # if no Accept header is set, then force */*, otherwise the exception
     # will be returned as text/plain, which causes easy_install/setuptools
     # to fail improperly
@@ -115,7 +126,9 @@ def abort(request, code, body):
     raise exception_response(code, explanation=body, headers=meta_headers)
 
 
-def abort_submit(request, code, msg, level="error"):
+def abort_submit(
+    request: Request, code: int, msg: str, level: str = "error"
+) -> NoReturn:
     # we construct our own type because we need to set the title
     # so that setup.py upload/register use it to explain the failure
     error = type(
@@ -130,7 +143,9 @@ def abort_submit(request, code, msg, level="error"):
     raise error(headers=meta_headers)
 
 
-def abort_authenticate(request, msg="authentication required"):
+def abort_authenticate(
+    request: Request, msg: str = "authentication required"
+) -> NoReturn:
     err = type(
         'HTTPError', (HTTPException,), dict(
             code=401, title=msg))
@@ -151,14 +166,14 @@ class HTTPResponse(HTTPSuccessful):
 
 
 def apiresult(
-    code,
-    message=None,
+    code: int,
+    message: str | None = None,
     *,
-    result=None,
-    type=None,  # noqa: A002
-    warnings=None,
-):
-    d = dict()
+    result: dict | list | None = None,
+    type: str | None = None,  # noqa: A002
+    warnings: list | None = None,
+) -> HTTPResponse:
+    d: dict[str, dict | list | str] = {}
     if result is not None:
         assert type is not None
         d["result"] = result
@@ -173,13 +188,13 @@ def apiresult(
 
 
 def apireturn(
-    code,
-    message=None,
+    code: int,
+    message: str | None = None,
     *,
-    result=None,
-    type=None,  # noqa: A002
-    warnings=None,
-):
+    result: dict | list | None = None,
+    type: str | None = None,  # noqa: A002
+    warnings: list | None = None,
+) -> NoReturn:
     raise apiresult(code, message=message, result=result, type=type, warnings=warnings)
 
 
@@ -516,6 +531,8 @@ def version_in_filename(version, filename):
 
 
 class PyPIView:
+    xom: XOM
+
     def __init__(self, request):
         self.request = request
         self.context = request.context
@@ -622,13 +639,13 @@ class PyPIView:
     @view_config(
         route_name="/{user}/{index}/+f/{relpath:.*}",
         request_method="POST")
-    def post_toxresult(self):
+    def post_toxresult(self) -> None:
         if not self.request.has_permission("toxresult_upload"):
             default_tox_result_handling = ToxResultHandling().block(TOXRESULT_UPLOAD_FORBIDDEN)
             tox_result_handling = self.xom.config.hook.devpiserver_on_toxresult_upload_forbidden(
                 request=self.request, tox_result_handling=default_tox_result_handling)
         else:
-            stage = self.context.stage
+            stage = cast("BaseStage", self.context.stage)
             relpath = self.request.path_info.strip("/")
             link = stage.get_link_from_entrypath(relpath)
             if link is None or link.rel != "releasefile":
@@ -1220,7 +1237,14 @@ class PyPIView:
         results.append((r.status_code, "docfile", name))
         return results
 
-    def _push_links(self, links, target_stage, name, version):
+    def _push_links(
+        self,
+        links: dict[str, list[ELink]],
+        target_stage: PrivateStage,
+        name: str,
+        version: str,
+    ) -> Iterator[tuple]:
+        stage = cast("PrivateStage", self.context.stage)
         stage = self.context.stage
         for link in links.get("releasefile", ()):
             entry = link.entry
@@ -1280,11 +1304,12 @@ class PyPIView:
 
     @view_config(
         route_name="/{user}/{index}/", request_method="POST")
-    def submit(self):
+    def submit(self) -> Response:  # noqa: PLR0912
         request = self.request
         stage = self.context.stage
         if not hasattr(stage, "store_releasefile"):
             abort_submit(request, 404, "cannot submit to mirror index")
+        stage = cast("PrivateStage", stage)
         if not request.has_permission("upload"):
             # if there is no authenticated user, then issue a basic auth challenge
             if not request.authenticated_userid:

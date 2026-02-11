@@ -20,12 +20,20 @@ from devpi_server import __version__ as server_version
 from devpi_server.model import get_stage_customizer_classes
 from devpi_server.model import is_valid_name
 from pathlib import Path
+from typing import TYPE_CHECKING
+from typing import cast
 import itertools
 import json
 import logging
 import os
 import shutil
 import sys
+
+
+if TYPE_CHECKING:
+    from .mirror import MirrorStage
+    from .model import BaseStage
+    from .model import PrivateStage
 
 
 def has_users_or_stages(xom):
@@ -567,7 +575,7 @@ class Importer:
             keyfs.notifier.wait_event_serial(wait_serial)
         self.tw.line(f"wait_for_events: importing finished; {latest_serial=}")
 
-    def import_filedesc(self, stage, filedesc, versions):
+    def import_filedesc(self, stage: BaseStage, filedesc: dict, versions: dict) -> None:  # noqa: PLR0912
         rel = filedesc["relpath"]
         project = filedesc["projectname"]
         p = self.import_rootdir / rel
@@ -600,6 +608,7 @@ class Importer:
                 version = filedesc["version"]
 
             if hasattr(stage, 'store_releasefile'):
+                stage = cast("PrivateStage", stage)
                 link = stage.store_releasefile(
                     project,
                     version,
@@ -610,6 +619,7 @@ class Importer:
                 )
                 entry = link.entry
             else:  # mirrors
+                stage = cast("MirrorStage", stage)
                 link = None
                 url = URL(mapping['url']).replace(fragment=hashes.best_available_spec)
                 entry = self.xom.filestore.maplink(
@@ -632,6 +642,7 @@ class Importer:
                 stage._save_cache_links(
                     project, links, requires_python, yanked, serial, None)
         elif filedesc["type"] == Rel.DocZip:
+            stage = cast("PrivateStage", stage)
             version = filedesc["version"]
             # docs didn't always have entrymapping in export dump
             last_modified = mapping.get("last_modified")
@@ -639,6 +650,7 @@ class Importer:
                 project, version, f, hashes=hashes, last_modified=last_modified)
             entry = link.entry
         elif filedesc["type"] == Rel.ToxResult:
+            stage = cast("PrivateStage", stage)
             linkstore = stage.get_linkstore_perstage(project, filedesc["version"])
             # we can not search for the full relative path because
             # it might use a different checksum

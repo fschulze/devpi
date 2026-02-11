@@ -25,6 +25,7 @@ from .log import thread_change_log_prefix
 from .log import thread_pop_log
 from .log import thread_push_log
 from .log import threadlog
+from .markers import Absent
 from .markers import absent
 from .markers import deleted
 from .model import RootModel
@@ -35,6 +36,7 @@ from .readonly import is_deeply_readonly
 from devpi_common.types import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING
+from typing import cast
 from typing import overload
 import contextlib
 import errno
@@ -44,11 +46,13 @@ import warnings
 
 
 if TYPE_CHECKING:
+    from .interfaces import IIOFile
     from .keyfs_types import KeyFSTypesRO
     from .keyfs_types import KeyType
-    from .markers import Absent
+    from .log import TagLogger
     from .markers import Deleted
     from .mythread import MyThread
+    from collections.abc import Callable
     from collections.abc import Iterable
     from collections.abc import Iterator
     from typing import Literal
@@ -86,16 +90,21 @@ class MissingFileException(Exception):
 
 class TxNotificationThread:
     _get_ixconfig_cache: dict[tuple[str, str], dict | None]
+    _on_key_change: dict[str, list[Callable]]
+    event_serial_in_sync_at: float | None
+    log: TagLogger
     thread: MyThread
 
-    def __init__(self, keyfs):
+    def __init__(self, keyfs: KeyFS) -> None:
         self.keyfs = keyfs
         self.cv_new_event_serial = mythread.threading.Condition()
         self.event_serial_path = str(self.keyfs.base_path / ".event_serial")
         self.event_serial_in_sync_at = None
         self._on_key_change = {}
 
-    def on_key_change(self, key, subscriber):
+    def on_key_change(
+        self, key: PTypedKey | TypedKey | str, subscriber: Callable
+    ) -> None:
         if mythread.has_active_thread(self):
             raise RuntimeError(
                 "cannot register handlers after thread has started")
@@ -103,19 +112,19 @@ class TxNotificationThread:
         assert isinstance(keyname, str)
         self._on_key_change.setdefault(keyname, []).append(subscriber)
 
-    def wait_event_serial(self, serial):
+    def wait_event_serial(self, serial: int) -> None:
         with threadlog.around("info", "waiting for event-serial %s", serial):
             with self.cv_new_event_serial:
                 while serial > self.read_event_serial():
                     self.cv_new_event_serial.wait()
 
-    def read_event_serial(self):
+    def read_event_serial(self) -> int:
         # the disk serial is kept one higher because pre-2.1.2
         # "event_serial" pointed to the "next event serial to be
         # processed" instead of the now "last processed event serial"
         return read_int_from_file(self.event_serial_path, 0) - 1
 
-    def get_event_serial_timestamp(self):
+    def get_event_serial_timestamp(self) -> float | None:
         f = Path(self.event_serial_path)
         retries = 5
         while retries:
@@ -133,13 +142,13 @@ class TxNotificationThread:
                 time.sleep(0.001)
         return None
 
-    def write_event_serial(self, event_serial):
+    def write_event_serial(self, event_serial: int) -> None:
         write_int_to_file(event_serial + 1, self.event_serial_path)
 
-    def thread_shutdown(self):
+    def thread_shutdown(self) -> None:
         pass
 
-    def tick(self):
+    def tick(self) -> None:
         event_serial = self.read_event_serial()
         while event_serial < self.keyfs.get_current_serial():
             self.thread.exit_if_shutdown()
@@ -156,7 +165,7 @@ class TxNotificationThread:
                 serial + 1,
                 recheck_callback=self.thread.exit_if_shutdown)
 
-    def thread_run(self):
+    def thread_run(self) -> None:
         self.log = thread_push_log("[NOTI]")
         while 1:
             try:
@@ -173,7 +182,7 @@ class TxNotificationThread:
                     "Unhandled exception in notification thread.")
                 self.thread.sleep(1.0)
 
-    def get_ixconfig(self, entry, event_serial):
+    def get_ixconfig(self, entry: FileEntry, event_serial: int) -> dict | None:
         user = entry.user
         index = entry.index
         if getattr(self, '_get_ixconfig_cache_serial', None) != event_serial:
@@ -183,9 +192,9 @@ class TxNotificationThread:
         if cache_key in self._get_ixconfig_cache:
             return self._get_ixconfig_cache[cache_key]
         with self.keyfs.read_transaction():
-            key = self.keyfs.get_key('USER')(user=user)
-            value = key.get()
-        if value is None:
+            key = cast("PTypedKey[dict]", self.keyfs.USER)(user=user)
+            value = key.get_mutable()
+        if not value:
             # the user doesn't exist anymore
             self._get_ixconfig_cache[cache_key] = None
             return None
@@ -197,7 +206,9 @@ class TxNotificationThread:
         self._get_ixconfig_cache[cache_key] = ixconfig
         return ixconfig
 
-    def _execute_hooks(self, event_serial, log, raising=False):
+    def _execute_hooks(  # noqa: PLR0912
+        self, event_serial: int, log: TagLogger, *, raising: bool = False
+    ) -> None:
         log.debug("calling hooks for tx%s", event_serial)
         with self.keyfs.get_connection() as conn:
             changes = conn.get_changes(event_serial)
@@ -490,11 +501,12 @@ class KeyFS:
             self._storage.add_key(key)
         return key
 
-    def get_key(self, name):
+    def get_key(self, name: str) -> PTypedKey | TypedKey | None:
         return self._keys.get(name)
 
     def get_key_instance(self, keyname: str, relpath: RelPath) -> TypedKey:
         key = self.get_key(keyname)
+        assert key is not None
         if isinstance(key, PTypedKey):
             key = key(**key.extract_params(relpath))
         return key
@@ -748,17 +760,18 @@ class TransactionRootModel(RootModel):
 
 
 class FileStoreTransaction:
-    def __init__(self, keyfs):
+    def __init__(self, keyfs: KeyFS) -> None:
         self.keyfs = keyfs
         self.closed = False
         self.write = True
 
     @cached_property
-    def conn(self):
+    def conn(self) -> KeyFSConn:
         return self.keyfs.get_connection(write=True, closing=False)
 
     @cached_property
-    def io_file(self):
+    def io_file(self) -> IIOFile:
+        assert self.keyfs.io_file_factory is not None
         return self.keyfs.io_file_factory(self.conn)
 
     def _close(self):
@@ -785,9 +798,20 @@ class FileStoreTransaction:
 
 
 class Transaction:
+    _finished_listeners: list[Callable]
     _model: TransactionRootModel | Absent
+    _original: dict[TypedKey, tuple[int, KeyFSTypesRO | Absent | Deleted]]
+    _success_listeners: list[Callable]
+    cache: dict[TypedKey, KeyFSTypesRO | Deleted]
+    commit_serial: int | None
+    dirty: set[TypedKey]
 
-    def __init__(self, keyfs, at_serial=None, write=False):
+    def __init__(
+        self,
+        keyfs: KeyFS,
+        at_serial: int | None = None,
+        write: bool = False,  # noqa: FBT001, FBT002
+    ) -> None:
         if write and at_serial:
             raise RuntimeError(
                 "Can't open write transaction with 'at_serial'.")
@@ -810,12 +834,13 @@ class Transaction:
         self._success_listeners = []
 
     @cached_property
-    def conn(self):
+    def conn(self) -> KeyFSConn:
         return self.keyfs.get_connection(
             write=self.write, closing=False)
 
     @cached_property
-    def io_file(self):
+    def io_file(self) -> IIOFile:
+        assert self.keyfs.io_file_factory is not None
         return self.keyfs.io_file_factory(self.conn)
 
     def get_model(self, xom):
@@ -971,7 +996,7 @@ class Transaction:
         self.cache[typedkey] = val
         self.dirty.add(typedkey)
 
-    def commit(self):
+    def commit(self) -> int:
         if self.doomed:
             threadlog.debug("closing doomed transaction")
             result = self._close()
@@ -983,7 +1008,7 @@ class Transaction:
             return result
         records = []
         for typedkey in self.dirty:
-            val = self.cache[typedkey]
+            val: KeyFSTypesRO | Deleted | None = self.cache[typedkey]
             assert val is not absent
             (back_serial, old_val) = self.get_original(typedkey)
             if val == old_val:
@@ -1005,7 +1030,7 @@ class Transaction:
             fswriter.set_rel_renames(self.io_file.get_rel_renames())
             fswriter.records_set(records)
             commit_serial = getattr(fswriter, "commit_serial", absent)
-            if commit_serial is absent:
+            if isinstance(commit_serial, Absent):
                 # for storages which don't have the attribute yet
                 commit_serial = self.conn.last_changelog_serial + 1
         self.commit_serial = commit_serial
