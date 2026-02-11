@@ -11,6 +11,7 @@ from .config import MyArgumentParser
 from .config import get_pluginmanager
 from .config import parseoptions
 from .exceptions import lazy_format_exception_only
+from .filestore import FileStore
 from .httpclient import FatalResponse
 from .httpclient import HTTPClient
 from .httpclient import OfflineHTTPClient
@@ -426,8 +427,7 @@ class XOM:
         raise Fatal(msg)
 
     @cached_property
-    def filestore(self):
-        from devpi_server.filestore import FileStore
+    def filestore(self) -> FileStore:
         return FileStore(self.keyfs)
 
     @cached_property

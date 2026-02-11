@@ -69,10 +69,10 @@ def fsck():
                     continue
                 if not args.checksum:
                     continue
-                msg = entry.validate()
-                if msg is not None:
+                _msg = entry.validate()
+                if _msg is not None:
                     got_errors = True
-                    log.error("%s - %s", entry.relpath, msg)
+                    log.error("%s - %s", entry.relpath, _msg)
             log.info("Finished with a total of %s files.", processed)
             if missing_files:
                 log.error("A total of %s files are missing.", missing_files)

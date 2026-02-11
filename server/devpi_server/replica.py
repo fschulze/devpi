@@ -1161,6 +1161,7 @@ class FileReplicationThread:
 
         (f, hashes) = self.find_pre_existing_file(entry)
         if f is not None:
+            assert hashes is not None
             # we found a matching existing file
             with keyfs.filestore_transaction():
                 entry.file_set_content_no_meta(f, hashes=hashes)

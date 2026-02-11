@@ -969,7 +969,9 @@ def test_keyfs_sqlite(file_digest, gen_path, sorted_serverdir):
     with keyfs.write_transaction() as tx:
         assert tx.io_file.os_path(file_path_info) is None
         tx.io_file.set_content(file_path_info, content)
-        tx.conn._sqlconn.commit()
+        (
+            tx.conn._sqlconn  # type: ignore[attr-defined]
+        ).commit()
     with keyfs.read_transaction() as tx:
         assert tx.io_file.os_path(file_path_info) is None
         assert tx.io_file.get_content(file_path_info) == content
@@ -989,10 +991,14 @@ def test_keyfs_sqlite_fs(file_digest, gen_path, sorted_serverdir):
     with keyfs.write_transaction() as tx:
         assert tx.io_file.os_path(file_path_info) == str(tmp / "+files" / "foo")
         tx.io_file.set_content(file_path_info, content)
-        tx.conn._sqlconn.commit()
+        (
+            tx.conn._sqlconn  # type: ignore[attr-defined]
+        ).commit()
     with keyfs.read_transaction() as tx:
         assert tx.io_file.get_content(file_path_info) == content
-        with open(tx.io_file.os_path(file_path_info), "rb") as f:
+        fn = tx.io_file.os_path(file_path_info)
+        assert fn is not None
+        with open(fn, "rb") as f:
             assert f.read() == content
     assert sorted_serverdir(tmp) == ["+files", ".sqlite"]
     assert sorted_serverdir(tmp / "+files") == ["foo"]
@@ -1012,10 +1018,14 @@ def test_keyfs_sqlite_hash_hl(file_digest, gen_path, sorted_serverdir):
     with keyfs.write_transaction() as tx:
         assert tx.io_file.os_path(file_path_info) == str(tmp / "+files" / "foo")
         tx.io_file.set_content(file_path_info, content)
-        tx.conn._sqlconn.commit()
+        (
+            tx.conn._sqlconn  # type: ignore[attr-defined]
+        ).commit()
     with keyfs.read_transaction() as tx:
         assert tx.io_file.get_content(file_path_info) == content
-        with open(tx.io_file.os_path(file_path_info), "rb") as f:
+        fn = tx.io_file.os_path(file_path_info)
+        assert fn is not None
+        with open(fn, "rb") as f:
             assert f.read() == content
     assert sorted_serverdir(tmp) == ["+files", "+h", ".sqlite"]
     assert sorted_serverdir(tmp / "+files") == ["foo"]
