@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from .readonly import ListViewReadonly
     from .readonly import SetViewReadonly
     from .readonly import TupleViewReadonly
+    from collections.abc import Callable
     from collections.abc import Iterator
     from typing import Any
     from typing import Literal
@@ -126,10 +127,10 @@ class PTypedKey(Generic[KeyType]):
         m = self.rex_reverse.match(relpath)
         return m.groupdict() if m is not None else {}
 
-    def on_key_change(self, callback):
+    def on_key_change(self, callback: Callable) -> None:
         self.keyfs.notifier.on_key_change(self.name, callback)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<PTypedKey {self.pattern!r} type {self.type.__name__!r}>"
 
 
@@ -159,7 +160,7 @@ class TypedKey(Generic[KeyType]):
     def __eq__(self, other):
         return self.relpath == other.relpath
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<TypedKey {self.name} {self.type.__name__} {self.relpath}>"
 
     @overload

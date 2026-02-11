@@ -111,6 +111,7 @@ def test_patch_index_with_unknown_option(
     api = mapp.create_and_use("foo/dev")
     with xom.keyfs.write_transaction():
         stage = xom.model.getstage(api.stagename)
+        assert stage is not None
         assert "ham" not in stage.ixconfig
         assert "notify" not in stage.ixconfig
         stage._modify(notify=True, ham="baz", _keep_unknown=True)

@@ -1,12 +1,23 @@
+from __future__ import annotations
+
 from .filestore import FileEntry
 from .main import CommandRunner
 from .main import Fatal
 from .main import xom_from_config
+from typing import TYPE_CHECKING
 import sys
 import time
 
 
-def add_fsck_options(parser, pluginmanager):
+if TYPE_CHECKING:
+    from .config import MyArgumentParser
+    from pluggy import PluginManager
+
+
+def add_fsck_options(
+    parser: MyArgumentParser,
+    pluginmanager: PluginManager,  # noqa: ARG001 - API
+) -> None:
     parser.addoption(
         "--checksum", action="store_true", default=True, dest="checksum",
         help="Perform checksum validation.")
@@ -69,10 +80,10 @@ def fsck():
                     continue
                 if not args.checksum:
                     continue
-                msg = entry.validate()
-                if msg is not None:
+                _msg = entry.validate()
+                if _msg is not None:
                     got_errors = True
-                    log.error("%s - %s", entry.relpath, msg)
+                    log.error("%s - %s", entry.relpath, _msg)
             log.info("Finished with a total of %s files.", processed)
             if missing_files:
                 log.error("A total of %s files are missing.", missing_files)

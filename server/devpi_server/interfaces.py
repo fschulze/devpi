@@ -261,7 +261,7 @@ class IWriter(Interface):
     commit_serial = Attribute("""
         The current to be commited serial set when entering the context manager. """)
 
-    def __enter__() -> AbstractContextManager:
+    def __enter__() -> IWriter:
         pass
 
     def __exit__(  # noqa: PLE0302, PYI036

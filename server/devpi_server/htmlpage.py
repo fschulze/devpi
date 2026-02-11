@@ -29,7 +29,7 @@ class HTMLPage:
         self.content = content
         self.url = url
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<HTMLPage {self.url}>"
 
     @cached_property
@@ -64,7 +64,7 @@ class Link:
         self.requires_python = requires_python if requires_python else None
         self.yanked = yanked
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         rp = (
             f" (requires-python:{self.requires_python})" if self.requires_python else ""
         )

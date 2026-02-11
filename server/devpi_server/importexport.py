@@ -20,6 +20,8 @@ from devpi_server import __version__ as server_version
 from devpi_server.model import get_stage_customizer_classes
 from devpi_server.model import is_valid_name
 from pathlib import Path
+from typing import TYPE_CHECKING
+from typing import cast
 import itertools
 import json
 import logging
@@ -28,7 +30,18 @@ import shutil
 import sys
 
 
-def has_users_or_stages(xom):
+if TYPE_CHECKING:
+    from .main import XOM
+    from .mirror import MirrorStage
+    from .model import BaseStage
+    from .model import PrivateStage
+    from .readonly import SetViewReadonly
+    from collections.abc import Iterable
+    from devpi_common.terminal import TerminalWriter
+    from typing import Any
+
+
+def has_users_or_stages(xom: XOM) -> bool:
     userlist = xom.model.get_userlist()
     if len(userlist) == 0:
         # no data at all
@@ -47,7 +60,7 @@ def has_users_or_stages(xom):
     return True
 
 
-def do_export(path, tw, xom):
+def do_export(path: Path | str, tw: TerminalWriter, xom: XOM) -> int:
     path = Path(path)
     if path.exists() and path.is_dir() and any(path.iterdir()):
         msg = f"export directory {path} must not exist or be empty"
@@ -88,7 +101,7 @@ def export(pluginmanager=None, argv=None):
     return runner.return_code or 0
 
 
-def do_import(path, tw, xom):
+def do_import(path: Path, tw: TerminalWriter, xom: XOM) -> int:
     logging.basicConfig(level=logging.INFO, format='%(message)s')
     path = Path(path)
 
@@ -150,14 +163,17 @@ def import_(pluginmanager=None, argv=None):
 
 class Exporter:
     DUMPVERSION = "2"
+    export: dict[str, Any]
+    export_users: dict[str, Any]
+    export_indexes: dict[str, Any]
 
-    def __init__(self, tw, xom):
+    def __init__(self, tw: TerminalWriter, xom: XOM) -> None:
         self.tw = tw
         self.xom = xom
         self.config = xom.config
         self.filestore = xom.filestore
 
-        self.export: dict[str, object] = {}
+        self.export = {}
         self.export_users = self.export["users"] = {}
         self.export_indexes = self.export["indexes"] = {}
 
@@ -177,13 +193,13 @@ class Exporter:
                 shutil.copyfileobj(sf, df)
         return relpath
 
-    def warn(self, msg):
+    def warn(self, msg: str) -> None:
         self.tw.line(msg, yellow=True)
 
-    def completed(self, msg):
+    def completed(self, msg: str) -> None:
         self.tw.line("dumped %s" % msg, bold=True)
 
-    def dump_all(self, path):
+    def dump_all(self, path: Path) -> None:
         self.basepath = path
         self.export["dumpversion"] = self.DUMPVERSION
         self.export["pythonversion"] = list(sys.version_info)
@@ -196,10 +212,11 @@ class Exporter:
             self.completed("user %r" % user.name)
             for indexname in indexes:
                 stage = self.xom.model.getstage(user.name, indexname)
+                assert stage is not None
                 IndexDump(self, stage, userdir / indexname).dump()
         self._write_json(path / "dataindex.json", self.export)
 
-    def _write_json(self, path, data):
+    def _write_json(self, path: Path, data: Any) -> None:
         # use a special handler for serializing ReadonlyViews
         def handle_readonly(val):
             if isinstance(val, ReadonlyView):
@@ -216,21 +233,21 @@ class Exporter:
 
 
 class IndexDump:
-    def __init__(self, exporter, stage, basedir):
+    def __init__(self, exporter: Exporter, stage: BaseStage, basedir: Path) -> None:
         self.exporter = exporter
         self.stage = stage
         self.basedir = basedir
         self.indexmeta = exporter.export_indexes[stage.name] = {}
         self.indexmeta["indexconfig"] = stage.ixconfig
 
-    def should_dump(self):
+    def should_dump(self) -> bool:
         if self.stage.ixconfig["type"] == "mirror":
             if not self.exporter.config.include_mirrored_files:
                 return False
         return True
 
-    def dump(self):
-        projects = []
+    def dump(self) -> None:
+        projects: dict | SetViewReadonly = {}
         if self.should_dump():
             self.stage.offline = True
             self.indexmeta["projects"] = {}
@@ -268,6 +285,7 @@ class IndexDump:
             links = links[-1:]
         for link in links:
             entry = self.exporter.filestore.get_file_entry(link.relpath)
+            assert entry is not None
             relpath = self.exporter.copy_file(
                 entry, self.basedir / f"{linkstore.project}-{link.version}.doc.zip"
             )
@@ -282,6 +300,7 @@ class IndexDump:
     def dump_releasefiles(self, linkstore):
         for link in linkstore.get_links(rel=Rel.ReleaseFile):
             entry = self.exporter.filestore.get_file_entry(link.relpath)
+            assert entry is not None
             if not entry.last_modified:
                 continue
             if not entry.file_exists():
@@ -331,7 +350,9 @@ class IndexDump:
 
 
 class Importer:
-    def __init__(self, tw, xom):
+    import_indexes: dict[str, Any]
+
+    def __init__(self, tw: TerminalWriter, xom: XOM) -> None:
         self.tw = tw
         self.xom = xom
         self.filestore = xom.filestore
@@ -339,15 +360,15 @@ class Importer:
         self.index_customizers = get_stage_customizer_classes(self.xom)
         self.types_to_skip = set(self.xom.config.skip_import_type or [])
 
-    def read_json(self, path):
+    def read_json(self, path: Path) -> Any:
         self.tw.line(f"reading json: {path}")
         with path.open() as f:
             return json.load(f)
 
-    def warn(self, msg):
+    def warn(self, msg: str) -> None:
         self.tw.line(msg, yellow=True)
 
-    def display_import_header(self, path):
+    def display_import_header(self, path: Path) -> None:
         self.tw.line("******** Importing packages from %s **********" % path)
         self.tw.line('Number of users: %d' % len(self.import_users))
         self.tw.line('Number of indexes: %d' % len(self.import_indexes))
@@ -364,7 +385,7 @@ class Importer:
         self.tw.line('Total number of projects: %d' % total_num_projects)
         self.tw.line('Total number of files: %d' % total_num_files)
 
-    def validate(self, json_path):
+    def validate(self, json_path: Path) -> None:
         known_types = set(self.index_customizers).union(self.types_to_skip)
         errors = False
         for name in self.import_users:
@@ -415,7 +436,7 @@ class Importer:
                 versions.update(projects[name])
             yield (project, versions)
 
-    def import_all(self, path):
+    def import_all(self, path: Path) -> None:  # noqa: PLR0912
         self.import_rootdir = path
         json_path = path / "dataindex.json"
         self.import_data = self.read_json(json_path)
@@ -450,7 +471,7 @@ class Importer:
             tree.add("root/pypi")
         missing_bases = set()
         for stagename, import_index in self.import_indexes.items():
-            bases = import_index["indexconfig"].get("bases")
+            bases = cast("set[str] | None", import_index["indexconfig"].get("bases"))
             if bases is None:
                 tree.add(stagename)
             else:
@@ -483,8 +504,9 @@ class Importer:
                     whitelist = indexconfig.pop('pypi_whitelist')
                     if 'mirror_whitelist' not in indexconfig:
                         indexconfig['mirror_whitelist'] = whitelist
-                user, index = stagename.split("/")
-                user = self.xom.model.get_user(user)
+                username, index = stagename.split("/")
+                user = self.xom.model.get_user(username)
+                assert user is not None
                 # due to possible circles we create without bases first
                 # BBB older versions of devpi had bases for mirror indices,
                 # newer versions don't. To support exports from both we
@@ -555,7 +577,7 @@ class Importer:
 
         self.tw.line("********* import_all: importing finished ***********")
 
-    def wait_for_events(self):
+    def wait_for_events(self) -> None:
         keyfs = self.xom.keyfs
         while True:
             event_serial = max(0, keyfs.notifier.read_event_serial())
@@ -567,7 +589,7 @@ class Importer:
             keyfs.notifier.wait_event_serial(wait_serial)
         self.tw.line(f"wait_for_events: importing finished; {latest_serial=}")
 
-    def import_filedesc(self, stage, filedesc, versions):
+    def import_filedesc(self, stage: BaseStage, filedesc: dict, versions: dict) -> None:  # noqa: PLR0912
         rel = filedesc["relpath"]
         project = filedesc["projectname"]
         p = self.import_rootdir / rel
@@ -600,6 +622,7 @@ class Importer:
                 version = filedesc["version"]
 
             if hasattr(stage, 'store_releasefile'):
+                stage = cast("PrivateStage", stage)
                 link = stage.store_releasefile(
                     project,
                     version,
@@ -610,6 +633,7 @@ class Importer:
                 )
                 entry = link.entry
             else:  # mirrors
+                stage = cast("MirrorStage", stage)
                 link = None
                 url = URL(mapping['url']).replace(fragment=hashes.best_available_spec)
                 entry = self.xom.filestore.maplink(
@@ -632,6 +656,7 @@ class Importer:
                 stage._save_cache_links(
                     project, links, requires_python, yanked, serial, None)
         elif filedesc["type"] == Rel.DocZip:
+            stage = cast("PrivateStage", stage)
             version = filedesc["version"]
             # docs didn't always have entrymapping in export dump
             last_modified = mapping.get("last_modified")
@@ -639,6 +664,7 @@ class Importer:
                 project, version, f, hashes=hashes, last_modified=last_modified)
             entry = link.entry
         elif filedesc["type"] == Rel.ToxResult:
+            stage = cast("PrivateStage", stage)
             linkstore = stage.get_linkstore_perstage(project, filedesc["version"])
             # we can not search for the full relative path because
             # it might use a different checksum
@@ -655,8 +681,8 @@ class Importer:
             msg = f"unknown file type: {type}"
             f.close()
             raise Fatal(msg)
-        if (msg := entry.validate(f)) is not None:
-            msg = f"{p}: {msg}"
+        if (error := entry.validate(f)) is not None:
+            msg = f"{p}: {error}"
             f.close()
             raise Fatal(msg)
         if link is not None:
@@ -672,11 +698,12 @@ class IndexTree:
     """ sort index inheritance structure to that we can
     create in root->child order.
     """
-    def __init__(self):
-        self.name2children = defaultdict(list)
-        self.name2bases = {}
 
-    def add(self, name, bases=None):
+    def __init__(self) -> None:
+        self.name2children: defaultdict[str | None, list[str]] = defaultdict(list)
+        self.name2bases: dict[str, list[str]] = {}
+
+    def add(self, name: str, bases: Iterable[str] | None = None) -> None:
         bases = list(bases or [])
         while name in bases:
             bases.remove(name)
@@ -687,7 +714,7 @@ class IndexTree:
             for base in bases:
                 self.name2children[base].append(name)
 
-    def validate(self):
+    def validate(self) -> None:
         all_bases = set(itertools.chain.from_iterable(self.name2bases.values()))
         all_indexes = set(self.name2bases)
         missing = all_bases - all_indexes
@@ -697,13 +724,14 @@ class IndexTree:
                 f"data: {', '.join(sorted(missing))}")
             raise Fatal(msg)
 
-    def iternames(self):
+    def iternames(self) -> Iterable[str]:
         self.validate()
         pending: list[str | None] = [None]
         created: set[str | None] = set()
         while pending:
             name = pending.pop(0)
-            for base in self.name2bases.get(name, []):
+            bases = [] if name is None else self.name2bases.get(name, [])
+            for base in bases:
                 if base not in created:
                     pending.append(name)
                     break
