@@ -53,6 +53,8 @@ from pyramid.traversal import DefaultRootFactory
 from pyramid.view import exception_view_config
 from pyramid.view import view_config
 from time import time
+from typing import TYPE_CHECKING
+from typing import cast
 from urllib.parse import urlparse
 import attrs
 import contextlib
@@ -62,6 +64,13 @@ import json
 import os
 import re
 import warnings
+
+
+if TYPE_CHECKING:
+    from .model import BaseStage
+    from .model import ELink
+    from .model import PrivateStage
+    from collections.abc import Iterator
 
 
 devpiweb_hookimpl = HookimplMarker("devpiweb")
@@ -622,13 +631,13 @@ class PyPIView:
     @view_config(
         route_name="/{user}/{index}/+f/{relpath:.*}",
         request_method="POST")
-    def post_toxresult(self):
+    def post_toxresult(self) -> None:
         if not self.request.has_permission("toxresult_upload"):
             default_tox_result_handling = ToxResultHandling().block(TOXRESULT_UPLOAD_FORBIDDEN)
             tox_result_handling = self.xom.config.hook.devpiserver_on_toxresult_upload_forbidden(
                 request=self.request, tox_result_handling=default_tox_result_handling)
         else:
-            stage = self.context.stage
+            stage = cast("BaseStage", self.context.stage)
             relpath = self.request.path_info.strip("/")
             link = stage.get_link_from_entrypath(relpath)
             if link is None or link.rel != "releasefile":
@@ -1220,7 +1229,14 @@ class PyPIView:
         results.append((r.status_code, "docfile", name))
         return results
 
-    def _push_links(self, links, target_stage, name, version):
+    def _push_links(
+        self,
+        links: dict[str, list[ELink]],
+        target_stage: PrivateStage,
+        name: str,
+        version: str,
+    ) -> Iterator[tuple]:
+        stage = cast("PrivateStage", self.context.stage)
         stage = self.context.stage
         for link in links.get("releasefile", ()):
             entry = link.entry
@@ -1280,11 +1296,12 @@ class PyPIView:
 
     @view_config(
         route_name="/{user}/{index}/", request_method="POST")
-    def submit(self):
+    def submit(self) -> Response:  # noqa: PLR0912
         request = self.request
         stage = self.context.stage
         if not hasattr(stage, "store_releasefile"):
             abort_submit(request, 404, "cannot submit to mirror index")
+        stage = cast("PrivateStage", stage)
         if not request.has_permission("upload"):
             # if there is no authenticated user, then issue a basic auth challenge
             if not request.authenticated_userid:

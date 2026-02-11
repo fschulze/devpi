@@ -39,6 +39,7 @@ import warnings
 
 if TYPE_CHECKING:
     from .filestore import FileStore
+    from .interfaces import ContentOrFile
     from .keyfs import KeyFS
     from .keyfs_types import PTypedKey
     from .keyfs_types import TypedKey
@@ -160,7 +161,7 @@ class MissesVersion(ModelException):
 class NonVolatile(ModelException):
     """ A release is overwritten on a non volatile index. """
 
-    link: ELink | None = None  # the conflicting link
+    link: ELink  # the conflicting link
 
 
 class RootModel:
@@ -899,8 +900,14 @@ class BaseStage:
         raise NotImplementedError
 
     def store_toxresult(
-        self, link, content_or_file, *, filename=None, hashes=None, last_modified=None
-    ):
+        self,
+        link: ELink,
+        content_or_file: ContentOrFile,
+        *,
+        filename: str | None = None,
+        hashes: Digests | None = None,
+        last_modified: str | None = None,
+    ) -> ELink:
         if self.customizer.readonly:
             raise ReadonlyIndex("index is marked read only")
         assert not isinstance(content_or_file, dict)
@@ -1545,8 +1552,16 @@ class PrivateStage(BaseStage):
     def has_project_perstage(self, project):
         return normalize_name(project) in self.list_projects_perstage()
 
-    def store_releasefile(self, project, version, filename, content_or_file,
-                          *, hashes=None, last_modified=None):
+    def store_releasefile(
+        self,
+        project: NormalizedName | str,
+        version: str,
+        filename: str,
+        content_or_file: ContentOrFile,
+        *,
+        hashes: Digests | None = None,
+        last_modified: str | None = None,
+    ) -> ELink:
         if self.customizer.readonly:
             raise ReadonlyIndex("index is marked read only")
         project = normalize_name(project)
@@ -1571,8 +1586,15 @@ class PrivateStage(BaseStage):
         self._regen_simplelinks(project)
         return link
 
-    def store_doczip(self, project, version, content_or_file,
-                     *, hashes=None, last_modified=None):
+    def store_doczip(
+        self,
+        project: NormalizedName | str,
+        version: str,
+        content_or_file: ContentOrFile,
+        *,
+        hashes: Digests | None = None,
+        last_modified: str | None = None,
+    ) -> ELink:
         if self.customizer.readonly:
             raise ReadonlyIndex("index is marked read only")
         project = normalize_name(project)
@@ -1859,7 +1881,15 @@ class LinkStore:
     def get_file_entry(self, relpath):
         return self.filestore.get_file_entry(relpath)
 
-    def create_linked_entry(self, rel, basename, content_or_file, *, hashes=None, last_modified=None):
+    def create_linked_entry(
+        self,
+        rel: Rel,
+        basename: str,
+        content_or_file: ContentOrFile,
+        *,
+        hashes: Digests | None = None,
+        last_modified: str | None = None,
+    ) -> ELink:
         overwrite = None
         for link in self.get_links(rel=rel, basename=basename):
             if not self.stage.ixconfig.get("volatile"):
@@ -1879,8 +1909,16 @@ class LinkStore:
             link.add_log('overwrite', None, count=overwrite + 1)
         return link
 
-    def new_reflink(self, rel, content_or_file, for_entrypath,
-                    *, filename=None, hashes=None, last_modified=None):
+    def new_reflink(
+        self,
+        rel: Rel,
+        content_or_file: ContentOrFile,
+        for_entrypath: ELink | str | None,
+        *,
+        filename: str | None = None,
+        hashes: Digests | None = None,
+        last_modified: str | None = None,
+    ) -> ELink:
         if isinstance(for_entrypath, ELink):
             for_entrypath = for_entrypath.relpath
         elif for_entrypath is not None:
@@ -1921,7 +1959,7 @@ class LinkStore:
         self,
         rel: Rel | None = None,
         basename: str | None = None,
-        entrypath: str | None = None,
+        entrypath: ELink | str | None = None,
         for_entrypath: ELink | str | None = None,
     ) -> list[ELink]:
         if isinstance(for_entrypath, ELink):
@@ -1957,7 +1995,9 @@ class LinkStore:
     def _get_inplace_linkdicts(self):
         return self.verdata.setdefault("+elinks", [])
 
-    def _add_link_to_file_entry(self, rel, file_entry, for_entrypath=None):
+    def _add_link_to_file_entry(
+        self, rel: Rel, file_entry: FileEntry, for_entrypath: ELink | str | None = None
+    ) -> ELink:
         if isinstance(for_entrypath, ELink):
             for_entrypath = for_entrypath.relpath
         elif for_entrypath is not None:
