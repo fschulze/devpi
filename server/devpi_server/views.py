@@ -1485,8 +1485,8 @@ class PyPIView:
                 if for_entrypath is not None:
                     linkdict["for_href"] = \
                         url_for_entrypath(self.request, for_entrypath)
-                if "_log" in linkdict:
-                    linkdict["log"] = list(linkdict.pop("_log"))
+                if "log" in linkdict:
+                    linkdict["log"] = list(linkdict.pop("log"))
                 links.append(linkdict)
         shadowing = view_verdata.pop("+shadowing", None)
         if shadowing:

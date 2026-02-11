@@ -31,6 +31,7 @@ from pyramid.authorization import Everyone
 from time import gmtime
 from time import strftime
 from typing import TYPE_CHECKING
+from typing import TypedDict
 from typing import cast
 from typing import overload
 import functools
@@ -50,9 +51,12 @@ if TYPE_CHECKING:
     from .keyfs_types import SearchKey
     from .main import XOM
     from .normalized import NormalizedName
+    from collections.abc import Iterable
+    from collections.abc import MutableSequence
     from collections.abc import Sequence
     from typing import Any
     from typing import Literal
+    from typing import NotRequired
 
     RequiresPython = str | None
     Yanked = Literal[True] | str | None
@@ -60,6 +64,15 @@ if TYPE_CHECKING:
 
 
 notset = object()
+
+
+class FileLogEntry(TypedDict):
+    what: str
+    who: str | None
+    when: str
+    count: NotRequired[int]
+    dst: NotRequired[str]
+    src: NotRequired[str]
 
 
 class Rel(StrEnum):
@@ -1919,7 +1932,7 @@ class ELink:
         "version",
     )
 
-    _log = linkdictprop("_log")
+    _log: MutableSequence[FileLogEntry] = linkdictprop("log")
     index_relpath = linkdictprop("relpath")
     for_relpath = linkdictprop("for_relpath", default=None)
     rel = linkdictprop("rel", default=None)
@@ -1997,19 +2010,48 @@ class ELink:
             self._entry = self.filestore.get_file_entry(self.relpath)
         return self._entry
 
-    def add_log(self, what, who, **kw):
-        log = {"what": what, "who": who, "when": gmtime()[:6]} | kw
-        self._log.append(log | dict(when=tuple(log["when"])))
+    def add_log(
+        self,
+        what: str,
+        who: str | None,
+        *,
+        count: int | None = None,
+        dst: str | None = None,
+        src: str | None = None,
+        when: str | None = None,
+    ) -> None:
+        d = FileLogEntry(
+            what=what, who=who, when=strftime("%Y-%m-%dT%H:%M:%SZ", gmtime())
+        )
+        if count is not None:
+            d["count"] = count
+        if dst is not None:
+            d["dst"] = dst
+        if src is not None:
+            d["src"] = src
+        if when is not None:
+            assert isinstance(when, str)
+            d["when"] = when
+        self._log.append(d)
 
-    def add_logs(self, logs):
+    def add_logs(self, logs: Iterable[FileLogEntry | dict]) -> None:
         for log in logs:
+            unknown_keys = set(log).difference(
+                FileLogEntry.__required_keys__ | FileLogEntry.__optional_keys__
+            )
+            if unknown_keys:
+                msg = f"Unknown keys {', '.join(sorted(unknown_keys))} for FileLogEntry"
+                raise ValueError(msg)
             self.add_log(
                 log["what"],
                 log["who"],
-                **{k: v for k, v in log.items() if k not in ("what", "who")},
+                count=log.get("count"),
+                dst=log.get("dst"),
+                src=log.get("src"),
+                when=log["when"],
             )
 
-    def get_logs(self):
+    def get_logs(self) -> list[FileLogEntry]:
         return list(getattr(self, '_log', []))
 
 
@@ -2233,7 +2275,7 @@ class MutableLinkStore(LinkStore):
     ) -> ELink:
         new_linkdict = {
             "relpath": file_entry.index_relpath,
-            "_log": [],
+            "log": [],
         }
         if for_link:
             assert isinstance(for_link, ELink)

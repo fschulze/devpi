@@ -23,6 +23,7 @@ from devpi_server.model import is_valid_name
 from pathlib import Path
 from typing import TYPE_CHECKING
 from typing import cast
+import datetime
 import itertools
 import json
 import logging
@@ -164,6 +165,26 @@ def makeentrymapping(entry):
     return result
 
 
+def makelog(log):
+    result = []
+    for _info in log:
+        info = get_mutable_deepcopy(_info)
+        if (_when := info.get("when")) is not None:
+            when = datetime.datetime.strptime(_when, "%Y-%m-%dT%H:%M:%S%z").astimezone(
+                datetime.UTC
+            )
+            info["when"] = (
+                when.year,
+                when.month,
+                when.day,
+                when.hour,
+                when.minute,
+                when.second,
+            )
+        result.append(info)
+    return result
+
+
 class Exporter:
     DUMPVERSION = "2"
 
@@ -294,7 +315,7 @@ class IndexDump:
                 relpath,
                 version=link.version,
                 entrymapping=makeentrymapping(entry),
-                log=link.get_logs(),
+                log=makelog(link.get_logs()),
             )
 
     def dump_releasefiles(self, linkstore):
@@ -314,7 +335,7 @@ class IndexDump:
                 relpath,
                 version=linkstore.version,
                 entrymapping=makeentrymapping(entry),
-                log=link.get_logs(),
+                log=makelog(link.get_logs()),
             )
 
     def dump_toxresults(self, linkstore):
@@ -335,7 +356,7 @@ class IndexDump:
                 version=linkstore.version,
                 entrymapping=makeentrymapping(tox_link.entry),
                 for_entrypath=reflink.relpath,
-                log=tox_link.get_logs(),
+                log=makelog(tox_link.get_logs()),
             )
 
     def add_filedesc(self, type, project, relpath, **kw):
@@ -688,6 +709,17 @@ class Importer:
             if history_log is None:
                 link.add_log('upload', '<import>', dst=stage.name)
             else:
+                for history_entry in history_log:
+                    (year, month, day, hour, minute, second) = history_entry["when"]
+                    history_entry["when"] = datetime.datetime(
+                        year,
+                        month,
+                        day,
+                        hour,
+                        minute,
+                        second,
+                        tzinfo=datetime.UTC,
+                    ).strftime("%Y-%m-%dT%H:%M:%SZ")
                 link.add_logs(history_log)
         f.close()
 
