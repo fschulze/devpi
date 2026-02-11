@@ -285,6 +285,7 @@ class IndexDump:
                 relpath,
                 version=link.version,
                 entrymapping=entry.meta,
+                log=link.get_logs(),
             )
 
     def dump_releasefiles(self, linkstore):

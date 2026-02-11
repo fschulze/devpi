@@ -1842,12 +1842,16 @@ class ELink:
         return self._entry
 
     def add_log(self, what, who, **kw):
-        d = {"what": what, "who": who, "when": gmtime()[:6]}
-        d.update(kw)
-        self._log.append(d)
+        log = {"what": what, "who": who, "when": gmtime()[:6]} | kw
+        self._log.append(log | dict(when=tuple(log["when"])))
 
     def add_logs(self, logs):
-        self._log.extend(logs)
+        for log in logs:
+            self.add_log(
+                log["what"],
+                log["who"],
+                **{k: v for k, v in log.items() if k not in ("what", "who")},
+            )
 
     def get_logs(self):
         return list(getattr(self, '_log', []))
