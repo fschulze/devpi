@@ -6,6 +6,7 @@ for all indexes.
 from __future__ import annotations
 
 from .keyfs_types import FilePathInfo
+from .markers import Deleted
 from .markers import NoDefault
 from .markers import nodefault as _nodefault
 from .readonly import get_mutable_deepcopy
@@ -27,7 +28,9 @@ import warnings
 if TYPE_CHECKING:
     from .interfaces import ContentOrFile
     from .keyfs_types import RelPath
+    from .keyfs_types import TypedKey
     from .markers import Absent
+    from .readonly import DictViewReadonly
     from typing import Any
 
 
@@ -457,17 +460,22 @@ class BaseFileEntry:
     BadGateway = BadGateway
     _hash_spec = metaprop("hash_spec")  # e.g. "md5=120938012"
     _hashes = metaprop("hashes")  # e.g. dict(md5="120938012")
-    _meta: dict | NoDefault
+    _meta: DictViewReadonly | dict | NoDefault
+    key: TypedKey[dict]
     last_modified = metaprop("last_modified")
     url = metaprop("url")
     project = metaprop("project")
     version = metaprop("version")
 
-    def __init__(self, key, meta=_nodefault):
+    def __init__(
+        self,
+        key: TypedKey[dict],
+        meta: DictViewReadonly | dict | Deleted | NoDefault = _nodefault,
+    ) -> None:
         self.key = key
         self._meta = _nodefault
         if not isinstance(meta, NoDefault):
-            self._meta = meta or {}
+            self._meta = {} if isinstance(meta, Deleted) or not meta else meta
 
     @property
     def basename(self):
