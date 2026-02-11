@@ -15,6 +15,7 @@ from .log import threadlog
 from .markers import unknown
 from .model import BaseStage
 from .model import BaseStageCustomizer
+from .model import ELink
 from .model import Rel
 from .model import ensure_boolean
 from .model import join_links_data
@@ -43,10 +44,12 @@ import weakref
 
 
 if TYPE_CHECKING:
+    from .filestore import BaseFileEntry
     from .filestore import FileEntry
     from .httpclient import AsyncGetResponse
     from .httpclient import HTTPClient
     from .keyfs_types import PatternedKey
+    from .markers import Unknown
     from .model import JoinedLinkList
     from .model import LinksList
     from .model import RequiresPythonList
@@ -1065,6 +1068,9 @@ class MirrorStage(BaseStage):
             return unknown
         return project in self._list_projects_perstage()
 
+    def has_version_perstage(self, project: str, version: str) -> bool | Unknown:
+        return version in self.list_versions_perstage(project)
+
     def list_versions_perstage(self, project):
         try:
             return set(x.version for x in self.get_simplelinks_perstage(project))
@@ -1084,6 +1090,17 @@ class MirrorStage(BaseStage):
             return -1
         (last_serial, _ulid, _links) = info
         return last_serial
+
+    def _get_elink_from_entry(self, entry: BaseFileEntry) -> ELink | None:
+        return ELink.from_entry(
+            self.filestore,
+            entry,
+            dict(rel=Rel.ReleaseFile, entrypath=entry.relpath, hashes=entry.hashes),
+        )
+
+    def _get_elinks(self, project: str, version: str) -> list:
+        verdata = self.get_versiondata_perstage(project, version, with_elinks=True)
+        return verdata["+elinks"]
 
     def get_versiondata_perstage(self, project, version, *, with_elinks=True):
         # we do not use normalize_name name here, so the returned data
