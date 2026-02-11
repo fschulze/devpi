@@ -59,7 +59,7 @@ class TestAuth:
         def validate(self, authpassword):
             result = orig_validate(self, authpassword)
             # block original to error on second use
-            User.validate = lambda _s, _a: 0 / 0  # type: ignore[method-assign]
+            User.validate = lambda _s, _a: 0 / 0  # type: ignore[assignment,return-value]
             return result
 
         monkeypatch.setattr(User, "validate", validate)

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from .normalized import normalize_name
 from devpi_common.types import cached_property
 from devpi_common.types import ensure_unicode
@@ -16,6 +18,11 @@ from pyramid.authorization import Everyone
 from pyramid.httpexceptions import HTTPFound
 from pyramid.interfaces import ISecurityPolicy
 from pyramid.request import RequestLocalCache
+from typing import TYPE_CHECKING
+
+
+if TYPE_CHECKING:
+    from .main import XOM
 
 
 class RootFactory:
@@ -29,7 +36,7 @@ class RootFactory:
         self.restrict_modify = self.xom.config.restrict_modify
         self.hook = self.xom.config.hook
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         cls = self.__class__
         return (
             f"<{cls.__module__}.{cls.__name__} "
@@ -227,13 +234,13 @@ class RootFactory:
 
 
 class CredentialsIdentity:
-    def __init__(self, username, groups):
+    def __init__(self, username: str, groups: list[str]) -> None:
         self.username = username
         self.groups = groups
 
 
 class DevpiSecurityPolicy:
-    def __init__(self, xom):
+    def __init__(self, xom: XOM) -> None:
         self.realm = "pypi"
         self.auth = Auth(xom, xom.config.get_auth_secret())
         self.hook = xom.config.hook

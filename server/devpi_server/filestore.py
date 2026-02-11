@@ -6,8 +6,11 @@ for all indexes.
 from __future__ import annotations
 
 from .keyfs_types import FilePathInfo
+from .markers import Deleted
 from .markers import NoDefault
 from .markers import nodefault as _nodefault
+from .readonly import DictViewReadonly
+from .readonly import ensure_deeply_readonly
 from .readonly import get_mutable_deepcopy
 from devpi_common.metadata import splitbasename
 from devpi_common.types import parse_hash_spec
@@ -15,6 +18,7 @@ from devpi_server.log import threadlog
 from devpi_server.markers import absent
 from inspect import currentframe
 from typing import TYPE_CHECKING
+from typing import cast
 from typing import overload
 from urllib.parse import unquote
 from wsgiref.handlers import format_date_time
@@ -26,8 +30,12 @@ import warnings
 
 if TYPE_CHECKING:
     from .interfaces import ContentOrFile
+    from .keyfs import KeyFS
+    from .keyfs_types import PTypedKey
     from .keyfs_types import RelPath
+    from .keyfs_types import TypedKey
     from .markers import Absent
+    from devpi_common.url import URL
     from typing import Any
 
 
@@ -82,7 +90,7 @@ class RunningHashes:
     def get_running_hash(self, hash_type):
         return self._hashes[hash_type]
 
-    def start(self):
+    def start(self) -> None:
         if self._algos:
             msg = f"{self.__class__.__name__} already started."
             raise RuntimeError(msg)
@@ -338,25 +346,23 @@ def relpath_prefix(content_or_file, hash_type=absent):
     return "/".join(make_splitdir(hash_spec))
 
 
-def key_from_link(keyfs, link, user, index):
+def key_from_link(keyfs: KeyFS, link: URL, user: str, index: str) -> TypedKey[dict]:
     if link.hash_spec:
         # we can only create 32K entries per directory
         # so let's take the first 3 bytes which gives
         # us a maximum of 16^3 = 4096 entries in the root dir
         a, b = make_splitdir(link.hash_spec)
-        return keyfs.STAGEFILE(
-            user=user, index=index,
-            hashdir_a=a, hashdir_b=b,
-            filename=link.basename)
+        return cast("PTypedKey[dict]", keyfs.STAGEFILE)(
+            user=user, index=index, hashdir_a=a, hashdir_b=b, filename=link.basename
+        )
     else:
         parts = link.torelpath().split("/")
         assert parts
         dirname = "_".join(parts[:-1])
         dirname = re.sub('[^a-zA-Z0-9_.-]', '_', dirname)
-        return keyfs.PYPIFILE_NOMD5(
-            user=user, index=index,
-            dirname=unquote(dirname),
-            basename=link.basename)
+        return cast("PTypedKey[dict]", keyfs.PYPIFILE_NOMD5)(
+            user=user, index=index, dirname=unquote(dirname), basename=link.basename
+        )
 
 
 def unicode_if_bytes(val):
@@ -368,10 +374,10 @@ def unicode_if_bytes(val):
 class FileStore:
     attachment_encoding = "utf-8"
 
-    def __init__(self, keyfs):
+    def __init__(self, keyfs: KeyFS) -> None:
         self.keyfs = keyfs
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<{self.__class__.__name__} {self.keyfs!r}>"
 
     def maplink(self, link, user, index, project):
@@ -411,7 +417,16 @@ class FileStore:
     def get_file_entry_from_key(self, key, meta=_nodefault):
         return MutableFileEntry(key, meta=meta)
 
-    def store(self, user, index, basename, content_or_file, *, dir_hash_spec=None, hashes=None):
+    def store(
+        self,
+        user: str,
+        index: str,
+        basename: str,
+        content_or_file: ContentOrFile,
+        *,
+        dir_hash_spec: str | None = None,
+        hashes: Digests | None = None,
+    ) -> MutableFileEntry:
         # dir_hash_spec is set for toxresult files
         if dir_hash_spec is None:
             if hashes is None:
@@ -423,9 +438,13 @@ class FileStore:
                 hashes = get_hashes(content_or_file)
             dir_hash_spec = hashes.get_default_spec()
         hashdir_a, hashdir_b = make_splitdir(dir_hash_spec)
-        key = self.keyfs.STAGEFILE(
-            user=user, index=index,
-            hashdir_a=hashdir_a, hashdir_b=hashdir_b, filename=basename)
+        key = cast("PTypedKey[dict]", self.keyfs.STAGEFILE)(
+            user=user,
+            index=index,
+            hashdir_a=hashdir_a,
+            hashdir_b=hashdir_b,
+            filename=basename,
+        )
         entry = MutableFileEntry(key)
         entry.file_set_content(content_or_file, hashes=hashes)
         return entry
@@ -457,20 +476,30 @@ class BaseFileEntry:
     BadGateway = BadGateway
     _hash_spec = metaprop("hash_spec")  # e.g. "md5=120938012"
     _hashes = metaprop("hashes")  # e.g. dict(md5="120938012")
-    _meta: dict | NoDefault
+    _meta: DictViewReadonly | dict | NoDefault
+    key: TypedKey[dict]
     last_modified = metaprop("last_modified")
     url = metaprop("url")
     project = metaprop("project")
     version = metaprop("version")
 
-    def __init__(self, key, meta=_nodefault):
+    def __init__(
+        self,
+        key: TypedKey[dict],
+        meta: DictViewReadonly | dict | Deleted | NoDefault = _nodefault,
+    ) -> None:
         self.key = key
         self._meta = _nodefault
         if not isinstance(meta, NoDefault):
-            self._meta = meta or {}
+            _meta = {} if isinstance(meta, Deleted) or not meta else meta
+            self._meta = (
+                ensure_deeply_readonly(_meta)
+                if self.readonly
+                else get_mutable_deepcopy(_meta)
+            )
 
     @property
-    def basename(self):
+    def basename(self) -> str:
         params = self.key.params
         if "filename" in params:
             return params["filename"]
@@ -483,7 +512,7 @@ class BaseFileEntry:
         return FilePathInfo(self.relpath, self.hashes.get_default_value(None))
 
     @property
-    def index(self):
+    def index(self) -> str:
         return self.key.params['index']
 
     @property
@@ -491,7 +520,7 @@ class BaseFileEntry:
         return self.key.relpath
 
     @property
-    def user(self):
+    def user(self) -> str:
         return self.key.params['user']
 
     @property
@@ -512,7 +541,7 @@ class BaseFileEntry:
         return self.hashes.best_available_value
 
     @property
-    def hashes(self):
+    def hashes(self) -> Digests:
         digests = Digests() if self._hashes is None else Digests(self._hashes)
         if hash_spec := self._hash_spec:
             (hash_algo, hash_value) = parse_hash_spec(hash_spec)
@@ -570,7 +599,7 @@ class BaseFileEntry:
         with self.file_open_read() as f:
             return get_file_hash(f, hash_type)
 
-    def file_get_hash_errors(self, hashes=None):
+    def file_get_hash_errors(self, hashes: Digests | None = None) -> dict[str, dict]:
         if hashes is None:
             hashes = self.hashes
         with self.file_open_read() as f:
@@ -583,7 +612,11 @@ class BaseFileEntry:
     md5 = property(None, None)
 
     @property
-    def meta(self):
+    def meta(self) -> DictViewReadonly | dict:
+        raise NotImplementedError
+
+    @property
+    def readonly(self) -> bool:
         raise NotImplementedError
 
     def file_exists(self):
@@ -595,7 +628,7 @@ class BaseFileEntry:
     def file_size(self):
         return self.tx.io_file.size(self.file_path_info)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<{self.__class__.__name__} {self.key!r}>"
 
     def file_new_open(self):
@@ -613,7 +646,14 @@ class BaseFileEntry:
             raise RuntimeError(msg)
         return self.tx.io_file.os_path(self.file_path_info)
 
-    def file_set_content(self, content_or_file, *, last_modified=None, hash_spec=None, hashes=None):
+    def file_set_content(
+        self,
+        content_or_file: ContentOrFile,
+        *,
+        last_modified: str | None = None,
+        hash_spec: str | None = None,
+        hashes: Digests | None = None,
+    ) -> None:
         if last_modified != -1:
             if last_modified is None:
                 last_modified = unicode_if_bytes(format_date_time(None))
@@ -638,9 +678,12 @@ class BaseFileEntry:
         # when we set the file content. Otherwise we might
         # end up only committing file content without any keys
         # changed which will not replay correctly at a replica.
+        assert isinstance(self.meta, dict)
         self.key.set(self.meta)
 
-    def file_set_content_no_meta(self, content_or_file, *, hashes=None):
+    def file_set_content_no_meta(
+        self, content_or_file: ContentOrFile, *, hashes: Digests
+    ) -> None:
         missing_hash_types = hashes.get_missing_hash_types()
         if missing_hash_types:
             warnings.warn(
@@ -652,7 +695,7 @@ class BaseFileEntry:
         file_path_info.hash_digest = hashes[DEFAULT_HASH_TYPE]
         self.tx.io_file.set_content(file_path_info, content_or_file)
 
-    def gethttpheaders(self):
+    def gethttpheaders(self) -> dict[str, str]:
         assert self.file_exists()
         headers = {}
         headers["last-modified"] = str(self.last_modified)
@@ -674,18 +717,18 @@ class BaseFileEntry:
     def __hash__(self):
         return hash(self.relpath)
 
-    def delete(self):
+    def delete(self) -> None:
         self.delete_file_only()
         self.key.delete()
-        self._meta = {}
+        self._meta = DictViewReadonly({}) if self.readonly else {}
 
-    def delete_file_only(self):
+    def delete_file_only(self) -> None:
         self.file_delete()
 
-    def has_existing_metadata(self):
+    def has_existing_metadata(self) -> bool:
         return bool(self._hash_spec and self.last_modified)
 
-    def validate(self, content_or_file=None):
+    def validate(self, content_or_file: ContentOrFile | None = None) -> dict | None:
         if content_or_file is None:
             errors = self.file_get_hash_errors()
         else:
@@ -699,25 +742,29 @@ class BaseFileEntry:
 
 class FileEntry(BaseFileEntry):
     @property
-    def meta(self):
-        if self._meta is _nodefault:
-            self._meta = self.key.get()
-        return self._meta
+    def meta(self) -> DictViewReadonly:
+        _meta = self._meta
+        if isinstance(_meta, NoDefault):
+            self._meta = _meta = self.key.get()
+        assert isinstance(_meta, DictViewReadonly)
+        return _meta
 
     @property
-    def readonly(self):
+    def readonly(self) -> bool:
         return True
 
 
 class MutableFileEntry(BaseFileEntry):
     @property
-    def meta(self):
-        if self._meta is _nodefault:
-            self._meta = get_mutable_deepcopy(self.key.get())
-        return self._meta
+    def meta(self) -> dict:
+        _meta = self._meta
+        if isinstance(_meta, NoDefault):
+            self._meta = _meta = self.key.get_mutable()
+        assert isinstance(_meta, dict)
+        return _meta
 
     @property
-    def readonly(self):
+    def readonly(self) -> bool:
         return False
 
 

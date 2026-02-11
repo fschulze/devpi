@@ -4,20 +4,20 @@ import traceback
 class LazyExceptionFormatter:
     __slots__ = ('e',)
 
-    def __init__(self, e):
+    def __init__(self, e: Exception) -> None:
         self.e = e
 
-    def __str__(self):
+    def __str__(self) -> str:
         return format_exception(self.e)
 
 
 class LazyExceptionOnlyFormatter:
     __slots__ = ('e',)
 
-    def __init__(self, e):
+    def __init__(self, e: Exception) -> None:
         self.e = e
 
-    def __str__(self):
+    def __str__(self) -> str:
         return format_exception_only(self.e)
 
 

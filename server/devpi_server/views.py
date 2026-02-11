@@ -53,6 +53,8 @@ from pyramid.traversal import DefaultRootFactory
 from pyramid.view import exception_view_config
 from pyramid.view import view_config
 from time import time
+from typing import TYPE_CHECKING
+from typing import cast
 from urllib.parse import urlparse
 import attrs
 import contextlib
@@ -62,6 +64,15 @@ import json
 import os
 import re
 import warnings
+
+
+if TYPE_CHECKING:
+    from .main import XOM
+    from .model import BaseStage
+    from .model import ELink
+    from .model import PrivateStage
+    from collections.abc import Iterator
+    from typing import NoReturn
 
 
 devpiweb_hookimpl = HookimplMarker("devpiweb")
@@ -104,7 +115,7 @@ def is_simple_json_or_requested_by_installer(request):
     return is_simple_json(request) or is_requested_by_installer(request)
 
 
-def abort(request, code, body):
+def abort(request: Request, code: int, body: str) -> NoReturn:
     # if no Accept header is set, then force */*, otherwise the exception
     # will be returned as text/plain, which causes easy_install/setuptools
     # to fail improperly
@@ -115,7 +126,9 @@ def abort(request, code, body):
     raise exception_response(code, explanation=body, headers=meta_headers)
 
 
-def abort_submit(request, code, msg, level="error"):
+def abort_submit(
+    request: Request, code: int, msg: str, level: str = "error"
+) -> NoReturn:
     # we construct our own type because we need to set the title
     # so that setup.py upload/register use it to explain the failure
     error = type(
@@ -130,7 +143,9 @@ def abort_submit(request, code, msg, level="error"):
     raise error(headers=meta_headers)
 
 
-def abort_authenticate(request, msg="authentication required"):
+def abort_authenticate(
+    request: Request, msg: str = "authentication required"
+) -> NoReturn:
     err = type(
         'HTTPError', (HTTPException,), dict(
             code=401, title=msg))
@@ -151,14 +166,14 @@ class HTTPResponse(HTTPSuccessful):
 
 
 def apiresult(
-    code,
-    message=None,
+    code: int,
+    message: str | None = None,
     *,
-    result=None,
-    type=None,  # noqa: A002
-    warnings=None,
-):
-    d = dict()
+    result: dict | list | None = None,
+    type: str | None = None,  # noqa: A002
+    warnings: list | None = None,
+) -> HTTPResponse:
+    d: dict[str, dict | list | str] = {}
     if result is not None:
         assert type is not None
         d["result"] = result
@@ -173,13 +188,13 @@ def apiresult(
 
 
 def apireturn(
-    code,
-    message=None,
+    code: int,
+    message: str | None = None,
     *,
-    result=None,
-    type=None,  # noqa: A002
-    warnings=None,
-):
+    result: dict | list | None = None,
+    type: str | None = None,  # noqa: A002
+    warnings: list | None = None,
+) -> NoReturn:
     raise apiresult(code, message=message, result=result, type=type, warnings=warnings)
 
 
@@ -192,7 +207,7 @@ class ContentTypePredicate(object):
     def __init__(self, val, config):
         self.val = val
 
-    def text(self):
+    def text(self) -> str:
         return 'content type = %s' % self.val
     phash = text
 
@@ -393,7 +408,7 @@ class StatusView:
         return status
 
     @view_config(route_name="/+status", accept="application/json")
-    def status(self):
+    def status(self) -> None:
         apireturn(200, type="status", result=self._status())
 
 
@@ -516,6 +531,8 @@ def version_in_filename(version, filename):
 
 
 class PyPIView:
+    xom: XOM
+
     def __init__(self, request):
         self.request = request
         self.context = request.context
@@ -544,7 +561,7 @@ class PyPIView:
     @view_config(route_name="/+api")
     @view_config(route_name="/{user}/+api")
     @view_config(route_name="/{user}/{index}/+api")
-    def apiconfig_index(self):
+    def apiconfig_index(self) -> None:
         request = self.request
         stage = None
         if request.context.index is not None:
@@ -622,13 +639,13 @@ class PyPIView:
     @view_config(
         route_name="/{user}/{index}/+f/{relpath:.*}",
         request_method="POST")
-    def post_toxresult(self):
+    def post_toxresult(self) -> None:
         if not self.request.has_permission("toxresult_upload"):
             default_tox_result_handling = ToxResultHandling().block(TOXRESULT_UPLOAD_FORBIDDEN)
             tox_result_handling = self.xom.config.hook.devpiserver_on_toxresult_upload_forbidden(
                 request=self.request, tox_result_handling=default_tox_result_handling)
         else:
-            stage = self.context.stage
+            stage = cast("BaseStage", self.context.stage)
             relpath = self.request.path_info.strip("/")
             link = stage.get_link_from_entrypath(relpath)
             if link is None or link.rel != "releasefile":
@@ -923,7 +940,7 @@ class PyPIView:
         route_name="/{user}/{index}", request_method="PUT")
     @view_config(
         route_name="/{user}/{index}/", request_method="PUT")
-    def index_create(self):
+    def index_create(self) -> None:
         username = self.context.username
         user = self.model.get_user(username)
         if user is None:
@@ -972,7 +989,7 @@ class PyPIView:
     @view_config(
         route_name="/{user}/{index}/", request_method="PATCH",
         permission="index_modify")
-    def index_modify(self):
+    def index_modify(self) -> None:  # noqa: PLR0912
         stage = self.context.stage
         json = getjson(self.request)
         keep_unknown = False
@@ -1035,7 +1052,7 @@ class PyPIView:
     @view_config(
         route_name="/{user}/{index}/", request_method="DELETE",
         permission="index_delete")
-    def index_delete(self):
+    def index_delete(self) -> None:
         stage = self.context.stage
         if not stage.ixconfig["volatile"]:
             apireturn(403, "index %s non-volatile, cannot delete" %
@@ -1220,7 +1237,14 @@ class PyPIView:
         results.append((r.status_code, "docfile", name))
         return results
 
-    def _push_links(self, links, target_stage, name, version):
+    def _push_links(
+        self,
+        links: dict[str, list[ELink]],
+        target_stage: PrivateStage,
+        name: str,
+        version: str,
+    ) -> Iterator[tuple]:
+        stage = cast("PrivateStage", self.context.stage)
         stage = self.context.stage
         for link in links.get("releasefile", ()):
             entry = link.entry
@@ -1231,7 +1255,9 @@ class PyPIView:
                     pass
                 # re-get entry for current metadata which might have
                 # added hashes if a file had to be streamed from a remote
-                entry = self.xom.filestore.get_file_entry(entry.relpath)
+                _entry = self.xom.filestore.get_file_entry(entry.relpath)
+                assert _entry is not None
+                entry = _entry
             with entry.file_open_read() as f:
                 new_link = target_stage.store_releasefile(
                     name, version, entry.basename, f,
@@ -1280,11 +1306,12 @@ class PyPIView:
 
     @view_config(
         route_name="/{user}/{index}/", request_method="POST")
-    def submit(self):
+    def submit(self) -> Response:  # noqa: PLR0912
         request = self.request
         stage = self.context.stage
         if not hasattr(stage, "store_releasefile"):
             abort_submit(request, 404, "cannot submit to mirror index")
+        stage = cast("PrivateStage", stage)
         if not request.has_permission("upload"):
             # if there is no authenticated user, then issue a basic auth challenge
             if not request.authenticated_userid:
@@ -1442,7 +1469,7 @@ class PyPIView:
 
     @view_config(route_name="/{user}/{index}/{project}",
                  accept="application/json", request_method="GET")
-    def project_get(self):
+    def project_get(self) -> None:
         if not json_preferred(self.request):
             apireturn(415, "unsupported media type %s" %
                       self.request.headers.items())
@@ -1459,7 +1486,7 @@ class PyPIView:
     @view_config(
         route_name="/{user}/{index}/{project}", request_method="DELETE",
         permission="del_project")
-    def del_project(self):
+    def del_project(self) -> None:
         stage = self.context.stage
         project = self.context.project
         force = 'force' in self.request.params
@@ -1474,7 +1501,7 @@ class PyPIView:
                   project=project, sname=stage.name))
 
     @view_config(route_name="/{user}/{index}/{project}/{version}", accept="application/json", request_method="GET")
-    def version_get(self):
+    def version_get(self) -> None:
         verdata = self.context.get_versiondata(perstage=False)
         view_verdata = self._make_view_verdata(verdata)
         apireturn(200, type="versiondata", result=view_verdata)
@@ -1504,7 +1531,7 @@ class PyPIView:
     @view_config(route_name="/{user}/{index}/{project}/{version}",
                  permission="del_verdata",
                  request_method="DELETE")
-    def del_versiondata(self):
+    def del_versiondata(self) -> None:
         stage = self.context.stage
         name, version = self.context.project, self.context.version
         force = 'force' in self.request.params
@@ -1604,7 +1631,7 @@ class PyPIView:
     @view_config(route_name="/{user}/{index}/+f/{relpath:.*}",
                  permission="del_entry",
                  request_method="DELETE")
-    def del_pkg(self):
+    def del_pkg(self) -> None:
         stage = self.context.stage
         force = 'force' in self.request.params
         if not stage.ixconfig["volatile"] and not force:
@@ -1624,7 +1651,7 @@ class PyPIView:
 
     @view_config(route_name="/{user}/{index}", accept="application/json", request_method="GET")
     @view_config(route_name="/{user}/{index}/", accept="application/json", request_method="GET")
-    def index_get(self):
+    def index_get(self) -> None:
         stage = self.context.stage
         result = dict(stage.ixconfig)
         # double negation :(
@@ -1642,7 +1669,7 @@ class PyPIView:
     # login and user handling
     #
     @view_config(route_name="/+login", request_method="POST")
-    def login(self):
+    def login(self) -> None:
         request = self.request
         dict = getjson(request)
         user = dict.get("user", None)
@@ -1702,7 +1729,7 @@ class PyPIView:
     @view_config(
         route_name="/{user}/", request_method="PUT",
         permission="user_create")
-    def user_create(self):
+    def user_create(self) -> None:
         username = self.context.username
         request = self.request
         user = self.model.get_user(username)
@@ -1725,7 +1752,7 @@ class PyPIView:
     @view_config(
         route_name="/{user}/", request_method="DELETE",
         permission="user_delete")
-    def user_delete(self):
+    def user_delete(self) -> None:
         context = self.context
         if not context.user:
             abort(self.request, 404, "required user %r does not exist" % context.username)
@@ -1741,14 +1768,14 @@ class PyPIView:
 
     @view_config(route_name="/{user}", accept="application/json", request_method="GET")
     @view_config(route_name="/{user}/", accept="application/json", request_method="GET")
-    def user_get(self):
+    def user_get(self) -> None:
         if self.context.user is None:
             apireturn(404, "user %r does not exist" % self.context.username)
         userconfig = self.context.user.get()
         apireturn(200, type="userconfig", result=userconfig)
 
     @view_config(route_name="/", accept="application/json", request_method="GET")
-    def user_list(self):
+    def user_list(self) -> None:
         d = {}
         for user in self.model.get_userlist():
             d[user.name] = user.get()

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from collections import OrderedDict
 from devpi_common.terminal import TerminalWriter
 from devpi_common.url import URL
@@ -8,8 +10,17 @@ from devpi_server.config import parseoptions
 from functools import partial
 from pathlib import Path
 from plistlib import dumps as plist_dumps
+from typing import TYPE_CHECKING
 import subprocess
 import sys
+
+
+if TYPE_CHECKING:
+    from .config import Config
+    from collections.abc import Callable
+    from typing import Union
+
+    WriterCallable = Callable[[str, Union[bytes, str]], None]
 
 
 # don't sort the keys; that way we can keep our own order
@@ -40,7 +51,12 @@ def get_devpibin(tw):
     return devpibin
 
 
-def gen_supervisor(tw, config, argv, writer):
+def gen_supervisor(
+    tw: TerminalWriter,
+    config: Config,  # noqa: ARG001 - call convention
+    argv: list[str],
+    writer: WriterCallable,
+) -> None:
     import getpass
     devpibin = get_devpibin(tw)
     content = render(
@@ -53,7 +69,12 @@ def gen_supervisor(tw, config, argv, writer):
     writer("supervisord.conf", content)
 
 
-def gen_cron(tw, config, argv, writer):
+def gen_cron(
+    tw: TerminalWriter,  # noqa: ARG001 - call convention
+    config: Config,  # noqa: ARG001 - call convention
+    argv: list[str],  # noqa: ARG001 - call convention
+    writer: WriterCallable,
+) -> None:
     import getpass
     content = render(
         "crontab",
@@ -61,7 +82,12 @@ def gen_cron(tw, config, argv, writer):
     writer("crontab", content)
 
 
-def gen_nginx(tw, config, argv, writer):
+def gen_nginx(
+    tw: TerminalWriter,  # noqa: ARG001 - call convention
+    config: Config,
+    argv: list[str],  # noqa: ARG001 - call convention
+    writer: WriterCallable,
+) -> None:
     outside_url = config.outside_url
     if outside_url is None:  # default
         outside_url = "http://localhost:80"
@@ -85,7 +111,12 @@ def gen_nginx(tw, config, argv, writer):
     writer("nginx-devpi.conf", nginxconf)
 
 
-def gen_nginx_caching(tw, config, argv, writer):
+def gen_nginx_caching(
+    tw: TerminalWriter,  # noqa: ARG001 - call convention
+    config: Config,
+    argv: list[str],  # noqa: ARG001 - call convention
+    writer: WriterCallable,
+) -> None:
     outside_url = config.outside_url
     if outside_url is None:  # default
         outside_url = "http://localhost:80"
@@ -125,7 +156,12 @@ def gen_nginx_caching(tw, config, argv, writer):
     writer("nginx-devpi-caching.conf", nginxconf)
 
 
-def gen_launchd(tw, config, argv, writer):
+def gen_launchd(
+    tw: TerminalWriter,
+    config: Config,  # noqa: ARG001 - call convention
+    argv: list[str],
+    writer: WriterCallable,
+) -> None:
     devpibin = get_devpibin(tw)
     plist_content = write_plist_to_bytes(OrderedDict([
         ("Label", "net.devpi"),
@@ -137,7 +173,12 @@ def gen_launchd(tw, config, argv, writer):
     writer("launchd-macos.txt", content)
 
 
-def gen_systemd(tw, config, argv, writer):
+def gen_systemd(
+    tw: TerminalWriter,
+    config: Config,  # noqa: ARG001 - call convention
+    argv: list[str],
+    writer: WriterCallable,
+) -> None:
     import getpass
     devpibin = get_devpibin(tw)
     content = render(
@@ -149,7 +190,12 @@ def gen_systemd(tw, config, argv, writer):
     writer("devpi.service", content)
 
 
-def gen_windows_service(tw, config, argv, writer):
+def gen_windows_service(
+    tw: TerminalWriter,
+    config: Config,  # noqa: ARG001 - call convention
+    argv: list[str],
+    writer: WriterCallable,
+) -> None:
     devpibin = get_devpibin(tw)
     content = render(
         "windows-service.txt",
@@ -159,7 +205,9 @@ def gen_windows_service(tw, config, argv, writer):
 
 
 @hookimpl
-def devpiserver_genconfig(tw, config, argv, writer):
+def devpiserver_genconfig(
+    tw: TerminalWriter, config: Config, argv: list[str], writer: WriterCallable
+) -> None:
     gen_cron(tw, config, argv, writer)
     gen_launchd(tw, config, argv, writer)
     gen_nginx(tw, config, argv, writer)
@@ -169,7 +217,7 @@ def devpiserver_genconfig(tw, config, argv, writer):
     gen_windows_service(tw, config, argv, writer)
 
 
-def genconfig(config=None, argv=None):
+def genconfig(config: Config | None = None, argv: list[str] | None = None) -> None:
     pluginmanager = get_pluginmanager()
 
     if argv is None:
@@ -217,7 +265,7 @@ def genconfig(config=None, argv=None):
         new_argv.append(arg)
     new_config = parseoptions(pluginmanager, ["devpi-server", *new_argv])
 
-    def writer(basename, content):
+    def writer(basename: str, content: bytes | str) -> None:
         p = destdir.joinpath(basename)
         with p.open("w" if isinstance(content, str) else "wb") as f:
             f.write(content)

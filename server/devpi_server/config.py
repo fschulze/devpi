@@ -47,7 +47,7 @@ DEFAULT_ARGON2_PARALLELISM = 8
 DEFAULT_ARGON2_TIME_COST = 16
 
 
-def strtobool(val):
+def strtobool(val: str) -> bool:
     val = val.lower()
     if val in ('y', 'yes', 't', 'true', 'on', '1'):
         return True
@@ -57,7 +57,7 @@ def strtobool(val):
         raise ValueError(f"invalid truth value {val!r}")
 
 
-def get_pluginmanager(load_entrypoints=True):
+def get_pluginmanager(*, load_entrypoints: bool = True) -> PluginManager:
     pm = PluginManager("devpiserver")
     pm.add_hookspecs(hookspecs)
     # XXX load internal plugins here
@@ -85,21 +85,30 @@ def traced_pluggy_call(hook, **caller_kwargs):
     return (results, plugin_names)
 
 
-def add_help_option(parser, pluginmanager):
+def add_help_option(
+    parser: MyArgumentParser,
+    pluginmanager: PluginManager,  # noqa: ARG001 - call convention
+) -> None:
     parser.addoption(
         "-h", "--help",
         action='store_true', default='==SUPPRESS==',
         help="Show this help message and exit.")
 
 
-def add_configfile_option(parser, pluginmanager):
+def add_configfile_option(
+    parser: MyArgumentParser,
+    pluginmanager: PluginManager,  # noqa: ARG001 - call convention
+) -> None:
     parser.addoption(
         "-c", "--configfile",
         type=str, default=None,
         help="Config file to use.")
 
 
-def add_role_option(parser, pluginmanager):
+def add_role_option(
+    parser: MyArgumentParser,
+    pluginmanager: PluginManager,  # noqa: ARG001 - call convention
+) -> None:
     parser.addoption(
         "--role", action="store", dest="role", default="auto",
         choices=["master", "primary", "replica", "standalone", "auto"],
@@ -110,7 +119,9 @@ def add_role_option(parser, pluginmanager):
              "the deprecated variant of 'primary'.")
 
 
-def add_master_url_option(parser, pluginmanager):
+def add_master_url_option(
+    parser: MyArgumentParser, pluginmanager: PluginManager
+) -> None:
     warnings.warn(
         "The add_master_url_option function is deprecated, "
         "use add_primary_url_option instead",
@@ -119,7 +130,10 @@ def add_master_url_option(parser, pluginmanager):
     add_primary_url_option(parser, pluginmanager)
 
 
-def add_primary_url_option(parser, pluginmanager):  # noqa: ARG001
+def add_primary_url_option(
+    parser: MyArgumentParser,
+    pluginmanager: PluginManager,  # noqa: ARG001 - call convention
+) -> None:  # noqa: ARG001
     parser.addoption(
         "--primary-url", action="store", dest="primary_url",
         help="run as a replica of the specified primary server",
@@ -130,7 +144,10 @@ def add_primary_url_option(parser, pluginmanager):  # noqa: ARG001
         default=None)
 
 
-def add_hard_links_option(parser, pluginmanager):
+def add_hard_links_option(
+    parser: MyArgumentParser,
+    pluginmanager: PluginManager,  # noqa: ARG001 - call convention
+) -> None:
     parser.addoption(
         "--hard-links", action="store_true",
         help="use hard links during export, import or with "
@@ -140,7 +157,10 @@ def add_hard_links_option(parser, pluginmanager):
              "USE AT YOUR OWN RISK")
 
 
-def add_logging_options(parser, pluginmanager):
+def add_logging_options(
+    parser: MyArgumentParser,
+    pluginmanager: PluginManager,  # noqa: ARG001 - call convention
+) -> None:
     parser.addoption(
         "--debug", action="store_true",
         help="run wsgi application with debug logging")
@@ -151,7 +171,10 @@ def add_logging_options(parser, pluginmanager):
         default=None)
 
 
-def add_web_options(parser, pluginmanager):
+def add_web_options(
+    parser: MyArgumentParser,
+    pluginmanager: PluginManager,  # noqa: ARG001 - call convention
+) -> None:
     parser.addoption(
         "--host", type=str,
         default="localhost",
@@ -228,7 +251,10 @@ def add_web_options(parser, pluginmanager):
              "By default no profiling is performed.")
 
 
-def add_mirror_options(parser, pluginmanager):
+def add_mirror_options(
+    parser: MyArgumentParser,
+    pluginmanager: PluginManager,  # noqa: ARG001 - call convention
+) -> None:
     parser.addoption(
         "--mirror-cache-expiry", type=int, metavar="SECS",
         default=DEFAULT_MIRROR_CACHE_EXPIRY,
@@ -236,7 +262,7 @@ def add_mirror_options(parser, pluginmanager):
              "are checked for new releases.")
 
 
-def add_replica_options(parser, pluginmanager):
+def add_replica_options(parser: MyArgumentParser, pluginmanager: PluginManager) -> None:
     add_primary_url_option(parser, pluginmanager)
 
     parser.addoption(
@@ -280,7 +306,10 @@ def add_replica_options(parser, pluginmanager):
         help="use separate requests instead of replica streaming protocol")
 
 
-def add_request_options(parser, pluginmanager):
+def add_request_options(
+    parser: MyArgumentParser,
+    pluginmanager: PluginManager,  # noqa: ARG001 - call convention
+) -> None:
     parser.addoption(
         "--request-timeout", type=int, metavar="NUM",
         default=DEFAULT_REQUEST_TIMEOUT,
@@ -294,7 +323,7 @@ def add_request_options(parser, pluginmanager):
              "simple index used by pip.")
 
 
-def add_storage_options(parser, pluginmanager):
+def add_storage_options(parser: MyArgumentParser, pluginmanager: PluginManager) -> None:
     parser.addoption(
         "--serverdir", type=str, metavar="DIR", action="store",
         default='~/.devpi/server',
@@ -320,7 +349,10 @@ def add_storage_options(parser, pluginmanager):
              "average. So by default about 10MB are used.")
 
 
-def add_init_options(parser, pluginmanager):
+def add_init_options(
+    parser: MyArgumentParser,
+    pluginmanager: PluginManager,  # noqa: ARG001 - call convention
+) -> None:
     parser.addoption(
         "--no-root-pypi", action="store_true",
         help="don't create root/pypi on server initialization.")
@@ -337,13 +369,19 @@ def add_init_options(parser, pluginmanager):
              "exist.")
 
 
-def add_export_options(parser, pluginmanager):
+def add_export_options(
+    parser: MyArgumentParser,
+    pluginmanager: PluginManager,  # noqa: ARG001 - call convention
+) -> None:
     parser.addoption(
         "--include-mirrored-files", action="store_true",
         help="include downloaded files from mirror indexes in dump.")
 
 
-def add_import_options(parser, pluginmanager):
+def add_import_options(
+    parser: MyArgumentParser,
+    pluginmanager: PluginManager,  # noqa: ARG001 - call convention
+) -> None:
     parser.addoption(
         "--skip-import-type", action="append", metavar="TYPE",
         help="skip the given index type during import. "
@@ -360,7 +398,10 @@ def add_import_options(parser, pluginmanager):
              "server has caught up with all events.")
 
 
-def add_secretfile_option(parser, pluginmanager):
+def add_secretfile_option(
+    parser: MyArgumentParser,
+    pluginmanager: PluginManager,  # noqa: ARG001 - call convention
+) -> None:
     parser.addoption(
         "--secretfile", type=str, metavar="path",
         help="file containing the server side secret used for user "
@@ -380,7 +421,7 @@ def add_secretfile_option(parser, pluginmanager):
         help=argparse.SUPPRESS)
 
 
-def add_deploy_options(parser, pluginmanager):
+def add_deploy_options(parser: MyArgumentParser, pluginmanager: PluginManager) -> None:
     add_secretfile_option(parser, pluginmanager)
 
     parser.addoption(
@@ -389,7 +430,10 @@ def add_deploy_options(parser, pluginmanager):
              "but does not run an event processing or replication thread.")
 
 
-def add_permission_options(parser, pluginmanager):
+def add_permission_options(
+    parser: MyArgumentParser,
+    pluginmanager: PluginManager,  # noqa: ARG001 - call convention
+) -> None:
     parser.addoption(
         "--restrict-modify", type=str, metavar="SPEC",
         action="store", default=None,
@@ -405,9 +449,9 @@ def add_permission_options(parser, pluginmanager):
 
 
 def add_autocreate_users_options(
-    parser,
-    pluginmanager,  # noqa: ARG001 - call convention
-):
+    parser: MyArgumentParser,
+    pluginmanager: PluginManager,  # noqa: ARG001 - call convention
+) -> None:
     parser.addoption(
         "--autocreate-users",
         action="store_true",
@@ -418,7 +462,10 @@ def add_autocreate_users_options(
     )
 
 
-def addoptions(parser, pluginmanager):
+def addoptions(
+    parser: MyArgumentParser,
+    pluginmanager: PluginManager,
+) -> None:
     add_help_option(parser, pluginmanager)
     add_configfile_option(parser, pluginmanager)
     add_role_option(parser, pluginmanager)
@@ -461,7 +508,7 @@ def addoptions(parser, pluginmanager):
     )
 
 
-def try_argcomplete(parser):
+def try_argcomplete(parser: MyArgumentParser) -> None:
     try:
         import argcomplete
     except ImportError:
@@ -470,7 +517,7 @@ def try_argcomplete(parser):
         argcomplete.autocomplete(parser)
 
 
-def get_parser(pluginmanager):
+def get_parser(pluginmanager: PluginManager) -> MyArgumentParser:
     parser = MyArgumentParser(
         description="Start a server which serves multiple users and "
                     "indices. The special root/pypi index is a cached "
@@ -537,7 +584,7 @@ class ArgumentDefaultGetter:
 
     def __init__(
         self, *, config_options: dict[str, Any], environ: MutableMapping[str, Any]
-    ):
+    ) -> None:
         self.config_options = config_options
         self.environ = environ
         self.used_config_options = set()
@@ -559,16 +606,20 @@ class ArgumentDefaultGetter:
         return self.config_options[name]
 
 
-def parseoptions(pluginmanager, argv, parser=None):
+def parseoptions(
+    pluginmanager: PluginManager,
+    argv: list[str],
+    parser: MyArgumentParser | None = None,
+) -> Config:
     if parser is None:
         parser = get_parser(pluginmanager)
     try_argcomplete(parser)
     # suppress any errors
     org_error = parser.error
-    parser.error = lambda m: None
+    parser.error = lambda _m: None  # type: ignore[assignment,method-assign,return-value]
     args = parser.parse_args(argv[1:])
     # restore error method
-    parser.error = org_error
+    parser.error = org_error  # type: ignore[method-assign]
     config_file = None
     if args.configfile:
         config_file = args.configfile
@@ -664,31 +715,31 @@ class MyArgumentParser(argparse.ArgumentParser):
         grp.addoption = grp.add_argument  # type: ignore[attr-defined]
         return grp
 
-    def add_all_options(self):
+    def add_all_options(self) -> None:
         addoptions(self, self.pluginmanager)
 
-    def add_configfile_option(self):
+    def add_configfile_option(self) -> None:
         add_configfile_option(self, self.pluginmanager)
 
-    def add_export_options(self):
+    def add_export_options(self) -> None:
         add_export_options(self, self.pluginmanager)
 
-    def add_hard_links_option(self):
+    def add_hard_links_option(self) -> None:
         add_hard_links_option(self, self.pluginmanager)
 
-    def add_help_option(self):
+    def add_help_option(self) -> None:
         add_help_option(self, self.pluginmanager)
 
-    def add_import_options(self):
+    def add_import_options(self) -> None:
         add_import_options(self, self.pluginmanager)
 
-    def add_init_options(self):
+    def add_init_options(self) -> None:
         add_init_options(self, self.pluginmanager)
 
     def add_logging_options(self) -> None:
         add_logging_options(self, self.pluginmanager)
 
-    def add_master_url_option(self):
+    def add_master_url_option(self) -> None:
         warnings.warn(
             "The add_master_url_option method is deprecated, "
             "use add_primary_url_option instead",
@@ -696,16 +747,16 @@ class MyArgumentParser(argparse.ArgumentParser):
             stacklevel=2)
         add_primary_url_option(self, self.pluginmanager)
 
-    def add_primary_url_option(self):
+    def add_primary_url_option(self) -> None:
         add_primary_url_option(self, self.pluginmanager)
 
-    def add_role_option(self):
+    def add_role_option(self) -> None:
         add_role_option(self, self.pluginmanager)
 
-    def add_secretfile_option(self):
+    def add_secretfile_option(self) -> None:
         add_secretfile_option(self, self.pluginmanager)
 
-    def add_storage_options(self):
+    def add_storage_options(self) -> None:
         add_storage_options(self, self.pluginmanager)
 
 
@@ -748,7 +799,9 @@ def get_io_file_factory(storage_info: dict) -> IIOFileFactory:
 
 
 class Config:
-    def __init__(self, args, pluginmanager):
+    _key_cache: dict[str, Any]
+
+    def __init__(self, args: argparse.Namespace, pluginmanager: PluginManager) -> None:
         self.args = args
         self.pluginmanager = pluginmanager
         self.hook = pluginmanager.hook
@@ -824,14 +877,14 @@ class Config:
     def nodeinfo_path(self):
         return self.server_path / ".nodeinfo"
 
-    def init_nodeinfo(self):
+    def init_nodeinfo(self) -> None:
         log.info("Loading node info from %s", self.nodeinfo_path)
         self._determine_role()
         self._determine_uuid()
         self._determine_storage()
         self.write_nodeinfo()
 
-    def _determine_uuid(self):
+    def _determine_uuid(self) -> None:
         if "uuid" not in self.nodeinfo:
             uuid_hex = uuid.uuid4().hex
             self.nodeinfo["uuid"] = uuid_hex
@@ -887,7 +940,7 @@ class Config:
                 return NodeInfo(json.load(f))
         return NodeInfo({})
 
-    def write_nodeinfo(self):
+    def write_nodeinfo(self) -> None:
         nodeinfo_dir = self.nodeinfo_path.parent
         nodeinfo_dir.mkdir(parents=True, exist_ok=True)
         prefix = "-" + self.nodeinfo_path.name
@@ -1031,7 +1084,7 @@ class Config:
     def wait_for_events(self):
         return getattr(self.args, 'wait_for_events', False)
 
-    def _init_role(self):
+    def _init_role(self) -> None:
         if self.primary_url:
             self.nodeinfo["role"] = "replica"
         else:
@@ -1065,7 +1118,7 @@ class Config:
             self.primary_url = None
         self.nodeinfo["role"] = new_role
 
-    def _determine_role(self):
+    def _determine_role(self) -> None:
         role = getattr(self.args, "role", "auto")
         old_role = self.nodeinfo.get("role")
         if role == "auto" and not old_role:
@@ -1104,7 +1157,7 @@ class Config:
     def storage(self) -> type:
         return self._storage_info()["storage"]
 
-    def _determine_storage(self):
+    def _determine_storage(self) -> None:
         if isinstance(self.args.storage, dict):
             # a yaml config may return a dict
             settings = dict(self.args.storage)
