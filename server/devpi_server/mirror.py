@@ -9,6 +9,7 @@ from __future__ import annotations
 from .config import hookimpl
 from .exceptions import lazy_format_exception
 from .filestore import Digests
+from .filestore import MutableFileEntry
 from .filestore import key_from_link
 from .htmlpage import HTMLPage
 from .httpclient import FatalResponse
@@ -438,9 +439,16 @@ class MirrorData:
         data: dict[str, CacheLink] = {}
         index_key = stage.key_index
         keyfs = stage.keyfs
+        name_key_file_map = {}
+        name_url_map = {}
+        name_version_map = {}
         for releaselink in releaselinks:
             fn = releaselink.basename
-            key = key_from_link(keyfs, releaselink, index_key)
+            (projectname, version, _ext) = splitbasename(fn)
+            assert normalize_name(projectname) == project
+            name_version_map[fn] = version
+            name_key_file_map[fn] = key = key_from_link(keyfs, releaselink, index_key)
+            name_url_map[fn] = releaselink.geturl_nofragment().url
             link_data = data[fn] = CacheLink(relpath=key.name)
             if hash_spec := releaselink.hash_spec:
                 link_data["hashes"] = Digests.from_spec(hash_spec)
@@ -450,21 +458,26 @@ class MirrorData:
                 y := None if releaselink.yanked is False else releaselink.yanked
             ) is not None:
                 link_data["yanked"] = y
+            del _ext, fn, hash_spec, key, link_data
+            del projectname, releaselink, rp, version, y
+        del index_key, keyfs, releaselinks
         with self.key_project.update() as projectdata:
             projectdata["name"] = project.original
+        del projectdata
         if cache_info is None:
             cache_info = self.get_cache_info()
         stage.key_projectcacheinfo(project).set(cast("dict", cache_info))
         key_mirrorfile = stage.key_mirrorfile(project)
         key_simpledata = stage.key_simpledata(project)
         name_key_mirrorfile_map = {}
-        name_version_map = {}
         old = {}
         for k, v in key_mirrorfile.iter_ulidkey_values():
             name_key_mirrorfile_map[k.name] = k
-            (projectname, version, _ext) = splitbasename(k.name)
-            assert normalize_name(projectname) == project
-            name_version_map[k.name] = version
+            if k.name not in name_version_map:
+                (projectname, version, _ext) = splitbasename(k.name)
+                assert normalize_name(projectname) == project
+                name_version_map[k.name] = version
+                del _ext, projectname
             old[k.name] = v
             assert v["relpath"].endswith(f"/{k.name}"), (k, v)
         if old != data:
@@ -489,10 +502,21 @@ class MirrorData:
                 else:
                     num_changed += 1
                     name_key_mirrorfile_map[name].set(cast("dict", new_value))
+                    entry = MutableFileEntry(name_key_file_map[name])
+                    entry.url = name_url_map[name]
+                    if (hashes := new_value.get("hashes")) is not None:
+                        entry._hashes = hashes
+                        del hashes
+                    entry.project = project
+                    entry.version = name_version_map[name]
+                    del entry
                     key_simpledata(version=name_version_map[name], filename=name).set(
                         cast("dict", new_value)
                     )
+                del name
+            del old
             new_mirrorfile_keys = [key_mirrorfile(name) for name in data]
+            new_file_keys = [name_key_file_map[name] for name in data]
             new_simpledata_keys = []
             for _k, ulid_key in tx.resolve_keys(
                 new_mirrorfile_keys, fetch=True, fill_cache=True, new_for_missing=True
@@ -506,10 +530,23 @@ class MirrorData:
                 )
             del new_mirrorfile_keys
             for _k, ulid_key in tx.resolve_keys(
+                new_file_keys, fetch=True, fill_cache=True, new_for_missing=True
+            ):
+                entry = MutableFileEntry(ulid_key)
+                name = entry.basename
+                entry.url = name_url_map[name]
+                if (hashes := data[name].get("hashes")) is not None:
+                    entry._hashes = hashes
+                    del hashes
+                entry.project = project
+                entry.version = name_version_map[name]
+                del entry, name
+            del new_file_keys
+            for _k, ulid_key in tx.resolve_keys(
                 new_simpledata_keys, fetch=True, fill_cache=True, new_for_missing=True
             ):
                 ulid_key.set(data[ulid_key.params["filename"]])
-            del new_simpledata_keys
+            del data, new_simpledata_keys
             threadlog.debug(
                 "%s new, %s deleted, %s changed, and %s unchanged simplelinks for %s in %s",
                 num_new,
@@ -1098,19 +1135,7 @@ class MirrorStage(BaseStage):
 
         with self.keyfs.write_transaction(allow_restart=True):
             # on the master we need to write the updated links.
-            existing_info = set(links or ())
             assert len(newlinks) == len(info.releaselinks)
-            linkstomap = [
-                newlink
-                for newinfo, link in zip(newlinks, info.releaselinks, strict=True)
-                if (newlink := link) not in existing_info
-            ]
-            # looping over iter_maplinks creates the entries in the database
-            for _entry in self.filestore.iter_maplinks(
-                linkstomap, self.user.name, self.index, project
-            ):
-                pass
-            # this stores the simple links info
             self._get_mirrordata(project)._save_cache_links(
                 info.releaselinks,
                 info.cache_info,
