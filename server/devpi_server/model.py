@@ -1922,7 +1922,6 @@ class ELink:
     _log = linkdictprop("_log")
     index_relpath = linkdictprop("relpath")
     for_relpath = linkdictprop("for_relpath", default=None)
-    _hashes = linkdictprop("hashes", default=None)
     rel = linkdictprop("rel", default=None)
     require_python = linkdictprop("require_python")
     yanked = linkdictprop("yanked")
@@ -1961,7 +1960,7 @@ class ELink:
 
     @property
     def hashes(self):
-        return Digests() if self._hashes is None else Digests(self._hashes)
+        return self.entry.hashes
 
     @property
     def basename(self):
@@ -2234,7 +2233,6 @@ class MutableLinkStore(LinkStore):
     ) -> ELink:
         new_linkdict = {
             "relpath": file_entry.index_relpath,
-            "hashes": file_entry.hashes,
             "_log": [],
         }
         if for_link:
