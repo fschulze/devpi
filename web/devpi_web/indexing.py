@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 from collections.abc import Mapping
-from devpi_common.types import ensure_unicode
 from devpi_common.metadata import get_sorted_versions
+from devpi_common.types import ensure_unicode
 from devpi_common.validation import normalize_name
 from devpi_web.config import get_pluginmanager
 from devpi_web.doczip import Docs
@@ -14,7 +16,7 @@ def is_project_cached(stage, project):
     return True
 
 
-def preprocess_project(project):
+def preprocess_project(project: ProjectIndexingInfo) -> dict | None:
     stage = project.stage
     pm = get_pluginmanager(stage.xom.config)
     name = normalize_name(project.name)
@@ -25,15 +27,19 @@ def preprocess_project(project):
         user, index = stage.name.split('/')
     user = ensure_unicode(user)
     index = ensure_unicode(index)
-    if not is_project_cached(stage, name):
-        result = dict(name=project.name, user=user, index=index)
-        pm.hook.devpiweb_modify_preprocess_project_result(
-            project=project, result=result)
-        return result
-    stage.offline = True
-    if not stage.has_project_perstage(name):
+    result: dict[str, object]
+    if stage.ixconfig["type"] == "mirror":
+        stage.offline = True
+        if not stage.is_project_cached(name):
+            # only index basic info for projects with no downloads
+            result = dict(name=project.name, user=user, index=index)
+            pm.hook.devpiweb_modify_preprocess_project_result(
+                project=project, result=result
+            )
+            return result
+    elif not stage.has_project_perstage(name):
         # project doesn't exist anymore
-        return
+        return None
     # metadata_keys is only available on private indexes
     setuptools_metadata = frozenset(getattr(stage, 'metadata_keys', ()))
     versions = get_sorted_versions(stage.list_versions_perstage(name))
@@ -91,11 +97,13 @@ def iter_indexes(xom):
     yield from mirrors
 
 
-def iter_projects(xom):
+def iter_projects(xom, *, offline=True):
     for username, index in iter_indexes(xom):
         stage = xom.model.getstage(username, index)
         if stage is None:  # this is async, so the stage may be gone
             continue
+        if stage.ixconfig["type"] == "mirror":
+            stage.offline = offline
         names = stage.list_projects_perstage()
         if isinstance(names, Mapping):
             # since devpi-server 6.6.0 mirrors return a mapping where
