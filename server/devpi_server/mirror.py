@@ -522,7 +522,9 @@ class MirrorData:
                 new_mirrorfile_keys, fetch=True, fill_cache=True, new_for_missing=True
             ):
                 num_new += 1
-                ulid_key.set(data[ulid_key.name])
+                ulid_key.set(
+                    {k: v for k, v in data[ulid_key.name].items() if k != "hashes"}
+                )
                 (projectname, version, _ext) = splitbasename(ulid_key.name)
                 assert normalize_name(projectname) == project
                 new_simpledata_keys.append(
@@ -583,7 +585,7 @@ class MirrorData:
             assert not simpledata
             data: dict = {}
             yield data
-            mirrorfiledata.update(data)
+            mirrorfiledata.update({k: v for k, v in data.items() if k != "hashes"})
             simpledata.update(data)
 
 
