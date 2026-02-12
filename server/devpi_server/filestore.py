@@ -33,8 +33,6 @@ if TYPE_CHECKING:
     from .keyfs_types import LocatedKey
     from .keyfs_types import PatternedKey
     from .markers import Absent
-    from collections.abc import Iterator
-    from collections.abc import Sequence
     from devpi_common.url import URL
     from typing import Any
 
@@ -354,43 +352,26 @@ class FileStore:
     def __repr__(self):
         return f"<{self.__class__.__name__} {self.keyfs!r}>"
 
-    def iter_maplinks(
-        self, links: Sequence[URL], user: str, index: str, project: str
-    ) -> Iterator[MutableFileEntry]:
-        if not links:
-            return
-        keyfs = self.keyfs
-        index_key = self.keyfs.INDEX(user=user, index=index).resolve(fetch=True)
-        key_links = {key_from_link(keyfs, link, index_key): link for link in links}
-        # pre-create/fetch all keys
-        key_entries = {
-            key: MutableFileEntry(ulid_key)
-            for (key, ulid_key) in keyfs.tx.resolve_keys(
-                key_links, fetch=True, fill_cache=True, new_for_missing=True
-            )
-        }
-        for key, link in key_links.items():
-            # this resolve should come from cache now
-            entry = key_entries[key]
-            entry.url = link.geturl_nofragment().url
-            if digest := link.hash_value:
-                entry._hashes = Digests({link.hash_type: digest})
-            entry.project = project
-            version = None
-            with suppress(ValueError):
-                (_projectname, version, _ext) = splitbasename(link.basename)
-            # only store version on entry if we can determine it
-            # since version is a meta property of FileEntry, it will return None
-            # if not set, if we set it explicitly, it would waste space in the
-            # database
-            if version is not None:
-                entry.version = version
-            yield entry
-
     def maplink(
         self, link: URL, user: str, index: str, project: str
     ) -> MutableFileEntry:
-        (entry,) = self.iter_maplinks((link,), user, index, project)
+        keyfs = self.keyfs
+        index_key = keyfs.INDEX(user=user, index=index).resolve(fetch=True)
+        key = key_from_link(keyfs, link, index_key)
+        entry = MutableFileEntry(key)
+        entry.url = link.geturl_nofragment().url
+        if digest := link.hash_value:
+            entry._hashes = Digests({link.hash_type: digest})
+        entry.project = project
+        version = None
+        with suppress(ValueError):
+            (_projectname, version, _ext) = splitbasename(link.basename)
+        # only store version on entry if we can determine it
+        # since version is a meta property of FileEntry, it will return None
+        # if not set, if we set it explicitly, it would waste space in the
+        # database
+        if version is not None:
+            entry.version = version
         return entry
 
     def get_file_entry(self, relpath: RelPath) -> FileEntry | None:
