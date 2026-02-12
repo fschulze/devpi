@@ -1293,8 +1293,11 @@ async def test_get_simplelinks_perstage_when_http_error(exc, pypistage, monkeypa
         def are_expired(self):
             return True
 
-        def _load_cache_links(self):
-            return (links, CacheInfo(serial=42, etag='"foo"'))
+        def get_cache_info(self):
+            return CacheInfo(serial=42, etag='"foo"')
+
+        def get_links(self):
+            return links
 
     monkeypatch.setattr("devpi_server.mirror.MirrorData", MockMirrorData)
 

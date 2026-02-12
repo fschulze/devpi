@@ -383,32 +383,29 @@ class MirrorData:
         cache_info.setdefault("etag", None)
         return cast("CacheInfo", cache_info)
 
-    def _load_cache_links(self) -> tuple[list | None, CacheInfo]:
-        (links_with_data, cache_info) = (None, CacheInfo(serial=-1, etag=None))
-
+    def get_fresh_links(self) -> list | None:
+        if not self.key_project.exists():
+            return None
         stage = self.get_stage()
-        if self.key_project.exists():
-            cache_info = self.get_cache_info()
-            key_simpledata = stage.key_simpledata(project=self.project)
-            username = stage.username
-            index = stage.index
-            links_with_data = []
-            for k, v in key_simpledata.iter_ulidkey_values():
-                entrypath = f"{username}/{index}/{v['relpath']}"
-                if (
-                    "hashes" in v
-                    and (hash_spec := Digests(v["hashes"]).best_available_spec)
-                    is not None
-                ):
-                    entrypath = f"{entrypath}#{hash_spec}"
-                links_with_data.append(
-                    (
-                        k.params["filename"],
-                        entrypath,
-                        v.get("requires_python"),
-                        v.get("yanked"),
-                    )
+        key_simpledata = stage.key_simpledata(project=self.project)
+        username = stage.username
+        index = stage.index
+        links_with_data = []
+        for k, v in key_simpledata.iter_ulidkey_values():
+            entrypath = f"{username}/{index}/{v['relpath']}"
+            if (
+                "hashes" in v
+                and (hash_spec := Digests(v["hashes"]).best_available_spec) is not None
+            ):
+                entrypath = f"{entrypath}#{hash_spec}"
+            links_with_data.append(
+                (
+                    k.params["filename"],
+                    entrypath,
+                    v.get("requires_python"),
+                    v.get("yanked"),
                 )
+            )
         if stage.offline and links_with_data is not None:
             entries = stage.get_entries_for_entrypaths(x[1] for x in links_with_data)
             links_with_data = ensure_deeply_readonly(
@@ -418,15 +415,18 @@ class MirrorData:
                     if entry is not None and entry.file_exists()
                 ]
             )
+        return links_with_data
 
-        return (links_with_data, cache_info)
+    def get_links(self) -> list | None:
+        # we might implement caching in get_links
+        return self.get_fresh_links()
 
     def get_stage(self) -> MirrorStage:
         stage = self._stage()
         assert stage is not None
         return stage
 
-    def _save_cache_links(  # noqa: PLR0912
+    def save_links(  # noqa: PLR0912
         self,
         releaselinks: ReleaseLinks,
         cache_info: CacheInfo | None,
@@ -785,8 +785,7 @@ class MirrorStage(BaseStage):
         if not self.is_project_cached(project):
             raise KeyError("project not found")
         mirrorlinks = self._get_mirrordata(project)
-        (links, _cache_info) = mirrorlinks._load_cache_links()
-        if links is not None:
+        if (links := mirrorlinks.get_links()) is not None:
             for entry in (self._entry_from_href(x[1]) for x in links):
                 if entry is None:
                     continue
@@ -809,8 +808,7 @@ class MirrorStage(BaseStage):
         # metadata, so only delete the files and keep the simple links
         # for the possibility to re-download a release
         mirrorlinks = self._get_mirrordata(project)
-        (links, _cache_info) = mirrorlinks._load_cache_links()
-        if links is not None:
+        if (links := mirrorlinks.get_links()) is not None:
             entries_to_check = []
             for entry in (self._entry_from_href(x[1]) for x in links):
                 if entry is None:
@@ -836,8 +834,7 @@ class MirrorStage(BaseStage):
         entry.delete()
         if cleanup:
             mirrorlinks = self._get_mirrordata(project)
-            (links, _cache_info) = mirrorlinks._load_cache_links()
-            if links is None:
+            if (links := mirrorlinks.get_links()) is None:
                 return
             if not any(self._is_file_cached(x) for x in links):
                 for key in (
@@ -1120,7 +1117,7 @@ class MirrorStage(BaseStage):
                 # XXX raise TransactionRestart to get a consistent clean view
                 self.keyfs.restart_read_transaction()
                 mirrorlinks = self._get_mirrordata(project)
-                (links, _cache_info) = mirrorlinks._load_cache_links()
+                links = mirrorlinks.get_fresh_links()
             if links is not None:
                 self.keyfs.tx.on_commit_success(
                     partial(
@@ -1136,7 +1133,7 @@ class MirrorStage(BaseStage):
         with self.keyfs.write_transaction(allow_restart=True):
             # on the master we need to write the updated links.
             assert len(newlinks) == len(info.releaselinks)
-            self._get_mirrordata(project)._save_cache_links(
+            self._get_mirrordata(project).save_links(
                 info.releaselinks,
                 info.cache_info,
             )
@@ -1157,7 +1154,7 @@ class MirrorStage(BaseStage):
             self.keyfs.tx.on_finished(lock.release)
             # fetch current links
             mirrorlinks = self._get_mirrordata(project)
-            (links, _cache_info) = mirrorlinks._load_cache_links()
+            links = mirrorlinks.get_fresh_links()
             if links is None or set(links) != set(newlinks):
                 # we got changes, so store them
                 self._update_simplelinks(project, info, links, newlinks)
@@ -1183,7 +1180,7 @@ class MirrorStage(BaseStage):
         if not is_expired and lock is not None:
             lock.release()
 
-        (links, cache_info) = mirrorlinks._load_cache_links()
+        links = mirrorlinks.get_links()
         if lock is None:
             if links is not None:
                 threadlog.warn(
@@ -1221,7 +1218,9 @@ class MirrorStage(BaseStage):
         newlinks_future = cast("NewLinksFuture", self.xom.create_future())
         try:
             self.xom.run_coroutine_threadsafe(
-                self._async_fetch_releaselinks(newlinks_future, project, cache_info),
+                self._async_fetch_releaselinks(
+                    newlinks_future, project, mirrorlinks.get_cache_info()
+                ),
                 timeout=self.timeout,
             )
         except TimeoutError:
