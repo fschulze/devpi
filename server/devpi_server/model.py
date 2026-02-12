@@ -23,7 +23,6 @@ from devpi_common.types import ensure_unicode
 from devpi_common.url import URL
 from devpi_common.validation import validate_metadata
 from functools import total_ordering
-from itertools import zip_longest
 from operator import iconcat
 from pathlib import Path
 from pyramid.authorization import Allow
@@ -55,13 +54,9 @@ if TYPE_CHECKING:
     from typing import Any
     from typing import Literal
 
-    LinksList = list[tuple[str, str]]
     RequiresPython = str | None
-    RequiresPythonList = list[RequiresPython]
     Yanked = Literal[True] | str | None
-    YankedList = list[Yanked]
     JoinedLink = tuple[str, str, RequiresPython, Yanked]
-    JoinedLinkList = list[JoinedLink]
 
 
 notset = object()
@@ -71,19 +66,6 @@ class Rel(StrEnum):
     DocZip = "doczip"
     ReleaseFile = "releasefile"
     ToxResult = "toxresult"
-
-
-def join_links_data(
-    links: LinksList, requires_python: RequiresPythonList, yanked: YankedList
-) -> JoinedLinkList:
-    # build list of (key, href, require_python, yanked) tuples
-    result = []
-    for link, require_python, link_yanked in zip_longest(
-        links, requires_python, yanked, fillvalue=None
-    ):
-        assert link is not None
-        result.append((*link, require_python, link_yanked))
-    return result
 
 
 def apply_filter_iter(items, filter_iter):

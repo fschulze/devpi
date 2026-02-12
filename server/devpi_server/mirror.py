@@ -24,7 +24,6 @@ from .model import BaseStageCustomizer
 from .model import ELink
 from .model import Rel
 from .model import ensure_boolean
-from .model import join_links_data
 from .normalized import NormalizedName
 from .normalized import normalize_name
 from .readonly import ensure_deeply_readonly
@@ -39,6 +38,7 @@ from devpi_common.types import cached_property
 from devpi_common.url import URL
 from functools import partial
 from html.parser import HTMLParser
+from itertools import zip_longest
 from pyramid.authentication import b64encode
 from typing import TYPE_CHECKING
 from typing import TypedDict
@@ -61,19 +61,20 @@ if TYPE_CHECKING:
     from .keyfs_types import PatternedKey
     from .keyfs_types import SearchKey
     from .markers import Unknown
-    from .model import JoinedLinkList
-    from .model import LinksList
+    from .model import JoinedLink
     from .model import RequiresPython
-    from .model import RequiresPythonList
     from .model import SimpleLinks
     from .model import Yanked
-    from .model import YankedList
     from collections.abc import Callable
     from collections.abc import Iterator
     from typing import Any
     from typing import NotRequired
     import asyncio
 
+    LinksList = list[tuple[str, str]]
+    RequiresPythonList = list[RequiresPython]
+    YankedList = list[Yanked]
+    JoinedLinkList = list[JoinedLink]
     ReleaseLinks = list["Link"]
 
 
@@ -248,6 +249,19 @@ def parse_index_v1_json(disturl: URL | str, text: str) -> ReleaseLinks:
             url,
             requires_python=item.get('requires-python'),
             yanked=item.get('yanked'))).obj)
+    return result
+
+
+def join_links_data(
+    links: LinksList, requires_python: RequiresPythonList, yanked: YankedList
+) -> JoinedLinkList:
+    # build list of (key, href, require_python, yanked) tuples
+    result = []
+    for link, require_python, link_yanked in zip_longest(
+        links, requires_python, yanked, fillvalue=None
+    ):
+        assert link is not None
+        result.append((*link, require_python, link_yanked))
     return result
 
 
