@@ -1,0 +1,1 @@
+Prevent double indexing work on first start of freshly initialized/imported instance.
