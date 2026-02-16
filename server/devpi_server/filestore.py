@@ -6,6 +6,8 @@ for all indexes.
 from __future__ import annotations
 
 from .keyfs_types import FilePathInfo
+from .markers import NoDefault
+from .markers import nodefault as _nodefault
 from .readonly import get_mutable_deepcopy
 from devpi_common.metadata import splitbasename
 from devpi_common.types import parse_hash_spec
@@ -33,7 +35,6 @@ def _get_default_hash_types():  # this is a function for testing
     return tuple(frozenset((DEFAULT_HASH_TYPE,)))
 
 
-_nodefault = object()
 # do not import the following, as they are changed for testing
 DEFAULT_HASH_TYPE: str = "sha256"
 DEFAULT_HASH_TYPES = _get_default_hash_types()
@@ -456,6 +457,7 @@ class BaseFileEntry:
     BadGateway = BadGateway
     _hash_spec = metaprop("hash_spec")  # e.g. "md5=120938012"
     _hashes = metaprop("hashes")  # e.g. dict(md5="120938012")
+    _meta: dict | NoDefault
     last_modified = metaprop("last_modified")
     url = metaprop("url")
     project = metaprop("project")
@@ -464,7 +466,7 @@ class BaseFileEntry:
     def __init__(self, key, meta=_nodefault):
         self.key = key
         self._meta = _nodefault
-        if meta is not _nodefault:
+        if not isinstance(meta, NoDefault):
             self._meta = meta or {}
 
     @property

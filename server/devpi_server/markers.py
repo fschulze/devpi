@@ -21,6 +21,26 @@ class Deleted:
 deleted = Deleted()
 
 
+class NoDefault:
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return "<nodefault>"
+
+
+nodefault = NoDefault()
+
+
+class NotSet:
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return "<notset>"
+
+
+notset = NotSet()
+
+
 class Unknown:
     __slots__ = ()
 
