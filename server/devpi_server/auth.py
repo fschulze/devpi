@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 from .log import threadlog
+from .markers import notset
 from passlib.context import CryptContext
 import itertools
 import itsdangerous
-
-
-notset = object()
 
 
 class AuthException(Exception):
