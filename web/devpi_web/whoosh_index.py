@@ -290,8 +290,13 @@ class IndexingSharedData(object):
             if time.time() - last_time > 5:
                 last_time = time.time()
                 log.debug(
-                    "Processed a total of %s projects and queued %s so far. "
-                    "Currently in %s" % (processed, queued, project.indexname))
+                    "Processed a total of %s/%s projects and queued %s so far. "
+                    "Currently in %s",
+                    processed,
+                    project.num_names,
+                    queued,
+                    project.indexname,
+                )
             if project.is_from_mirror:
                 # we find the last serial the project was changed to avoid re-indexing
                 name = normalize_name(project.name)
@@ -403,9 +408,13 @@ class IndexerThread(object):
         self.shared_data.wait(error_queue=error_queue)
 
     def handler(self, is_from_mirror, serial, indexname, names):
+        num_names = len(names)
         log.debug(
             "Got %s projects from %s at serial %s for indexing",
-            len(names), indexname, serial)
+            num_names,
+            indexname,
+            serial,
+        )
         ix = get_indexer(self.xom)
         counter = itertools.count()
         project_ix = ix.get_project_ix()
@@ -418,7 +427,10 @@ class IndexerThread(object):
                 if stage is not None:
                     for name in names:
                         data = preprocess_project(
-                            ProjectIndexingInfo(stage=stage, name=name))
+                            ProjectIndexingInfo(
+                                stage=stage, name=name, num_names=num_names
+                            )
+                        )
                         if data is None:
                             ix._delete_project(
                                 indexname, name, tx.at_serial, counter, writer,

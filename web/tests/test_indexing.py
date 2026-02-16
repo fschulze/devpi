@@ -36,7 +36,7 @@ def test_inheritance(xom):
 
     with xom.keyfs.read_transaction():
         stage = xom.model.getstage(dev.name)
-        preprocess_project(ProjectIndexingInfo(stage=stage, name="proj"))
+        preprocess_project(ProjectIndexingInfo(stage=stage, name="proj", num_names=1))
 
 
 @pytest.mark.with_notifier

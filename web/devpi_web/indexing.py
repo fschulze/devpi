@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+from attrs import define
 from collections.abc import Mapping
 from devpi_common.metadata import get_sorted_versions
 from devpi_common.types import ensure_unicode
 from devpi_common.validation import normalize_name
 from devpi_web.config import get_pluginmanager
 from devpi_web.doczip import Docs
-import attr
+from typing import TYPE_CHECKING
+
+
+if TYPE_CHECKING:
+    from typing import Any
 
 
 def is_project_cached(stage, project):
@@ -69,17 +74,18 @@ def preprocess_project(project: ProjectIndexingInfo) -> dict | None:
     return result
 
 
-@attr.s(slots=True)
-class ProjectIndexingInfo:  # type: ignore[no-untyped-def]
-    stage = attr.ib()
-    name = attr.ib(type=str)
+@define
+class ProjectIndexingInfo:
+    stage: Any
+    name: str
+    num_names: int
 
     @property
-    def indexname(self):
+    def indexname(self) -> str:
         return self.stage.name
 
     @property
-    def is_from_mirror(self):
+    def is_from_mirror(self) -> bool:
         return self.stage.ixconfig['type'] == 'mirror'
 
 
@@ -110,8 +116,8 @@ def iter_projects(xom, *, offline=True):
             # since devpi-server 6.6.0 mirrors return a mapping where
             # the un-normalized names are in the values
             names = names.values()
+        num_names = len(names)
         for name in names:
-            name = ensure_unicode(name)
             yield ProjectIndexingInfo(
-                stage=stage,
-                name=name)
+                stage=stage, name=ensure_unicode(name), num_names=num_names
+            )
