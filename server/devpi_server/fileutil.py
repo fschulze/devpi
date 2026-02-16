@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from . import filestore
 from . import readonly
+from .markers import nodefault as _nodefault
 from .normalized import NormalizedName
 from io import BytesIO
 from struct import error as struct_error
@@ -15,9 +16,6 @@ import sys
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-
-_nodefault = object()
 
 
 def rename(source, dest):
