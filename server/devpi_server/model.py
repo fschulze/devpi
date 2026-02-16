@@ -8,6 +8,7 @@ from .filestore import Digests
 from .filestore import FileEntry
 from .filestore import get_hash_spec
 from .log import threadlog
+from .markers import notset
 from .markers import unknown
 from .normalized import normalize_name
 from .readonly import get_mutable_deepcopy
@@ -43,6 +44,7 @@ if TYPE_CHECKING:
     from .keyfs_types import PTypedKey
     from .keyfs_types import TypedKey
     from .main import XOM
+    from .markers import NotSet
     from .normalized import NormalizedName
     from collections.abc import Sequence
     from typing import Any
@@ -56,9 +58,6 @@ if TYPE_CHECKING:
     YankedList = list[Yanked]
     JoinedLink = tuple[str, str, RequiresPython, Yanked]
     JoinedLinkList = list[JoinedLink]
-
-
-notset = object()
 
 
 class Rel(StrEnum):
@@ -2003,6 +2002,8 @@ class SimplelinkMeta:
         "require_python",
         "yanked",
     )
+    __cmpval: tuple | NotSet
+    __hashes: Digests | NotSet
 
     def __init__(self, link_info: tuple[str, str, RequiresPython, Yanked]) -> None:
         self.__basename = notset

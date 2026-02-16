@@ -12,6 +12,7 @@ from devpi_server.log import thread_clear_log
 from devpi_server.log import threadlog
 from devpi_server.main import XOM
 from devpi_server.main import parseoptions
+from devpi_server.markers import notset
 from devpi_server.normalized import normalize_name
 from io import BytesIO
 from pathlib import Path
@@ -39,19 +40,9 @@ import webtest
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from devpi_server.markers import NotSet
 
 
-class NotSet:
-    __slots__ = ()
-
-    def __bool__(self):
-        return False
-
-    def __repr__(self) -> str:
-        return "<notset>"
-
-
-notset = NotSet()
 pytest_plugins = ["test_devpi_server.reqmock"]
 
 
