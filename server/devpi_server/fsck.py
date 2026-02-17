@@ -1,9 +1,9 @@
 from .filestore import FileEntry
+from .log import TimeDeltaChecker
 from .main import CommandRunner
 from .main import Fatal
 from .main import xom_from_config
 import sys
-import time
 
 
 def add_fsck_options(parser, pluginmanager):
@@ -36,7 +36,7 @@ def fsck():
         log.info("uuid: %s", xom.config.nodeinfo["uuid"])
         keyfs = xom.keyfs
         keys = (keyfs.get_key('PYPIFILE_NOMD5'), keyfs.get_key('STAGEFILE'))
-        last_time = time.time()
+        timed_log = TimeDeltaChecker(5)
         processed = 0
         missing_files = 0
         got_errors = False
@@ -46,8 +46,7 @@ def fsck():
             for item in relpaths:
                 if item.value is None:
                     continue
-                if time.time() - last_time > 5:
-                    last_time = time.time()
+                if timed_log.is_due():
                     log.info(
                         "Processed a total of %s files (serial %s/%s) so far.",
                         processed,
