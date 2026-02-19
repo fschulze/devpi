@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from devpi_server.keyfs import KeyChangeEvent
     from devpi_server.keyfs_types import PTypedKey
     from devpi_server.keyfs_types import TypedKey
+    from devpi_server.readonly import DictViewReadonly
 
 
 notransaction = pytest.mark.notransaction
@@ -468,7 +469,7 @@ class TestTransactionIsolation:
         assert serial == 2
         # load entries into new keyfs instance
         new_keyfs = KeyFS(tmpdir.join("newkeyfs"), storage)
-        D2 = cast("TypedKey[dict]", new_keyfs.add_key("NAME", "hello", dict))
+        D2 = cast("TypedKey[dict, DictViewReadonly]", new_keyfs.add_key("NAME", "hello", dict))
         for serial in range(3):
             with keyfs.read_transaction() as tx:
                 changes = tx.conn.get_changes(serial)
