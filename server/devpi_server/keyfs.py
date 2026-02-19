@@ -481,6 +481,14 @@ class KeyFS(Generic[Schema]):
             key = key(**key.extract_params(relpath))
         return key
 
+    def match_key(self, relpath, *key_candidates):
+        for key_candidate in key_candidates:
+            if not hasattr(key_candidate, "extract_params"):
+                return key_candidate
+            if params := key_candidate.extract_params(relpath):
+                return key_candidate(**params)
+        return None
+
     def _tx_prefix(self, *, filestore=False):
         tx = self._threadlocal.tx
         mode = "F" if filestore else ("W" if tx.write else "R")
@@ -812,24 +820,9 @@ class Transaction:
         return self.get_last_serial_and_value_at(typedkey, at_serial)[1]
 
     def last_serial(self, typedkey: TypedKey[KeyType, KeyTypeRO]) -> int:
-        return self.get_last_serial_and_value_at(typedkey, self.at_serial)[0]
-
-    def derive_key(self, relpath):
-        """ return key instance for a given key path."""
-        try:
-            return self.get_key_in_transaction(relpath)
-        except KeyError:
-            # XXX we could avoid asking the database
-            # if the relpath included the keyname
-            # but that's yet another refactoring (tm).
-            keyname, serial = self.conn.db_read_typedkey(relpath)
-        return self.keyfs.get_key_instance(keyname, relpath)
-
-    def get_key_in_transaction(self, relpath):
-        for key in self.cache:
-            if key.relpath == relpath and self.cache[key] not in (absent, deleted):
-                return key
-        raise KeyError(relpath)
+        if typedkey in self.cache:
+            return self.at_serial
+        return self.get_original(typedkey)[0]
 
     def is_dirty(self, typedkey):
         return typedkey in self.dirty
