@@ -742,8 +742,8 @@ class ReplicaThread:
         self.shared_data.wait(error_queue=error_queue)
 
 
-def register_key_subscribers(xom):
-    xom.keyfs.PROJSIMPLELINKS.on_key_change(SimpleLinksChanged(xom))
+def register_key_subscribers(xom: XOM) -> None:
+    xom.keyfs.schema.PROJSIMPLELINKS.on_key_change(SimpleLinksChanged(xom))
 
 
 class FileReplicationSharedData:
@@ -787,12 +787,12 @@ class FileReplicationSharedData:
 
     def on_import(self, serial, changes):
         keyfs = self.xom.keyfs
-        user_keyname = keyfs.USER.name
+        user_keyname = keyfs.schema.USER.name
         for key in changes:
             if key.name == user_keyname:
                 self.update_index_types(keyfs, serial, key, *changes[key])
         file_keynames = frozenset(
-            (keyfs.STAGEFILE.name, keyfs.PYPIFILE_NOMD5.name))
+            (keyfs.schema.STAGEFILE.name, keyfs.schema.PYPIFILE_NOMD5.name))
         for key in changes:
             if key.name in file_keynames:
                 self.on_import_file(keyfs, serial, key, *changes[key])
