@@ -10,10 +10,8 @@ from typing import Generic
 from typing import NewType
 from typing import TYPE_CHECKING
 from typing import TypeVar
-from typing import overload
 import contextlib
 import re
-import warnings
 
 
 if TYPE_CHECKING:
@@ -26,7 +24,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from collections.abc import Iterator
     from typing import Any
-    from typing import Literal
 
     KeyFSTypesRO = (
         bool
@@ -165,34 +162,8 @@ class TypedKey(Generic[KeyType, KeyTypeRO]):
     def __repr__(self):
         return f"<TypedKey {self.name} {self.type.__name__} {self.relpath}>"
 
-    @overload
-    def get(
-        self: TypedKey[KeyType, KeyTypeRO], *, readonly: None = None
-    ) -> KeyTypeRO: ...
-
-    @overload
-    def get(
-        self: TypedKey[KeyType, KeyTypeRO], *, readonly: Literal[True]
-    ) -> KeyTypeRO: ...
-
-    @overload
-    def get(
-        self: TypedKey[KeyType, KeyTypeRO], *, readonly: Literal[False]
-    ) -> KeyType: ...
-
-    def get(self, *, readonly: bool | None = None) -> KeyType | KeyTypeRO:
-        if readonly is None:
-            readonly = True
-        else:
-            warnings.warn(
-                "The 'readonly' argument is deprecated. "
-                "You should either drop it or use the 'get_mutable' method.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-        if readonly:
-            return self.keyfs.tx.get(self)
-        return self.keyfs.tx.get_mutable(self)
+    def get(self) -> KeyTypeRO:
+        return self.keyfs.tx.get(self)
 
     def get_mutable(self) -> KeyType:
         return self.keyfs.tx.get_mutable(self)
