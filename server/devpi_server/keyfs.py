@@ -316,7 +316,7 @@ class KeyFS(Generic[Schema]):
             settings={} if storage_info.settings is None else storage_info.settings,
         )
         for key in self.schema:
-            self._storage.add_key(key)
+            self._storage.register_key(key)
         self.io_file_factory = io_file_factory
         self._readonly = readonly
 
