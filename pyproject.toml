@@ -27,7 +27,7 @@ dev = [
     "setuptools_changelog_shortener",
     "supervisor",
     "towncrier>=21.9.0",
-    "tox",
+    "tox<=4.38",
     "types-WebOb",
     "types-beautifulsoup4",
     "types-defusedxml",

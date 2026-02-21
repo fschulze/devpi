@@ -121,7 +121,7 @@ jobs:
           set -xe -o nounset
           python -VV
           python -m site
-          python -m pip install --upgrade pip setuptools wheel tox
+          python -m pip install --upgrade pip setuptools wheel "tox<=4.38"
       - name: "Run tox targets for ${{ matrix.project }} (${{ matrix.tox-envs }}) with ${{ matrix.python-version }} on ${{ matrix.os }}"
         run: |
           set -xe -o nounset
@@ -167,7 +167,7 @@ jobs:
           set -xe -o nounset
           python -VV
           python -m site
-          python -m pip install --upgrade pip setuptools wheel tox
+          python -m pip install --upgrade pip setuptools wheel "tox<=4.38"
       - name: "Run tox targets for ${{ matrix.project }} (${{ matrix.tox-envs }}) with ${{ matrix.python-version }} on ${{ matrix.os }}"
         run: |
           set -xe -o nounset
@@ -210,7 +210,7 @@ jobs:
           set -xe -o nounset
           python -VV
           python -m site
-          python -m pip install --upgrade pip setuptools wheel tox
+          python -m pip install --upgrade pip setuptools wheel "tox<=4.38"
       - name: "Run tox targets for ${{ matrix.project }} (${{ matrix.tox-envs }}) with ${{ matrix.python-version }} on ${{ matrix.os }}"
         run: |
           set -xe -o nounset
@@ -261,7 +261,7 @@ jobs:
           set -xe -o nounset
           python -VV
           python -m site
-          python -m pip install --upgrade pip setuptools wheel tox
+          python -m pip install --upgrade pip setuptools wheel "tox<=4.38"
       - name: "Run tox targets for ${{ matrix.project }} (${{ matrix.tox-envs }}) with ${{ matrix.python-version }} on ${{ matrix.os }}"
         run: |
           set -xe -o nounset
@@ -308,7 +308,7 @@ jobs:
           set -xe -o nounset
           python -VV
           python -m site
-          python -m pip install --upgrade pip setuptools wheel tox
+          python -m pip install --upgrade pip setuptools wheel "tox<=4.38"
       - name: "Run tox targets for ${{ matrix.project }} (${{ matrix.tox-envs }}) with ${{ matrix.python-version }} on ${{ matrix.os }}"
         run: |
           set -xe -o nounset
@@ -360,7 +360,7 @@ jobs:
           set -xe -o nounset
           python -VV
           python -m site
-          python -m pip install --upgrade pip setuptools wheel tox
+          python -m pip install --upgrade pip setuptools wheel "tox<=4.38"
       - name: "Run tox targets for ${{ matrix.project }} (${{ matrix.tox-envs }}) with ${{ matrix.python-version }} on ${{ matrix.os }}"
         run: |
           set -xe -o nounset
@@ -412,7 +412,7 @@ jobs:
           set -xe -o nounset
           python -VV
           python -m site
-          python -m pip install --upgrade pip setuptools wheel tox
+          python -m pip install --upgrade pip setuptools wheel "tox<=4.38"
       - name: "Run tox targets for ${{ matrix.project }} (${{ matrix.tox-envs }}) with ${{ matrix.python-version }} on ${{ matrix.os }}"
         run: |
           set -xe -o nounset
@@ -451,7 +451,7 @@ jobs:
           set -xe -o nounset
           python -VV
           python -m site
-          python -m pip install --upgrade pip setuptools wheel tox
+          python -m pip install --upgrade pip setuptools wheel "tox<=4.38"
       - name: "Run tox targets for ${{ matrix.project }} (${{ matrix.tox-envs }}) with ${{ matrix.python-version }} on ${{ matrix.os }}"
         run: |
           set -xe -o nounset
@@ -497,7 +497,7 @@ jobs:
           set -xe -o nounset
           python -VV
           python -m site
-          python -m pip install --upgrade pip setuptools wheel tox
+          python -m pip install --upgrade pip setuptools wheel "tox<=4.38"
       - name: "Run tox targets for ${{ matrix.project }} (${{ matrix.tox-envs }}) with ${{ matrix.python-version }} on ${{ matrix.os }}"
         env:
           DEVPI_SERVER_TEST_ADDITIONAL_HASH_TYPES: md5,blake2b
@@ -579,7 +579,7 @@ jobs:
           set -xe -o nounset
           python -VV
           python -m site
-          python -m pip install --upgrade pip setuptools wheel tox
+          python -m pip install --upgrade pip setuptools wheel "tox<=4.38"
       - name: "Run tox targets for ${{ matrix.project }} (${{ matrix.tox-envs }}) with ${{ matrix.python-version }} on ${{ matrix.os }}"
         run: |
           set -xe -o nounset
@@ -633,7 +633,7 @@ jobs:
           set -xe -o nounset
           python -VV
           python -m site
-          python -m pip install --upgrade pip setuptools wheel tox
+          python -m pip install --upgrade pip setuptools wheel "tox<=4.38"
       - name: "Run tox targets for ${{ matrix.project }} (${{ matrix.tox-envs }}) with ${{ matrix.python-version }} on ${{ matrix.os }}"
         run: |
           set -xe -o nounset
@@ -683,7 +683,7 @@ jobs:
           set -xe -o nounset
           python -VV
           python -m site
-          python -m pip install --upgrade pip setuptools wheel tox
+          python -m pip install --upgrade pip setuptools wheel "tox<=4.38"
       - name: "Run tox targets for ${{ matrix.project }} (${{ matrix.tox-envs }}) with ${{ matrix.python-version }} on ${{ matrix.os }}"
         run: |
           set -xe -o nounset
@@ -735,7 +735,7 @@ jobs:
           set -xe -o nounset
           python -VV
           python -m site
-          python -m pip install --upgrade pip setuptools wheel tox
+          python -m pip install --upgrade pip setuptools wheel "tox<=4.38"
       - name: "Run tox targets for ${{ matrix.project }} (${{ matrix.tox-envs }}) with ${{ matrix.python-version }} on ${{ matrix.os }}"
         run: |
           set -xe -o nounset
@@ -794,7 +794,7 @@ jobs:
           set -xe -o nounset
           python -VV
           python -m site
-          python -m pip install --upgrade pip setuptools wheel tox
+          python -m pip install --upgrade pip setuptools wheel "tox<=4.38"
       - name: "Run tox targets for ${{ matrix.project }} (${{ matrix.tox-envs }}) with ${{ matrix.python-version }} on ${{ matrix.os }}"
         shell: "bash"
         run: |
@@ -855,7 +855,7 @@ jobs:
           set -xe -o nounset
           python -VV
           python -m site
-          python -m pip install --upgrade mercurial pip setuptools wheel tox
+          python -m pip install --upgrade mercurial pip setuptools wheel "tox<=4.38"
           brew install nginx
       - name: "Run tox targets for ${{ matrix.project }} (${{ matrix.tox-envs }}) with ${{ matrix.python-version }} on ${{ matrix.os }}"
         shell: "bash"
@@ -912,7 +912,7 @@ jobs:
           source .ci/set-index-env.sh
           python -VV
           python -m site
-          python -m pip install --upgrade pip setuptools wheel tox
+          python -m pip install --upgrade pip setuptools wheel "tox<=4.38"
       - name: "Run mypy"
         shell: "bash"
         run: |
@@ -1032,7 +1032,7 @@ jobs:
           set -xe -o nounset
           python -VV
           python -m site
-          python -m pip install --upgrade pip setuptools wheel tox --group dev -e common -e client -e postgresql -e server -e web
+          python -m pip install --upgrade pip setuptools wheel "tox<=4.38" --group dev -e common -e client -e postgresql -e server -e web
       - name: "Run tox targets for ${{ matrix.plugin }} (${{ matrix.tox-envs }}) with ${{ matrix.python-version }} on ${{ matrix.os }}"
         shell: "bash"
         run: |
@@ -1111,7 +1111,7 @@ jobs:
           set -xe -o nounset
           python -VV
           python -m site
-          python -m pip install --upgrade pip setuptools wheel tox --group dev -e common -e client -e postgresql -e server -e web
+          python -m pip install --upgrade pip setuptools wheel "tox<=4.38" --group dev -e common -e client -e postgresql -e server -e web
       - name: "Run tox targets for ${{ matrix.plugin }} (${{ matrix.tox-envs }}) with ${{ matrix.python-version }} on ${{ matrix.os }}"
         shell: "bash"
         run: |
