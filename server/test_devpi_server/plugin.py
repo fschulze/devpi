@@ -26,7 +26,6 @@ from webtest.forms import Upload
 import httpdate
 import json
 import mimetypes
-import py
 import pytest
 import re
 import requests
@@ -181,27 +180,14 @@ def gen_path(request, tmp_path_factory):
             path.mkdir()
             return path
         return make_numbered_dir_with_cleanup(
-            prefix="gentmp", keep=0, root=basedir, lock_timeout=LOCK_TIMEOUT, mode=0o700)
+            prefix="gen_path",
+            keep=0,
+            root=basedir,
+            lock_timeout=LOCK_TIMEOUT,
+            mode=0o700,
+        )
 
     return gen_path
-
-
-@pytest.fixture
-def gentmp(gen_path):
-    import py
-    import warnings
-
-    def gentmp(name=None):
-        warnings.warn(
-            "gentmp fixture is deprecated, use gen_path instead",
-            DeprecationWarning,
-            stacklevel=2)
-        try:
-            return py.path.local(gen_path(name=name))
-        except FileExistsError as e:
-            raise py.error.EEXIST from e
-
-    return gentmp
 
 
 @pytest.fixture(autouse=True)
@@ -1361,17 +1347,6 @@ def server_path():
     shutil.rmtree(srvdir, ignore_errors=True)
 
 
-@pytest.fixture(scope="class")
-def server_directory(server_path):
-    import py
-    import warnings
-    warnings.warn(
-        "server_directory fixture is deprecated, use server_path instead",
-        DeprecationWarning,
-        stacklevel=0)
-    return py.path.local(server_path)
-
-
 @pytest.fixture(scope="module")
 def call_devpi_in_dir():
     # let xproc find the correct executable instead of py.test
@@ -1422,16 +1397,6 @@ def call_devpi_in_dir():
 
 
 @pytest.fixture(scope="class")
-def master_serverdir(primary_server_path):
-    import warnings
-    warnings.warn(
-        "master_serverdir fixture is deprecated, use primary_server_path instead",
-        DeprecationWarning,
-        stacklevel=0)
-    return py.path.local(primary_server_path)
-
-
-@pytest.fixture(scope="class")
 def primary_server_path(server_path):
     return server_path / "primary"
 
@@ -1446,16 +1411,6 @@ def secretfile(server_path):
         if sys.platform != "win32":
             secretfile.chmod(0o600)
     return str(secretfile)
-
-
-@pytest.fixture(scope="class")
-def master_host_port(primary_host_port):
-    import warnings
-    warnings.warn(
-        "master_host_port fixture is deprecated, use primary_host_port instead",
-        DeprecationWarning,
-        stacklevel=0)
-    return primary_host_port
 
 
 @pytest.fixture(scope="class")

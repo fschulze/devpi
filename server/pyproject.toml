@@ -20,7 +20,6 @@ dependencies = [
     "passlib[argon2]",
     "platformdirs",
     "pluggy>=0.6.0,<2.0",
-    "py>=1.4.23",
     "pyramid>=2",
     "repoze.lru>=0.6",
     "setuptools<=81",  # removed pkg_resources required by pyramid
