@@ -13,6 +13,7 @@ from .markers import unknown
 from .normalized import normalize_name
 from .readonly import DictViewReadonly
 from .readonly import SetViewReadonly
+from .readonly import ensure_deeply_readonly
 from .readonly import get_mutable_deepcopy
 from devpi_common.metadata import get_latest_version
 from devpi_common.metadata import parse_version
@@ -1352,6 +1353,7 @@ class PrivateStage(BaseStage):
         errors. """
         if self.customizer.readonly:
             raise ReadonlyIndex("index is marked read only")
+        metadata = {k: v for k, v in metadata.items() if not k.startswith("+")}
         # use a copy, as validate_metadata actually removes metadata_version
         validate_metadata(dict(metadata))
         self._set_versiondata(metadata)
@@ -1375,17 +1377,38 @@ class PrivateStage(BaseStage):
             version=version,
         )
 
+    def key_versionfilelist(
+        self, project: NormalizedName | str, version: str
+    ) -> TypedKey[set[str], SetViewReadonly[str]]:
+        return self.keyfs.schema.VERSIONFILELIST(
+            user=self.username,
+            index=self.index,
+            project=normalize_name(project),
+            version=version,
+        )
+
+    def key_versionfile(
+        self, project: NormalizedName | str, version: str, filename: str
+    ) -> TypedKey[dict, DictViewReadonly]:
+        return self.keyfs.schema.VERSIONFILE(
+            user=self.username,
+            index=self.index,
+            project=normalize_name(project),
+            version=version,
+            filename=filename,
+        )
+
     def _set_versiondata(self, metadata):
+        assert "+elinks" not in metadata
         project = normalize_name(metadata["name"])
         version = metadata["version"]
         key_projversion = self.key_projversion(project, version)
         with key_projversion.update() as versiondata:
             versiondata.update(metadata)
         threadlog.info("set_metadata %s-%s", project, version)
-        versions = self.key_projversions(project).get_mutable()
-        if version not in versions:
-            versions.add(version)
-            self.key_projversions(project).set(versions)
+        with self.key_projversions(project).update() as versions:
+            if version not in versions:
+                versions.add(version)
         self.add_project_name(project)
 
     def add_project_name(self, project):
@@ -1421,6 +1444,7 @@ class PrivateStage(BaseStage):
         linkstore.remove_links()
         versions.remove(version)
         self.key_projversion(project, version).delete()
+        self.key_versionfilelist(project, version).delete()
         self.key_projversions(project).set(versions)
         if cleanup:
             self._regen_simplelinks(project)
@@ -1442,7 +1466,17 @@ class PrivateStage(BaseStage):
     def list_versions_perstage(self, project):
         return self.key_projversions(project).get()
 
-    def get_last_project_change_serial_perstage(self, project, at_serial=None):  # noqa: PLR0911
+    def _get_elinks(self, project, version):
+        filenames = self.key_versionfilelist(project, version).get()
+        return [
+            self.key_versionfile(project, version, filename).get()
+            for filename in sorted(filenames)
+        ]
+
+    def get_has_versiondata_perstage(self, project, version):
+        return self.key_projversion(project, version).exists()
+
+    def get_last_project_change_serial_perstage(self, project, at_serial=None):  # noqa: PLR0911, PLR0912
         project = normalize_name(project)
         tx = self.keyfs.tx
         if at_serial is None:
@@ -1471,24 +1505,59 @@ class PrivateStage(BaseStage):
             # the project never existed or was deleted and didn't have versions
             return -1
         (last_serial, versions) = info
+        if last_serial >= at_serial:
+            return last_serial
         if versions is None:
             # was deleted
             return last_serial
-        version = get_latest_version(versions)
-        info = tx.get_last_serial_and_value_at(
-            self.key_projversion(project, version),
-            at_serial,
-            raise_on_error=False,
-        )
-        if info is None:
-            # never existed
-            return -1
-        (version_serial, version) = info
-        return max(last_serial, version_serial)
+        for version in versions:
+            info = tx.get_last_serial_and_value_at(
+                self.key_projversion(project, version), at_serial, raise_on_error=False
+            )
+            if info is None:
+                continue
+            (version_serial, _version_info) = info
+            last_serial = max(last_serial, version_serial)
+            if last_serial >= at_serial:
+                return last_serial
+            info = tx.get_last_serial_and_value_at(
+                self.key_versionfilelist(project, version),
+                at_serial,
+                raise_on_error=False,
+            )
+            if info is None:
+                continue
+            (versionfiles_serial, versionfiles_info) = info
+            last_serial = max(last_serial, versionfiles_serial)
+            if last_serial >= at_serial:
+                return last_serial
+            for filename in versionfiles_info:
+                info = tx.get_last_serial_and_value_at(
+                    self.key_versionfile(project, version, filename),
+                    at_serial,
+                    raise_on_error=False,
+                )
+                if info is None:
+                    continue
+                (versionfile_serial, _versionfile_info) = info
+                last_serial = max(last_serial, versionfile_serial)
+                if last_serial >= at_serial:
+                    return last_serial
+                last_serial = max(last_serial, versionfile_serial)
+                if last_serial >= at_serial:
+                    return last_serial
+        return last_serial
 
-    def get_versiondata_perstage(self, project, version):
+    def get_versiondata_perstage(self, project, version, *, with_elinks=True):
         project = normalize_name(project)
-        return self.key_projversion(project, version).get()
+        verdata = self.key_projversion(project, version).get()
+        assert "+elinks" not in verdata
+        if with_elinks:
+            elinks = self._get_elinks(project, version)
+            if elinks:
+                verdata = get_mutable_deepcopy(verdata)
+                verdata["+elinks"] = elinks
+        return ensure_deeply_readonly(verdata)
 
     def get_simplelinks_perstage(self, project: NormalizedName | str) -> SimpleLinks:
         data = self.key_projsimplelinks(project).get()
@@ -1506,8 +1575,9 @@ class PrivateStage(BaseStage):
             linkstore = self.get_linkstore_perstage(project, version)
             releases = linkstore.get_links(Rel.ReleaseFile)
             links.extend(map(make_key_and_href, releases))
-            require_python = self.get_versiondata_perstage(project,
-                    version).get('requires_python')
+            require_python = self.get_versiondata_perstage(
+                project, version, with_elinks=False
+            ).get("requires_python")
             requires_python.extend([require_python] * len(releases))
         data_dict = {u"links":links, u"requires_python":requires_python}
         self.key_projsimplelinks(project).set(data_dict)
@@ -1532,12 +1602,12 @@ class PrivateStage(BaseStage):
             raise ReadonlyIndex("index is marked read only")
         project = normalize_name(project)
         filename = ensure_unicode(filename)
-        if not self.get_versiondata_perstage(project, version):
+        if not self.get_has_versiondata_perstage(project, version):
             # There's a chance the version was guessed from the
             # filename, which might have swapped dashes to underscores
             if '_' in version:
                 version = version.replace('_', '-')
-                if not self.get_versiondata_perstage(project, version):
+                if not self.get_has_versiondata_perstage(project, version):
                     raise MissesRegistration("%s-%s", project, version)
             else:
                 raise MissesRegistration("%s-%s", project, version)
@@ -1573,7 +1643,7 @@ class PrivateStage(BaseStage):
             threadlog.info("store_doczip: derived version of %s is %s",
                            project, version)
         basename = "%s-%s.doc.zip" % (project, version)
-        if not self.get_versiondata_perstage(project, version):
+        if not self.get_has_versiondata_perstage(project, version):
             self.set_versiondata({'name': project, 'version': version})
         linkstore = self.get_mutable_linkstore_perstage(project, version)
         return linkstore.create_linked_entry(
@@ -1588,11 +1658,17 @@ class PrivateStage(BaseStage):
         """ get link of documentation zip or None if no docs exists. """
         linkstore = self.get_linkstore_perstage(project, version)
         links = linkstore.get_links(rel=Rel.DocZip)
-        if len(links) > 1:
-            threadlog.warning(
-                "Multiple documentation files for %s-%s, returning newest",
-                project, version)
-        return links[-1] if links else None
+        link = links[-1] if links else None
+        if len(links) > 1 and link is not None:
+            # the order is not defined, but since devpi-server 2.4.0 it
+            # shouldn't be possible to get into this case anyway
+            threadlog.warn(
+                "Multiple documentation files for %s-%s, returning %s",
+                project,
+                version,
+                link.entrypath,
+            )
+        return link
 
     def get_doczip_entry(self, project, version):
         """ get entry of documentation zip or None if no docs exists. """
@@ -1629,6 +1705,30 @@ class PrivateStage(BaseStage):
                 last_serial = max(last_serial, version_serial)
                 if last_serial >= at_serial:
                     return last_serial
+                try:
+                    (versionfiles_serial, versionfilenames) = (
+                        tx.get_last_serial_and_value_at(
+                            self.key_versionfilelist(project, version), at_serial
+                        )
+                    )
+                except KeyError:
+                    continue
+                last_serial = max(last_serial, versionfiles_serial)
+                if last_serial >= at_serial:
+                    return last_serial
+                for filename in versionfilenames:
+                    try:
+                        (versionfile_serial, _versionfile_info) = (
+                            tx.get_last_serial_and_value_at(
+                                self.key_versionfile(project, version, filename),
+                                at_serial,
+                            )
+                        )
+                    except KeyError:
+                        continue
+                    last_serial = max(last_serial, versionfile_serial)
+                    if last_serial >= at_serial:
+                        return last_serial
         # no project uploaded yet
         index_key = self.key_index
         (index_serial, _index_config) = tx.get_last_serial_and_value_at(
@@ -1769,15 +1869,37 @@ class LinkStore:
     def __repr__(self):
         return f"<{self.__class__.__name__} {self.project} {self.stage.name} {self.version}>"
 
+    def get_links(self, rel=None, basename=None, entrypath=None, for_entrypath=None):
+        if isinstance(for_entrypath, ELink):
+            for_entrypath = for_entrypath.relpath
+        elif for_entrypath is not None:
+            assert "#" not in for_entrypath
+
+        def fil(link):
+            return (
+                (not rel or rel == link.rel)
+                and (not basename or basename == link.basename)
+                and (not entrypath or entrypath in (link.entrypath, link.relpath))
+                and (not for_entrypath or for_entrypath == link.for_entrypath)
+            )
+
+        return [
+            elink
+            for linkdict in self.verdata.get("+elinks", [])
+            if fil(elink := ELink(self.filestore, linkdict, self.project, self.version))
+        ]
+
     @property
     def metadata(self):
-        return {
-            k: v
-            for k, v in get_mutable_deepcopy(self.verdata).items()
-            if not k.startswith("+")}
+        return ensure_deeply_readonly(
+            {k: v for k, v in self.verdata.items() if not k.startswith("+")}
+        )
 
-    def get_file_entry(self, relpath):
-        return self.filestore.get_file_entry(relpath)
+
+class MutableLinkStore(LinkStore):
+    def __init__(self, stage, project, version):
+        super().__init__(stage, project, version)
+        self.verdata = get_mutable_deepcopy(self.verdata)
 
     def create_linked_entry(
         self,
@@ -1791,21 +1913,35 @@ class LinkStore:
         overwrite = None
         for link in self.get_links(rel=rel, basename=basename):
             if not self.stage.ixconfig.get("volatile"):
-                exc = NonVolatile("rel=%s basename=%s on stage %s" % (
-                    rel, basename, self.stage.name))
+                exc = NonVolatile(
+                    "rel=%s basename=%s on stage %s" % (rel, basename, self.stage.name)
+                )
                 exc.link = link
                 raise exc
             assert overwrite is None
-            overwrite = sum(x.get('count', 0)
-                            for x in link.get_logs() if x.get('what') == 'overwrite')
+            overwrite = sum(
+                x.get("count", 0)
+                for x in link.get_logs()
+                if x.get("what") == "overwrite"
+            )
         self.remove_links(rel=rel, basename=basename)
         file_entry = self._create_file_entry(
             basename, content_or_file, hashes=hashes, last_modified=last_modified
         )
         link = self._add_link_to_file_entry(rel, file_entry)
         if overwrite is not None:
-            link.add_log('overwrite', None, count=overwrite + 1)
+            link.add_log("overwrite", None, count=overwrite + 1)
         return link
+
+    def key_versionfile(
+        self, project: NormalizedName | str, version: str, filename: str
+    ) -> TypedKey[dict, DictViewReadonly]:
+        return self.stage.key_versionfile(project, version, filename)
+
+    def key_versionfilelist(
+        self, project: NormalizedName | str, version: str
+    ) -> TypedKey[set[str], SetViewReadonly[str]]:
+        return self.stage.key_versionfilelist(project, version)
 
     def new_reflink(
         self,
@@ -1825,7 +1961,11 @@ class LinkStore:
             other_reflinks = self.get_links(rel=rel, for_entrypath=for_link.relpath)
             timestamp = strftime("%Y%m%d%H%M%S", gmtime())
             filename = "%s.%s-%s-%d" % (
-                base_entry.basename, rel, timestamp, len(other_reflinks))
+                base_entry.basename,
+                rel,
+                timestamp,
+                len(other_reflinks),
+            )
         entry = self._create_file_entry(
             filename,
             content_or_file,
@@ -1836,42 +1976,25 @@ class LinkStore:
         return self._add_link_to_file_entry(rel, entry, for_link=for_link)
 
     def remove_links(self, rel=None, basename=None, for_entrypath=None):
-        linkdicts = self._get_inplace_linkdicts()
-        del_links = self.get_links(rel=rel, basename=basename, for_entrypath=for_entrypath)
+        del_links = self.get_links(
+            rel=rel, basename=basename, for_entrypath=for_entrypath
+        )
         was_deleted = []
-        for link in del_links:
-            link.entry.delete()
-            linkdicts.remove(link.linkdict)
-            was_deleted.append(link.relpath)
-            threadlog.info("deleted %r link %s", link.rel, link.relpath)
-        if linkdicts:
+        if del_links:
+            with self.key_versionfilelist(
+                self.project, self.version
+            ).update() as versionfilenames:
+                for link in del_links:
+                    filename = link.entry.basename
+                    self.verdata["+elinks"].remove(link.linkdict)
+                    link.entry.delete()
+                    versionfilenames.remove(filename)
+                    self.key_versionfile(self.project, self.version, filename).delete()
+                    was_deleted.append(link.relpath)
+                    threadlog.info("deleted %r link %s", link.rel, link.relpath)
+        if was_deleted and self.key_versionfilelist(self.project, self.version).get():
             for relpath in was_deleted:
                 self.remove_links(for_entrypath=relpath)
-        if was_deleted:
-            self._mark_dirty()
-
-    def get_links(
-        self,
-        rel: Rel | None = None,
-        basename: str | None = None,
-        entrypath: ELink | str | None = None,
-        for_entrypath: ELink | str | None = None,
-    ) -> list[ELink]:
-        if isinstance(for_entrypath, ELink):
-            for_entrypath = for_entrypath.relpath
-        elif for_entrypath is not None:
-            assert "#" not in for_entrypath
-
-        def fil(link):
-            return (
-                (not rel or rel == link.rel)
-                and (not basename or basename == link.basename)
-                and (not entrypath or entrypath in (link.entrypath, link.relpath))
-                and (not for_entrypath or for_entrypath == link.for_entrypath)
-            )
-
-        return list(filter(fil, [ELink(self.filestore, linkdict, self.project, self.version)
-                           for linkdict in self.verdata.get("+elinks", [])]))
 
     def _create_file_entry(
         self,
@@ -1895,12 +2018,6 @@ class LinkStore:
         entry.version = self.version
         return entry
 
-    def _mark_dirty(self):
-        self.stage._set_versiondata(self.verdata)
-
-    def _get_inplace_linkdicts(self):
-        return self.verdata.setdefault("+elinks", [])
-
     def _add_link_to_file_entry(
         self, rel: Rel, file_entry: FileEntry, for_link: ELink | str | None = None
     ) -> ELink:
@@ -1913,17 +2030,17 @@ class LinkStore:
         if for_link:
             assert isinstance(for_link, ELink)
             new_linkdict["for_entrypath"] = for_link.relpath
-        linkdicts = self._get_inplace_linkdicts()
-        linkdicts.append(new_linkdict)
+        with self.key_versionfilelist(
+            self.project, self.version
+        ).update() as versionfilelist:
+            assert file_entry.basename not in versionfilelist, file_entry.basename
+            versionfilelist.add(file_entry.basename)
+        self.key_versionfile(self.project, self.version, file_entry.basename).set(
+            new_linkdict
+        )
+        self.verdata.setdefault("+elinks", []).append(new_linkdict)
         threadlog.info("added %r link %s", rel, file_entry.relpath)
-        self._mark_dirty()
         return ELink(self.filestore, new_linkdict, self.project, self.version)
-
-
-class MutableLinkStore(LinkStore):
-    def __init__(self, stage, project, version):
-        super().__init__(stage, project, version)
-        self.verdata = get_mutable_deepcopy(self.verdata)
 
 
 @total_ordering
@@ -2118,6 +2235,18 @@ class Schema(KeyFSSchema):
     )
     PROJNAMES = KeyFSSchema.decl_ptypedkey(
         "PROJNAMES", "{user}/{index}/.projects", set, SetViewReadonly
+    )
+    VERSIONFILELIST = KeyFSSchema.decl_ptypedkey(
+        "VERSIONFILELIST",
+        "{user}/{index}/{project}/{version}/.files",
+        set,
+        SetViewReadonly,
+    )
+    VERSIONFILE = KeyFSSchema.decl_ptypedkey(
+        "VERSIONFILE",
+        "{user}/{index}/{project}/{version}/{filename}",
+        dict,
+        DictViewReadonly,
     )
     STAGEFILE = KeyFSSchema.decl_ptypedkey(
         "STAGEFILE",
