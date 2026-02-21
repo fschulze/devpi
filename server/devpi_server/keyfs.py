@@ -17,10 +17,9 @@ from .fileutil import write_int_to_file
 from .interfaces import IStorage
 from .interfaces import IStorageConnection4
 from .interfaces import IWriter2
+from .keyfs_schema import KeyFSSchema
 from .keyfs_types import PTypedKey
 from .keyfs_types import Record
-from .keyfs_types import RelPath
-from .keyfs_types import TypedKey
 from .log import thread_change_log_prefix
 from .log import thread_pop_log
 from .log import thread_push_log
@@ -36,7 +35,9 @@ from .readonly import get_mutable_deepcopy
 from .readonly import is_deeply_readonly
 from devpi_common.types import cached_property
 from pathlib import Path
+from typing import Generic
 from typing import TYPE_CHECKING
+from typing import TypeVar
 from typing import cast
 from typing import overload
 import contextlib
@@ -50,6 +51,8 @@ if TYPE_CHECKING:
     from .keyfs_types import KeyFSTypesRO
     from .keyfs_types import KeyType
     from .keyfs_types import KeyTypeRO
+    from .keyfs_types import RelPath
+    from .keyfs_types import TypedKey
     from .log import TagLogger
     from .mythread import MyThread
     from collections.abc import Callable
@@ -87,14 +90,17 @@ class MissingFileException(Exception):
         self.serial = serial
 
 
-class TxNotificationThread:
+Schema = TypeVar("Schema", bound=KeyFSSchema)
+
+
+class TxNotificationThread(Generic[Schema]):
     _get_ixconfig_cache: dict[tuple[str, str], dict | None]
     _on_key_change: dict[str, list[Callable]]
     event_serial_in_sync_at: float | None
     log: TagLogger
     thread: MyThread
 
-    def __init__(self, keyfs: KeyFS) -> None:
+    def __init__(self, keyfs: KeyFS[Schema]) -> None:
         self.keyfs = keyfs
         self.cv_new_event_serial = mythread.threading.Condition()
         self.event_serial_path = str(self.keyfs.base_path / ".event_serial")
@@ -191,7 +197,9 @@ class TxNotificationThread:
         if cache_key in self._get_ixconfig_cache:
             return self._get_ixconfig_cache[cache_key]
         with self.keyfs.read_transaction():
-            key = cast("PTypedKey[dict, DictViewReadonly]", self.keyfs.USER)(user=user)
+            key = cast("PTypedKey[dict, DictViewReadonly]", self.keyfs.schema.USER)(  # type: ignore[attr-defined]
+                user=user
+            )
             value = key.get_mutable()
         if not value:
             # the user doesn't exist anymore
@@ -282,30 +290,38 @@ class TxNotificationThread:
         log.debug("finished calling all hooks for tx%s", event_serial)
 
 
-class KeyFS:
+class KeyFS(Generic[Schema]):
     """ singleton storage object. """
 
     class ReadOnly(Exception):
         """ attempt to open write transaction while in readonly mode. """
 
-    _keys: dict[str, PTypedKey | TypedKey]
+    _import_subscriber: Callable | None
+    notifier: TxNotificationThread[Schema]
+    schema: Schema
 
     def __init__(
         self,
-        basedir,
-        storage,
+        basedir: Path | str,
+        storage: Callable,
         *,
-        io_file_factory=None,
-        readonly=False,
-        cache_size=10000,
-    ):
+        io_file_factory: Callable | None = None,
+        readonly: bool = False,
+        cache_size: int = 10000,
+        schema: type[Schema] | None = None,
+    ) -> None:
         self.base_path = Path(basedir)
         self.base_path.mkdir(parents=True, exist_ok=True)
-        self._keys = {}
         self._threadlocal = mythread.threading.local()
         self._cv_new_transaction = mythread.threading.Condition()
         self._import_subscriber = None
         self.notifier = TxNotificationThread(self)
+        _self = cast("KeyFS[KeyFSSchema]", self)
+        if schema is None:
+            _schema = cast("Schema", KeyFSSchema(_self))
+            self.schema = _schema
+        else:
+            self.schema = schema(_self)
         self._storage = IStorage(
             storage(
                 py.path.local(self.base_path),
@@ -313,15 +329,11 @@ class KeyFS:
                 cache_size=cache_size,
             )
         )
+        if hasattr(self._storage, "add_key"):
+            for key in self.schema:
+                self._storage.add_key(key)
         self.io_file_factory = io_file_factory
         self._readonly = readonly
-
-    def __getattr__(self, name: str) -> PTypedKey | TypedKey:
-        if name not in self._keys:
-            raise AttributeError(name)
-        assert name not in self.__dict__
-        self.__dict__[name] = key = self._keys[name]
-        return key
 
     def __repr__(self):
         return f"<{self.__class__.__name__} {self.base_path}>"
@@ -476,27 +488,8 @@ class KeyFS:
     def tx(self):
         return self._threadlocal.tx
 
-    def add_key(
-        self,
-        name: str,
-        path: str,
-        type: type,  # noqa: A002
-    ) -> PTypedKey | TypedKey:
-        assert isinstance(path, str)
-        key: PTypedKey | TypedKey
-        if "{" in path:
-            key = PTypedKey(self, path, type, name)
-        else:
-            key = TypedKey(self, RelPath(path), type, name)
-        if name in self._keys:
-            raise ValueError("Duplicate registration for key named '%s'" % name)
-        self._keys[name] = key
-        if hasattr(self._storage, 'add_key'):
-            self._storage.add_key(key)
-        return key
-
     def get_key(self, name: str) -> PTypedKey | TypedKey | None:
-        return self._keys.get(name)
+        return getattr(self.schema, name, None)
 
     def get_key_instance(self, keyname: str, relpath: RelPath) -> TypedKey:
         key = self.get_key(keyname)

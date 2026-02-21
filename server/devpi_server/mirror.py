@@ -46,7 +46,6 @@ if TYPE_CHECKING:
     from .filestore import FileEntry
     from .httpclient import AsyncGetResponse
     from .httpclient import HTTPClient
-    from .keyfs_types import PTypedKey
     from .model import JoinedLinkList
     from .model import LinksList
     from .model import RequiresPythonList
@@ -695,7 +694,7 @@ class MirrorStage(BaseStage):
                 # called from the notification thread
                 if not self.keyfs.tx.write:
                     self.keyfs.restart_read_transaction()
-                k = cast("PTypedKey[int, int]", self.keyfs.MIRRORNAMESINIT)(
+                k = self.keyfs.schema.MIRRORNAMESINIT(
                     user=self.username, index=self.index
                 )
                 # when 0 it is new, when 1 it is pre 6.6.0 with

@@ -7,10 +7,13 @@ from .config import hookimpl
 from .filestore import Digests
 from .filestore import FileEntry
 from .filestore import get_hash_spec
+from .keyfs_schema import KeyFSSchema
 from .log import threadlog
 from .markers import notset
 from .markers import unknown
 from .normalized import normalize_name
+from .readonly import DictViewReadonly
+from .readonly import SetViewReadonly
 from .readonly import get_mutable_deepcopy
 from devpi_common.metadata import get_latest_version
 from devpi_common.metadata import parse_version
@@ -42,13 +45,10 @@ if TYPE_CHECKING:
     from .filestore import FileStore
     from .interfaces import ContentOrFile
     from .keyfs import KeyFS
-    from .keyfs_types import PTypedKey
     from .keyfs_types import TypedKey
     from .main import XOM
     from .markers import NotSet
     from .normalized import NormalizedName
-    from .readonly import DictViewReadonly
-    from .readonly import SetViewReadonly
     from collections.abc import Sequence
     from typing import Any
     from typing import Literal
@@ -172,9 +172,7 @@ class RootModel:
         self.keyfs = xom.keyfs
 
     def create_user(self, username, password, **kwargs):
-        userlist = cast(
-            "TypedKey[set, SetViewReadonly]", self.keyfs.USERLIST
-        ).get_mutable()
+        userlist = self.keyfs.schema.USERLIST.get_mutable()
         if username in userlist:
             raise InvalidUser("username '%s' already exists" % username)
         if not is_valid_name(username):
@@ -185,7 +183,7 @@ class RootModel:
         kwargs.update(created=strftime("%Y-%m-%dT%H:%M:%SZ", gmtime()))
         user._modify(password=password, **kwargs)
         userlist.add(username)
-        cast("TypedKey[set, SetViewReadonly]", self.keyfs.USERLIST).set(userlist)
+        self.keyfs.schema.USERLIST.set(userlist)
         if "email" in kwargs:
             threadlog.info("created user %r with email %r" % (username, kwargs["email"]))
         else:
@@ -215,9 +213,7 @@ class RootModel:
         return stage
 
     def delete_user(self, username):
-        with cast(
-            "TypedKey[set, SetViewReadonly]", self.keyfs.USERLIST
-        ).update() as userlist:
+        with self.keyfs.schema.USERLIST.update() as userlist:
             userlist.remove(username)
 
     def delete_stage(self, username, index):
@@ -240,12 +236,7 @@ class RootModel:
         return None
 
     def get_userlist(self):
-        return [
-            User(self, name)
-            for name in cast(
-                "TypedKey[set, SetViewReadonly]", self.keyfs.USERLIST
-            ).get()
-        ]
+        return [User(self, name) for name in self.keyfs.schema.USERLIST.get()]
 
     def get_usernames(self):
         return set(user.name for user in self.get_userlist())
@@ -355,7 +346,7 @@ class InvalidUserconfig(Exception):
 
 
 class User:
-    keyfs: KeyFS
+    keyfs: KeyFS[Schema]
 
     # ignored_keys are skipped on create and modify
     ignored_keys = frozenset(('indexes', 'username'))
@@ -382,9 +373,7 @@ class User:
 
     @property
     def key(self) -> TypedKey[dict, DictViewReadonly]:
-        return cast("PTypedKey[dict, DictViewReadonly]", self.keyfs.USER)(
-            user=self.name
-        )
+        return self.keyfs.schema.USER(user=self.name)
 
     def get_cleaned_config(self, **kwargs):
         result = {}
@@ -712,7 +701,7 @@ class SimpleLinks:
 
 
 class BaseStage:
-    keyfs: KeyFS
+    keyfs: KeyFS[Schema]
 
     def __init__(self, xom, username, index, ixconfig, customizer_cls):
         self.xom = xom
@@ -724,9 +713,7 @@ class BaseStage:
         # the following attributes are per-xom singletons
         self.keyfs = xom.keyfs
         self.filestore = xom.filestore
-        self.key_projects = cast(
-            "PTypedKey[set[str], SetViewReadonly[str]]", self.keyfs.PROJNAMES
-        )(user=username, index=index)
+        self.key_projects = self.keyfs.schema.PROJNAMES(user=username, index=index)
 
     def __repr__(self):
         return f"<{self.__class__.__name__} {self.name}>"
@@ -839,7 +826,7 @@ class BaseStage:
         self.model.delete_stage(self.username, self.index)
 
     def key_projsimplelinks(self, project: str) -> TypedKey[dict, DictViewReadonly]:
-        return cast("PTypedKey[dict, DictViewReadonly]", self.keyfs.PROJSIMPLELINKS)(
+        return self.keyfs.schema.PROJSIMPLELINKS(
             user=self.username, index=self.index, project=normalize_name(project)
         )
 
@@ -1391,7 +1378,7 @@ class PrivateStage(BaseStage):
     def key_projversions(
         self, project: NormalizedName | str
     ) -> TypedKey[set, SetViewReadonly]:
-        return cast("PTypedKey[set, SetViewReadonly]", self.keyfs.PROJVERSIONS)(
+        return self.keyfs.schema.PROJVERSIONS(
             user=self.username,
             index=self.index,
             project=normalize_name(project),
@@ -1400,7 +1387,7 @@ class PrivateStage(BaseStage):
     def key_projversion(
         self, project: NormalizedName | str, version: str
     ) -> TypedKey[dict, DictViewReadonly]:
-        return cast("PTypedKey[dict, DictViewReadonly]", self.keyfs.PROJVERSION)(
+        return self.keyfs.schema.PROJVERSION(
             user=self.username,
             index=self.index,
             project=normalize_name(project),
@@ -2219,28 +2206,51 @@ def normalize_bases(model, bases):
     return tuple(newbases)
 
 
-def add_keys(xom: XOM, keyfs: KeyFS) -> None:
+class Schema(KeyFSSchema):
     # users and index configuration
-    keyfs.add_key("USER", "{user}/.config", dict)
-    keyfs.add_key("USERLIST", ".config", set)
+    USER = KeyFSSchema.decl_ptypedkey("USER", "{user}/.config", dict, DictViewReadonly)
+    USERLIST = KeyFSSchema.decl_typedkey("USERLIST", ".config", set, SetViewReadonly)
 
     # type mirror related data
-    keyfs.add_key("PYPIFILE_NOMD5", "{user}/{index}/+e/{dirname}/{basename}", dict)
-    keyfs.add_key("MIRRORNAMESINIT", "{user}/{index}/.mirrornameschange", int)
+    PYPIFILE_NOMD5 = KeyFSSchema.decl_ptypedkey(
+        "PYPIFILE_NOMD5",
+        "{user}/{index}/+e/{dirname}/{basename}",
+        dict,
+        DictViewReadonly,
+    )
+    MIRRORNAMESINIT = KeyFSSchema.decl_ptypedkey(
+        "MIRRORNAMESINIT", "{user}/{index}/.mirrornameschange", int, int
+    )
 
     # type "stage" related
-    keyfs.add_key("PROJSIMPLELINKS", "{user}/{index}/{project}/.simple", dict)
-    keyfs.add_key("PROJVERSIONS", "{user}/{index}/{project}/.versions", set)
-    keyfs.add_key("PROJVERSION", "{user}/{index}/{project}/{version}/.config", dict)
-    keyfs.add_key("PROJNAMES", "{user}/{index}/.projects", set)
-    keyfs.add_key("STAGEFILE",
-                  "{user}/{index}/+f/{hashdir_a}/{hashdir_b}/{filename}", dict)
+    PROJSIMPLELINKS = KeyFSSchema.decl_ptypedkey(
+        "PROJSIMPLELINKS", "{user}/{index}/{project}/.simple", dict, DictViewReadonly
+    )
+    PROJVERSIONS = KeyFSSchema.decl_ptypedkey(
+        "PROJVERSIONS", "{user}/{index}/{project}/.versions", set, SetViewReadonly
+    )
+    PROJVERSION = KeyFSSchema.decl_ptypedkey(
+        "PROJVERSION",
+        "{user}/{index}/{project}/{version}/.config",
+        dict,
+        DictViewReadonly,
+    )
+    PROJNAMES = KeyFSSchema.decl_ptypedkey(
+        "PROJNAMES", "{user}/{index}/.projects", set, SetViewReadonly
+    )
+    STAGEFILE = KeyFSSchema.decl_ptypedkey(
+        "STAGEFILE",
+        "{user}/{index}/+f/{hashdir_a}/{hashdir_b}/{filename}",
+        dict,
+        DictViewReadonly,
+    )
 
-    sub = EventSubscribers(xom)
-    cast("PTypedKey", keyfs.PROJVERSION).on_key_change(sub.on_changed_version_config)
-    cast("PTypedKey", keyfs.STAGEFILE).on_key_change(sub.on_changed_file_entry)
-    cast("PTypedKey", keyfs.MIRRORNAMESINIT).on_key_change(sub.on_mirror_initialnames)
-    cast("PTypedKey", keyfs.USER).on_key_change(sub.on_userchange)
+    def register_key_subscribers(self, xom: XOM) -> None:
+        sub = EventSubscribers(xom)
+        self.PROJVERSION.on_key_change(sub.on_changed_version_config)
+        self.STAGEFILE.on_key_change(sub.on_changed_file_entry)
+        self.MIRRORNAMESINIT.on_key_change(sub.on_mirror_initialnames)
+        self.USER.on_key_change(sub.on_userchange)
 
 
 class EventSubscribers:
