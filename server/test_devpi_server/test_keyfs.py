@@ -982,9 +982,9 @@ class TestSubscriber:
 
     def test_last_key_serial(self, keyfs):
         key1 = keyfs.schema.named_key_factory(
-            "SOME1", "{some}/1", None, set, SetViewReadonly
+            "SOME1", "{some}", None, set, SetViewReadonly
         )
-        key2 = keyfs.schema.named_key_factory("SOME2", "{some}/2", None, int, int)
+        key2 = keyfs.schema.named_key_factory("SOME2", "{some}", None, int, int)
         for i in range(10):
             with keyfs.write_transaction() as tx:
                 key1(some="foo").set({i})

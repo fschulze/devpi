@@ -8,6 +8,7 @@ from .keyfs_types import NamedKeyFactory
 from inspect import getmembers
 from typing import Generic
 from typing import TYPE_CHECKING
+from typing import overload
 
 
 if TYPE_CHECKING:
@@ -16,6 +17,41 @@ if TYPE_CHECKING:
 
 
 class KeyFSSchemaMeta(type):
+    @overload
+    @classmethod
+    def decl_anonymous_key(
+        cls,
+        key_name: str,
+        parent_key: None,
+        key_type: type[KeyType],
+        key_rotype: type[KeyTypeRO],
+    ) -> LocatedKeyDescriptor[KeyType, KeyTypeRO]: ...
+
+    @overload
+    @classmethod
+    def decl_anonymous_key(
+        cls,
+        key_name: str,
+        parent_key: NamedKeyDescriptor | NamedKeyFactoryDescriptor,
+        key_type: type[KeyType],
+        key_rotype: type[KeyTypeRO],
+    ) -> NamedKeyDescriptor[KeyType, KeyTypeRO]: ...
+
+    @classmethod
+    def decl_anonymous_key(
+        cls,
+        key_name: str,
+        parent_key: NamedKeyDescriptor | NamedKeyFactoryDescriptor | None,
+        key_type: type[KeyType],
+        key_rotype: type[KeyTypeRO],
+    ) -> (
+        LocatedKeyDescriptor[KeyType, KeyTypeRO]
+        | NamedKeyDescriptor[KeyType, KeyTypeRO]
+    ):
+        if parent_key is None:
+            return LocatedKeyDescriptor(key_name, "", "", key_type, key_rotype)
+        return NamedKeyDescriptor(key_name, "", parent_key, key_type, key_rotype)
+
     @classmethod
     def decl_located_key(
         cls,
@@ -174,6 +210,50 @@ class KeyFSSchema(metaclass=KeyFSSchemaMeta):
             self, lambda x: isinstance(x, (LocatedKey, NamedKey))
         ):
             yield key
+
+    @overload
+    def anonymous_key(
+        self,
+        key_name: str,
+        parent_key: None,
+        key_type: type[KeyType],
+        key_rotype: type[KeyTypeRO],
+    ) -> LocatedKey[KeyType, KeyTypeRO]: ...
+
+    @overload
+    def anonymous_key(
+        self,
+        key_name: str,
+        parent_key: NamedKey | NamedKeyFactory,
+        key_type: type[KeyType],
+        key_rotype: type[KeyTypeRO],
+    ) -> NamedKey[KeyType, KeyTypeRO]: ...
+
+    def anonymous_key(
+        self,
+        key_name: str,
+        parent_key: NamedKey | NamedKeyFactory | None,
+        key_type: type[KeyType],
+        key_rotype: type[KeyTypeRO],
+    ) -> LocatedKey[KeyType, KeyTypeRO] | NamedKey[KeyType, KeyTypeRO]:
+        assert not hasattr(self, key_name)
+        if parent_key is None:
+            setattr(
+                self,
+                key_name,
+                LocatedKeyDescriptor(key_name, "", "", key_type, key_rotype).__get__(
+                    self, self.__class__
+                ),
+            )
+        else:
+            setattr(
+                self,
+                key_name,
+                NamedKeyDescriptor(
+                    key_name, "", parent_key, key_type, key_rotype
+                ).__get__(self, self.__class__),
+            )
+        return getattr(self, key_name)
 
     def located_key(
         self,
