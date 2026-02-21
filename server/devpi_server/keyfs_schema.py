@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from .keyfs_types import KeyType
 from .keyfs_types import KeyTypeRO
-from .keyfs_types import PTypedKey
-from .keyfs_types import RelPath
-from .keyfs_types import TypedKey
+from .keyfs_types import LocatedKey
+from .keyfs_types import NamedKey
+from .keyfs_types import NamedKeyFactory
 from inspect import getmembers
 from typing import Generic
 from typing import TYPE_CHECKING
@@ -17,77 +17,151 @@ if TYPE_CHECKING:
 
 class KeyFSSchemaMeta(type):
     @classmethod
-    def decl_ptypedkey(
+    def decl_located_key(
         cls,
+        key_name: str,
+        location: str,
         name: str,
-        path: str,
         key_type: type[KeyType],
         key_rotype: type[KeyTypeRO],
-    ) -> PTypedKeyDescriptor[KeyType, KeyTypeRO]:
-        return PTypedKeyDescriptor(name, path, key_type, key_rotype)
+    ) -> LocatedKeyDescriptor[KeyType, KeyTypeRO]:
+        return LocatedKeyDescriptor(key_name, location, name, key_type, key_rotype)
 
     @classmethod
-    def decl_typedkey(
+    def decl_named_key(
         cls,
-        name: str,
-        path: str,
+        key_name: str,
+        pattern_or_name: str,
+        parent_key: NamedKeyDescriptor | NamedKeyFactoryDescriptor,
         key_type: type[KeyType],
         key_rotype: type[KeyTypeRO],
-    ) -> TypedKeyDescriptor[KeyType, KeyTypeRO]:
-        return TypedKeyDescriptor(name, path, key_type, key_rotype)
+    ) -> NamedKeyDescriptor[KeyType, KeyTypeRO]:
+        return NamedKeyDescriptor(
+            key_name, pattern_or_name, parent_key, key_type, key_rotype
+        )
+
+    @classmethod
+    def decl_named_key_factory(
+        cls,
+        key_name: str,
+        pattern_or_name: str,
+        parent_key: NamedKeyDescriptor | NamedKeyFactoryDescriptor | None,
+        key_type: type[KeyType],
+        key_rotype: type[KeyTypeRO],
+    ) -> NamedKeyFactoryDescriptor[KeyType, KeyTypeRO]:
+        return NamedKeyFactoryDescriptor(
+            key_name, pattern_or_name, parent_key, key_type, key_rotype
+        )
 
 
-class PTypedKeyDescriptor(Generic[KeyType, KeyTypeRO]):
-    __slots__ = ("key_rotype", "key_type", "name", "path")
+class LocatedKeyDescriptor(Generic[KeyType, KeyTypeRO]):
+    __slots__ = ("key_name", "key_rotype", "key_type", "location", "name")
 
     def __init__(
         self,
+        key_name: str,
+        location: str,
         name: str,
-        path: str,
         key_type: type[KeyType],
         key_rotype: type[KeyTypeRO],
     ) -> None:
-        assert "{" in path
+        self.key_name = key_name
+        self.location = location
         self.name = name
-        self.path = path
         self.key_type = key_type
         self.key_rotype = key_rotype
 
     def __get__(
         self, instance: KeyFSSchema, owner: type[KeyFSSchema] | None = None
-    ) -> PTypedKey[KeyType, KeyTypeRO]:
-        key: PTypedKey[KeyType, KeyTypeRO] = PTypedKey(
-            instance.keyfs, self.path, self.key_type, self.name
+    ) -> LocatedKey[KeyType, KeyTypeRO]:
+        key: LocatedKey[KeyType, KeyTypeRO] = LocatedKey(
+            instance.keyfs, self.key_name, self.location, self.name, self.key_type
         )
         # cache attribute
-        instance.__dict__[self.name] = key
+        instance.__dict__[self.key_name] = key
         return key
 
 
-class TypedKeyDescriptor(Generic[KeyType, KeyTypeRO]):
-    __slots__ = ("key_rotype", "key_type", "name", "path")
+class NamedKeyDescriptor(Generic[KeyType, KeyTypeRO]):
+    __slots__ = ("key_name", "key_rotype", "key_type", "parent_key", "pattern_or_name")
 
     def __init__(
         self,
-        name: str,
-        path: str,
+        key_name: str,
+        pattern_or_name: str,
+        parent_key: NamedKey
+        | NamedKeyDescriptor
+        | NamedKeyFactory
+        | NamedKeyFactoryDescriptor,
         key_type: type[KeyType],
         key_rotype: type[KeyTypeRO],
     ) -> None:
-        assert "{" not in path
-        self.name = name
-        self.path = path
+        assert "{" not in pattern_or_name
+        self.key_name = key_name
+        self.pattern_or_name = pattern_or_name
+        self.parent_key = parent_key
         self.key_type = key_type
         self.key_rotype = key_rotype
 
     def __get__(
         self, instance: KeyFSSchema, owner: type[KeyFSSchema]
-    ) -> TypedKey[KeyType, KeyTypeRO]:
-        key: TypedKey[KeyType, KeyTypeRO] = TypedKey(
-            instance.keyfs, RelPath(self.path), self.key_type, self.name
+    ) -> NamedKey[KeyType, KeyTypeRO]:
+        parent_key = self.parent_key
+        if isinstance(parent_key, NamedKeyDescriptor):
+            parent_key = parent_key.__get__(instance, owner)
+        if isinstance(parent_key, NamedKeyFactoryDescriptor):
+            parent_key = parent_key.__get__(instance, owner)
+        key: NamedKey[KeyType, KeyTypeRO] = NamedKey(
+            instance.keyfs,
+            self.key_name,
+            self.pattern_or_name,
+            parent_key,
+            self.key_type,
         )
         # cache attribute
-        instance.__dict__[self.name] = key
+        instance.__dict__[self.key_name] = key
+        return key
+
+
+class NamedKeyFactoryDescriptor(Generic[KeyType, KeyTypeRO]):
+    __slots__ = ("key_name", "key_rotype", "key_type", "parent_key", "pattern_or_name")
+
+    def __init__(
+        self,
+        key_name: str,
+        pattern_or_name: str,
+        parent_key: NamedKey
+        | NamedKeyDescriptor
+        | NamedKeyFactory
+        | NamedKeyFactoryDescriptor
+        | None,
+        key_type: type[KeyType],
+        key_rotype: type[KeyTypeRO],
+    ) -> None:
+        assert "{" in pattern_or_name
+        self.key_name = key_name
+        self.pattern_or_name = pattern_or_name
+        self.parent_key = parent_key
+        self.key_type = key_type
+        self.key_rotype = key_rotype
+
+    def __get__(
+        self, instance: KeyFSSchema, owner: type[KeyFSSchema]
+    ) -> NamedKeyFactory[KeyType, KeyTypeRO]:
+        parent_key = self.parent_key
+        if isinstance(parent_key, NamedKeyDescriptor):
+            parent_key = parent_key.__get__(instance, owner)
+        if isinstance(parent_key, NamedKeyFactoryDescriptor):
+            parent_key = parent_key.__get__(instance, owner)
+        key: NamedKeyFactory[KeyType, KeyTypeRO] = NamedKeyFactory(
+            instance.keyfs,
+            self.key_name,
+            self.pattern_or_name,
+            parent_key,
+            self.key_type,
+        )
+        # cache attribute
+        instance.__dict__[self.key_name] = key
         return key
 
 
@@ -95,42 +169,62 @@ class KeyFSSchema(metaclass=KeyFSSchemaMeta):
     def __init__(self, keyfs: KeyFS):
         self.keyfs = keyfs
 
-    def __iter__(self) -> Iterator[PTypedKey | TypedKey]:
+    def __iter__(self) -> Iterator[LocatedKey | NamedKey]:
         for _name, key in getmembers(
-            self, lambda x: isinstance(x, (PTypedKey, TypedKey))
+            self, lambda x: isinstance(x, (LocatedKey, NamedKey))
         ):
             yield key
 
-    def ptypedkey(
+    def located_key(
         self,
+        key_name: str,
+        location: str,
         name: str,
-        path: str,
         key_type: type[KeyType],
-        key_rotype: type[KeyTypeRO],  # noqa: ARG002 - typing only
-    ) -> PTypedKey[KeyType, KeyTypeRO]:
-        assert not hasattr(self, name)
+        key_rotype: type[KeyTypeRO],
+    ) -> LocatedKey[KeyType, KeyTypeRO]:
+        assert not hasattr(self, key_name)
         setattr(
             self,
-            name,
-            PTypedKeyDescriptor(name, path, key_type, key_rotype).__get__(
-                self, self.__class__
-            ),
+            key_name,
+            LocatedKeyDescriptor(
+                key_name, location, name, key_type, key_rotype
+            ).__get__(self, self.__class__),
         )
-        return getattr(self, name)
+        return getattr(self, key_name)
 
-    def typedkey(
+    def named_key(
         self,
-        name: str,
-        path: str,
+        key_name: str,
+        pattern_or_name: str,
+        parent_key: NamedKey | NamedKeyFactory,
         key_type: type[KeyType],
-        key_rotype: type[KeyTypeRO],  # noqa: ARG002 - typing only
-    ) -> TypedKey[KeyType, KeyTypeRO]:
-        assert not hasattr(self, name)
+        key_rotype: type[KeyTypeRO],
+    ) -> NamedKey[KeyType, KeyTypeRO]:
+        assert not hasattr(self, key_name)
         setattr(
             self,
-            name,
-            TypedKeyDescriptor(name, path, key_type, key_rotype).__get__(
-                self, self.__class__
-            ),
+            key_name,
+            NamedKeyDescriptor(
+                key_name, pattern_or_name, parent_key, key_type, key_rotype
+            ).__get__(self, self.__class__),
         )
-        return getattr(self, name)
+        return getattr(self, key_name)
+
+    def named_key_factory(
+        self,
+        key_name: str,
+        pattern_or_name: str,
+        parent_key: NamedKey | NamedKeyFactory | None,
+        key_type: type[KeyType],
+        key_rotype: type[KeyTypeRO],
+    ) -> NamedKeyFactory[KeyType, KeyTypeRO]:
+        assert not hasattr(self, key_name)
+        setattr(
+            self,
+            key_name,
+            NamedKeyFactoryDescriptor(
+                key_name, pattern_or_name, parent_key, key_type, key_rotype
+            ).__get__(self, self.__class__),
+        )
+        return getattr(self, key_name)
