@@ -68,21 +68,6 @@ class TestChangelog:
         r = testapp.get("/+api", expect_errors=False)
         return int(r.headers["X-DEVPI-SERIAL"])
 
-    def test_accept_header(self, testapp):
-        from devpi_server.replica import REPLICA_ACCEPT_STREAMING
-        from devpi_server.replica import REPLICA_CONTENT_TYPE
-
-        r = testapp.get("/+changelog/0")
-        assert r.content_type == "application/octet-stream"
-        r = testapp.get("/+changelog/0", headers={"Accept": "foo"})
-        assert r.content_type == "application/octet-stream"
-        r = testapp.get("/+changelog/0", headers={"Accept": "foo/bar"})
-        assert r.content_type == "application/octet-stream"
-        r = testapp.get("/+changelog/0", headers={"Accept": REPLICA_CONTENT_TYPE})
-        assert r.content_type == "application/octet-stream"
-        r = testapp.get("/+changelog/0", headers={"Accept": REPLICA_ACCEPT_STREAMING})
-        assert r.content_type == "application/octet-stream"
-
     def test_get_latest_serial(self, testapp, mapp):
         latest_serial = self.get_latest_serial(testapp)
         assert latest_serial >= -1
@@ -152,21 +137,6 @@ class TestMultiChangelog:
     def get_latest_serial(self, testapp):
         r = testapp.get("/+api", expect_errors=False)
         return int(r.headers["X-DEVPI-SERIAL"])
-
-    def test_accept_header(self, testapp):
-        from devpi_server.replica import REPLICA_ACCEPT_STREAMING
-        from devpi_server.replica import REPLICA_CONTENT_TYPE
-
-        r = testapp.get("/+changelog/0-")
-        assert r.content_type == "application/octet-stream"
-        r = testapp.get("/+changelog/0-", headers={"Accept": "foo"})
-        assert r.content_type == "application/octet-stream"
-        r = testapp.get("/+changelog/0-", headers={"Accept": "foo/bar"})
-        assert r.content_type == "application/octet-stream"
-        r = testapp.get("/+changelog/0-", headers={"Accept": REPLICA_CONTENT_TYPE})
-        assert r.content_type == REPLICA_CONTENT_TYPE
-        r = testapp.get("/+changelog/0-", headers={"Accept": REPLICA_ACCEPT_STREAMING})
-        assert r.content_type == REPLICA_CONTENT_TYPE
 
     @pytest.mark.usefixtures("noiter")
     def test_multiple_changes(self, mapp, reqchangelogs, testapp):
@@ -532,7 +502,7 @@ def replay(xom, replica_xom, events=True):
         if serial == -1:
             continue
         with xom.keyfs._storage.get_connection() as conn:
-            change_entry = conn.get_changes(serial)
+            change_entry = list(conn.iter_changes_at(serial))
         threadlog.info("test: importing to replica %s", serial)
         replica_xom.keyfs.import_changes(serial, change_entry)
     replica_xom.replica_thread.wait()
@@ -1559,6 +1529,7 @@ class TestFileReplicationSharedData:
         assert key == relpath
 
     def test_recreated_index(self, monkeypatch, shared_data):
+        from devpi_server.markers import deleted
         from devpi_server.replica import IndexType
         relpath = "root/dev/+f/274/e88b0b3d028fe/pytest-2.1.0.zip"
         key = shared_data.xom.keyfs.get_key_instance("STAGEFILE", relpath)
@@ -1576,7 +1547,7 @@ class TestFileReplicationSharedData:
             3: {key: (None, -1)},
             4: {userkey: ({"indexes": {"dev": {"type": "mirror"}}}, 2)},
             5: {key: (None, -1)},
-            6: {userkey: (None, 4)},
+            6: {userkey: (deleted, 4)},
             7: {key: (None, -1)},
         }
 
