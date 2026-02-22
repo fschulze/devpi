@@ -46,19 +46,23 @@ def get_pypi_project_names(testapp):
 
 
 @pytest.mark.parametrize("kind", ["user", "index"])
-@pytest.mark.parametrize(("name", "status"), [
-    ("foo_bar", 'ok'),
-    ("foo-bar", 'ok'),
-    ("foo.bar", 'ok'),
-    ("foo.bar42", 'ok'),
-    ("foo@bar42", 'ok'),
-    ("foo:bar42", 'fatal'),
-    ("foo!bar42", 'fatal'),
-    ("foo~bar42", 'fatal'),
-    (":foobar", 'fatal'),
-    (":foobar:", 'fatal'),
-    ("föö", 'ok'),
-    ("😀", 'ok')])
+@pytest.mark.parametrize(
+    ("name", "status"),
+    [
+        ("foo_bar", "ok"),
+        ("foo-bar", "ok"),
+        ("foo.bar", "ok"),
+        ("foo.bar42", "ok"),
+        ("foo@bar42", "ok"),
+        ("foo:bar42", "fatal"),
+        ("foo!bar42", "fatal"),
+        ("foo~bar42", "fatal"),
+        (":foobar", "fatal"),
+        (":foobar:", "fatal"),
+        ("föö", "ok"),
+        ("\N{GRINNING FACE}", "ok"),
+    ],
+)
 def test_invalid_name(testapp, name, status, kind):
     from urllib.parse import quote as urlquote
     reqdict = dict(password="123")  # noqa: S106
