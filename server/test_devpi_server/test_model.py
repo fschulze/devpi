@@ -17,7 +17,6 @@ import inspect
 import itertools
 import json
 import pytest
-import re
 
 
 pytestmark = [pytest.mark.writetransaction]
@@ -1184,7 +1183,7 @@ class TestStage:
         with xom.keyfs.write_transaction():
             stage = user.create_stage(**udict(
                 index="world", bases=(), type="stage", volatile=True))
-            with pytest.raises(KeyError, match=re.escape("hello/world/.config")):
+            with pytest.raises(KeyError, match=r"LocatedKey.*INDEX.*hello.*world"):
                 stage.get_last_change_serial_perstage()
         assert current_serial == xom.keyfs.get_current_serial() - 1
         current_serial = xom.keyfs.get_current_serial()
