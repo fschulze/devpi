@@ -439,7 +439,7 @@ class XOM:
             cache_size=self.config.args.keyfs_cache_size,
             schema=Schema,
         )
-        keyfs.schema.register_key_subscribers(self)
+        keyfs.schema.register_key_subscribers(self, keyfs)
         try:
             keyfs.finalize_init()
         except Exception as e:

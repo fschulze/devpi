@@ -49,7 +49,7 @@ if TYPE_CHECKING:
     from .httpclient import GetResponse
     from .httpclient import HTTPClient
     from .keyfs_types import KeyFSTypesRO
-    from .keyfs_types import TypedKey
+    from .keyfs_types import LocatedKey
     from .main import XOM
     from contextlib import ExitStack
 
@@ -680,7 +680,9 @@ class ReplicaThread:
 
 
 def register_key_subscribers(xom: XOM) -> None:
-    xom.keyfs.schema.PROJSIMPLELINKS.on_key_change(SimpleLinksChanged(xom))
+    xom.keyfs.notifier.on_key_change(
+        xom.keyfs.schema.PROJSIMPLELINKS, SimpleLinksChanged(xom)
+    )
 
 
 class FileReplicationSharedData:
@@ -724,15 +726,15 @@ class FileReplicationSharedData:
 
     def on_import(self, serial, changes):
         keyfs = self.xom.keyfs
-        user_keyname = keyfs.schema.USER.name
+        user_keyname = keyfs.schema.USER.key_name
         for key in changes:
-            if key.name == user_keyname:
+            if key.key_name == user_keyname:
                 self.update_index_types(keyfs, serial, key, *changes[key])
         file_keynames = frozenset(
-            (keyfs.schema.STAGEFILE.name, keyfs.schema.PYPIFILE_NOMD5.name)
+            (keyfs.schema.STAGEFILE.key_name, keyfs.schema.PYPIFILE_NOMD5.key_name)
         )
         for key in changes:
-            if key.name in file_keynames:
+            if key.key_name in file_keynames:
                 self.on_import_file(keyfs, serial, key, *changes[key])
 
     def on_import_file(self, keyfs, serial, key, val, back_serial):
@@ -774,8 +776,9 @@ class FileReplicationSharedData:
                 return
 
         # note the negated serial for the PriorityQueue
-        self.queue.put((
-            index_type, -serial, key.relpath, key.name, val, back_serial))
+        self.queue.put(
+            (index_type, -serial, key.relpath, key.key_name, val, back_serial)
+        )
         self.last_added = time.time()
 
     def update_index_types(self, keyfs, serial, key, val, back_serial):
@@ -813,11 +816,11 @@ class FileReplicationSharedData:
             (ts, delay, index_type, serial, key, keyname, value, back_serial))
         self.last_errored = time.time()
 
-    def get_index_name_for(self, key: TypedKey) -> str:
+    def get_index_name_for(self, key: LocatedKey) -> str:
         return f"{key.params['user']}/{key.params['index']}"
 
     def get_index_type_for(
-        self, key: TypedKey, default: IndexType | Absent = absent
+        self, key: LocatedKey, default: IndexType | Absent = absent
     ) -> IndexType:
         result = self.index_types.get(self.get_index_name_for(key), absent)
         if isinstance(result, Absent):

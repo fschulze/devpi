@@ -28,8 +28,8 @@ import re
 if TYPE_CHECKING:
     from .interfaces import ContentOrFile
     from .keyfs import KeyFS
+    from .keyfs_types import LocatedKey
     from .keyfs_types import RelPath
-    from .keyfs_types import TypedKey
     from .markers import Absent
     from .model import Schema
     from .readonly import DictViewReadonly
@@ -434,7 +434,7 @@ class BaseFileEntry:
     BadGateway = BadGateway
     _hashes = metaprop("hashes")  # e.g. dict(md5="120938012")
     _meta: DictViewReadonly | dict | NoDefault
-    key: TypedKey[dict, DictViewReadonly]
+    key: LocatedKey[dict, DictViewReadonly]
     last_modified = metaprop("last_modified")
     url = metaprop("url")
     project = metaprop("project")
@@ -442,7 +442,7 @@ class BaseFileEntry:
 
     def __init__(
         self,
-        key: TypedKey[dict, DictViewReadonly],
+        key: LocatedKey[dict, DictViewReadonly],
         meta: DictViewReadonly | dict | Deleted | NoDefault = _nodefault,
     ) -> None:
         self.key = key
@@ -628,7 +628,7 @@ class BaseFileEntry:
         )
 
     @property
-    def key_digestpaths(self) -> TypedKey[set[str], SetViewReadonly[str]]:
+    def key_digestpaths(self) -> LocatedKey[set[str], SetViewReadonly[str]]:
         keyfs = cast("KeyFS[Schema]", self.key.keyfs)
         return keyfs.schema.DIGESTPATHS(digest=self.hashes[DEFAULT_HASH_TYPE])
 

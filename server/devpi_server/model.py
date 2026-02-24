@@ -43,7 +43,9 @@ if TYPE_CHECKING:
     from .filestore import FileStore
     from .interfaces import ContentOrFile
     from .keyfs import KeyFS
-    from .keyfs_types import TypedKey
+    from .keyfs_types import KeyFSTypes
+    from .keyfs_types import KeyFSTypesRO
+    from .keyfs_types import LocatedKey
     from .main import XOM
     from .markers import NotSet
     from .normalized import NormalizedName
@@ -376,7 +378,7 @@ class User:
         self.key = self.keyfs.schema.USER(user=self.name)
         self.key_indexes = self.keyfs.schema.INDEXLIST(user=self.name)
 
-    def key_index(self, index: str) -> TypedKey[dict, DictViewReadonly]:
+    def key_index(self, index: str) -> LocatedKey[dict, DictViewReadonly]:
         return self.keyfs.schema.INDEX(user=self.name, index=index)
 
     def get_cleaned_config(self, **kwargs):
@@ -836,7 +838,7 @@ class BaseStage:
     def delete(self):
         self.model.delete_stage(self.username, self.index)
 
-    def key_projsimplelinks(self, project: str) -> TypedKey[dict, DictViewReadonly]:
+    def key_projsimplelinks(self, project: str) -> LocatedKey[dict, DictViewReadonly]:
         return self.keyfs.schema.PROJSIMPLELINKS(
             user=self.username, index=self.index, project=normalize_name(project)
         )
@@ -1361,7 +1363,7 @@ class PrivateStage(BaseStage):
 
     def key_projversions(
         self, project: NormalizedName | str
-    ) -> TypedKey[set, SetViewReadonly]:
+    ) -> LocatedKey[set[str], SetViewReadonly[str]]:
         return self.keyfs.schema.PROJVERSIONS(
             user=self.username,
             index=self.index,
@@ -1370,7 +1372,7 @@ class PrivateStage(BaseStage):
 
     def key_projversion(
         self, project: NormalizedName | str, version: str
-    ) -> TypedKey[dict, DictViewReadonly]:
+    ) -> LocatedKey[dict[str, KeyFSTypes], DictViewReadonly[str, KeyFSTypesRO]]:
         return self.keyfs.schema.PROJVERSION(
             user=self.username,
             index=self.index,
@@ -1380,7 +1382,7 @@ class PrivateStage(BaseStage):
 
     def key_versionfilelist(
         self, project: NormalizedName | str, version: str
-    ) -> TypedKey[set[str], SetViewReadonly[str]]:
+    ) -> LocatedKey[set[str], SetViewReadonly[str]]:
         return self.keyfs.schema.VERSIONFILELIST(
             user=self.username,
             index=self.index,
@@ -1390,7 +1392,7 @@ class PrivateStage(BaseStage):
 
     def key_versionfile(
         self, project: NormalizedName | str, version: str, filename: str
-    ) -> TypedKey[dict, DictViewReadonly]:
+    ) -> LocatedKey[dict, DictViewReadonly]:
         return self.keyfs.schema.VERSIONFILE(
             user=self.username,
             index=self.index,
@@ -1936,12 +1938,12 @@ class MutableLinkStore(LinkStore):
 
     def key_versionfile(
         self, project: NormalizedName | str, version: str, filename: str
-    ) -> TypedKey[dict, DictViewReadonly]:
+    ) -> LocatedKey[dict, DictViewReadonly]:
         return self.stage.key_versionfile(project, version, filename)
 
     def key_versionfilelist(
         self, project: NormalizedName | str, version: str
-    ) -> TypedKey[set[str], SetViewReadonly[str]]:
+    ) -> LocatedKey[set[str], SetViewReadonly[str]]:
         return self.stage.key_versionfilelist(project, version)
 
     def new_reflink(
@@ -2218,103 +2220,118 @@ def normalize_bases(model, bases):
 
 class Schema(KeyFSSchema):
     # users and index configuration
-    USER = KeyFSSchema.decl_ptypedkey(
+    USER = KeyFSSchema.decl_named_key_factory(
         "USER",
         "{user}/.config",
+        None,
         dict,
         DictViewReadonly,
     )
-    USERLIST = KeyFSSchema.decl_typedkey(
+    USERLIST = KeyFSSchema.decl_located_key(
         "USERLIST",
+        "",
         ".config",
         set[str],
         SetViewReadonly[str],
     )
-    INDEX = KeyFSSchema.decl_ptypedkey(
+    INDEX = KeyFSSchema.decl_named_key_factory(
         "INDEX",
-        "{user}/{index}/.config",
+        "{index}/.config",
+        USER,
         dict,
         DictViewReadonly,
     )
-    INDEXLIST = KeyFSSchema.decl_ptypedkey(
+    INDEXLIST = KeyFSSchema.decl_named_key(
         "INDEXLIST",
-        "{user}/.indexes",
+        ".indexes",
+        USER,
         set[str],
         SetViewReadonly[str],
     )
 
     # type mirror related data
-    PYPIFILE_NOMD5 = KeyFSSchema.decl_ptypedkey(
+    PYPIFILE_NOMD5 = KeyFSSchema.decl_named_key_factory(
         "PYPIFILE_NOMD5",
-        "{user}/{index}/+e/{dirname}/{basename}",
+        "+e/{dirname}/{basename}",
+        INDEX,
         dict,
         DictViewReadonly,
     )
-    MIRRORNAMESINIT = KeyFSSchema.decl_ptypedkey(
+    MIRRORNAMESINIT = KeyFSSchema.decl_named_key(
         "MIRRORNAMESINIT",
-        "{user}/{index}/.mirrornameschange",
+        ".mirrornameschange",
+        INDEX,
         int,
         int,
     )
 
     # type "stage" related
-    PROJSIMPLELINKS = KeyFSSchema.decl_ptypedkey(
+    PROJSIMPLELINKS = KeyFSSchema.decl_named_key_factory(
         "PROJSIMPLELINKS",
-        "{user}/{index}/{project}/.simple",
+        "{project}/.simple",
+        INDEX,
         dict,
         DictViewReadonly,
     )
-    PROJVERSIONS = KeyFSSchema.decl_ptypedkey(
+    PROJVERSIONS = KeyFSSchema.decl_named_key(
         "PROJVERSIONS",
-        "{user}/{index}/{project}/.versions",
+        ".versions",
+        PROJSIMPLELINKS,
         set[str],
         SetViewReadonly[str],
     )
-    PROJVERSION = KeyFSSchema.decl_ptypedkey(
+    PROJVERSION = KeyFSSchema.decl_named_key_factory(
         "PROJVERSION",
-        "{user}/{index}/{project}/{version}/.config",
+        "{version}/.config",
+        PROJSIMPLELINKS,
         dict,
         DictViewReadonly,
     )
-    PROJNAMES = KeyFSSchema.decl_ptypedkey(
+    PROJNAMES = KeyFSSchema.decl_named_key(
         "PROJNAMES",
-        "{user}/{index}/.projects",
+        ".projects",
+        INDEX,
         set[str],
         SetViewReadonly[str],
     )
-    VERSIONFILELIST = KeyFSSchema.decl_ptypedkey(
+    VERSIONFILELIST = KeyFSSchema.decl_named_key(
         "VERSIONFILELIST",
-        "{user}/{index}/{project}/{version}/.files",
-        set,
-        SetViewReadonly,
+        ".files",
+        PROJVERSION,
+        set[str],
+        SetViewReadonly[str],
     )
-    VERSIONFILE = KeyFSSchema.decl_ptypedkey(
+    VERSIONFILE = KeyFSSchema.decl_named_key_factory(
         "VERSIONFILE",
-        "{user}/{index}/{project}/{version}/{filename}",
+        "{filename}",
+        PROJVERSION,
         dict,
         DictViewReadonly,
     )
-    STAGEFILE = KeyFSSchema.decl_ptypedkey(
+    STAGEFILE = KeyFSSchema.decl_named_key_factory(
         "STAGEFILE",
-        "{user}/{index}/+f/{hashdir_a}/{hashdir_b}/{filename}",
+        "+f/{hashdir_a}/{hashdir_b}/{filename}",
+        INDEX,
         dict,
         DictViewReadonly,
     )
 
     # files related
-    DIGESTPATHS = KeyFSSchema.decl_ptypedkey(
+    DIGESTPATHS = KeyFSSchema.decl_named_key_factory(
         "DIGESTPATHS",
         "{digest}",
+        None,
         set[str],
         SetViewReadonly[str],
     )
 
-    def register_key_subscribers(self, xom: XOM) -> None:
+    def register_key_subscribers(self, xom: XOM, keyfs: KeyFS) -> None:
         sub = EventSubscribers(xom)
-        self.PROJVERSION.on_key_change(sub.on_changed_version_config)
-        self.STAGEFILE.on_key_change(sub.on_changed_file_entry)
-        self.MIRRORNAMESINIT.on_key_change(sub.on_mirror_initialnames)
-        self.INDEX.on_key_change(sub.on_changed_index)
+        notifier = keyfs.notifier
+        notifier.on_key_change(self.PROJVERSION, sub.on_changed_version_config)
+        notifier.on_key_change(self.STAGEFILE, sub.on_changed_file_entry)
+        notifier.on_key_change(self.MIRRORNAMESINIT, sub.on_mirror_initialnames)
+        notifier.on_key_change(self.INDEX, sub.on_changed_index)
 
 
 class EventSubscribers:
