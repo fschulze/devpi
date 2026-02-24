@@ -11,6 +11,7 @@ from .fileutil import dumps
 from .fileutil import load
 from .fileutil import loads
 from .httpclient import FatalResponse
+from .log import TimeDeltaChecker
 from .log import thread_push_log
 from .log import threadlog
 from .main import Fatal
@@ -719,12 +720,11 @@ class ReplicaThread:
         # within a devpi replica server this thread is the only writer
         self.started_at = time.time()
         self.log = thread_push_log("[REP]")
-        last_time = time.time()
+        timed_log = TimeDeltaChecker(10)
         while 1:
             try:
                 self.tick()
-                if time.time() - last_time > 10:
-                    last_time = time.time()
+                if timed_log.is_due():
                     qsize = self.shared_data.queue.qsize()
                     if qsize:
                         threadlog.info("File download queue size ~ %s", qsize)
@@ -1331,7 +1331,7 @@ class InitialQueueThread:
         keyfs = self.xom.keyfs
         threadlog.info("Queuing files for possible download from primary")
         keys = (keyfs.get_key('PYPIFILE_NOMD5'), keyfs.get_key('STAGEFILE'))
-        last_time = time.time()
+        timed_log = TimeDeltaChecker(5)
         self.shared_data.initial_processed = 0
         queued = 0
         # wait until we are in sync for the first time
@@ -1353,8 +1353,7 @@ class InitialQueueThread:
                 if self.shared_data.queue.qsize() > self.shared_data.num_threads:
                     # let the queue be processed before filling it further
                     self.shared_data.wait()
-                if time.time() - last_time > 5:
-                    last_time = time.time()
+                if timed_log.is_due():
                     threadlog.info(
                         "Processed a total of %s files (serial %s/%s) and queued %s so far.",
                         self.shared_data.initial_processed,
