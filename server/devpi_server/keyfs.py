@@ -408,7 +408,7 @@ class KeyFS(Generic[Schema]):
             records: list[Record] = []
             subscriber_changes = {}
             for relpath, (keyname, back_serial, val) in changes.items():
-                old_val: KeyFSTypesRO | Absent | None
+                old_val: KeyFSTypesRO | Absent | Deleted
                 try:
                     old_val = conn.get_relpath_at(relpath, serial - 1).value
                 except KeyError:
@@ -801,13 +801,13 @@ class Transaction:
         self,
         typedkey: LocatedKey[KeyType, KeyTypeRO],
         at_serial: int,
-    ) -> tuple[int, KeyTypeRO | None] | None:
+    ) -> tuple[int, KeyTypeRO | Absent | Deleted]:
         relpath = typedkey.relpath
         try:
             data = self.conn.get_relpath_at(relpath, at_serial)
         except KeyError:
-            return None
-        return (data.last_serial, cast("KeyTypeRO | None", data.value))
+            return (-1, absent)
+        return (data.last_serial, cast("KeyTypeRO | Deleted", data.value))
 
     def get_value_at(
         self, typedkey: LocatedKey[KeyType, KeyTypeRO], at_serial: int
@@ -822,7 +822,7 @@ class Transaction:
     def last_serial_and_value_at(self, typedkey, at_serial):
         relpath = typedkey.relpath
         data = self.conn.get_relpath_at(relpath, at_serial)
-        if data.value is None:
+        if data.value is deleted:
             raise KeyError(relpath)  # was deleted
         return (data.last_serial, data.value)
 
@@ -836,15 +836,10 @@ class Transaction:
             without changes from current transaction."""
         if typedkey not in self._original:
             tup = self.get_last_serial_and_value_at(typedkey, self.at_serial)
-            val: Absent | Deleted | KeyTypeRO | None
-            if tup is None:
-                serial = -1
-                val = absent
-            else:
-                (serial, val) = tup
+            # make mypy happy
+            (serial, val) = tup
+            if val not in (absent, deleted):
                 assert is_deeply_readonly(val)
-                if val is None:
-                    val = deleted
             if TYPE_CHECKING:
                 assert isinstance(val, (KeyFSTypesRO, Absent, Deleted))
             self._original[typedkey] = (serial, val)
