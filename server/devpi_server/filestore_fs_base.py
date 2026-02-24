@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from collections.abc import Iterable
     from types import TracebackType
+    from typing import Any
     from typing import IO
     from typing import Literal
     from typing import Self
@@ -118,7 +119,7 @@ class FSIOFileBase:
             else:
                 files_commit.extend(dirty_file.commit())
         if files_commit or files_del:
-            threadlog.debug(msg, LazyChangesFormatter({}, files_commit, files_del))
+            threadlog.debug(msg, LazyChangesFormatter((), files_commit, files_del))
 
     def delete(
         self,
@@ -304,13 +305,13 @@ class LazyChangesFormatter:
 
     def __init__(
         self,
-        changes: dict,
+        keys: Iterable[Any],
         files_commit: Iterable[str],
         files_del: Iterable[str],
     ) -> None:
         self.files_commit = files_commit
         self.files_del = files_del
-        self.keys = changes.keys()
+        self.keys = keys
 
     def __str__(self) -> str:
         msg = []
