@@ -31,6 +31,7 @@ from pluggy import HookimplMarker
 from pyramid.httpexceptions import HTTPAccepted
 from pyramid.httpexceptions import HTTPBadRequest
 from pyramid.httpexceptions import HTTPForbidden
+from pyramid.httpexceptions import HTTPNotAcceptable
 from pyramid.httpexceptions import HTTPNotFound
 from pyramid.response import Response
 from pyramid.view import view_config
@@ -75,8 +76,8 @@ REPLICA_REQUEST_TIMEOUT = MAX_REPLICA_BLOCK_TIME * 1.25
 REPLICA_MULTIPLE_TIMEOUT = REPLICA_REQUEST_TIMEOUT / 2
 REPLICA_AUTH_MAX_AGE = REPLICA_REQUEST_TIMEOUT + 0.1
 REPLICA_CHUNK_SIZE = 65536
-REPLICA_CONTENT_TYPE = "application/x-devpi-replica-changes"
-REPLICA_ACCEPT_STREAMING = f"{REPLICA_CONTENT_TYPE}, application/octet-stream; q=0.9"
+REPLICA_CONTENT_TYPE_V2 = "application/x-devpi-replica-changes-v2"
+REPLICA_CONTENT_TYPE_V2_STREAM = "application/x-devpi-replica-stream-v2"
 MAX_REPLICA_CHANGES_SIZE = 5 * 1024 * 1024
 
 
@@ -253,6 +254,19 @@ class PrimaryChangelogRequest:
             raise HTTPForbidden(
                 "Authenticated identity '%r' isn't from replica." % identity)
 
+    def get_acceptable(self) -> set[str]:
+        accept = self.request.accept
+        return {
+            x[0]
+            for x in (
+                accept.acceptable_offers(
+                    [REPLICA_CONTENT_TYPE_V2, REPLICA_CONTENT_TYPE_V2_STREAM]
+                )
+                if accept
+                else []
+            )
+        }
+
     @view_config(route_name="/+changelog/{serial}")
     def get_changes(self):
         # this method is called from all replica servers
@@ -266,6 +280,9 @@ class PrimaryChangelogRequest:
         #   never time out here, leading to more and more threads
         # if no commits happen.
 
+        if REPLICA_CONTENT_TYPE_V2 not in self.get_acceptable():
+            raise HTTPNotAcceptable
+
         self.verify_primary()
 
         serial = int(self.request.matchdict["serial"])
@@ -277,21 +294,24 @@ class PrimaryChangelogRequest:
             raw_entry = keyfs.tx.conn.get_raw_changelog_entry(serial)
 
             devpi_serial = keyfs.get_current_serial()
-            return Response(body=raw_entry, status=200, headers={
-                "Content-Type": "application/octet-stream",
-                "X-DEVPI-SERIAL": str(devpi_serial)})
+            return Response(
+                body=raw_entry,
+                status=200,
+                headers={
+                    "Content-Type": REPLICA_CONTENT_TYPE_V2,
+                    "X-DEVPI-SERIAL": str(devpi_serial),
+                },
+            )
 
     @view_config(route_name="/+changelog/{serial}-")
     def get_multiple_changes(self):
-        acceptable = self.request.accept.acceptable_offers(
-            [REPLICA_CONTENT_TYPE, "application/octet-stream"])
-        preferres_streaming = (
-            (REPLICA_CONTENT_TYPE, 1.0) in acceptable
-            and ("application/octet-stream", 1.0) not in acceptable)
-        if preferres_streaming:
+        acceptable = self.get_acceptable()
+        if REPLICA_CONTENT_TYPE_V2_STREAM in acceptable:
             # a replica which accepts streams has a lower priority for
             # "application/octet-stream" as the old default "Accept: */*"
             return self.get_streaming_changes()
+        if REPLICA_CONTENT_TYPE_V2 not in acceptable:
+            raise HTTPNotAcceptable
 
         self.verify_primary()
 
@@ -317,9 +337,14 @@ class PrimaryChangelogRequest:
                     threadlog.debug('Changelog timeout %s', raw_size)
                     break
             raw_entry = dumps(all_changes)
-            return Response(body=raw_entry, status=200, headers={
-                "Content-Type": "application/octet-stream",
-                "X-DEVPI-SERIAL": str(devpi_serial)})
+            return Response(
+                body=raw_entry,
+                status=200,
+                headers={
+                    "Content-Type": REPLICA_CONTENT_TYPE_V2,
+                    "X-DEVPI-SERIAL": str(devpi_serial),
+                },
+            )
 
     def get_streaming_changes(self):
         self.verify_primary()
@@ -345,9 +370,12 @@ class PrimaryChangelogRequest:
 
         return Response(
             app_iter=buffered_iterator(iter_changelog_entries()),
-            status=200, headers={
-                "Content-Type": REPLICA_CONTENT_TYPE,
-                "X-DEVPI-SERIAL": str(devpi_serial)})
+            status=200,
+            headers={
+                "Content-Type": REPLICA_CONTENT_TYPE_V2_STREAM,
+                "X-DEVPI-SERIAL": str(devpi_serial),
+            },
+        )
 
     def _wait_for_serial(self, serial):
         keyfs = self.xom.keyfs
@@ -525,9 +553,11 @@ class ReplicaThread:
         with contextlib.ExitStack() as cstack:
             try:
                 self.primary_contacted_at = time.time()
-                headers = (
-                    {"Accept": REPLICA_ACCEPT_STREAMING} if self.use_streaming else {}
-                )
+                headers = {
+                    "Accept": REPLICA_CONTENT_TYPE_V2_STREAM
+                    if self.use_streaming
+                    else REPLICA_CONTENT_TYPE_V2
+                }
                 r = self.http.stream(
                     cstack,
                     "GET",
@@ -620,7 +650,9 @@ class ReplicaThread:
             return False
 
     def handler_multi(self, response):
-        if response.headers.get("content-type", "") == REPLICA_CONTENT_TYPE:
+        content_type = response.headers.get("content-type")
+        use_stream = content_type == REPLICA_CONTENT_TYPE_V2_STREAM
+        if use_stream:
             with contextlib.closing(response):
                 readableiterable = ReadableIterabel(
                     response.iter_bytes(REPLICA_CHUNK_SIZE)
@@ -653,7 +685,7 @@ class ReplicaThread:
         return self.fetch(self.handler_multi, url)
 
     def iter_changes(self, serial, changes):
-        for relpath, (keyname, back_serial, val) in changes.items():
+        for keyname, relpath, back_serial, val in changes:
             yield KeyData(
                 relpath=relpath,
                 keyname=keyname,
