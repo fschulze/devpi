@@ -187,12 +187,16 @@ class TxNotificationThread(Generic[Schema]):
                 self.keyfs.schema.USER,  # type: ignore[attr-defined]
             )(user=user)
             value = key.get_mutable()
+            key = cast(
+                "PTypedKey[dict, DictViewReadonly]",
+                self.keyfs.schema.INDEX,  # type: ignore[attr-defined]
+            )(user=user, index=index)
+            ixconfig = key.get_mutable()
         if not value:
             # the user doesn't exist anymore
             self._get_ixconfig_cache[cache_key] = None
             return None
-        ixconfig = value.get('indexes', {}).get(index)
-        if ixconfig is None:
+        if not ixconfig:
             # the index doesn't exist anymore
             self._get_ixconfig_cache[cache_key] = None
             return None
@@ -686,11 +690,11 @@ class TransactionRootModel(RootModel):
         super().delete_user(username)
 
     def delete_stage(self, username, index):
+        super().delete_stage(username, index)
         key = (username, index)
         if key in self.model_cache:
             assert self.model_cache[key] is not None
             del self.model_cache[key]
-        super().delete_stage(username, index)
 
     def get_user(self, name):
         if name not in self.model_cache:
