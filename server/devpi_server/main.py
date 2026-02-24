@@ -23,6 +23,7 @@ from .log import thread_push_log
 from .log import threadlog
 from .model import BaseStage
 from .model import RootModel
+from .model import Schema
 from .views import apireturn
 from collections import defaultdict
 from devpi_common.request import new_requests_session
@@ -431,16 +432,16 @@ class XOM:
         return FileStore(self.keyfs)
 
     @cached_property
-    def keyfs(self) -> KeyFS:
-        from devpi_server.model import add_keys
+    def keyfs(self) -> KeyFS[Schema]:
         keyfs = KeyFS(
             self.config.server_path,
             self.config.storage,
             io_file_factory=self.config.io_file_factory,
             readonly=self.is_replica(),
             cache_size=self.config.args.keyfs_cache_size,
+            schema=Schema,
         )
-        add_keys(self, keyfs)
+        keyfs.schema.register_key_subscribers(self)
         try:
             keyfs.finalize_init()
         except Exception as e:
