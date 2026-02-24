@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING
 from webtest import TestApp as TApp
 from webtest import TestResponse
 from webtest.forms import Upload
+import httpdate
 import json
 import mimetypes
 import py
@@ -809,9 +810,11 @@ def add_pypistage_mocks(
         mock_simple_projects, raising=False)
 
     def mock_extfile(self, path, content, **kw):
-        headers = {"content-length": len(content),
-                   "content-type": mimetypes.guess_type(path),
-                   "last-modified": "today"}
+        headers = {
+            "content-length": len(content),
+            "content-type": mimetypes.guess_type(path),
+            "last-modified": httpdate.unixtime_to_httpdate(int(time.time())),
+        }
         url = URL(self.mirror_url).joinpath(path)
         return self.xom.http.mockresponse(
             url.url, content=content, headers=headers, **kw

@@ -946,6 +946,20 @@ class TestImportExport:
             assert 'index.html' in archive.namelist()
             assert archive.read("index.html").decode('utf-8') == "<html/>"
 
+    def test_last_modified_as_httpdate(self, impexp):
+        import httpdate
+
+        mapp = impexp.mapp1
+        api = mapp.create_and_use()
+        content = b"content"
+        mapp.upload_file_pypi("he-llo-1.0.tar.gz", content, "he_llo", "1.0")
+
+        impexp.export()
+
+        data = json.loads(impexp.exportdir.joinpath("dataindex.json").read_bytes())
+        (fileinfo,) = data["indexes"][api.stagename]["files"]
+        assert httpdate.is_valid_httpdate(fileinfo["entrymapping"]["last_modified"])
+
     def test_name_mangling_relates_to_issue132(self, impexp):
         mapp1 = impexp.mapp1
         api = mapp1.create_and_use()
