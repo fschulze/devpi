@@ -23,7 +23,6 @@ dependencies = [
     "pyramid>=2",
     "repoze.lru>=0.6",
     "setuptools<=81",  # removed pkg_resources required by pyramid
-    "strenum;python_version<'3.11'",
     "strictyaml",
     "waitress>=1.0.1",
     'ruamel.yaml',
@@ -34,7 +33,7 @@ license-files = ["LICENSE"]
 maintainers = [
     {name = "Florian Schulze", email = "mail@pyfidelity.com"}
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Environment :: Web Environment",
@@ -42,8 +41,6 @@ classifiers = [
     "Intended Audience :: System Administrators",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -94,7 +91,7 @@ devpi-server-status = "devpi_server.views"
 
 [tool.ruff]
 extend = "../pyproject.toml"
-target-version = "py39"
+target-version = "py311"
 
 
 [tool.ruff.format]
@@ -171,6 +168,7 @@ extend-ignore = [
     "ARG001", # maybe cleanup later - unused function argument
     "ARG002", # maybe cleanup later - unused method argument
     "ARG005", # maybe cleanup later - unused lambda argument
+    "ASYNC109", # maybe cleanup later - timeout argument in async function
     "B007", # maybe cleanup later
     "B904", # maybe cleanup later
     "BLE001", # cleanup soon - blind exception

@@ -113,19 +113,17 @@ def wait_for_port(host, port, timeout=60):
 
 
 def find_python3():
-    if sys.version_info >= (3, 9):
+    if sys.version_info >= (3, 11):
         return sys.executable
     locations = [
-        "C:\\Python39-x64\\python.exe",
-        "C:\\Python39\\python.exe",
-        "C:\\Python310-x64\\python.exe",
-        "C:\\Python310\\python.exe",
         "C:\\Python311-x64\\python.exe",
         "C:\\Python311\\python.exe",
         "C:\\Python312-x64\\python.exe",
         "C:\\Python312\\python.exe",
         "C:\\Python313-x64\\python.exe",
         "C:\\Python313\\python.exe",
+        "C:\\Python314-x64\\python.exe",
+        "C:\\Python314\\python.exe",
     ]
     for location in locations:
         if not os.path.exists(location):
@@ -137,11 +135,10 @@ def find_python3():
         except subprocess.CalledProcessError:
             continue
     names = [
-        "python3.9",
-        "python3.10",
         "python3.11",
         "python3.12",
         "python3.13",
+        "python3.14",
         "python3",
     ]
     for name in names:
