@@ -3,7 +3,6 @@ from __future__ import annotations
 from .log import threadlog
 from .markers import notset
 from passlib.context import CryptContext
-import itertools
 import itsdangerous
 
 
@@ -21,38 +20,11 @@ class Auth:
         self.xom = xom
         self.serializer = itsdangerous.TimedSerializer(secret)
         self.hook = xom.config.hook.devpiserver_auth_request
-        self.legacy_hook = xom.config.hook.devpiserver_auth_user
         self.autocreate_users = xom.config.autocreate_users
 
     @property
     def model(self):
         return self.xom.model
-
-    def _legacy_auth(self, authuser, authpassword, is_root, user):
-        results = []
-        if not is_root:
-            userinfo = user.get() if user is not None else None
-            try:
-                results = [
-                    x for x in self.legacy_hook(
-                        userdict=userinfo,
-                        username=authuser,
-                        password=authpassword)
-                    if x["status"] != "unknown"]
-            except AuthException:
-                threadlog.exception("Error in authentication plugin.")
-                return dict(status="nouser")
-        if [x for x in results if x["status"] != "ok"]:
-            # a plugin discovered invalid credentials or returned an invalid
-            # status, so we abort
-            return dict(status="reject")
-        userinfo_list = [x for x in results if x is not False]
-        if userinfo_list and not is_root:
-            # one of the plugins returned valid userinfo
-            # return union of all groups which may be contained in that info
-            groups = (ui.get('groups', []) for ui in userinfo_list)
-            return dict(status="ok", groups=sorted(
-                set(itertools.chain.from_iterable(groups))))
 
     def _autocreate_user(self, authuser):
         if self.model.get_user(authuser) is None:
@@ -90,11 +62,6 @@ class Auth:
                 # plugins may never return from_user_object
                 result.pop('from_user_object', None)
                 return result
-        result = self._legacy_auth(authuser, authpassword, is_root, user)
-        if result is not None:
-            # plugins may never return from_user_object
-            result.pop('from_user_object', None)
-            return result
         if user is None:
             # we got no user model
             return dict(status="nouser")
