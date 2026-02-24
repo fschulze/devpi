@@ -152,9 +152,13 @@ def test_search_root_pypi(mapp, testapp, pypistage):
     indexer = get_indexer(mapp.xom)
     with mapp.xom.keyfs.read_transaction():
         stage = mapp.xom.model.getstage(pypistage.name)
-        indexer.update_projects([
-            ProjectIndexingInfo(stage=stage, name=u'pkg1'),
-            ProjectIndexingInfo(stage=stage, name=u'pkg2')], clear=True)
+        indexer.update_projects(
+            [
+                ProjectIndexingInfo(stage=stage, name="pkg1", num_names=2),
+                ProjectIndexingInfo(stage=stage, name="pkg2", num_names=2),
+            ],
+            clear=True,
+        )
     indexer.indexer_thread.wait()
     r = testapp.xget(200, '/+search?query=pkg')
     search_results = r.html.select('.searchresults > dl > dt a')
@@ -289,9 +293,13 @@ def test_pip_search(mapp, pypistage, testapp):
     indexer.indexer_thread.wait()
     with mapp.xom.keyfs.read_transaction():
         stage = mapp.xom.model.getstage(pypistage.name)
-        indexer.update_projects([
-            ProjectIndexingInfo(stage=stage, name=u'pkg1'),
-            ProjectIndexingInfo(stage=stage, name=u'pkg2')], clear=True)
+        indexer.update_projects(
+            [
+                ProjectIndexingInfo(stage=stage, name="pkg1", num_names=2),
+                ProjectIndexingInfo(stage=stage, name="pkg2", num_names=2),
+            ],
+            clear=True,
+        )
     mapp.set_versiondata({
         "name": "pkg2",
         "version": "2.7",

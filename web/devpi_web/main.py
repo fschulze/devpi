@@ -283,9 +283,11 @@ def devpiserver_mirror_initialnames(stage, projectnames):
         # since devpi-server 6.6.0 mirrors return a mapping where
         # the un-normalized names are in the values
         projectnames = projectnames.values()
+    num_names = len(projectnames)
     ix.update_projects(
-        ProjectIndexingInfo(stage=stage, name=name)
-        for name in projectnames)
+        ProjectIndexingInfo(stage=stage, name=name, num_names=num_names)
+        for name in projectnames
+    )
     threadlog.info("finished mirror indexing operation")
 
 
@@ -314,14 +316,14 @@ def delete_project(stage, name):
     if stage is None:
         return
     ix = get_indexer(stage.xom)
-    ix.delete_projects([ProjectIndexingInfo(stage=stage, name=name)])
+    ix.delete_projects([ProjectIndexingInfo(stage=stage, name=name, num_names=1)])
 
 
 def index_project(stage, name):
     if stage is None:
         return
     ix = get_indexer(stage.xom)
-    ix.update_projects([ProjectIndexingInfo(stage=stage, name=name)])
+    ix.update_projects([ProjectIndexingInfo(stage=stage, name=name, num_names=1)])
 
 
 @devpiserver_hookimpl
