@@ -167,7 +167,7 @@ def test_dont_index_deleted_mirror(mapp, monkeypatch, simpypi, testapp):
     assert calls == ["delete"]
 
 
-class FakeStage(object):
+class FakeStage:
     def __init__(self, index_type):
         self.ixconfig = dict(type=index_type)
         self.name = index_type
@@ -176,6 +176,9 @@ class FakeStage(object):
 
     def get_last_project_change_serial_perstage(self, project, at_serial=None):  # noqa: ARG002
         return self.serials.get(project, self.serial)
+
+    def is_project_cached(self, project):
+        return project in self.serials
 
 
 class TestIndexingSharedData:

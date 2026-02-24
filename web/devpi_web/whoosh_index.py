@@ -295,24 +295,28 @@ class IndexingSharedData(object):
             if project.is_from_mirror:
                 # we find the last serial the project was changed to avoid re-indexing
                 name = normalize_name(project.name)
-                project_serial = project.stage.get_last_project_change_serial_perstage(
-                    name, at_serial=at_serial)
                 # mirrors have no docs, so we can shortcut
-                path = '/%s/%s' % (project.indexname, name)
-                existing = None
-                doc_num = searcher.document_number(path=path)
-                if doc_num is not None:
-                    existing = searcher.stored_fields(doc_num)
-                if existing:
-                    existing_serial = existing.get('serial', -1)
-                    if existing_serial >= project_serial:
+                doc_num = searcher.document_number(path=f"/{project.indexname}/{name}")
+                existing = None if doc_num is None else searcher.stored_fields(doc_num)
+                existing_serial = None if existing is None else existing.get("serial")
+                if existing_serial is not None:
+                    if not project.stage.is_project_cached(name):
+                        # projects with no downloads only have basic info
+                        # which doesn't need to be updated
                         continue
-                # we use at_serial here, because indexing is always done
-                # with the latest metadata
-                key = (project.indexname, at_serial)
-                _projects = mirror_projects.setdefault(key, [])
+                    project_serial = (
+                        project.stage.get_last_project_change_serial_perstage(
+                            name, at_serial=at_serial
+                        )
+                    )
+                    if existing_serial >= project_serial:
+                        # the stored info is current
+                        continue
+                _projects = mirror_projects.setdefault(project.indexname, [])
                 _projects.append(project)
                 if len(_projects) >= self.QUEUE_MAX_NAMES:
+                    # we use at_serial here, because indexing is always done
+                    # with the latest metadata
                     self.extend(_projects, at_serial)
                     _projects.clear()
             else:
@@ -321,9 +325,9 @@ class IndexingSharedData(object):
                 # not available when indexing while replicating like doczips
                 self.add(project, at_serial)
             queued = next(queued_counter)
-        for (indexname, serial), _projects in mirror_projects.items():
-            self.extend(_projects, serial)
-        log.info("Processed a total of %s projects and queued %s" % (processed, queued))
+        for _projects in mirror_projects.values():
+            self.extend(_projects, at_serial)
+        log.info("Processed a total of %s projects and queued %s", processed, queued)
 
     def is_in_future(self, ts):
         return ts > time.time()
