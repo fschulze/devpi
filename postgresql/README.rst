@@ -27,10 +27,10 @@ Depending on your PostgreSQL setup you have to create a user and grant it permis
     CREATE ROLE devpi WITH LOGIN;
     GRANT CREATE, CONNECT ON DATABASE devpi TO devpi;
 
-Upon first initialization of ``devpi-server`` use ``--storage pg8000`` to select the PostgreSQL backend.
+Upon first initialization of ``devpi-server`` use ``--storage sqla_pg8000`` to select the PostgreSQL backend.
 
 By default it'll use the ``devpi`` database on ``localhost`` port ``5432``.
-To change that, use ``storage pg8000:host=example.com,port=5433,database=devpi_prod``.
+To change that, use ``storage sqla_pg8000:host=example.com,port=5433,database=devpi_prod``.
 The possible settings are: ``database``, ``host``, ``port``, ``unix_sock``, ``user``, ``password``, ``ssl_check_hostname``, ``ssl_ca_certs``, ``ssl_certfile`` and ``ssl_keyfile``.
 
 If any of the "ssl" settings is specified, a secure Postgres connection will be made. Typically, the name of a file containing a certificate authority certificate will need to be specified via ``ssl_ca_certs``. By default, the server's hostname will be checked against the certificate it presents. Optionally disable this behavior with the ``ssl_check_hostname`` setting.  Use ``ssl_certfile`` and ``ssl_keyfile`` to enable certificate-based client authentication.
