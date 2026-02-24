@@ -460,7 +460,7 @@ class BaseFileEntry:
     _hash_spec = metaprop("hash_spec")  # e.g. "md5=120938012"
     _hashes = metaprop("hashes")  # e.g. dict(md5="120938012")
     _meta: DictViewReadonly | dict | NoDefault
-    key: TypedKey[dict]
+    key: TypedKey[dict, DictViewReadonly]
     last_modified = metaprop("last_modified")
     url = metaprop("url")
     project = metaprop("project")
@@ -468,7 +468,7 @@ class BaseFileEntry:
 
     def __init__(
         self,
-        key: TypedKey[dict],
+        key: TypedKey[dict, DictViewReadonly],
         meta: DictViewReadonly | dict | Deleted | NoDefault = _nodefault,
     ) -> None:
         self.key = key

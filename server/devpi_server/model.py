@@ -47,6 +47,8 @@ if TYPE_CHECKING:
     from .main import XOM
     from .markers import NotSet
     from .normalized import NormalizedName
+    from .readonly import DictViewReadonly
+    from .readonly import SetViewReadonly
     from collections.abc import Sequence
     from devpi_common.metadata import Version
     from typing import Any
@@ -171,7 +173,9 @@ class RootModel:
         self.keyfs = xom.keyfs
 
     def create_user(self, username, password, **kwargs):
-        userlist = cast("TypedKey[set]", self.keyfs.USERLIST).get_mutable()
+        userlist = cast(
+            "TypedKey[set, SetViewReadonly]", self.keyfs.USERLIST
+        ).get_mutable()
         if username in userlist:
             raise InvalidUser("username '%s' already exists" % username)
         if not is_valid_name(username):
@@ -182,7 +186,7 @@ class RootModel:
         kwargs.update(created=strftime("%Y-%m-%dT%H:%M:%SZ", gmtime()))
         user._modify(password=password, **kwargs)
         userlist.add(username)
-        cast("TypedKey[set]", self.keyfs.USERLIST).set(userlist)
+        cast("TypedKey[set, SetViewReadonly]", self.keyfs.USERLIST).set(userlist)
         if "email" in kwargs:
             threadlog.info("created user %r with email %r" % (username, kwargs["email"]))
         else:
@@ -212,7 +216,9 @@ class RootModel:
         return stage
 
     def delete_user(self, username):
-        with cast("TypedKey[set]", self.keyfs.USERLIST).update() as userlist:
+        with cast(
+            "TypedKey[set, SetViewReadonly]", self.keyfs.USERLIST
+        ).update() as userlist:
             userlist.remove(username)
 
     def delete_stage(self, username, index):
@@ -237,7 +243,9 @@ class RootModel:
     def get_userlist(self):
         return [
             User(self, name)
-            for name in cast("TypedKey[set]", self.keyfs.USERLIST).get()
+            for name in cast(
+                "TypedKey[set, SetViewReadonly]", self.keyfs.USERLIST
+            ).get()
         ]
 
     def get_usernames(self):
@@ -374,8 +382,10 @@ class User:
         self.name = name
 
     @property
-    def key(self) -> TypedKey[dict]:
-        return cast("PTypedKey[dict]", self.keyfs.USER)(user=self.name)
+    def key(self) -> TypedKey[dict, DictViewReadonly]:
+        return cast("PTypedKey[dict, DictViewReadonly]", self.keyfs.USER)(
+            user=self.name
+        )
 
     def get_cleaned_config(self, **kwargs):
         result = {}
@@ -715,9 +725,9 @@ class BaseStage:
         # the following attributes are per-xom singletons
         self.keyfs = xom.keyfs
         self.filestore = xom.filestore
-        self.key_projects = cast("PTypedKey[set[str]]", self.keyfs.PROJNAMES)(
-            user=username, index=index
-        )
+        self.key_projects = cast(
+            "PTypedKey[set[str], SetViewReadonly[str]]", self.keyfs.PROJNAMES
+        )(user=username, index=index)
 
     def __repr__(self):
         return f"<{self.__class__.__name__} {self.name}>"
@@ -829,8 +839,8 @@ class BaseStage:
     def delete(self):
         self.model.delete_stage(self.username, self.index)
 
-    def key_projsimplelinks(self, project: str) -> TypedKey[dict]:
-        return cast("PTypedKey[dict]", self.keyfs.PROJSIMPLELINKS)(
+    def key_projsimplelinks(self, project: str) -> TypedKey[dict, DictViewReadonly]:
+        return cast("PTypedKey[dict, DictViewReadonly]", self.keyfs.PROJSIMPLELINKS)(
             user=self.username, index=self.index, project=normalize_name(project)
         )
 
@@ -1379,8 +1389,10 @@ class PrivateStage(BaseStage):
         validate_metadata(dict(metadata))
         self._set_versiondata(metadata)
 
-    def key_projversions(self, project: NormalizedName | str) -> TypedKey[set]:
-        return cast("PTypedKey[set]", self.keyfs.PROJVERSIONS)(
+    def key_projversions(
+        self, project: NormalizedName | str
+    ) -> TypedKey[set, SetViewReadonly]:
+        return cast("PTypedKey[set, SetViewReadonly]", self.keyfs.PROJVERSIONS)(
             user=self.username,
             index=self.index,
             project=normalize_name(project),
@@ -1388,8 +1400,8 @@ class PrivateStage(BaseStage):
 
     def key_projversion(
         self, project: NormalizedName | str, version: str
-    ) -> TypedKey[dict]:
-        return cast("PTypedKey[dict]", self.keyfs.PROJVERSION)(
+    ) -> TypedKey[dict, DictViewReadonly]:
+        return cast("PTypedKey[dict, DictViewReadonly]", self.keyfs.PROJVERSION)(
             user=self.username,
             index=self.index,
             project=normalize_name(project),
