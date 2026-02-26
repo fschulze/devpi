@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 [project]
 dynamic = ["version", "readme"]
 name = "devpi-server"
-description = "devpi-server: reliable, private, and pypi.org caching server"
+description = "devpi-server: backend for hosting private package indexes and PyPI on-demand mirrors"
 dependencies = [
     "argon2-cffi",
     "attrs>=22.2.0",
