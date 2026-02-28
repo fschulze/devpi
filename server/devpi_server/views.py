@@ -985,7 +985,7 @@ class PyPIView:
         keep_unknown = False
         if isinstance(json, list):
             used_ops = set()
-            ixconfig = stage.get()
+            ixconfig = stage.ixconfig_mutable
             for op, key, value in get_actions(json):
                 used_ops.add(op)
                 if op == 'del':
