@@ -6,6 +6,18 @@ pytestmark = [pytest.mark.notransaction]
 
 
 class TestStatus:
+    def test_status_cache(self, testapp):
+        r = testapp.get_json("/+status", status=200)
+        assert r.status_code == 200
+        metrics = r.json["result"]["metrics"]
+        metric_names = {x[0] for x in metrics}
+        for cache_name in (
+            "devpi_server_changelog_cache",
+            "devpi_server_relpath_cache",
+        ):
+            for name in ("evictions", "hits", "items", "lookups", "misses", "size"):
+                assert f"{cache_name}_{name}" in metric_names
+
     def test_status_primary(self, testapp):
         r = testapp.get_json("/+status", status=200)
         assert r.status_code == 200
