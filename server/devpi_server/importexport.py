@@ -327,7 +327,9 @@ class IndexDump:
             relpath = self.exporter.copy_file(
                 tox_link.entry,
                 self.basedir.joinpath(
-                    linkstore.project, reflink._hash_spec, tox_link.basename
+                    linkstore.project,
+                    reflink.best_available_hash_spec,
+                    tox_link.basename,
                 ),
             )
             self.add_filedesc(

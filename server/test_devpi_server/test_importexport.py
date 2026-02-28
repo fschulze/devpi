@@ -2,7 +2,6 @@ from contextlib import contextmanager
 from devpi_common.archive import Archive
 from devpi_common.archive import zip_dict
 from devpi_common.metadata import Version
-from devpi_common.types import parse_hash_spec
 from devpi_common.url import URL
 from devpi_server.config import hookimpl
 from devpi_server.filestore import get_hashes
@@ -305,11 +304,8 @@ class TestImportExport:
         impexp.export()
         with impexp.update_dataindex_json() as data:
             (filedata,) = data["indexes"][api1.stagename]["files"]
-            assert (
-                filedata["entrymapping"].pop("hash_spec") == hashes.get_default_spec()
-            )
-            filedata["entrymapping"].pop("hashes")
-            filedata["entrymapping"]["md5"] = "foo"
+            assert filedata["entrymapping"].pop("hashes") == hashes
+            filedata["entrymapping"]["hashes"] = dict(md5="foo")
         with pytest.raises(
             Fatal,
             match=re.escape(
@@ -644,9 +640,7 @@ class TestImportExport:
         r = mapp1.upload_toxresult("/%s" % path, toxresult_dump)
         toxresult_link = mapp1.getjson(f'/{r.json["result"]}')["result"]
         last_modified = toxresult_link["last_modified"]
-        (hash_algo, hash_value) = parse_hash_spec(toxresult_link["hash_spec"])
         assert toxresult_link["hashes"] == toxresult_hashes
-        assert hash_value == toxresult_hash
         sleep(1.5)
         impexp.export()
         mapp2 = impexp.new_import()
