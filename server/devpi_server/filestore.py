@@ -42,6 +42,7 @@ if TYPE_CHECKING:
     from .keyfs import KeyFS
     from .keyfs_types import LocatedKey
     from .keyfs_types import RelPath
+    from .keyfs_types import ULIDKey
     from .model import Schema
     from .normalized import NormalizedName
     from .readonly import SetViewReadonly
@@ -552,7 +553,7 @@ class BaseFileEntry:
     BadGateway = BadGateway
     _hashes = metaprop("hashes")  # e.g. dict(md5="120938012")
     _meta: DictViewReadonly | dict | NoDefault
-    key: LocatedKey[dict, DictViewReadonly]
+    key: LocatedKey[dict, DictViewReadonly] | ULIDKey[dict, DictViewReadonly]
     last_modified = metaprop("last_modified")
     url = metaprop("url")
     project = metaprop("project")
@@ -560,7 +561,7 @@ class BaseFileEntry:
 
     def __init__(
         self,
-        key: LocatedKey[dict, DictViewReadonly],
+        key: LocatedKey[dict, DictViewReadonly] | ULIDKey[dict, DictViewReadonly],
         meta: DictViewReadonly | dict | Absent | Deleted | NoDefault = _nodefault,
     ) -> None:
         self.key = key
@@ -614,6 +615,10 @@ class BaseFileEntry:
     @property
     def best_available_hash_value(self):
         return self.hashes.best_available_value
+
+    @property
+    def deleted_or_never_fetched(self):
+        return self.last_modified is None
 
     @property
     def hashes(self) -> Digests:
