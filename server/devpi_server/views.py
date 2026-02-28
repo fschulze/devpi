@@ -1250,7 +1250,7 @@ class PyPIView:
                     pass
                 # re-get entry for current metadata which might have
                 # added hashes if a file had to be streamed from a remote
-                _entry = self.xom.filestore.get_file_entry(entry.relpath)
+                _entry = self.xom.filestore.get_file_entry(entry.abspath)
                 assert _entry is not None
                 entry = _entry
             with entry.file_open_read() as f:
