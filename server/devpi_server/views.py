@@ -1673,13 +1673,13 @@ class PyPIView:
                  permission="del_entry",
                  request_method="DELETE")
     def del_pkg(self) -> None:
-        stage = self.context.stage
+        stage = cast("BaseIndex", self.context.stage)
         force = 'force' in self.request.params
         if not stage.ixconfig["volatile"] and not force:
             abort(self.request, 403, "cannot delete version on non-volatile index")
         relpath = self.request.path_info.strip("/")
         filestore = self.xom.filestore
-        entry = filestore.get_file_entry(relpath)
+        entry = filestore.get_mutable_file_entry(relpath)
         if entry is None:
             abort(self.request, 404, "package %r doesn't exist" % relpath)
         elif not entry.meta:

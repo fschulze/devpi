@@ -32,6 +32,7 @@ from devpi_common.types import cached_property
 from devpi_server.config import traced_pluggy_call
 from devpi_server.filestore import AbsPath
 from devpi_server.filestore import FileEntry
+from devpi_server.filestore import MutableFileEntry
 from devpi_server.log import threadlog
 from devpi_server.markers import Absent
 from devpi_server.markers import Deleted
@@ -41,6 +42,7 @@ from devpi_server.readonly import ensure_deeply_readonly
 from lazy import lazy
 from pyramid.authorization import Allow
 from typing import TYPE_CHECKING
+from typing import TypeVar
 from typing import overload
 import getpass
 import json
@@ -92,6 +94,9 @@ def run_passwd(root, username):
         return 1
     user.modify(password=pwd)
     return None
+
+
+F = TypeVar("F", FileEntry, MutableFileEntry)
 
 
 class BaseIndex:
@@ -300,6 +305,9 @@ class BaseIndex:
     def delete(self) -> None:
         self.model.delete_stage(self.username, self.index)
 
+    def del_entry(self, entry: MutableFileEntry, *, cleanup: bool = True) -> None:
+        raise NotImplementedError
+
     def get_releaselinks(self, project):
         # compatibility access method used by devpi-web and tests
         project = normalize_name(project)
@@ -358,9 +366,9 @@ class BaseIndex:
             for entrypath in entrypaths
         ]
 
-    def get_entries_for_keys(
-        self, keys: Iterable[LocatedKey | None]
-    ) -> list[FileEntry | None]:
+    def _get_entries_for_keys(
+        self, cls: type[F], keys: Iterable[LocatedKey | None]
+    ) -> list[F | None]:
         key_to_ulidkey: dict[LocatedKey, ULIDKey | Absent | Deleted] = dict(
             self.keyfs.tx.resolve_keys(
                 (k for k in keys if k is not None),
@@ -374,7 +382,7 @@ class BaseIndex:
             if key is None
             or (ulid_key := key_to_ulidkey.get(key)) is None
             or isinstance(ulid_key, (Absent, Deleted))
-            else FileEntry(ulid_key)
+            else cls(ulid_key)
             for key in keys
         ]
 
@@ -382,7 +390,13 @@ class BaseIndex:
         self, entrypaths: Iterable[str]
     ) -> list[FileEntry | None]:
         keys = self.get_keys_for_entrypaths(entrypaths)
-        return self.get_entries_for_keys(keys)
+        return self._get_entries_for_keys(FileEntry, keys)
+
+    def get_mutable_entries_for_entrypaths(
+        self, entrypaths: Iterable[str]
+    ) -> list[MutableFileEntry | None]:
+        keys = self.get_keys_for_entrypaths(entrypaths)
+        return self._get_entries_for_keys(MutableFileEntry, keys)
 
     def get_link_from_entrypath(self, entrypath):
         relpath = entrypath.rsplit("#", 1)[0]
