@@ -259,6 +259,11 @@ class TestImportExport:
                     assert import_(argv=argv) == 0
                 return makemapp(options=["--serverdir", serverdir])
 
+            def load_dataindex_json(self):
+                path = self.exportdir.joinpath("dataindex.json")
+                with path.open() as f:
+                    return json.load(f)
+
             def new_import(self, options=(), plugin=None):
                 from devpi_server.config import get_pluginmanager
                 from devpi_server.importexport import import_
@@ -847,6 +852,20 @@ class TestImportExport:
             archive = Archive(BytesIO(doczip))
             assert 'index.html' in archive.namelist()
             assert archive.read("index.html").decode('utf-8') == "<html/>"
+
+    def test_last_modified_as_httpdate(self, impexp):
+        import httpdate
+
+        mapp = impexp.mapp1
+        api = mapp.create_and_use()
+        content = b"content"
+        mapp.upload_file_pypi("he-llo-1.0.tar.gz", content, "he_llo", "1.0")
+
+        impexp.export()
+
+        data = impexp.load_dataindex_json()
+        (fileinfo,) = data["indexes"][api.stagename]["files"]
+        assert httpdate.is_valid_httpdate(fileinfo["entrymapping"]["last_modified"])
 
     def test_name_mangling_relates_to_issue132(self, impexp):
         mapp1 = impexp.mapp1
