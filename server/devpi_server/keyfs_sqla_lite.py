@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from contextlib import AbstractContextManager
     from pathlib import Path
     from pyramid.request import Request
+    from typing import Any
     from typing import Literal
 
 
@@ -146,7 +147,7 @@ def devpiserver_describe_storage_backend(settings: dict) -> StorageInfo:
 
 @hookimpl
 def devpiserver_metrics(request: Request) -> list[tuple[str, str, object]]:
-    result: list[tuple[str, str, object]] = []
+    result: list[tuple[str, str, Any]] = []
     xom = request.registry["xom"]
     storage = xom.keyfs._storage
     if isinstance(storage, Storage):
