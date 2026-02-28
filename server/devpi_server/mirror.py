@@ -887,7 +887,9 @@ class MirrorStage(BaseStage):
     @cached_property
     def http(self) -> MirrorHTTPClient:
         if self.xom.is_replica():
-            get_extra_headers = self.xom.replica_thread.http.get_extra_headers
+            get_extra_headers = (
+                self.xom.replica_thread.connection.http.get_extra_headers
+            )
         else:
 
             def get_extra_headers(extra_headers):
