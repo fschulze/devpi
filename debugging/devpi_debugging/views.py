@@ -111,7 +111,8 @@ def keyfs_changelog_view(request: Request) -> dict:
                         prev_formatted = pformat(prev_v[2])
             formatted = pformat(v[2])
             diffed = diff(prev_formatted, formatted)
-            (_, latest_serial) = conn.db_read_typedkey(k)
+            key = xom.keyfs.get_key_instance(v[0], k)
+            latest_serial = conn.last_key_serial(key)
             changes[k] = dict(
                 name=v[0],
                 type=html_key_types_map[v[0]],
