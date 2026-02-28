@@ -3,8 +3,7 @@ from __future__ import annotations
 from .keyfs_types import KeyType
 from .keyfs_types import KeyTypeRO
 from .keyfs_types import LocatedKey
-from .keyfs_types import NamedKey
-from .keyfs_types import NamedKeyFactory
+from .keyfs_types import PatternedKey
 from inspect import getmembers
 from typing import Generic
 from typing import TYPE_CHECKING
@@ -32,25 +31,25 @@ class KeyFSSchemaMeta(type):
     def decl_anonymous_key(
         cls,
         key_name: str,
-        parent_key: NamedKeyDescriptor | NamedKeyFactoryDescriptor,
+        parent_key: PatternedKeyDescriptor,
         key_type: type[KeyType],
         key_rotype: type[KeyTypeRO],
-    ) -> NamedKeyDescriptor[KeyType, KeyTypeRO]: ...
+    ) -> PatternedKeyDescriptor[KeyType, KeyTypeRO]: ...
 
     @classmethod
     def decl_anonymous_key(
         cls,
         key_name: str,
-        parent_key: NamedKeyDescriptor | NamedKeyFactoryDescriptor | None,
+        parent_key: PatternedKeyDescriptor | None,
         key_type: type[KeyType],
         key_rotype: type[KeyTypeRO],
     ) -> (
         LocatedKeyDescriptor[KeyType, KeyTypeRO]
-        | NamedKeyDescriptor[KeyType, KeyTypeRO]
+        | PatternedKeyDescriptor[KeyType, KeyTypeRO]
     ):
         if parent_key is None:
             return LocatedKeyDescriptor(key_name, "", "", key_type, key_rotype)
-        return NamedKeyDescriptor(key_name, "", parent_key, key_type, key_rotype)
+        return PatternedKeyDescriptor(key_name, "", parent_key, key_type, key_rotype)
 
     @classmethod
     def decl_located_key(
@@ -64,28 +63,15 @@ class KeyFSSchemaMeta(type):
         return LocatedKeyDescriptor(key_name, location, name, key_type, key_rotype)
 
     @classmethod
-    def decl_named_key(
+    def decl_patterned_key(
         cls,
         key_name: str,
         pattern_or_name: str,
-        parent_key: NamedKeyDescriptor | NamedKeyFactoryDescriptor,
+        parent_key: PatternedKeyDescriptor | None,
         key_type: type[KeyType],
         key_rotype: type[KeyTypeRO],
-    ) -> NamedKeyDescriptor[KeyType, KeyTypeRO]:
-        return NamedKeyDescriptor(
-            key_name, pattern_or_name, parent_key, key_type, key_rotype
-        )
-
-    @classmethod
-    def decl_named_key_factory(
-        cls,
-        key_name: str,
-        pattern_or_name: str,
-        parent_key: NamedKeyDescriptor | NamedKeyFactoryDescriptor | None,
-        key_type: type[KeyType],
-        key_rotype: type[KeyTypeRO],
-    ) -> NamedKeyFactoryDescriptor[KeyType, KeyTypeRO]:
-        return NamedKeyFactoryDescriptor(
+    ) -> PatternedKeyDescriptor[KeyType, KeyTypeRO]:
+        return PatternedKeyDescriptor(
             key_name, pattern_or_name, parent_key, key_type, key_rotype
         )
 
@@ -107,6 +93,8 @@ class LocatedKeyDescriptor(Generic[KeyType, KeyTypeRO]):
         key_type: type[KeyType],
         key_rotype: type[KeyTypeRO],
     ) -> None:
+        assert "{" not in name, name
+        assert "{" not in location, location
         self.key_name = validated_key_name(key_name)
         self.location = location
         self.name = name
@@ -117,88 +105,42 @@ class LocatedKeyDescriptor(Generic[KeyType, KeyTypeRO]):
         self, instance: KeyFSSchema, owner: type[KeyFSSchema] | None = None
     ) -> LocatedKey[KeyType, KeyTypeRO]:
         key: LocatedKey[KeyType, KeyTypeRO] = LocatedKey(
-            instance.keyfs, self.key_name, self.location, self.name, self.key_type
+            instance.keyfs, self.key_name, f"{self.location}/{self.name}", self.key_type
         )
         # cache attribute
         instance.__dict__[self.key_name] = key
         return key
 
 
-class NamedKeyDescriptor(Generic[KeyType, KeyTypeRO]):
-    __slots__ = ("key_name", "key_rotype", "key_type", "parent_key", "pattern_or_name")
+class PatternedKeyDescriptor(Generic[KeyType, KeyTypeRO]):
+    __slots__ = ("key_name", "key_rotype", "key_type", "parent_key", "pattern")
 
     def __init__(
         self,
         key_name: str,
-        pattern_or_name: str,
-        parent_key: NamedKey
-        | NamedKeyDescriptor
-        | NamedKeyFactory
-        | NamedKeyFactoryDescriptor,
+        pattern: str,
+        parent_key: PatternedKey | PatternedKeyDescriptor | None,
         key_type: type[KeyType],
         key_rotype: type[KeyTypeRO],
     ) -> None:
-        assert "{" not in pattern_or_name
+        assert "{" in pattern or not pattern, pattern
+        assert not isinstance(parent_key, LocatedKey)
         self.key_name = validated_key_name(key_name)
-        self.pattern_or_name = pattern_or_name
+        self.pattern = pattern
         self.parent_key = parent_key
         self.key_type = key_type
         self.key_rotype = key_rotype
 
     def __get__(
         self, instance: KeyFSSchema, owner: type[KeyFSSchema]
-    ) -> NamedKey[KeyType, KeyTypeRO]:
+    ) -> PatternedKey[KeyType, KeyTypeRO]:
         parent_key = self.parent_key
-        if isinstance(parent_key, NamedKeyDescriptor):
+        if isinstance(parent_key, PatternedKeyDescriptor):
             parent_key = parent_key.__get__(instance, owner)
-        if isinstance(parent_key, NamedKeyFactoryDescriptor):
-            parent_key = parent_key.__get__(instance, owner)
-        key: NamedKey[KeyType, KeyTypeRO] = NamedKey(
+        key: PatternedKey[KeyType, KeyTypeRO] = PatternedKey(
             instance.keyfs,
             self.key_name,
-            self.pattern_or_name,
-            parent_key,
-            self.key_type,
-        )
-        # cache attribute
-        instance.__dict__[self.key_name] = key
-        return key
-
-
-class NamedKeyFactoryDescriptor(Generic[KeyType, KeyTypeRO]):
-    __slots__ = ("key_name", "key_rotype", "key_type", "parent_key", "pattern_or_name")
-
-    def __init__(
-        self,
-        key_name: str,
-        pattern_or_name: str,
-        parent_key: NamedKey
-        | NamedKeyDescriptor
-        | NamedKeyFactory
-        | NamedKeyFactoryDescriptor
-        | None,
-        key_type: type[KeyType],
-        key_rotype: type[KeyTypeRO],
-    ) -> None:
-        assert "{" in pattern_or_name
-        self.key_name = validated_key_name(key_name)
-        self.pattern_or_name = pattern_or_name
-        self.parent_key = parent_key
-        self.key_type = key_type
-        self.key_rotype = key_rotype
-
-    def __get__(
-        self, instance: KeyFSSchema, owner: type[KeyFSSchema]
-    ) -> NamedKeyFactory[KeyType, KeyTypeRO]:
-        parent_key = self.parent_key
-        if isinstance(parent_key, NamedKeyDescriptor):
-            parent_key = parent_key.__get__(instance, owner)
-        if isinstance(parent_key, NamedKeyFactoryDescriptor):
-            parent_key = parent_key.__get__(instance, owner)
-        key: NamedKeyFactory[KeyType, KeyTypeRO] = NamedKeyFactory(
-            instance.keyfs,
-            self.key_name,
-            self.pattern_or_name,
+            self.pattern,
             parent_key,
             self.key_type,
         )
@@ -211,9 +153,9 @@ class KeyFSSchema(metaclass=KeyFSSchemaMeta):
     def __init__(self, keyfs: KeyFS):
         self.keyfs = keyfs
 
-    def __iter__(self) -> Iterator[LocatedKey | NamedKey]:
+    def __iter__(self) -> Iterator[LocatedKey | PatternedKey]:
         for _name, key in getmembers(
-            self, lambda x: isinstance(x, (LocatedKey, NamedKey, NamedKeyFactory))
+            self, lambda x: isinstance(x, (LocatedKey, PatternedKey))
         ):
             yield key
 
@@ -230,18 +172,18 @@ class KeyFSSchema(metaclass=KeyFSSchemaMeta):
     def anonymous_key(
         self,
         key_name: str,
-        parent_key: NamedKey | NamedKeyFactory,
+        parent_key: PatternedKey,
         key_type: type[KeyType],
         key_rotype: type[KeyTypeRO],
-    ) -> NamedKey[KeyType, KeyTypeRO]: ...
+    ) -> PatternedKey[KeyType, KeyTypeRO]: ...
 
     def anonymous_key(
         self,
         key_name: str,
-        parent_key: NamedKey | NamedKeyFactory | None,
+        parent_key: PatternedKey | None,
         key_type: type[KeyType],
         key_rotype: type[KeyTypeRO],
-    ) -> LocatedKey[KeyType, KeyTypeRO] | NamedKey[KeyType, KeyTypeRO]:
+    ) -> LocatedKey[KeyType, KeyTypeRO] | PatternedKey[KeyType, KeyTypeRO]:
         assert not hasattr(self, key_name)
         if parent_key is None:
             setattr(
@@ -255,7 +197,7 @@ class KeyFSSchema(metaclass=KeyFSSchemaMeta):
             setattr(
                 self,
                 key_name,
-                NamedKeyDescriptor(
+                PatternedKeyDescriptor(
                     key_name, "", parent_key, key_type, key_rotype
                 ).__get__(self, self.__class__),
             )
@@ -281,40 +223,20 @@ class KeyFSSchema(metaclass=KeyFSSchemaMeta):
         self.keyfs._storage.register_key(key)
         return key
 
-    def named_key(
+    def patterned_key(
         self,
         key_name: str,
-        pattern_or_name: str,
-        parent_key: NamedKey | NamedKeyFactory,
+        pattern: str,
+        parent_key: PatternedKey | None,
         key_type: type[KeyType],
         key_rotype: type[KeyTypeRO],
-    ) -> NamedKey[KeyType, KeyTypeRO]:
+    ) -> PatternedKey[KeyType, KeyTypeRO]:
         assert not hasattr(self, key_name)
         setattr(
             self,
             key_name,
-            NamedKeyDescriptor(
-                key_name, pattern_or_name, parent_key, key_type, key_rotype
-            ).__get__(self, self.__class__),
-        )
-        key = getattr(self, key_name)
-        self.keyfs._storage.register_key(key)
-        return key
-
-    def named_key_factory(
-        self,
-        key_name: str,
-        pattern_or_name: str,
-        parent_key: NamedKey | NamedKeyFactory | None,
-        key_type: type[KeyType],
-        key_rotype: type[KeyTypeRO],
-    ) -> NamedKeyFactory[KeyType, KeyTypeRO]:
-        assert not hasattr(self, key_name)
-        setattr(
-            self,
-            key_name,
-            NamedKeyFactoryDescriptor(
-                key_name, pattern_or_name, parent_key, key_type, key_rotype
+            PatternedKeyDescriptor(
+                key_name, pattern, parent_key, key_type, key_rotype
             ).__get__(self, self.__class__),
         )
         key = getattr(self, key_name)
