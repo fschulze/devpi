@@ -25,6 +25,7 @@ from .keyfs_types import KeyTypeRO
 from .keyfs_types import LocatedKey
 from .keyfs_types import PatternedKey
 from .keyfs_types import Record
+from .keyfs_types import RelPath
 from .keyfs_types import SearchKey
 from .keyfs_types import ULID
 from .keyfs_types import ULIDKey
@@ -57,8 +58,8 @@ import time
 
 
 if TYPE_CHECKING:
+    from .filestore import AbsPath
     from .interfaces import IIOFile
-    from .keyfs_types import RelPath
     from .keyfs_types import StorageInfo
     from .log import TagLogger
     from .main import XOM
@@ -417,7 +418,7 @@ class KeyFS(Generic[Schema]):
                 return conn.iter_rel_renames(serial)
 
             def iter_file_path_infos(
-                relpaths: Iterable[RelPath],
+                abspaths: Iterable[AbsPath],
             ) -> Iterable[FilePathInfo]:
                 resolved: dict[str, ULIDKey] = {}
 
@@ -444,11 +445,11 @@ class KeyFS(Generic[Schema]):
                     resolved[location] = result
                     return result
 
-                for relpath in relpaths:
+                for abspath in abspaths:
                     digests = Digests()
                     if (
                         key := self.match_key(
-                            relpath,
+                            abspath,
                             self.schema.FILE_NOHASH,  # type: ignore[attr-defined]
                             self.schema.FILE,  # type: ignore[attr-defined]
                         )
@@ -470,7 +471,9 @@ class KeyFS(Generic[Schema]):
                             )
                         if isinstance(val := key_data.value, (dict, DictViewReadonly)):
                             digests = Digests(get_mutable_deepcopy(val["hashes"]))
-                    yield FilePathInfo(relpath, digests.get_default_value(None))
+                    yield FilePathInfo(
+                        RelPath(abspath), digests.get_default_value(None)
+                    )
 
             io_file = self.io_file_factory(conn)
             io_file.perform_crash_recovery(iter_rel_renames, iter_file_path_infos)
@@ -575,19 +578,23 @@ class KeyFS(Generic[Schema]):
     def get_key(self, name: str) -> LocatedKey | PatternedKey | None:
         return getattr(self.schema, name, None)
 
-    def get_key_instance(self, keyname: str, relpath: RelPath) -> LocatedKey:
+    def get_key_instance(self, keyname: str, abspath: AbsPath) -> LocatedKey:
         key = self.get_key(keyname)
         assert key is not None
         if not isinstance(key, LocatedKey):
-            key = key.locate(**key.extract_params(relpath))
+            key = key.locate(**key.extract_params(abspath))
         return key
 
-    def match_key(self, relpath, *key_candidates):
+    def match_key(
+        self, abspath: AbsPath, *key_candidates: PatternedKey | LocatedKey
+    ) -> LocatedKey | None:
         for key_candidate in key_candidates:
-            if not hasattr(key_candidate, "extract_params"):
+            if not isinstance(key_candidate, PatternedKey):
                 return key_candidate
-            if params := key_candidate.extract_params(relpath):
-                return key_candidate(**params)
+            if params := key_candidate.extract_params(abspath):
+                result = key_candidate(**params)
+                assert not isinstance(result, SearchKey)
+                return result
         return None
 
     def _tx_prefix(self, *, filestore=False):
