@@ -755,6 +755,34 @@ class BaseStage:
         return f"<{self.__class__.__name__} {self.name}>"
 
     @overload
+    def key_simpledata(
+        self, project: NormalizedName | str, version_filename: tuple[str, str]
+    ) -> LocatedKey[dict, DictViewReadonly]: ...
+
+    @overload
+    def key_simpledata(
+        self, project: NormalizedName | str, version_filename: None = None
+    ) -> SearchKey[dict, DictViewReadonly]: ...
+
+    def key_simpledata(
+        self,
+        project: NormalizedName | str,
+        version_filename: tuple[str, str] | None = None,
+    ) -> LocatedKey[dict, DictViewReadonly] | SearchKey[dict, DictViewReadonly]:
+        key = self.keyfs.schema.SIMPLEDATA
+        (version, filename) = (
+            (None, None) if version_filename is None else version_filename
+        )
+        (kw, meth) = (
+            ({}, key.search)
+            if version is None or filename is None
+            else (dict(version=version, filename=filename), key.locate)
+        )
+        return meth(
+            user=self.username, index=self.index, project=normalize_name(project), **kw
+        )
+
+    @overload
     def key_version(
         self, project: NormalizedName | str, version: str
     ) -> LocatedKey[dict, DictViewReadonly]: ...
@@ -919,11 +947,6 @@ class BaseStage:
 
     def delete(self) -> None:
         self.model.delete_stage(self.username, self.index)
-
-    def key_projsimplelinks(self, project: str) -> LocatedKey[dict, DictViewReadonly]:
-        return self.keyfs.schema.PROJSIMPLELINKS.locate(
-            user=self.username, index=self.index, project=normalize_name(project)
-        )
 
     def get_releaselinks(self, project):
         # compatibility access method used by devpi-web and tests
@@ -1597,10 +1620,15 @@ class PrivateStage(BaseStage):
         project = normalize_name(metadata["name"])
         version = metadata["version"]
         self.add_project_name(project)
-        self.key_version(project, version).with_resolved_parent().set({})
-        key_versionmetadata = self.key_versionmetadata(project, version)
-        with key_versionmetadata.with_resolved_parent().update() as versiondata:
-            versiondata.update(metadata)
+        key_version = self.key_version(project, version).with_resolved_parent()
+        with key_version.update() as versiondata:
+            if (rp := metadata.get("requires_python")) is not None:
+                versiondata["requires_python"] = rp
+        key_versionmetadata = self.key_versionmetadata(
+            project, version
+        ).with_resolved_parent()
+        with key_versionmetadata.update() as versionmetadata:
+            versionmetadata.update(metadata)
         threadlog.info("set_metadata %s-%s", project, version)
 
     def add_project_name(self, project: NormalizedName | str) -> None:
@@ -1617,9 +1645,7 @@ class PrivateStage(BaseStage):
         versions = {x.name for x in key_version.iter_ulidkeys()}
         for version in versions:
             self.del_versiondata(project, version, cleanup=False)
-        self._regen_simplelinks(project)
         threadlog.info("deleting project %s", project)
-        self.key_projsimplelinks(project).with_resolved_parent().delete()
         self.key_project(project).with_resolved_parent().delete()
 
     def del_versiondata(
@@ -1637,7 +1663,6 @@ class PrivateStage(BaseStage):
         self.key_versionmetadata(project, version).with_resolved_parent().delete()
         self.key_version(project, version).with_resolved_parent().delete()
         if cleanup:
-            self._regen_simplelinks(project)
             key_version = self.key_version(project).with_resolved_parent()
             has_versions = next(key_version.iter_ulidkeys(), absent) is not absent
             if not has_versions:
@@ -1650,10 +1675,8 @@ class PrivateStage(BaseStage):
         linkstore = self.get_mutable_linkstore_perstage(project, version)
         linkstore.remove_links(basename=entry.basename)
         entry.delete()
-        if cleanup:
-            if not linkstore.get_links():
-                self.del_versiondata(project, version)
-            self._regen_simplelinks(project)
+        if cleanup and not linkstore.get_links():
+            self.del_versiondata(project, version)
 
     def list_versions_perstage(self, project):
         project = normalize_name(project)
@@ -1781,28 +1804,19 @@ class PrivateStage(BaseStage):
         return ensure_deeply_readonly(verdata)
 
     def get_simplelinks_perstage(self, project: NormalizedName | str) -> SimpleLinks:
-        data = self.key_projsimplelinks(project).with_resolved_parent().get()
-        links = cast("LinksList", data.get("links", []))
-        requires_python = cast("RequiresPythonList", data.get("requires_python", []))
-        yanked: YankedList = []  # PEP 592 isn't supported for private stages yet
-        return self.SimpleLinks(
-            join_links_data(links, requires_python, yanked), core_metadata=True
-        )
-
-    def _regen_simplelinks(self, project_input):
-        project = normalize_name(project_input)
-        links: list = []
-        requires_python = []
-        for version in self.list_versions_perstage(project):
-            linkstore = self.get_linkstore_perstage(project, version)
-            releases = linkstore.get_links(Rel.ReleaseFile)
-            links.extend(map(make_key_and_href, releases))
-            require_python = self.get_versiondata_perstage(
-                project, version, with_elinks=False
-            ).get("requires_python")
-            requires_python.extend([require_python] * len(releases))
-        data_dict = {u"links":links, u"requires_python":requires_python}
-        self.key_projsimplelinks(project).with_resolved_parent().set(data_dict)
+        links = self.SimpleLinks([])
+        key_simpledata = self.key_simpledata(project).with_resolved_parent()
+        for k, v in key_simpledata.iter_ulidkey_values():
+            href = v["entrypath"]
+            if hash_spec := Digests(v["hashes"]).best_available_spec:
+                href += "#" + hash_spec
+            links.append(
+                SimplelinkMeta(
+                    (k.params["filename"], href, v.get("requires_python"), None),
+                    core_metadata=True,
+                )
+            )
+        return links
 
     def list_projects_perstage(self) -> dict[str, NormalizedName | str]:
         key_project = self.key_project.with_resolved_parent()
@@ -1845,7 +1859,19 @@ class PrivateStage(BaseStage):
             hashes=hashes,
             last_modified=last_modified,
         )
-        self._regen_simplelinks(project)
+        versiondata = (
+            {}
+            if version is None
+            else self.key_version(project, version).with_resolved_parent().get()
+        )
+        key_simpledata = self.key_simpledata(
+            project, (version, filename)
+        ).with_resolved_parent()
+        with key_simpledata.update() as simpledata:
+            simpledata["entrypath"] = link.entry.relpath
+            simpledata["hashes"] = link.entry.hashes
+            if "requires_python" in versiondata:
+                simpledata["requires_python"] = versiondata["requires_python"]
         return link
 
     def store_doczip(
@@ -2191,6 +2217,21 @@ class MutableLinkStore(LinkStore):
         return self.stage.key_doczip(self.project, self.version)
 
     @overload
+    def key_simpledata(self, filename: str) -> LocatedKey[dict, DictViewReadonly]: ...
+
+    @overload
+    def key_simpledata(
+        self, filename: None = None
+    ) -> SearchKey[dict, DictViewReadonly]: ...
+
+    def key_simpledata(
+        self, filename: str | None = None
+    ) -> LocatedKey[dict, DictViewReadonly] | SearchKey[dict, DictViewReadonly]:
+        if filename is None:
+            return self.stage.key_simpledata(self.project)
+        return self.stage.key_simpledata(self.project, (self.version, filename))
+
+    @overload
     def key_toxresult(self, filename: str) -> LocatedKey[dict, DictViewReadonly]: ...
 
     @overload
@@ -2263,6 +2304,8 @@ class MutableLinkStore(LinkStore):
         key_doczip = self.key_doczip().with_resolved_parent()
         key_toxresult = self.key_toxresult().with_resolved_parent()
         key_versionfile = self.key_versionfile().with_resolved_parent()
+        key_simpledata = self.key_simpledata().with_resolved_parent()
+        version = self.version
         if del_links:
             for link in del_links:
                 filename = link.entry.basename
@@ -2274,6 +2317,7 @@ class MutableLinkStore(LinkStore):
                         key_toxresult(filename).delete()
                     case Rel.ReleaseFile:
                         key_versionfile(filename).delete()
+                        key_simpledata(version=version, filename=filename).delete()
                     case _:
                         raise RuntimeError(link.rel)
                 was_deleted.append(link.relpath)
@@ -2488,15 +2532,6 @@ class SimplelinkMeta:
         )
 
 
-def make_key_and_href(entry):
-    # entry is either an ELink or a filestore.FileEntry instance.
-    # both provide a "relpath" attribute which points to a file entry.
-    href = entry.relpath
-    if hash_spec := entry.best_available_hash_spec:
-        href += "#" + hash_spec
-    return entry.basename, href
-
-
 def normalize_bases(model, bases):
     # check and normalize base indices
     messages = []
@@ -2517,7 +2552,7 @@ def normalize_bases(model, bases):
 
 
 class Schema(KeyFSSchema):
-    # users and index configuration
+    # users, index and project configuration
     USER = KeyFSSchema.decl_patterned_key(
         "USER",
         "{user}",
@@ -2532,12 +2567,32 @@ class Schema(KeyFSSchema):
         dict,
         DictViewReadonly,
     )
+    PROJECT = KeyFSSchema.decl_patterned_key(
+        "PROJECT",
+        "{project}",
+        INDEX,
+        dict,
+        DictViewReadonly,
+    )
 
-    # mirror related data
+    # type mirror related data
     FILE_NOHASH = KeyFSSchema.decl_patterned_key(
         "FILE_NOHASH",
         "+e/{dirname}/{basename}",
         INDEX,
+        dict,
+        DictViewReadonly,
+    )
+    PROJECTCACHEINFO = KeyFSSchema.decl_anonymous_key(
+        "PROJECTCACHEINFO",
+        PROJECT,
+        dict,
+        DictViewReadonly,
+    )
+    MIRRORFILE = KeyFSSchema.decl_patterned_key(
+        "MIRRORFILE",
+        "{filename}",
+        PROJECT,
         dict,
         DictViewReadonly,
     )
@@ -2548,16 +2603,10 @@ class Schema(KeyFSSchema):
         int,
     )
 
-    # "stage" related
-    PROJECT = KeyFSSchema.decl_patterned_key(
-        "PROJECT",
-        "{project}",
-        INDEX,
-        dict,
-        DictViewReadonly,
-    )
-    PROJSIMPLELINKS = KeyFSSchema.decl_anonymous_key(
-        "PROJSIMPLELINKS",
+    # project and version related
+    SIMPLEDATA = KeyFSSchema.decl_patterned_key(
+        "SIMPLEDATA",
+        "{version}/{filename}",
         PROJECT,
         dict,
         DictViewReadonly,
@@ -2583,15 +2632,15 @@ class Schema(KeyFSSchema):
         dict,
         DictViewReadonly,
     )
-    VERSIONFILE = KeyFSSchema.decl_patterned_key(
-        "VERSIONFILE",
+    TOXRESULT = KeyFSSchema.decl_patterned_key(
+        "TOXRESULT",
         "{filename}",
         VERSION,
         dict,
         DictViewReadonly,
     )
-    TOXRESULT = KeyFSSchema.decl_patterned_key(
-        "TOXRESULT",
+    VERSIONFILE = KeyFSSchema.decl_patterned_key(
+        "VERSIONFILE",
         "{filename}",
         VERSION,
         dict,
