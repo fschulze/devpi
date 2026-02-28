@@ -2290,28 +2290,22 @@ class Schema(KeyFSSchema):
     # users and index configuration
     USER = KeyFSSchema.decl_named_key_factory(
         "USER",
-        "{user}/.config",
+        "{user}",
         None,
         dict,
         DictViewReadonly,
     )
-    USERLIST = KeyFSSchema.decl_located_key(
+    USERLIST = KeyFSSchema.decl_anonymous_key(
         "USERLIST",
-        "",
-        ".config",
+        None,
         set[str],
         SetViewReadonly[str],
     )
     INDEX = KeyFSSchema.decl_named_key_factory(
-        "INDEX",
-        "{index}/.config",
-        USER,
-        dict,
-        DictViewReadonly,
+        "INDEX", "{index}", USER, dict, DictViewReadonly
     )
-    INDEXLIST = KeyFSSchema.decl_named_key(
+    INDEXLIST = KeyFSSchema.decl_anonymous_key(
         "INDEXLIST",
-        ".indexes",
         USER,
         set[str],
         SetViewReadonly[str],
@@ -2325,9 +2319,8 @@ class Schema(KeyFSSchema):
         dict,
         DictViewReadonly,
     )
-    MIRRORNAMESINIT = KeyFSSchema.decl_named_key(
+    MIRRORNAMESINIT = KeyFSSchema.decl_anonymous_key(
         "MIRRORNAMESINIT",
-        ".mirrornameschange",
         INDEX,
         int,
         int,
@@ -2336,35 +2329,32 @@ class Schema(KeyFSSchema):
     # type "stage" related
     PROJSIMPLELINKS = KeyFSSchema.decl_named_key_factory(
         "PROJSIMPLELINKS",
-        "{project}/.simple",
+        "{project}",
         INDEX,
         dict,
         DictViewReadonly,
     )
-    PROJVERSIONS = KeyFSSchema.decl_named_key(
+    PROJVERSIONS = KeyFSSchema.decl_anonymous_key(
         "PROJVERSIONS",
-        ".versions",
         PROJSIMPLELINKS,
         set[str],
         SetViewReadonly[str],
     )
     PROJVERSION = KeyFSSchema.decl_named_key_factory(
         "PROJVERSION",
-        "{version}/.config",
+        "{version}",
         PROJSIMPLELINKS,
         dict,
         DictViewReadonly,
     )
-    PROJNAMES = KeyFSSchema.decl_named_key(
+    PROJNAMES = KeyFSSchema.decl_anonymous_key(
         "PROJNAMES",
-        ".projects",
         INDEX,
         set[str],
         SetViewReadonly[str],
     )
-    VERSIONFILELIST = KeyFSSchema.decl_named_key(
+    VERSIONFILELIST = KeyFSSchema.decl_anonymous_key(
         "VERSIONFILELIST",
-        ".files",
         PROJVERSION,
         set[str],
         SetViewReadonly[str],
