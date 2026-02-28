@@ -923,7 +923,7 @@ class TestImportExport:
             (link,) = stage.get_mutable_linkstore_perstage("hello", "1.0").get_links()
             (log_entry,) = link.get_logs()
             when = log_entry["when"]
-            assert isinstance(when, tuple)
+            assert isinstance(when, str)
 
         impexp.export()
 
@@ -934,6 +934,27 @@ class TestImportExport:
             (link,) = stage.get_mutable_linkstore_perstage("hello", "1.0").get_links()
             (log_entry,) = link.get_logs()
             assert log_entry["when"] == when
+
+    def test_log_old_when(self, impexp):
+        mapp = impexp.mapp1
+        api = mapp.create_and_use()
+        content = b"content"
+        mapp.upload_file_pypi("hello-1.0.tar.gz", content, "hello", "1.0")
+
+        impexp.export()
+
+        with impexp.update_dataindex_json() as data:
+            (filedata,) = data["indexes"][api.stagename]["files"]
+            # old tuple format
+            filedata["log"][0]["when"] = (2026, 4, 5, 13, 37, 0)
+
+        mapp2 = impexp.new_import()
+
+        with mapp2.xom.keyfs.read_transaction():
+            stage = mapp2.xom.model.getstage(api.stagename)
+            (link,) = stage.get_mutable_linkstore_perstage("hello", "1.0").get_links()
+            (log_entry,) = link.get_logs()
+            assert log_entry["when"] == "2026-04-05T13:37:00Z"
 
     def test_name_mangling_relates_to_issue132(self, impexp):
         mapp1 = impexp.mapp1
