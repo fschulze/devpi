@@ -1522,6 +1522,33 @@ class PrivateStage(BaseStage):
         )
 
     @overload
+    def key_toxresult(
+        self, project: NormalizedName | str, version: str, filename: str
+    ) -> LocatedKey[dict, DictViewReadonly]: ...
+
+    @overload
+    def key_toxresult(
+        self, project: NormalizedName | str, version: str, filename: None = None
+    ) -> SearchKey[dict, DictViewReadonly]: ...
+
+    def key_toxresult(
+        self, project: NormalizedName | str, version: str, filename: str | None = None
+    ) -> LocatedKey[dict, DictViewReadonly] | SearchKey[dict, DictViewReadonly]:
+        key = self.keyfs.schema.TOXRESULT
+        (kw, meth) = (
+            ({}, key.search)
+            if filename is None
+            else (dict(filename=filename), key.locate)
+        )
+        return meth(
+            user=self.username,
+            index=self.index,
+            project=normalize_name(project),
+            version=version,
+            **kw,
+        )
+
+    @overload
     def key_versionfile(
         self, project: NormalizedName | str, version: str, filename: str
     ) -> LocatedKey[dict, DictViewReadonly]: ...
@@ -1648,6 +1675,7 @@ class PrivateStage(BaseStage):
         basename = entry.basename
         keys = [
             self.key_doczip(project, version).with_resolved_parent(),
+            self.key_toxresult(project, version, basename).with_resolved_parent(),
             self.key_versionfile(project, version, basename).with_resolved_parent(),
         ]
         result = []
@@ -1670,7 +1698,9 @@ class PrivateStage(BaseStage):
         keys: list[LocatedKey | SearchKey] = list()
         if Rel.DocZip in rels:
             keys.append(self.key_doczip(project, version).with_resolved_parent())
-        if Rel.ReleaseFile in rels or Rel.ToxResult in rels:
+        if Rel.ToxResult in rels:
+            keys.append(self.key_toxresult(project, version).with_resolved_parent())
+        if Rel.ReleaseFile in rels:
             keys.append(self.key_versionfile(project, version).with_resolved_parent())
         return [v for k, v in self.keyfs.tx.iter_ulidkey_values_for(keys)]
 
@@ -1906,6 +1936,13 @@ class PrivateStage(BaseStage):
                     pass
                 else:
                     last_serial = max(last_serial, versionmetadata_serial)
+                for toxresult_key in tx.conn.iter_ulidkeys_at_serial(
+                    (self.key_toxresult(project, version).with_resolved_parent(),),
+                    at_serial=at_serial,
+                    fill_cache=False,
+                    with_deleted=True,
+                ):
+                    last_serial = max(last_serial, toxresult_key.last_serial)
                     if last_serial >= at_serial:
                         return last_serial
                 for versionfile_key in tx.conn.iter_ulidkeys_at_serial(
@@ -2143,6 +2180,19 @@ class MutableLinkStore(LinkStore):
         return self.stage.key_doczip(self.project, self.version)
 
     @overload
+    def key_toxresult(self, filename: str) -> LocatedKey[dict, DictViewReadonly]: ...
+
+    @overload
+    def key_toxresult(
+        self, filename: None = None
+    ) -> SearchKey[dict, DictViewReadonly]: ...
+
+    def key_toxresult(
+        self, filename: str | None = None
+    ) -> LocatedKey[dict, DictViewReadonly] | SearchKey[dict, DictViewReadonly]:
+        return self.stage.key_toxresult(self.project, self.version, filename)
+
+    @overload
     def key_versionfile(self, filename: str) -> LocatedKey[dict, DictViewReadonly]: ...
 
     @overload
@@ -2200,6 +2250,7 @@ class MutableLinkStore(LinkStore):
         )
         was_deleted = []
         key_doczip = self.key_doczip().with_resolved_parent()
+        key_toxresult = self.key_toxresult().with_resolved_parent()
         key_versionfile = self.key_versionfile().with_resolved_parent()
         if del_links:
             for link in del_links:
@@ -2208,8 +2259,12 @@ class MutableLinkStore(LinkStore):
                 match link.rel:
                     case Rel.DocZip:
                         key_doczip.delete()
-                    case _:
+                    case Rel.ToxResult:
+                        key_toxresult(filename).delete()
+                    case Rel.ReleaseFile:
                         key_versionfile(filename).delete()
+                    case _:
+                        raise RuntimeError(link.rel)
                 was_deleted.append(link.relpath)
                 threadlog.info("deleted %r link %s", link.rel, link.relpath)
         has_versionfiles = next(key_versionfile.iter_ulidkeys(), absent) is not absent
@@ -2254,8 +2309,12 @@ class MutableLinkStore(LinkStore):
         match rel:
             case Rel.DocZip:
                 key = self.key_doczip().with_resolved_parent()
-            case _:
+            case Rel.ToxResult:
+                key = self.key_toxresult(file_entry.basename).with_resolved_parent()
+            case Rel.ReleaseFile:
                 key = self.key_versionfile(file_entry.basename).with_resolved_parent()
+            case _:
+                raise RuntimeError(rel)
         if key.exists():
             raise RuntimeError
         key.set(new_linkdict)
@@ -2516,6 +2575,13 @@ class Schema(KeyFSSchema):
     )
     VERSIONFILE = KeyFSSchema.decl_patterned_key(
         "VERSIONFILE",
+        "{filename}",
+        VERSION,
+        dict,
+        DictViewReadonly,
+    )
+    TOXRESULT = KeyFSSchema.decl_patterned_key(
+        "TOXRESULT",
         "{filename}",
         VERSION,
         dict,
