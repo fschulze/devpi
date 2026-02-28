@@ -18,6 +18,7 @@ import inspect
 import itertools
 import json
 import pytest
+import re
 
 
 pytestmark = [pytest.mark.writetransaction]
@@ -73,7 +74,7 @@ def test_has_mirror_base(model, pypistage):
     assert stage2.has_mirror_base("pytest")
     register_and_store(stage2, "pytest-1.1.tar.gz")
     assert not stage2.has_mirror_base("pytest")
-    ixconfig = stage2.ixconfig.copy()
+    ixconfig = stage2.ixconfig_mutable.copy()
     ixconfig["mirror_whitelist"] = ["pytest"]
     stage2.modify(**ixconfig)
     assert stage2.has_mirror_base("pytest")
@@ -102,21 +103,21 @@ def test_get_mirror_whitelist_info(model, pypistage):
         has_mirror_base=unknown, blocked_by_mirror_whitelist="root/pypi"
     )
     # now add to whitelist
-    ixconfig = stage2.ixconfig.copy()
+    ixconfig = stage2.ixconfig_mutable.copy()
     ixconfig["mirror_whitelist"] = ["pytest"]
     stage2.modify(**ixconfig)
     assert stage2.get_mirror_whitelist_info("pytest") == dict(
         has_mirror_base=True,
         blocked_by_mirror_whitelist=None)
     # now remove from whitelist
-    ixconfig = stage2.ixconfig.copy()
+    ixconfig = stage2.ixconfig_mutable.copy()
     ixconfig["mirror_whitelist"] = []
     stage2.modify(**ixconfig)
     assert stage2.get_mirror_whitelist_info("pytest") == dict(
         has_mirror_base=unknown, blocked_by_mirror_whitelist="root/pypi"
     )
     # and try "*"
-    ixconfig = stage2.ixconfig.copy()
+    ixconfig = stage2.ixconfig_mutable.copy()
     ixconfig["mirror_whitelist"] = ["*"]
     stage2.modify(**ixconfig)
     assert stage2.get_mirror_whitelist_info("pytest") == dict(
@@ -599,10 +600,10 @@ class TestStage:
         with xom.keyfs.write_transaction():
             user = xom.model.create_user("hello", password="123")
             config = udict(index="world", bases=(), type="stage", volatile=True)
-            user.create_stage(**config)
-            with user.key.update() as userconfig:
+            stage = user.create_stage(**config)
+            with stage.key_index.update() as ixconfig:
                 # here we inject the legacy setting
-                userconfig['indexes']['world']['pypi_whitelist'] = []
+                ixconfig["pypi_whitelist"] = []
             del user
         with xom.keyfs.write_transaction():
             stage = xom.model.getstage('hello/world')
@@ -801,9 +802,9 @@ class TestStage:
             stage = user.create_stage(**config)
             assert stage.ixconfig["mirror_whitelist_inheritance"] == "intersection"
             assert stage.get_whitelist_inheritance() == "intersection"
-            with user.key.update() as userconfig:
+            with stage.key_index.update() as ixconfig:
                 # here we remove the value to simulate an old stage
-                del userconfig['indexes']['world']['mirror_whitelist_inheritance']
+                del ixconfig["mirror_whitelist_inheritance"]
         with keyfs.read_transaction():
             stage = xom.model.getstage("hello/world")
             assert 'mirror_whitelist_inheritance' not in stage.ixconfig
@@ -1216,7 +1217,7 @@ class TestStage:
         with xom.keyfs.write_transaction():
             stage = user.create_stage(**udict(
                 index="world", bases=(), type="stage", volatile=True))
-            with pytest.raises(KeyError, match='not committed yet'):
+            with pytest.raises(KeyError, match=re.escape("hello/world/.config")):
                 stage.get_last_change_serial_perstage()
         assert current_serial == xom.keyfs.get_current_serial() - 1
         current_serial = xom.keyfs.get_current_serial()

@@ -941,7 +941,7 @@ class PyPIView:
         json = getjson(self.request)
         try:
             stage = self.context.user.create_stage(self.context.index, **json)
-            ixconfig = stage.ixconfig
+            ixconfig = stage.ixconfig_mutable
         except InvalidIndex as e:
             apireturn(400, "%s" % e)
         except InvalidIndexconfig as e:
