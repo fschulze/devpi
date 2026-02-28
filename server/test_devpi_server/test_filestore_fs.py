@@ -23,19 +23,19 @@ class TestRenameFileLogic:
             assert fs.get_content(hello_path_info) == hello_content
             this_path_info = FilePathInfo(RelPath("file1"), this_digest)
             fs.set_content(this_path_info, this_content)
-            (rel_rename,) = list(fs.iter_rel_renames())
-            file1_tmp = tmpdir.join(rel_rename)
-            rel_parts = Path(rel_rename).parts
+            (crash_action,) = list(fs.iter_crash_actions())
+            file1_tmp = tmpdir.join(crash_action)
+            rel_parts = Path(crash_action).parts
             assert rel_parts[0] == "+files"
             assert rel_parts[1].startswith("file1")
-            assert rel_rename.endswith("-tmp")
+            assert crash_action.endswith("-tmp")
             assert file1_tmp.exists()
         assert file1.check()
         assert file1.read_binary() == this_content
         assert not file1_tmp.exists()
         with FSIOFile(Path(tmpdir), {}) as fs:
             caplog.clear()
-            fs.perform_crash_recovery(partial(iter, [rel_rename]), lambda _: [])
+            fs.perform_crash_recovery(partial(iter, [crash_action]), lambda _: [])
             assert not caplog.getrecords()
         assert file1.check()
         assert file1.read_binary() == this_content
@@ -56,12 +56,12 @@ class TestRenameFileLogic:
             assert fs.get_content(hello_path_info) == hello_content
             this_path_info = FilePathInfo(RelPath("file1"), this_digest)
             fs.set_content(this_path_info, this_content)
-            (rel_rename,) = list(fs.iter_rel_renames())
-            file1_tmp = tmpdir.join(rel_rename)
-            rel_parts = Path(rel_rename).parts
+            (crash_action,) = list(fs.iter_crash_actions())
+            file1_tmp = tmpdir.join(crash_action)
+            rel_parts = Path(crash_action).parts
             assert rel_parts[0] == "+files"
             assert rel_parts[1].startswith("file1")
-            assert rel_rename.endswith("-tmp")
+            assert crash_action.endswith("-tmp")
             assert file1_tmp.exists()
             # simulate a crash
             _commit = mock.Mock()
@@ -70,7 +70,7 @@ class TestRenameFileLogic:
         assert file1_tmp.exists()
         with FSIOFile(Path(tmpdir), {}) as fs:
             caplog.clear()
-            fs.perform_crash_recovery(partial(iter, [rel_rename]), lambda _: [])
+            fs.perform_crash_recovery(partial(iter, [crash_action]), lambda _: [])
             assert len(caplog.getrecords(".*completed.*file-commit.*")) == 1
         assert file1.check()
         assert file1.read_binary() == this_content
@@ -88,13 +88,13 @@ class TestRenameFileLogic:
             assert fs.os_path(hello_path_info) == str(file1)
             assert fs.get_content(hello_path_info) == hello_content
             fs.delete(hello_path_info, is_last_of_hash=True)
-            (rel_rename,) = list(fs.iter_rel_renames())
-            assert tmpdir.join(rel_rename) == str(file1)
+            (crash_action,) = list(fs.iter_crash_actions())
+            assert tmpdir.join(crash_action) == str(file1)
             assert file1.exists()
         assert not file1.exists()
         with FSIOFile(Path(tmpdir), {}) as fs:
             caplog.clear()
-            fs.perform_crash_recovery(partial(iter, [rel_rename]), lambda _: [])
+            fs.perform_crash_recovery(partial(iter, [crash_action]), lambda _: [])
             assert not caplog.getrecords()
         assert not file1.exists()
 
@@ -110,8 +110,8 @@ class TestRenameFileLogic:
             assert fs.os_path(hello_path_info) == str(file1)
             assert fs.get_content(hello_path_info) == hello_content
             fs.delete(hello_path_info, is_last_of_hash=True)
-            (rel_rename,) = list(fs.iter_rel_renames())
-            assert tmpdir.join(rel_rename) == str(file1)
+            (crash_action,) = list(fs.iter_crash_actions())
+            assert tmpdir.join(crash_action) == str(file1)
             assert file1.exists()
             # simulate a crash
             _commit = mock.Mock()
@@ -119,7 +119,7 @@ class TestRenameFileLogic:
         assert file1.exists()
         with FSIOFile(Path(tmpdir), {}) as fs:
             caplog.clear()
-            fs.perform_crash_recovery(partial(iter, [rel_rename]), lambda _: [])
+            fs.perform_crash_recovery(partial(iter, [crash_action]), lambda _: [])
             assert len(caplog.getrecords(".*completed.*file-del.*")) == 1
         assert not file1.exists()
 
@@ -170,11 +170,11 @@ class TestRenameFileLogic:
             entry = MutableFileEntry(key)
             entry.file_set_content(content, hashes=hashes)
             path = Path(tx.io_file.os_path(entry.file_path_info))
-            (rel_rename,) = tx.io_file.get_rel_renames()
+            (crash_action,) = tx.io_file.get_crash_actions()
         assert _commit.called
         # due to the monkeypatch above the file renames shouldn't be done yet
         assert not path.exists()
-        assert xom.config.server_path.joinpath(rel_rename).exists()
+        assert xom.config.server_path.joinpath(crash_action).exists()
         monkeypatch.undo()
         caplog.clear()
         xom = makexom(opts=("--serverdir", str(tmp_path)))
@@ -182,5 +182,5 @@ class TestRenameFileLogic:
         assert xom.keyfs
         # which should perform the renames
         assert path.exists()
-        assert not xom.config.server_path.joinpath(rel_rename).exists()
+        assert not xom.config.server_path.joinpath(crash_action).exists()
         assert len(caplog.getrecords(".*completed.*file-commit.*")) == 1
