@@ -2700,7 +2700,7 @@ class TestTweenKeyfsTransaction:
         cur_serial = xom.keyfs.get_current_serial()
 
         def wrapped_handler(request):
-            with xom.keyfs.USER(user="hello").update():
+            with xom.keyfs.schema.USER(user="hello").update():
                 pass
             return Response("")
 
@@ -2713,7 +2713,7 @@ class TestTweenKeyfsTransaction:
 
         def wrapped_handler(request):
             xom.keyfs.restart_as_write_transaction()
-            with xom.keyfs.USER(user="hello").update():
+            with xom.keyfs.schema.USER(user="hello").update():
                 pass
             return Response("")
 
