@@ -198,6 +198,10 @@ class Connection(BaseConnection):
             self.io_file_get = self._select_io_file_get
             self._file_write = self._insert_file_write
 
+    def analyze(self) -> None:
+        # a noop for postgresql, as ANALYZE doesn't really help here and is slow
+        return
+
     def _lock(self) -> None:
         self._sqlaconn.execute(sa.select(sa.func.pg_advisory_xact_lock(1))).scalar()
 
