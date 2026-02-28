@@ -36,6 +36,7 @@ pytest = [
     "beautifulsoup4 != 4.12.1",
     "certauth",
     "execnet",
+    "hypothesis",
     "mock",
     "pip",
     "pypitoken; python_version < '3.15'",
