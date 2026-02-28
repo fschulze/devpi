@@ -256,9 +256,14 @@ class BaseConnection:
         yield from self._iter_relpaths_at(relpaths_stmt, serial)
 
     def get_raw_changelog_entry(self, serial: int) -> bytes | None:
-        renames = self.get_rel_renames(serial)
-        if renames is None:
+        data = self._sqlaconn.execute(
+            sa.select(self.renames_table.c.data).where(
+                self.renames_table.c.serial == serial
+            )
+        ).scalar()
+        if data is None:
             return None
+        renames = loads(data)
         changes = {
             c.relpath: (
                 c.keyname,
@@ -269,13 +274,15 @@ class BaseConnection:
         }
         return dumps((changes, renames))
 
-    def get_rel_renames(self, serial: int) -> list | None:
+    def iter_rel_renames(self, serial: int) -> Iterator[str]:
         data = self._sqlaconn.execute(
             sa.select(self.renames_table.c.data).where(
                 self.renames_table.c.serial == serial
             )
         ).scalar()
-        return None if data is None else loads(data)
+        if data is None:
+            return
+        yield from loads(data)
 
     def _iter_relpaths_at(
         self, relpaths: InElementRole | Iterable[str], serial: int
