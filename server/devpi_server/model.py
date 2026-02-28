@@ -1475,25 +1475,31 @@ class PrivateStage(BaseStage):
         validate_metadata(dict(metadata))
         self._set_versiondata(metadata)
 
-    def key_versionfilelist(
-        self, project: NormalizedName | str, version: str
-    ) -> LocatedKey[set[str], SetViewReadonly[str]]:
-        return self.keyfs.schema.VERSIONFILELIST.locate(
-            user=self.username,
-            index=self.index,
-            project=normalize_name(project),
-            version=version,
-        )
-
+    @overload
     def key_versionfile(
         self, project: NormalizedName | str, version: str, filename: str
-    ) -> LocatedKey[dict, DictViewReadonly]:
-        return self.keyfs.schema.VERSIONFILE.locate(
+    ) -> LocatedKey[dict, DictViewReadonly]: ...
+
+    @overload
+    def key_versionfile(
+        self, project: NormalizedName | str, version: str, filename: None = None
+    ) -> SearchKey[dict, DictViewReadonly]: ...
+
+    def key_versionfile(
+        self, project: NormalizedName | str, version: str, filename: str | None = None
+    ) -> LocatedKey[dict, DictViewReadonly] | SearchKey[dict, DictViewReadonly]:
+        key = self.keyfs.schema.VERSIONFILE
+        (kw, meth) = (
+            ({}, key.search)
+            if filename is None
+            else (dict(filename=filename), key.locate)
+        )
+        return meth(
             user=self.username,
             index=self.index,
             project=normalize_name(project),
             version=version,
-            filename=filename,
+            **kw,
         )
 
     @overload
@@ -1562,7 +1568,6 @@ class PrivateStage(BaseStage):
                                 (version, project, self.name))
         linkstore = self.get_mutable_linkstore_perstage(project, version)
         linkstore.remove_links()
-        self.key_versionfilelist(project, version).with_resolved_parent().delete()
         self.key_versionmetadata(project, version).with_resolved_parent().delete()
         self.key_version(project, version).with_resolved_parent().delete()
         if cleanup:
@@ -1592,20 +1597,19 @@ class PrivateStage(BaseStage):
         return {x.name for x in key_version.iter_ulidkeys()}
 
     def _get_elinks(self, project, version):
-        filenames = (
-            self.key_versionfilelist(project, version).with_resolved_parent().get()
-        )
+        if not self.key_versionmetadata(project, version).exists(resolve_parents=True):
+            return []
         return [
-            self.key_versionfile(project, version, filename)
+            v
+            for k, v in self.key_versionfile(project, version)
             .with_resolved_parent()
-            .get()
-            for filename in sorted(filenames)
+            .iter_ulidkey_values()
         ]
 
     def get_has_versiondata_perstage(self, project, version):
         return self.key_versionmetadata(project, version).exists(resolve_parents=True)
 
-    def get_last_project_change_serial_perstage(self, project, at_serial=None):  # noqa: PLR0911
+    def get_last_project_change_serial_perstage(self, project, at_serial=None):
         project = normalize_name(project)
         tx = self.keyfs.tx
         if at_serial is None:
@@ -1625,8 +1629,7 @@ class PrivateStage(BaseStage):
             last_serial = max(last_serial, version_keydata.key.last_serial)
             if last_serial >= at_serial:
                 return last_serial
-            version_info = version_keydata.value
-            if version_info in (absent, deleted):
+            if version_keydata.value in (absent, deleted):
                 continue
             version = version_keydata.key.name
             key_versionmetadata = self.key_versionmetadata(
@@ -1640,32 +1643,13 @@ class PrivateStage(BaseStage):
             last_serial = max(last_serial, versionmetadata_serial)
             if last_serial >= at_serial:
                 return last_serial
-            (versionfiles_serial, _versionfiles_info_ulid, versionfiles_value) = (
-                tx.get_last_serial_and_value_at(
-                    self.key_versionfilelist(project, version).with_resolved_parent(),
-                    at_serial,
-                )
-            )
-            if isinstance(versionfiles_value, (Absent, Deleted)):
-                continue
-            last_serial = max(last_serial, versionfiles_serial)
-            if last_serial >= at_serial:
-                return last_serial
-            for filename in versionfiles_value:
-                (versionfile_serial, _versionfile_info_ulid, versionfile_value) = (
-                    tx.get_last_serial_and_value_at(
-                        self.key_versionfile(
-                            project, version, filename
-                        ).with_resolved_parent(),
-                        at_serial,
-                    )
-                )
-                if isinstance(versionfile_value, (Absent, Deleted)):
-                    continue
-                last_serial = max(last_serial, versionfile_serial)
-                if last_serial >= at_serial:
-                    return last_serial
-                last_serial = max(last_serial, versionfile_serial)
+            for versionfile_key in tx.conn.iter_ulidkeys_at_serial(
+                (self.key_versionfile(project, version).with_resolved_parent(),),
+                at_serial=at_serial,
+                fill_cache=False,
+                with_deleted=True,
+            ):
+                last_serial = max(last_serial, versionfile_key.last_serial)
                 if last_serial >= at_serial:
                     return last_serial
         return last_serial
@@ -1839,6 +1823,8 @@ class PrivateStage(BaseStage):
                 last_serial = max(last_serial, version_keydata.key.last_serial)
                 if last_serial >= at_serial:
                     return last_serial
+                if version_keydata.value in (absent, deleted):
+                    continue
                 version = version_keydata.key.name
                 key_versionmetadata = self.key_versionmetadata(
                     project, version
@@ -1853,33 +1839,13 @@ class PrivateStage(BaseStage):
                     last_serial = max(last_serial, versionmetadata_serial)
                     if last_serial >= at_serial:
                         return last_serial
-                try:
-                    (versionfiles_serial, versionfilenames) = (
-                        tx.last_serial_and_value_at(
-                            self.key_versionfilelist(
-                                project, version
-                            ).with_resolved_parent(),
-                            at_serial,
-                        )
-                    )
-                except KeyError:
-                    continue
-                last_serial = max(last_serial, versionfiles_serial)
-                if last_serial >= at_serial:
-                    return last_serial
-                for filename in versionfilenames:
-                    try:
-                        (versionfile_serial, _versionfile_info) = (
-                            tx.last_serial_and_value_at(
-                                self.key_versionfile(
-                                    project, version, filename
-                                ).with_resolved_parent(),
-                                at_serial,
-                            )
-                        )
-                    except KeyError:
-                        continue
-                    last_serial = max(last_serial, versionfile_serial)
+                for versionfile_key in tx.conn.iter_ulidkeys_at_serial(
+                    (self.key_versionfile(project, version).with_resolved_parent(),),
+                    at_serial=at_serial,
+                    fill_cache=False,
+                    with_deleted=True,
+                ):
+                    last_serial = max(last_serial, versionfile_key.last_serial)
                     if last_serial >= at_serial:
                         return last_serial
         # no project uploaded yet
@@ -2089,15 +2055,18 @@ class MutableLinkStore(LinkStore):
             link.add_log("overwrite", None, count=overwrite + 1)
         return link
 
-    def key_versionfile(
-        self, project: NormalizedName | str, version: str, filename: str
-    ) -> LocatedKey[dict, DictViewReadonly]:
-        return self.stage.key_versionfile(project, version, filename)
+    @overload
+    def key_versionfile(self, filename: str) -> LocatedKey[dict, DictViewReadonly]: ...
 
-    def key_versionfilelist(
-        self, project: NormalizedName | str, version: str
-    ) -> LocatedKey[set[str], SetViewReadonly[str]]:
-        return self.stage.key_versionfilelist(project, version)
+    @overload
+    def key_versionfile(
+        self, filename: None = None
+    ) -> SearchKey[dict, DictViewReadonly]: ...
+
+    def key_versionfile(
+        self, filename: str | None = None
+    ) -> LocatedKey[dict, DictViewReadonly] | SearchKey[dict, DictViewReadonly]:
+        return self.stage.key_versionfile(self.project, self.version, filename)
 
     def new_reflink(
         self,
@@ -2136,22 +2105,17 @@ class MutableLinkStore(LinkStore):
             rel=rel, basename=basename, for_entrypath=for_entrypath
         )
         was_deleted = []
-        key_versionfilelist = self.key_versionfilelist(
-            self.project, self.version
-        ).with_resolved_parent()
+        key_versionfile = self.key_versionfile().with_resolved_parent()
         if del_links:
-            with key_versionfilelist.update() as versionfilenames:
-                for link in del_links:
-                    filename = link.entry.basename
-                    self.verdata["+elinks"].remove(link.linkdict)
-                    link.entry.delete()
-                    versionfilenames.remove(filename)
-                    self.key_versionfile(
-                        self.project, self.version, filename
-                    ).with_resolved_parent().delete()
-                    was_deleted.append(link.relpath)
-                    threadlog.info("deleted %r link %s", link.rel, link.relpath)
-        if was_deleted and key_versionfilelist.get():
+            for link in del_links:
+                filename = link.entry.basename
+                self.verdata["+elinks"].remove(link.linkdict)
+                link.entry.delete()
+                key_versionfile(filename).delete()
+                was_deleted.append(link.relpath)
+                threadlog.info("deleted %r link %s", link.rel, link.relpath)
+        has_versionfiles = next(key_versionfile.iter_ulidkeys(), absent) is not absent
+        if was_deleted and has_versionfiles:
             for relpath in was_deleted:
                 self.remove_links(for_entrypath=relpath)
 
@@ -2189,16 +2153,11 @@ class MutableLinkStore(LinkStore):
         if for_link:
             assert isinstance(for_link, ELink)
             new_linkdict["for_entrypath"] = for_link.relpath
-        key_versionfilelist = self.key_versionfilelist(
-            self.project, self.version
-        ).with_resolved_parent()
-        with key_versionfilelist.update() as versionfilelist:
-            assert file_entry.basename not in versionfilelist, file_entry.basename
-            versionfilelist.add(file_entry.basename)
-        key_versionfile = self.key_versionfile(
-            self.project, self.version, file_entry.basename
-        ).with_resolved_parent()
-        key_versionfile.set(new_linkdict)
+        if self.key_versionfile(file_entry.basename).exists(resolve_parents=True):
+            raise RuntimeError
+        self.key_versionfile(file_entry.basename).with_resolved_parent().set(
+            new_linkdict
+        )
         self.verdata.setdefault("+elinks", []).append(new_linkdict)
         threadlog.info("added %r link %s", rel, file_entry.relpath)
         return ELink(self.filestore, new_linkdict, self.project, self.version)
@@ -2435,12 +2394,6 @@ class Schema(KeyFSSchema):
         PROJECT,
         dict,
         DictViewReadonly,
-    )
-    VERSIONFILELIST = KeyFSSchema.decl_anonymous_key(
-        "VERSIONFILELIST",
-        VERSION,
-        set,
-        SetViewReadonly,
     )
     VERSIONFILE = KeyFSSchema.decl_patterned_key(
         "VERSIONFILE",
