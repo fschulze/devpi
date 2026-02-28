@@ -39,6 +39,7 @@ import warnings
 
 if TYPE_CHECKING:
     from .interfaces import IIOFile
+    from .keyfs_types import KeyFSTypes
     from .keyfs_types import Record
     from collections.abc import Callable
     from collections.abc import Iterable
@@ -267,11 +268,11 @@ def sqlite_explain(element: explain, compiler: SQLCompiler, **kw: Any) -> str:
 
 
 class BaseConnection:
+    crash_actions_table: sa.Table
     dirty_files: dict[str, IO | None]
     key_ulid_table: sa.Table
     keytype_name_parent_ulid_table: sa.Table
     parent_ulid_keytype_table: sa.Table
-    renames_table: sa.Table
     ulid_changelog_table: sa.Table
     ulid_info_table: sa.Table
     ulid_latest_serial_table: sa.Table
@@ -352,7 +353,9 @@ class BaseConnection:
 
     def db_read_last_changelog_serial(self) -> int:
         result = self._sqlaconn.execute(
-            sa.select(sa.func.coalesce(sa.func.max(self.renames_table.c.serial), -1))
+            sa.select(
+                sa.func.coalesce(sa.func.max(self.crash_actions_table.c.serial), -1)
+            )
         ).scalar()
         assert isinstance(result, int)
         return result
@@ -441,10 +444,10 @@ class BaseConnection:
             for c in self.iter_changes_at(serial)
         )
 
-    def iter_rel_renames(self, serial: int) -> Iterator[str]:
+    def iter_crash_actions(self, serial: int) -> Iterator[KeyFSTypes]:
         data = self._sqlaconn.execute(
-            sa.select(self.renames_table.c.data).where(
-                self.renames_table.c.serial == serial
+            sa.select(self.crash_actions_table.c.data).where(
+                self.crash_actions_table.c.serial == serial
             )
         ).scalar()
         if data is None:
@@ -915,7 +918,7 @@ class BaseConnection:
 @implementer(IWriter)
 class Writer:
     records: Sequence[Record]
-    rel_renames: Sequence[str]
+    crash_actions: Sequence[KeyFSTypes]
 
     def __init__(
         self, storage: BaseStorage, conn: BaseConnection, io_file: IIOFile | None
@@ -923,7 +926,7 @@ class Writer:
         self.conn = conn
         self.io_file = io_file
         self.storage = storage
-        self.rel_renames = []
+        self.crash_actions = []
 
     def __enter__(self) -> Self:
         self.commit_serial = self.conn.get_next_serial()
@@ -961,11 +964,11 @@ class Writer:
         assert records is not None
         del self.records
         execute(
-            sa.insert(self.conn.renames_table).values(
-                (commit_serial, dumps(self.rel_renames))
+            sa.insert(self.conn.crash_actions_table).values(
+                (commit_serial, dumps(self.crash_actions))
             )
         )
-        del self.rel_renames
+        del self.crash_actions
         records_info: Counter | set
         num_records = len(records)
         if num_records > 20:
@@ -1120,10 +1123,10 @@ class Writer:
             del self.records
         self.conn.rollback()
 
-    def set_rel_renames(self, rel_renames: Sequence[str]) -> None:
-        assert rel_renames is not None
-        assert self.rel_renames == []
-        self.rel_renames = rel_renames
+    def set_crash_actions(self, actions: Sequence[KeyFSTypes]) -> None:
+        assert actions is not None
+        assert self.crash_actions == []
+        self.crash_actions = actions
 
 
 class BaseStorage:
@@ -1145,6 +1148,12 @@ class BaseStorage:
         self, metadata_obj: sa.MetaData, binary_type: type[_Binary]
     ) -> dict:
         tables = dict(
+            crash_actions_table=sa.Table(
+                "crash_actions",
+                metadata_obj,
+                sa.Column("serial", sa.Integer, primary_key=True),
+                sa.Column("data", binary_type, nullable=False),
+            ),
             key_ulid_table=sa.Table(
                 "key_ulid",
                 metadata_obj,
@@ -1171,12 +1180,6 @@ class BaseStorage:
                 sa.Column("parent_ulid", sa.BigInteger),
                 sa.Column("keytype", sa.String),
                 prefixes=["TEMPORARY"],
-            ),
-            renames_table=sa.Table(
-                "renames",
-                metadata_obj,
-                sa.Column("serial", sa.Integer, primary_key=True),
-                sa.Column("data", binary_type, nullable=False),
             ),
             ulid_changelog_table=sa.Table(
                 "ulid_changelog",
