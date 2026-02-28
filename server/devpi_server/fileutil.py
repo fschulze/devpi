@@ -8,6 +8,7 @@ from io import BytesIO
 from struct import error as struct_error
 from struct import pack
 from struct import unpack
+from tempfile import SpooledTemporaryFile  # noqa: F401 - for compatibility
 from typing import TYPE_CHECKING
 import errno
 import os.path
