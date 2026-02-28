@@ -18,7 +18,6 @@ from devpi_server.log import threadlog
 from devpi_server.markers import absent
 from inspect import currentframe
 from typing import TYPE_CHECKING
-from typing import cast
 from typing import overload
 from urllib.parse import unquote
 from wsgiref.handlers import format_date_time
@@ -31,10 +30,10 @@ import warnings
 if TYPE_CHECKING:
     from .interfaces import ContentOrFile
     from .keyfs import KeyFS
-    from .keyfs_types import PTypedKey
     from .keyfs_types import RelPath
     from .keyfs_types import TypedKey
     from .markers import Absent
+    from .model import Schema
     from devpi_common.url import URL
     from typing import Any
 
@@ -347,14 +346,14 @@ def relpath_prefix(content_or_file, hash_type=absent):
 
 
 def key_from_link(
-    keyfs: KeyFS, link: URL, user: str, index: str
+    keyfs: KeyFS[Schema], link: URL, user: str, index: str
 ) -> TypedKey[dict, DictViewReadonly]:
     if link.hash_spec:
         # we can only create 32K entries per directory
         # so let's take the first 3 bytes which gives
         # us a maximum of 16^3 = 4096 entries in the root dir
         a, b = make_splitdir(link.hash_spec)
-        return cast("PTypedKey[dict, DictViewReadonly]", keyfs.STAGEFILE)(
+        return keyfs.schema.STAGEFILE(
             user=user, index=index, hashdir_a=a, hashdir_b=b, filename=link.basename
         )
     else:
@@ -362,7 +361,7 @@ def key_from_link(
         assert parts
         dirname = "_".join(parts[:-1])
         dirname = re.sub('[^a-zA-Z0-9_.-]', '_', dirname)
-        return cast("PTypedKey[dict, DictViewReadonly]", keyfs.PYPIFILE_NOMD5)(
+        return keyfs.schema.PYPIFILE_NOMD5(
             user=user, index=index, dirname=unquote(dirname), basename=link.basename
         )
 
@@ -376,7 +375,7 @@ def unicode_if_bytes(val):
 class FileStore:
     attachment_encoding = "utf-8"
 
-    def __init__(self, keyfs: KeyFS) -> None:
+    def __init__(self, keyfs: KeyFS[Schema]) -> None:
         self.keyfs = keyfs
 
     def __repr__(self) -> str:
@@ -440,7 +439,7 @@ class FileStore:
                 hashes = get_hashes(content_or_file)
             dir_hash_spec = hashes.get_default_spec()
         hashdir_a, hashdir_b = make_splitdir(dir_hash_spec)
-        key = cast("PTypedKey[dict, DictViewReadonly]", self.keyfs.STAGEFILE)(
+        key = self.keyfs.schema.STAGEFILE(
             user=user,
             index=index,
             hashdir_a=hashdir_a,
