@@ -198,7 +198,7 @@ class KeyFSSchema(metaclass=KeyFSSchemaMeta):
             ).__get__(self, self.__class__),
         )
         key = getattr(self, key_name)
-        self.keyfs._storage.add_key(key)
+        self.keyfs._storage.register_key(key)
         return key
 
     def named_key(
@@ -218,7 +218,7 @@ class KeyFSSchema(metaclass=KeyFSSchemaMeta):
             ).__get__(self, self.__class__),
         )
         key = getattr(self, key_name)
-        self.keyfs._storage.add_key(key)
+        self.keyfs._storage.register_key(key)
         return key
 
     def named_key_factory(
@@ -238,5 +238,5 @@ class KeyFSSchema(metaclass=KeyFSSchemaMeta):
             ).__get__(self, self.__class__),
         )
         key = getattr(self, key_name)
-        self.keyfs._storage.add_key(key)
+        self.keyfs._storage.register_key(key)
         return key
