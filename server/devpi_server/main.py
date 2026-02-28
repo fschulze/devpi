@@ -446,7 +446,6 @@ class XOM:
             storage_info,
             io_file_factory=self.config.io_file_factory,
             readonly=self.is_replica(),
-            cache_size=self.config.args.keyfs_cache_size,
             schema=Schema,
         )
         keyfs.schema.register_key_subscribers(self, keyfs)
