@@ -24,6 +24,7 @@ from inspect import currentframe
 from io import BytesIO
 from pathlib import Path
 from typing import TYPE_CHECKING
+from typing import cast
 from typing import overload
 from urllib.parse import unquote
 from zipfile import BadZipFile
@@ -44,6 +45,7 @@ if TYPE_CHECKING:
     from .markers import Absent
     from .model import Schema
     from .normalized import NormalizedName
+    from .readonly import SetViewReadonly
     from collections.abc import Iterable
     from devpi_common.url import URL
     from typing import Any
@@ -739,8 +741,10 @@ class BaseFileEntry:
     def file_exists(self):
         return self.tx.io_file.exists(self.file_path_info)
 
-    def file_delete(self):
-        return self.tx.io_file.delete(self.file_path_info)
+    def file_delete(self, *, is_last_of_hash):
+        return self.tx.io_file.delete(
+            self.file_path_info, is_last_of_hash=is_last_of_hash
+        )
 
     def file_size(self):
         return self.tx.io_file.size(self.file_path_info)
@@ -791,6 +795,8 @@ class BaseFileEntry:
         # changed which will not replay correctly at a replica.
         assert isinstance(self.meta, dict)
         self.key.set(self.meta)
+        with self.key_digestpaths.update() as digest_paths:
+            digest_paths.add(self.relpath)
 
     def file_set_content_no_meta(
         self, content_or_file: ContentOrFile, *, hashes: Digests
@@ -838,12 +844,24 @@ class BaseFileEntry:
         self._meta = DictViewReadonly({}) if self.readonly else {}
 
     def delete_file_only(self) -> None:
-        self.file_delete()
+        key_digestpaths = self.key_digestpaths
+        with key_digestpaths.update() as digest_paths:
+            digest_paths.discard(self.relpath)
+        is_last_of_hash = False
+        if not digest_paths:
+            key_digestpaths.delete()
+            is_last_of_hash = True
+        self.file_delete(is_last_of_hash=is_last_of_hash)
 
     def has_existing_metadata(self) -> bool:
         return bool(
             self.hashes and self.last_modified and DEFAULT_HASH_TYPE in self.hashes
         )
+
+    @property
+    def key_digestpaths(self) -> TypedKey[set[str], SetViewReadonly[str]]:
+        keyfs = cast("KeyFS[Schema]", self.key.keyfs)
+        return keyfs.schema.DIGESTPATHS(digest=self.hashes[DEFAULT_HASH_TYPE])
 
     def validate(self, content_or_file: ContentOrFile | None = None) -> dict | None:
         if content_or_file is None:
