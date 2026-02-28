@@ -45,6 +45,7 @@ class FatalResponse:
 
     def __init__(self, url: URL | str, reason: str) -> None:
         self.url = str(url)
+        self.headers: dict = {}
         self.reason_phrase = reason
         self.status = self.status_code
 
@@ -210,6 +211,7 @@ class HTTPClient:
         content: bytes | None = None,
         timeout: float | None = None,
         extra_headers: dict | None = None,
+        raise_on_error: bool = False,
     ) -> GetResponse:
         headers = {}
         if extra_headers:
@@ -225,6 +227,8 @@ class HTTPClient:
             )
             resp = cstack.enter_context(gen)
         except self.Errors as e:
+            if raise_on_error:
+                raise
             location = get_caller_location()
             threadlog.warn(
                 "%s during http.stream of %s at %s: %s",

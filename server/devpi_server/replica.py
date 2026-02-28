@@ -1514,6 +1514,7 @@ def proxy_request_to_primary(xom, request, cstack):
             extra_headers=headers,
             allow_redirects=False,
             timeout=xom.config.args.proxy_timeout,
+            raise_on_error=True,
         )
     except http.Errors as e:
         msg = f"proxy-write-to-primary {url}: {e}"

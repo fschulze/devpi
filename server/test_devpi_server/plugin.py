@@ -473,6 +473,7 @@ def http(pypiurls):
             content=None,
             timeout=None,
             extra_headers=None,
+            raise_on_error=False,  # noqa: ARG002
         ):
             return self.__call__(
                 url,
