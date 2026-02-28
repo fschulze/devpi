@@ -26,6 +26,7 @@ from devpi_server.model import is_valid_name
 from pathlib import Path
 from typing import TYPE_CHECKING
 from typing import cast
+import datetime
 import itertools
 import json
 import logging
@@ -392,6 +393,20 @@ class Migrator:
             mapping["hashes"] = dict(hashes)
         if "for_entrypath" in data:
             self.migrate_toxresult(data)
+        history_log = data.get("log", [])
+        for history_entry in history_log:
+            if isinstance(history_entry["when"], str):
+                continue
+            (year, month, day, hour, minute, second) = history_entry["when"]
+            history_entry["when"] = datetime.datetime(
+                year,
+                month,
+                day,
+                hour,
+                minute,
+                second,
+                tzinfo=datetime.UTC,
+            ).strftime("%Y-%m-%dT%H:%M:%SZ")
         return data
 
     def migrate_index(self, data: dict) -> dict:
