@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from devpi_server.filestore import get_hashes
 from devpi_server.filestore import make_splitdir
 from devpi_server.keyfs_types import FilePathInfo
@@ -7,11 +9,19 @@ from devpi_server.mirror import ProjectUpdateCache
 from devpi_server.mirror import URL
 from devpi_server.mirror import parse_index
 from devpi_server.normalized import normalize_name
+from devpi_server.readonly import get_mutable_deepcopy
+from operator import itemgetter
 from test_devpi_server.simpypi import getmd5
+from typing import TYPE_CHECKING
 import hashlib
 import httpx
 import pytest
 import time
+
+
+if TYPE_CHECKING:
+    from devpi_server.main import XOM
+    from devpi_server.mirror import MirrorStage
 
 
 def getlinks(text):
@@ -1642,3 +1652,47 @@ def test_get_last_project_change_serial_perstage(xom, pypistage):
         assert pypistage.get_last_project_change_serial_perstage('other') == (first_serial + 3)
         # but the previous project is at the same serial
         assert pypistage.get_last_project_change_serial_perstage('pkg') == (first_serial + 2)
+
+
+@pytest.mark.notransaction
+def test_elinks(xom: XOM, pypistage: MirrorStage) -> None:
+    pypistage.mock_simple(  # type: ignore[attr-defined]
+        "pack-age",
+        '<a href="/pack.age-0.9.tar.gz" />\n'
+        '<a href="/pack.age-0.9-1.tar.gz" />\n'
+        '<a href="/pack.age-1.0.zip" />\n'
+        '<a href="/pack.age-1.1.zip#sha256=a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3" />\n'
+        '<a href="/pack.age-1.2.zip#sha256=b3a8e0e1f9ab1bfe3a36f231f676f78bb30a519d2b21e6c530c0eee8ebb4a5d0" data-yanked="" />\n'
+        '<a href="/pack.age-2.0.zip#sha256=35a9e381b1a27567549b5f8a6f783c167ebf809f1c4d6a9e367240484d8ce281" data-requires-python="&gt;=3.5" />',
+    )
+    with xom.keyfs.read_transaction():
+        elinks = {
+            version: sorted(
+                get_mutable_deepcopy(
+                    pypistage.get_versiondata_perstage("pack-age", version)["+elinks"]
+                ),
+                key=itemgetter("entrypath"),
+            )
+            for version in pypistage.list_versions_perstage("pack-age")
+        }
+        assert elinks
+        assert any("hashes" in el for velinks in elinks.values() for el in velinks)
+        assert all(
+            el["rel"] == "releasefile" for velinks in elinks.values() for el in velinks
+        )
+        entries = {
+            version: sorted(
+                (
+                    {}
+                    if (el := None if e is None else pypistage._get_elink_from_entry(e))
+                    is None
+                    else el.linkdict
+                    for e in pypistage.get_entries_for_entrypaths(
+                        v["entrypath"] for v in velinks
+                    )
+                ),
+                key=itemgetter("entrypath"),
+            )
+            for version, velinks in elinks.items()
+        }
+        assert elinks == entries
