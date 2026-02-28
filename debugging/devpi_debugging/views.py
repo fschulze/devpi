@@ -92,7 +92,7 @@ def keyfs_changelog_view(request: Request) -> dict:
     if not xom.config.args.debug_keyfs:
         raise HTTPForbidden("+keyfs views disabled")
     html_key_types_map = {
-        k: str(v.type).replace(" ", "\xa0") for k, v in xom.keyfs._keys.items()
+        k.name: str(k.type).replace(" ", "\xa0") for k in xom.keyfs.schema
     }
     storage = xom.keyfs._storage
     serial = request.matchdict['serial']
