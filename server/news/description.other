@@ -1,0 +1,4 @@
+Long descriptions in version metadata are now stored in files instead of the database.
+This is mostly transparent.
+If the file doesn't exist (yet) on a replica,
+the json API will return a dictionary with the file information instead of a string.
