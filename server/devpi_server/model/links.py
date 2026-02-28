@@ -350,9 +350,12 @@ class MutableLinkStore(LinkStore):
         return self.stage.key_versionfile(self.project, self.version, filename)
 
     def _get_elinks(self, rel):
-        result = super()._get_elinks(rel)
-        for elink in result:
-            elink.linkdict = get_mutable_deepcopy(elink.linkdict)
+        result = []
+        for elink in super()._get_elinks(rel):
+            entry = MutableFileEntry(
+                elink.entry.key, get_mutable_deepcopy(elink.entry._meta)
+            )
+            result.append(ELink(entry, get_mutable_deepcopy(elink.linkdict)))
         return result
 
     @property
