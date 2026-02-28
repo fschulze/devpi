@@ -686,7 +686,7 @@ def set_default_indexes(model: RootModel) -> None:
         threadlog.info("created root user")
     if model.xom.config.no_root_pypi:
         return
-    if "pypi" not in root_user.key_indexes.with_resolved_parent().get():
+    if not root_user.key_index.with_resolved_parent()("pypi").exists():
         root_user.create_stage("pypi", **_pypi_ixconfig_default)
         threadlog.info("created root/pypi index")
 

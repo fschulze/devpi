@@ -1376,26 +1376,22 @@ class InitialQueueThread:
                 for stage in user.getstages():
                     self.shared_data.set_index_type_for(
                         stage.name, stage.ixconfig['type'])
-            relpaths = tx.iter_keys_at_serial(keys, tx.at_serial)
-            for item in relpaths:
+            for key, value in tx.iter_ulidkey_values_for(keys, fill_cache=False):
+                assert isinstance(value, DictViewReadonly)
                 self.thread.exit_if_shutdown()
-                if isinstance(item.value, Deleted):
-                    continue
                 if self.shared_data.queue.qsize() > self.shared_data.num_threads:
                     # let the queue be processed before filling it further
                     self.shared_data.wait()
                 if timed_log.is_due():
                     threadlog.info(
-                        "Processed a total of %s files (serial %s/%s) and queued %s so far.",
+                        "Processed a total of %s files and queued %s so far.",
                         self.shared_data.initial_processed,
-                        tx.at_serial - item.serial,
-                        tx.at_serial,
                         queued,
                     )
                 self.shared_data.initial_processed = (
                     self.shared_data.initial_processed + 1
                 )
-                key = item.key
+                entry = FileEntry(key, value)
                 index_name = self.shared_data.get_index_name_for(key)
                 if index_name in skip_indexes:
                     threadlog.debug(
@@ -1408,8 +1404,6 @@ class InitialQueueThread:
                         "Skipping %s because %r in %s.", key, index_type, skip_indexes
                     )
                     continue
-                assert isinstance(item.value, DictViewReadonly)
-                entry = FileEntry(key, item.value)
                 if entry.file_exists() or not entry.last_modified:
                     continue
                 # note the negated serial for the PriorityQueue
@@ -1417,11 +1411,11 @@ class InitialQueueThread:
                 self.shared_data.queue.put(
                     (
                         index_type,
-                        -item.serial,
-                        item.key.relpath,
-                        item.key.key_name,
-                        item.value,
-                        item.back_serial,
+                        -key.last_serial,
+                        key.relpath,
+                        key.key_name,
+                        key.get(),
+                        key.back_serial,
                     )
                 )
                 queued = queued + 1

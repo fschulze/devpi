@@ -1002,17 +1002,6 @@ class Transaction:
             self._model = TransactionRootModel(xom)
         return self._model
 
-    def iter_keys_at_serial(
-        self,
-        keys: Iterable[
-            LocatedKey[KeyType, KeyTypeRO] | PatternedKey[KeyType, KeyTypeRO]
-        ],
-        at_serial: int,
-    ) -> Iterator[KeyData[KeyType, KeyTypeRO]]:
-        return self.conn.iter_keys_at_serial(
-            keys, at_serial, fill_cache=False, with_deleted=True
-        )
-
     def iter_serial_and_value_backwards(
         self,
         key: LocatedKey[KeyType, KeyTypeRO] | ULIDKey[KeyType, KeyTypeRO],
