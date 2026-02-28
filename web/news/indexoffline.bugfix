@@ -1,0 +1,1 @@
+Consistently use offline mode when indexing. This especially helps performance on startup.

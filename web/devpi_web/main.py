@@ -339,6 +339,8 @@ def devpiserver_on_changed_versiondata(stage, project, version, metadata):
     if stage is None:
         return
     if not metadata:
+        if stage.ixconfig["type"] == "mirror":
+            stage.offline = True
         if is_project_cached(stage, project) and not stage.has_project_perstage(project):
             delete_project(stage, project)
             return
