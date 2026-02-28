@@ -5,7 +5,6 @@ from .exceptions import lazy_format_exception_only
 from .log import threadlog
 from devpi_common.types import cached_property
 from devpi_common.url import URL
-from requests.utils import DEFAULT_CA_BUNDLE_PATH
 from typing import TYPE_CHECKING
 import httpx
 import inspect
@@ -82,7 +81,6 @@ class HTTPClient:
         cafile = (
             os.environ.get("REQUESTS_CA_BUNDLE")
             or os.environ.get("CURL_CA_BUNDLE")
-            or DEFAULT_CA_BUNDLE_PATH
         )
         if cafile and not os.path.exists(cafile):
             threadlog.warning(
