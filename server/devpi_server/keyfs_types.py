@@ -37,6 +37,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from collections.abc import Iterator
     from pathlib import Path
+    from re import Match
+    from re import Pattern
     from typing import Self
 
     KeyFSTypesRO = (
@@ -92,13 +94,15 @@ class ULID(int):
 @frozen
 class Record(Generic[KeyType, KeyTypeRO]):
     key: LocatedKey[KeyType, KeyTypeRO]
+    ulid: ULID
     value: KeyType | Deleted
     back_serial: int
+    old_ulid: ULID | Absent
     old_value: KeyTypeRO | Absent | Deleted
 
     def __attrs_post_init__(self) -> None:
         if not isinstance(value := self.value, Deleted):
-            if not isinstance(value, self.key.type):
+            if not isinstance(value, self.key.key_type):
                 msg = f"Mismatching value type {type(value)} for record with {self.key}"
                 raise TypeError(msg)
             if not isinstance(self.old_value, (Absent, Deleted)) and not isinstance(
@@ -115,6 +119,7 @@ RelPath = NewType("RelPath", str)
 class KeyData:
     relpath: RelPath
     keyname: str
+    ulid: ULID
     serial: int
     back_serial: int
     value: KeyFSTypesRO | Deleted
@@ -124,7 +129,7 @@ class KeyData:
         return self.serial
 
     @property
-    def mutable_value(self):
+    def mutable_value(self) -> KeyFSTypes | Deleted:
         return deleted if (val := self.value) is deleted else get_mutable_deepcopy(val)
 
 
@@ -142,7 +147,7 @@ class StorageInfo:
     settings: dict = field(kw_only=True, default={})
 
     @property
-    def storage_with_filesystem(self):
+    def storage_with_filesystem(self) -> bool:
         from .interfaces import IDBIOFileConnection
 
         if self.settings.get("fsbackend", "db") == "db":
@@ -167,13 +172,12 @@ class FilePathInfo:
 _formatter = Formatter()
 
 
-def extract_params(key, relpath):
-    m = key.rex_reverse.match(relpath)
-    return m.groupdict() if m is not None else {}
+def get_pattern_keys(pattern: str) -> frozenset[str]:
+    return frozenset(x[1] for x in _formatter.parse(pattern) if x[1] is not None)
 
 
-def get_params(pattern, kw):
-    keys = frozenset(x[1] for x in _formatter.parse(pattern) if x[1] is not None)
+def get_params(pattern: str, kw: dict[str, str]) -> dict[str, str]:
+    keys = get_pattern_keys(pattern)
     params = {k: kw[k] for k in keys}
     if frozenset(kw).difference(keys):
         msg = f"Not all parameters contained in pattern {pattern!r}: {kw!r}"
@@ -181,8 +185,8 @@ def get_params(pattern, kw):
     return params
 
 
-def get_rex_reverse(pattern):
-    def repl(match):
+def get_rex_reverse(pattern: str) -> Pattern:
+    def repl(match: Match) -> str:
         name = match.group(1)
         return rf"(?P<{name}>[^\/]+)"
 
@@ -190,7 +194,7 @@ def get_rex_reverse(pattern):
     return re.compile(f"^{rex_pattern}$")
 
 
-def iter_lineage(key):
+def iter_lineage(key: PatternedKey) -> Iterator[PatternedKey]:
     ancestor_key = key.parent_key
     while ancestor_key:
         yield ancestor_key
@@ -207,11 +211,11 @@ H = TypeVar("H", bound=Hashable)
 
 @implementer(IKeyFSKey)
 class LocatedKey(Generic[KeyType, KeyTypeRO]):
-    __slots__ = ("key_name", "keyfs", "location", "name", "params", "type")
-    keyfs: KeyFS
+    __slots__ = ("key_name", "key_type", "keyfs", "location", "params")
     key_name: str
+    keyfs: KeyFS
+    key_type: type[KeyType]
     location: str
-    name: str
     params: dict[str, str]
 
     def __init__(
@@ -219,38 +223,37 @@ class LocatedKey(Generic[KeyType, KeyTypeRO]):
         keyfs: KeyFS,
         key_name: str,
         location: str,
-        name: str,
         key_type: type[KeyType],
         params: dict | None = None,
     ) -> None:
         self.keyfs = keyfs
         self.key_name = key_name
         assert "{" not in location
-        assert "{" not in name
         self.location = location
-        self.name = name
         _key_type = get_origin(key_type)
         if _key_type is None:
             _key_type = key_type
-        self.type: type[KeyType] = _key_type
+        self.key_type = _key_type
         self.params = {} if params is None else params
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash((self.key_name, self.relpath))
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, LocatedKey):
+            return NotImplemented
         return self.key_name == other.key_name and self.relpath == other.relpath
 
     def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} {self.key_name} {self.type.__name__} {self.location!r} {self.name!r}>"
+        return f"<{self.__class__.__name__} {self.key_name} {self.key_type.__name__} {self.location!r}>"
 
-    def delete(self):
+    def delete(self) -> None:
         return self.keyfs.tx.delete(self)
 
-    def deleted(self):
+    def deleted(self) -> bool:
         return self.keyfs.tx.deleted(self)
 
-    def exists(self):
+    def exists(self) -> bool:
         return self.keyfs.tx.exists(self)
 
     def get(self: LocatedKey[KeyType, KeyTypeRO]) -> KeyTypeRO:
@@ -271,19 +274,15 @@ class LocatedKey(Generic[KeyType, KeyTypeRO]):
 
     @property
     def relpath(self) -> RelPath:
-        location = self.location
-        name = self.name
-        if location and name:
-            return RelPath(f"{location}/{name}")
-        if location:
-            return RelPath(location)
-        return RelPath(name)
+        return RelPath(self.location)
 
     def set(self, val: KeyType) -> None:
-        if not isinstance(val, self.type) and not issubclass(self.type, type(val)):
+        if not isinstance(val, self.key_type) and not issubclass(
+            self.key_type, type(val)
+        ):
             raise TypeError(
                 "%r requires value of type %r, got %r"
-                % (self.relpath, self.type.__name__, type(val).__name__)
+                % (self.relpath, self.key_type.__name__, type(val).__name__)
             )
         self.keyfs.tx.set(self, val)
 
@@ -296,132 +295,65 @@ class LocatedKey(Generic[KeyType, KeyTypeRO]):
 
 
 @implementer(IKeyFSKey)
-class NamedKey(Generic[KeyType, KeyTypeRO]):
+class PatternedKey(Generic[KeyType, KeyTypeRO]):
     __slots__ = (
         "_rex_reverse",
         "key_name",
+        "key_type",
         "keyfs",
-        "name",
-        "params",
-        "parent_key",
-        "type",
-    )
-
-    def __init__(
-        self,
-        keyfs: KeyFS,
-        key_name: str,
-        name: str,
-        parent_key: NamedKey | NamedKeyFactory,
-        key_type: type[KeyType],
-        params: dict | None = None,
-    ) -> None:
-        if parent_key is None:
-            raise ValueError
-        self.keyfs = keyfs
-        self.key_name = key_name
-        self.name = name
-        self.parent_key = parent_key
-        _key_type = get_origin(key_type)
-        if _key_type is None:
-            _key_type = key_type
-        self.type: type[KeyType] = _key_type
-        self.params = {} if params is None else params
-        self._rex_reverse = None
-
-    def __call__(self, **kw: NormalizedName | str) -> LocatedKey[KeyType, KeyTypeRO]:
-        for val in kw.values():
-            if "/" in val:
-                raise ValueError(val)
-        pattern = "/".join(reversed(tuple(x.pattern for x in iter_lineage(self))))
-        params = get_params(pattern, kw)
-        location = pattern.format_map(params)
-        return LocatedKey(
-            self.keyfs, self.key_name, location, self.name, self.type, params=params
-        )
-
-    def __repr__(self):
-        return f"<{self.__class__.__name__} {self.key_name} {self.type.__name__} {self.name!r} {self.parent_key!r}>"
-
-    def extract_params(self, relpath):
-        return extract_params(self, relpath)
-
-    @property
-    def rex_reverse(self):
-        if self._rex_reverse is None:
-            parts = [self.name] if self.name else []
-            parts.extend(x.pattern for x in iter_lineage(self))
-            self._rex_reverse = get_rex_reverse("/".join(reversed(parts)))
-        return self._rex_reverse
-
-
-@implementer(IKeyFSKey)
-class NamedKeyFactory(Generic[KeyType, KeyTypeRO]):
-    __slots__ = (
-        "_rex_reverse",
-        "key_name",
-        "keyfs",
-        "name",
         "parent_key",
         "pattern",
-        "type",
     )
+    _rex_reverse: Pattern
+    key_type: type[KeyType]
 
     def __init__(
         self,
         keyfs: KeyFS,
         key_name: str,
         pattern: str,
-        parent_key: NamedKey | NamedKeyFactory | None,
+        parent_key: PatternedKey | None,
         key_type: type[KeyType],
     ) -> None:
         self.keyfs = keyfs
         self.key_name = key_name
-        name_parts = []
-        pattern_parts = []
-        parts_iter = reversed(pattern.split("/"))
-        for part in parts_iter:
-            if "{" in part:
-                pattern_parts.append(part)
-                break
-            name_parts.append(part)
-        pattern_parts.extend(parts_iter)
-        self.name = "/".join(reversed(name_parts))
-        assert "{" not in self.name
-        self.pattern = "/".join(reversed(pattern_parts))
-        assert "{" in self.pattern
+        self.pattern = pattern
         self.parent_key = parent_key
         _key_type = get_origin(key_type)
         if _key_type is None:
             _key_type = key_type
-        self.type: type[KeyType] = _key_type
-        self._rex_reverse = None
+        self.key_type = _key_type
 
     def __call__(self, **kw: NormalizedName | str) -> LocatedKey[KeyType, KeyTypeRO]:
         for val in kw.values():
             if "/" in val:
                 raise ValueError(val)
-        location = self.pattern.format_map(kw)
-        if self.parent_key is None:
-            return LocatedKey(
-                self.keyfs, self.key_name, location, self.name, self.type, params=kw
-            )
-        parent_key = self.parent_key(**kw)
-        location = f"{parent_key.location}/{location}"
-        return LocatedKey(
-            self.keyfs, self.key_name, location, self.name, self.type, params=kw
+        location = self.full_pattern.format_map(kw)
+        return LocatedKey(self.keyfs, self.key_name, location, self.key_type, params=kw)
+
+    def __repr__(self) -> str:
+        return f"<{self.__class__.__name__} {self.key_name} {self.key_type.__name__} {self.pattern!r} {self.parent_key!r}>"
+
+    def extract_params(self, relpath: str) -> dict:
+        m = self.rex_reverse.match(relpath)
+        return m.groupdict() if m is not None else {}
+
+    def iter_patterns(self) -> Iterator[str]:
+        lineage_patterns: Iterator[str] = (x.pattern for x in iter_lineage(self))
+        parts = (
+            (self.pattern, *lineage_patterns)
+            if self.pattern
+            else tuple(lineage_patterns)
         )
-
-    def __repr__(self):
-        return f"<{self.__class__.__name__} {self.key_name} {self.type.__name__} {self.pattern!r} {self.name!r} {self.parent_key!r}>"
-
-    def extract_params(self, relpath):
-        return extract_params(self, relpath)
+        return reversed(parts)
 
     @property
-    def rex_reverse(self):
-        if self._rex_reverse is None:
-            parts = [self.name, self.pattern] if self.name else [self.pattern]
-            parts.extend(x.pattern for x in iter_lineage(self))
-            self._rex_reverse = get_rex_reverse("/".join(reversed(parts)))
-        return self._rex_reverse
+    def full_pattern(self) -> str:
+        return "/".join(self.iter_patterns())
+
+    @property
+    def rex_reverse(self) -> Pattern:
+        _rex_reverse = getattr(self, "_rex_reverse", None)
+        if _rex_reverse is None:
+            _rex_reverse = self._rex_reverse = get_rex_reverse(self.full_pattern)
+        return _rex_reverse
