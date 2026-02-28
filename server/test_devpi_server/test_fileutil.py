@@ -5,6 +5,7 @@ from devpi_server.fileutil import dump_iter
 from devpi_server.fileutil import dumplen
 from devpi_server.fileutil import dumps
 from devpi_server.fileutil import loads
+from devpi_server.fileutil import loads_iter
 from execnet.gateway_base import DumpError as _DumpError
 from execnet.gateway_base import LoadError as _LoadError
 from execnet.gateway_base import Unserializer
@@ -149,6 +150,23 @@ def test_dump_iter():
         b"y\x00\x00\x00\x03Q",
     ]
     assert dumps(iter(data)) == b"".join(result)
+
+
+def test_load_iter():
+    from collections.abc import Generator
+    from collections.abc import Iterator
+
+    data = [1, ("a", "b"), {3}]
+    result = dumps(data)
+    iterator = loads_iter(result)
+    isinstance(iterator, Generator)
+    isinstance(iterator, Iterator)
+    assert list(zip(iterator, data, strict=True)) == list(zip(data, data, strict=True))
+    result = b"".join(dump_iter(iter(data)))
+    iterator = loads_iter(result)
+    isinstance(iterator, Generator)
+    isinstance(iterator, Iterator)
+    assert list(zip(iterator, data, strict=True)) == list(zip(data, data, strict=True))
 
 
 def test_dumplen():
