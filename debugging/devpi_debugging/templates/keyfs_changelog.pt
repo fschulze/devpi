@@ -57,10 +57,6 @@
             <li><a tal:omit-tag="serial +1 > last_changelog_serial" href="${request.route_url('keyfs_changelog', serial=serial + 1,_query=dict(query=query))}">Next serial</a></li>
             <li><a tal:omit-tag="serial == last_changelog_serial" href="${request.route_url('keyfs_changelog', serial=last_changelog_serial,_query=dict(query=query))}">Latest serial</a></li>
         </ul>
-        <h3>Renames</h3>
-        <ul>
-            <li tal:repeat="rename rel_renames"><code>${rename}<code></li>
-        </ul>
         <h3>Parent keys</h3>
         <ul>
             <li tal:repeat="parent_key parent_keys">${parent_key.name} <a name="${parent_key.fragment}">${parent_key.relpath}</a> at serial <a href="${request.route_url('keyfs_changelog', serial=parent_key.serial,_query=dict(query=query),_anchor=parent_key.fragment)}">${parent_key.serial}</a></li>
