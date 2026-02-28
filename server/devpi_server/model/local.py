@@ -44,6 +44,7 @@ if TYPE_CHECKING:
     from .links import SimpleLinks
     from collections.abc import Sequence
     from devpi_server.filestore import BaseFileEntry
+    from devpi_server.filestore import MutableFileEntry
     from devpi_server.interfaces import ContentOrFile
     from devpi_server.keyfs_types import LocatedKey
     from devpi_server.keyfs_types import SearchKey
@@ -367,7 +368,7 @@ class LocalIndex(BaseIndex):
         self.key_version(project, version).with_resolved_parent().delete()
         metadata = key_versionmetadata.get()
         if "description" in metadata and not isinstance(metadata["description"], str):
-            entry = self.filestore.get_file_entry(
+            entry = self.filestore.get_mutable_file_entry(
                 AbsPath(
                     f"{self.username}/{self.index}/{metadata['description']['relpath']}"
                 )
@@ -381,7 +382,7 @@ class LocalIndex(BaseIndex):
             if not has_versions:
                 self.del_project(project)
 
-    def del_entry(self, entry: BaseFileEntry, *, cleanup: bool = True) -> None:
+    def del_entry(self, entry: MutableFileEntry, *, cleanup: bool = True) -> None:
         # we need to store project and version for use in cleanup part below
         project = entry.project
         version = entry.version
