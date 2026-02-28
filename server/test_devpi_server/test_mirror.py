@@ -480,20 +480,20 @@ class TestExtPYPIDB:
             ''', pypiserial=10)
 
         with pypistage.keyfs.read_transaction():
-            assert "mirror_ignore_serial_header" not in pypistage.get()
+            assert "mirror_ignore_serial_header" not in pypistage.ixconfig
             assert pypistage.key_projsimplelinks("pytest").get() == {}
             assert len(pypistage.get_releaselinks("pytest")) == 1
             assert pypistage.key_projsimplelinks("pytest").get()["serial"] == 10
         pypistage.mock_simple("pytest", text="", pypiserial=9)
         with pypistage.keyfs.read_transaction():
-            assert "mirror_ignore_serial_header" not in pypistage.get()
+            assert "mirror_ignore_serial_header" not in pypistage.ixconfig
             assert pypistage.key_projsimplelinks("pytest").get()["serial"] == 10
             assert len(pypistage.get_releaselinks("pytest")) == 1
             assert pypistage.key_projsimplelinks("pytest").get()["serial"] == 10
         recs = caplog.getrecords(".*serving stale links.*")
         assert len(recs) >= 1
         with pypistage.keyfs.write_transaction():
-            assert "mirror_ignore_serial_header" not in pypistage.get()
+            assert "mirror_ignore_serial_header" not in pypistage.ixconfig
             assert (
                 pypistage.modify(mirror_ignore_serial_header=True)[
                     "mirror_ignore_serial_header"
