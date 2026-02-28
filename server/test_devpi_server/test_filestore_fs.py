@@ -160,7 +160,7 @@ class TestRenameFileLogic:
             ).with_resolved_parent()
             key_index.set({})
             hashdir_a, hashdir_b = make_splitdir(hashes.get_default_spec())
-            key = tx.keyfs.schema.STAGEFILE(
+            key = tx.keyfs.schema.FILE(
                 user="user",
                 index="index",
                 hashdir_a=hashdir_a,
