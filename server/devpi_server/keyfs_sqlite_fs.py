@@ -18,11 +18,15 @@ class Connection(BaseConnection):
 class Storage(BaseStorage):
     Connection = Connection
     db_filename = ".sqlite"
-    expected_schema = dict(
+    expected_schema = dict(  # noqa: RUF012
         index=dict(
             kv_serial_idx="""
                 CREATE INDEX kv_serial_idx ON kv (serial);
-            """),
+            """,
+            kv_key_keyname_idx="""
+                CREATE UNIQUE INDEX kv_key_keyname_idx ON kv (key, keyname);
+            """,
+        ),
         table=dict(
             changelog="""
                 CREATE TABLE changelog (
@@ -32,11 +36,13 @@ class Storage(BaseStorage):
             """,
             kv="""
                 CREATE TABLE kv (
-                    key TEXT NOT NULL PRIMARY KEY,
-                    keyname TEXT,
+                    key TEXT NOT NULL,
+                    keyname TEXT NOT NULL,
                     serial INTEGER
                 )
-            """))
+            """,
+        ),
+    )
 
     def perform_crash_recovery(self):
         pass
