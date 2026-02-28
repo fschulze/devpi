@@ -6,6 +6,7 @@ for all indexes.
 from __future__ import annotations
 
 from .keyfs_types import FilePathInfo
+from .keyfs_types import RelPath
 from .keyfs_types import ULID
 from .keyfs_types import ULIDKey
 from .keyfs_types import iter_lineage
@@ -23,6 +24,8 @@ from contextlib import suppress
 from devpi_common.metadata import splitbasename
 from devpi_common.types import parse_hash_spec
 from inspect import currentframe
+from pathlib import Path
+from typing import NewType
 from typing import TYPE_CHECKING
 from typing import cast
 from typing import overload
@@ -38,13 +41,15 @@ if TYPE_CHECKING:
     from .interfaces import ContentOrFile
     from .keyfs import KeyFS
     from .keyfs_types import LocatedKey
-    from .keyfs_types import RelPath
     from .model import Schema
     from .readonly import SetViewReadonly
     from collections.abc import Iterator
     from collections.abc import Sequence
     from devpi_common.url import URL
     from typing import Any
+
+
+AbsPath = NewType("AbsPath", str)
 
 
 def _get_default_hash_types():  # this is a function for testing
@@ -295,6 +300,10 @@ def get_hash_spec(content_or_file, hash_type):
     return get_hashes(content_or_file, hash_types=(hash_type,)).get_spec(hash_type)
 
 
+def index_relpath(user: str, index: str, relpath: RelPath) -> RelPath:
+    return RelPath(Path(relpath).relative_to(Path(f"{user}/{index}")).as_posix())
+
+
 def make_splitdir(hash_spec):
     parts = hash_spec.split("=")
     assert len(parts) == 2
@@ -402,9 +411,9 @@ class FileStore:
         (entry,) = self.iter_maplinks((link,), user, index, project)
         return entry
 
-    def get_file_entry(self, relpath: RelPath) -> FileEntry | None:
+    def get_file_entry(self, abspath: AbsPath) -> FileEntry | None:
         if key := self.keyfs.match_key(
-            relpath, self.keyfs.schema.FILE_NOHASH, self.keyfs.schema.FILE
+            abspath, self.keyfs.schema.FILE_NOHASH, self.keyfs.schema.FILE
         ):
             for ancestor in reversed(list(iter_lineage(key))):
                 if ancestor.with_resolved_parent().deleted():
@@ -500,6 +509,10 @@ class BaseFileEntry:
             )
 
     @property
+    def abspath(self) -> AbsPath:
+        return AbsPath(self.key.relpath)
+
+    @property
     def basename(self) -> str:
         params = self.key.params
         if "filename" in params:
@@ -515,6 +528,10 @@ class BaseFileEntry:
     @property
     def index(self) -> str:
         return self.key.params['index']
+
+    @property
+    def index_relpath(self) -> RelPath:
+        return index_relpath(self.user, self.index, self.key.relpath)
 
     @property
     def relpath(self) -> RelPath:
