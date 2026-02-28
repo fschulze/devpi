@@ -68,56 +68,6 @@ class TestChangelog:
         r = testapp.get("/+api", expect_errors=False)
         return int(r.headers["X-DEVPI-SERIAL"])
 
-    def test_accept_header(self, auth_serializer, testapp):
-        from devpi_server.replica import REPLICA_ACCEPT_STREAMING
-        from devpi_server.replica import REPLICA_CONTENT_TYPE
-
-        token = auth_serializer.dumps(self.replica_uuid)
-        r = testapp.get(
-            "/+changelog/0",
-            headers={
-                H_REPLICA_UUID: self.replica_uuid,
-                "Authorization": "Bearer %s" % token,
-            },
-        )
-        assert r.content_type == "application/octet-stream"
-        r = testapp.get(
-            "/+changelog/0",
-            headers={
-                "Accept": "foo",
-                H_REPLICA_UUID: self.replica_uuid,
-                "Authorization": "Bearer %s" % token,
-            },
-        )
-        assert r.content_type == "application/octet-stream"
-        r = testapp.get(
-            "/+changelog/0",
-            headers={
-                "Accept": "foo/bar",
-                H_REPLICA_UUID: self.replica_uuid,
-                "Authorization": "Bearer %s" % token,
-            },
-        )
-        assert r.content_type == "application/octet-stream"
-        r = testapp.get(
-            "/+changelog/0",
-            headers={
-                "Accept": REPLICA_CONTENT_TYPE,
-                H_REPLICA_UUID: self.replica_uuid,
-                "Authorization": "Bearer %s" % token,
-            },
-        )
-        assert r.content_type == "application/octet-stream"
-        r = testapp.get(
-            "/+changelog/0",
-            headers={
-                "Accept": REPLICA_ACCEPT_STREAMING,
-                H_REPLICA_UUID: self.replica_uuid,
-                "Authorization": "Bearer %s" % token,
-            },
-        )
-        assert r.content_type == "application/octet-stream"
-
     def test_get_latest_serial(self, testapp, mapp):
         latest_serial = self.get_latest_serial(testapp)
         assert latest_serial >= -1
@@ -197,56 +147,6 @@ class TestMultiChangelog:
     def get_latest_serial(self, testapp):
         r = testapp.get("/+api", expect_errors=False)
         return int(r.headers["X-DEVPI-SERIAL"])
-
-    def test_accept_header(self, auth_serializer, testapp):
-        from devpi_server.replica import REPLICA_ACCEPT_STREAMING
-        from devpi_server.replica import REPLICA_CONTENT_TYPE
-
-        token = auth_serializer.dumps(self.replica_uuid)
-        r = testapp.get(
-            "/+changelog/0-",
-            headers={
-                H_REPLICA_UUID: self.replica_uuid,
-                "Authorization": "Bearer %s" % token,
-            },
-        )
-        assert r.content_type == "application/octet-stream"
-        r = testapp.get(
-            "/+changelog/0-",
-            headers={
-                "Accept": "foo",
-                H_REPLICA_UUID: self.replica_uuid,
-                "Authorization": "Bearer %s" % token,
-            },
-        )
-        assert r.content_type == "application/octet-stream"
-        r = testapp.get(
-            "/+changelog/0-",
-            headers={
-                "Accept": "foo/bar",
-                H_REPLICA_UUID: self.replica_uuid,
-                "Authorization": "Bearer %s" % token,
-            },
-        )
-        assert r.content_type == "application/octet-stream"
-        r = testapp.get(
-            "/+changelog/0-",
-            headers={
-                "Accept": REPLICA_CONTENT_TYPE,
-                H_REPLICA_UUID: self.replica_uuid,
-                "Authorization": "Bearer %s" % token,
-            },
-        )
-        assert r.content_type == REPLICA_CONTENT_TYPE
-        r = testapp.get(
-            "/+changelog/0-",
-            headers={
-                "Accept": REPLICA_ACCEPT_STREAMING,
-                H_REPLICA_UUID: self.replica_uuid,
-                "Authorization": "Bearer %s" % token,
-            },
-        )
-        assert r.content_type == REPLICA_CONTENT_TYPE
 
     @pytest.mark.usefixtures("noiter")
     def test_multiple_changes(self, mapp, reqchangelogs, testapp):
@@ -612,7 +512,7 @@ def replay(xom, replica_xom, events=True):
         if serial == -1:
             continue
         with xom.keyfs._storage.get_connection() as conn:
-            change_entry = conn.get_changes(serial)
+            change_entry = list(conn.iter_changes_at(serial))
         threadlog.info("test: importing to replica %s", serial)
         replica_xom.keyfs.import_changes(serial, change_entry)
     replica_xom.replica_thread.wait()
@@ -1654,10 +1554,11 @@ class TestFileReplicationSharedData:
         with xom.keyfs._storage.get_connection() as conn:
             for serial in range(xom.keyfs.get_next_serial()):
                 changes[serial] = {}
-                change_entry = conn.get_changes(serial)
-                for relpath, (key_name, back_serial, val) in change_entry.items():
-                    key = replica_xom.keyfs.get_key_instance(key_name, relpath)
-                    changes[serial][key] = (val, back_serial)
+                for keydata in conn.iter_changes_at(serial):
+                    key = replica_xom.keyfs.get_key_instance(
+                        keydata.keyname, keydata.relpath
+                    )
+                    changes[serial][key] = (keydata.value, keydata.back_serial)
 
         result = []
 
