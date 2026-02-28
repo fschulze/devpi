@@ -6,6 +6,8 @@ for all indexes.
 from __future__ import annotations
 
 from .keyfs_types import FilePathInfo
+from .keyfs_types import ULID
+from .keyfs_types import ULIDKey
 from .log import threadlog
 from .markers import Absent
 from .markers import Deleted
@@ -34,7 +36,6 @@ if TYPE_CHECKING:
     from .keyfs import KeyFS
     from .keyfs_types import LocatedKey
     from .keyfs_types import RelPath
-    from .keyfs_types import ULIDKey
     from .model import Schema
     from .readonly import SetViewReadonly
     from devpi_common.url import URL
@@ -598,8 +599,14 @@ class BaseFileEntry:
         # changed which will not replay correctly at a replica.
         assert isinstance(self.meta, dict)
         self.key.set(self.meta)
-        with self.key_digestpaths.update() as digest_paths:
-            digest_paths.add(self.relpath)
+        with self.key_digestulids.update() as digest_ulids:
+            ulid = (
+                self.key.resolve(fetch=False)
+                if not isinstance(self.key, ULIDKey)
+                else self.key
+            ).ulid
+            assert isinstance(ulid, ULID)
+            digest_ulids.add(int(ulid))
 
     def file_set_content_no_meta(
         self, content_or_file: ContentOrFile, *, hashes: Digests
@@ -647,12 +654,18 @@ class BaseFileEntry:
         self._meta = DictViewReadonly({}) if self.readonly else {}
 
     def delete_file_only(self) -> None:
-        key_digestpaths = self.key_digestpaths
-        with key_digestpaths.update() as digest_paths:
-            digest_paths.discard(self.relpath)
+        key_digestulids = self.key_digestulids
+        with key_digestulids.update() as digest_ulids:
+            ulid = (
+                self.key.resolve(fetch=False)
+                if not isinstance(self.key, ULIDKey)
+                else self.key
+            ).ulid
+            assert isinstance(ulid, ULID)
+            digest_ulids.discard(ulid)
         is_last_of_hash = False
-        if not digest_paths:
-            key_digestpaths.delete()
+        if not digest_ulids:
+            key_digestulids.delete()
             is_last_of_hash = True
         self.file_delete(is_last_of_hash=is_last_of_hash)
 
@@ -662,9 +675,9 @@ class BaseFileEntry:
         )
 
     @property
-    def key_digestpaths(self) -> LocatedKey[set[str], SetViewReadonly[str]]:
+    def key_digestulids(self) -> LocatedKey[set[int], SetViewReadonly[int]]:
         keyfs = cast("KeyFS[Schema]", self.key.keyfs)
-        return keyfs.schema.DIGESTPATHS(digest=self.hashes[DEFAULT_HASH_TYPE])
+        return keyfs.schema.DIGESTULIDS(digest=self.hashes[DEFAULT_HASH_TYPE])
 
     def validate(self, content_or_file: ContentOrFile | None = None) -> dict | None:
         if content_or_file is None:
