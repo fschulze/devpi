@@ -65,13 +65,13 @@ class File:
     def os_path(self) -> Path:
         return self.path
 
-    def remove(self) -> list[str]:
+    def remove(self, *, is_last_of_hash: bool) -> list[str]:
         assert tmpsuffix_for_path(self.path) is None
         with suppress(OSError):
             self.path.unlink()
         digest_path = self.digest_path
         assert digest_path is not None
-        if digest_path.exists() and digest_path.stat().st_nlink == 1:
+        if digest_path.exists() and is_last_of_hash:
             # if nothing else links to the digest file anymore, then remove it
             digest_path.unlink()
         return [str(self.path.relative_to(self.basedir))]
@@ -108,9 +108,6 @@ class DirtyFile(File):
 
     def drop(self) -> None:
         self.path.unlink()
-
-    def remove(self) -> list[str]:
-        raise NotImplementedError
 
 
 @provider(IDirtyFileFactory, IFileFactory)
