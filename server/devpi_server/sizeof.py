@@ -1,3 +1,5 @@
+from .markers import Absent
+from .markers import Deleted
 from .readonly import DictViewReadonly
 from .readonly import SeqViewReadonly
 from .readonly import SetViewReadonly
@@ -19,7 +21,7 @@ try:
         maxlen=None,
         _default_size=_DEFAULT_SIZE,
         _sequences=(frozenset, list, set, tuple, SetViewReadonly, SeqViewReadonly),
-        _singles=(bytes, complex, float, int, str, _NONE_TYPE),
+        _singles=(Absent, Deleted, bytes, complex, float, int, str, _NONE_TYPE),
         _dicts=(dict, DictViewReadonly),
     ):
         stack = [iter((obj,))]
@@ -36,14 +38,14 @@ try:
             seen.add(id(item))
             result += getsizeof(item, _default_size)
             if maxlen and result >= maxlen:
-                return
+                return None
             if isinstance(item, _singles):
                 continue
-            elif isinstance(item, _sequences):
+            if isinstance(item, _sequences):
                 if len(item):
                     stack.append(iter(item))
                 continue
-            elif isinstance(item, _dicts):
+            if isinstance(item, _dicts):
                 if len(item):
                     stack.append(_iter_dict(item))
                 continue
