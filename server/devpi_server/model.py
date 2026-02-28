@@ -6,6 +6,7 @@ from .config import hookimpl
 from .filestore import AbsPath
 from .filestore import Digests
 from .filestore import FileEntry
+from .filestore import MutableFileEntry
 from .keyfs_schema import KeyFSSchema
 from .keyfs_types import RelPath
 from .keyfs_types import is_dict_key
@@ -38,7 +39,9 @@ from pyramid.authorization import Authenticated
 from pyramid.authorization import Everyone
 from time import gmtime
 from time import strftime
+from typing import Generic
 from typing import TYPE_CHECKING
+from typing import TypeVar
 from typing import overload
 import enum
 import functools
@@ -50,7 +53,6 @@ import re
 if TYPE_CHECKING:
     from .filestore import BaseFileEntry
     from .filestore import FileStore
-    from .filestore import MutableFileEntry
     from .interfaces import ContentOrFile
     from .keyfs import KeyChangeEvent
     from .keyfs import KeyFS
@@ -935,32 +937,34 @@ class BaseStage:
         # compatibility access method used by devpi-web and tests
         project = normalize_name(project)
         try:
-            return [self._make_elink(project, link_info)
-                    for link_info in self.get_simplelinks(project)]
+            return self._make_elinks(self.get_simplelinks(project))
         except self.UpstreamNotFoundError:
             return []
 
     def get_releaselinks_perstage(self, project: NormalizedName | str) -> list[ELink]:
         # compatibility access method for devpi-findlinks and possibly other plugins
         project = normalize_name(project)
-        return [self._make_elink(project, link_info)
-                for link_info in self.get_simplelinks_perstage(project)]
+        return self._make_elinks(self.get_simplelinks_perstage(project))
 
-    def _make_elink(self, project, link_meta):
-        return ELink(
-            self.filestore,
-            dict(
-                relpath=link_meta.relpath,
-                hashes=link_meta.hashes,
-                rel=Rel.ReleaseFile,
-                require_python=link_meta.require_python,
-                yanked=link_meta.yanked,
-            ),
-            link_meta.user,
-            link_meta.index,
-            project,
-            link_meta.version,
-        )
+    def _make_elinks(self, simplelinks: SimpleLinks) -> list[ELink]:
+        entries = {
+            e.abspath: e
+            for e in self.get_entries_for_entrypaths(l.abspath for l in simplelinks)
+            if e is not None
+        }
+        return [
+            ELink(
+                entries[l.abspath],
+                dict(
+                    relpath=l.relpath,
+                    hashes=l.hashes,
+                    rel=Rel.ReleaseFile,
+                    require_python=l.require_python,
+                    yanked=l.yanked,
+                ),
+            )
+            for l in simplelinks
+        ]
 
     def get_linkstore_perstage(self, name, version):
         return LinkStore(self, name, version)
@@ -1020,7 +1024,7 @@ class BaseStage:
             return None
         linkstore = self.get_linkstore_perstage(entry.project,
                                                 entry.version)
-        links = linkstore.get_links(entrypath=entrypath)
+        links = linkstore.get_links(entrypath=relpath)
         assert len(links) < 2
         return links[0] if links else None
 
@@ -1708,7 +1712,7 @@ class PrivateStage(BaseStage):
         if not result:
             return None
         (data,) = result
-        return ELink.from_entry(self.filestore, entry, data)
+        return ELink(entry, data)
 
     def _get_elinks(
         self, project: str, version: str, *, rel: Rel | None = None
@@ -1911,14 +1915,9 @@ class PrivateStage(BaseStage):
         doczip = self.key_doczip(project, version).with_resolved_parent().get()
         if not doczip:
             return None
-        return ELink(
-            self.filestore,
-            dict(doczip, rel=Rel.DocZip),
-            self.username,
-            self.index,
-            project,
-            version,
-        )
+        entrypath = AbsPath(f"{self.username}/{self.index}/{doczip['relpath']}")
+        entry = self.filestore.get_file_entry(entrypath)
+        return ELink(entry, dict(doczip, rel=Rel.DocZip))
 
     def get_doczip_entry(self, project, version):
         """ get entry of documentation zip or None if no docs exists. """
@@ -2031,13 +2030,15 @@ def linkdictprop(name, default=notset):
     return property(fget)
 
 
-class ELink:
+F = TypeVar("F", FileEntry, MutableFileEntry)
+
+
+class ELink(Generic[F]):
     """ model Link using entrypathes for referencing. """
 
     __slots__ = (
         "_basename",
         "_entry",
-        "filestore",
         "index",
         "linkdict",
         "project",
@@ -2045,33 +2046,24 @@ class ELink:
         "version",
     )
 
+    _entry: F
     _log = linkdictprop("_log")
     index_relpath = linkdictprop("relpath")
     for_relpath = linkdictprop("for_relpath", default=None)
-    _hashes = linkdictprop("hashes", default=None)
     rel = linkdictprop("rel", default=None)
     require_python = linkdictprop("require_python")
     yanked = linkdictprop("yanked")
 
-    def __init__(self, filestore, linkdict, user, index, project, version):
+    def __init__(self, entry: F, linkdict: dict) -> None:
         assert "hash_spec" not in linkdict
-        self._entry = notset
-        self.filestore = filestore
+        self._entry = entry
         self.linkdict = linkdict
         if self.for_relpath is not None:
             assert "#" not in self.for_relpath
-        self.user = user
-        self.index = index
-        self.project = project
-        self.version = version
-
-    @classmethod
-    def from_entry(cls, filestore, entry, linkdict):
-        elink = ELink(
-            filestore, linkdict, entry.user, entry.index, entry.project, entry.version
-        )
-        elink._entry = entry
-        return elink
+        self.user = entry.user
+        self.index = entry.index
+        self.project = entry.project
+        self.version = entry.version
 
     @property
     def best_available_hash_type(self):
@@ -2087,7 +2079,7 @@ class ELink:
 
     @property
     def hashes(self):
-        return Digests() if self._hashes is None else Digests(self._hashes)
+        return self.entry.hashes
 
     @property
     def basename(self):
@@ -2119,13 +2111,10 @@ class ELink:
         return "<ELink rel=%r entrypath=%r>" % (self.rel, self.entrypath)
 
     @property
-    def entry(self) -> FileEntry:
-        entry = self._entry
-        if isinstance(entry, NotSet):
-            entry = self.filestore.get_file_entry(self.relpath)
-            assert entry is not None
-            self._entry = entry
-        return entry
+    def entry(self) -> F:
+        if isinstance(self._entry, NotSet):
+            raise RuntimeError  # noqa: TRY004
+        return self._entry
 
     def add_log(self, what, who, **kw):
         log = {"what": what, "who": who, "when": gmtime()[:6]} | kw
@@ -2169,33 +2158,32 @@ class LinkStore:
         entrypath: str | None = None,
         for_entrypath: ELink | str | None = None,
     ) -> list[ELink]:
+        if entrypath is not None:
+            assert "#" not in entrypath
+
         if isinstance(for_entrypath, ELink):
             for_entrypath = for_entrypath.relpath
         elif for_entrypath is not None:
             assert "#" not in for_entrypath
 
-        elinks = self._get_elinks(rel)
-
-        def fil(link):
+        def fil(elink):
             return (
-                (not rel or rel == link.rel)
-                and (not basename or basename == link.basename)
-                and (not entrypath or entrypath in (link.entrypath, link.relpath))
-                and (not for_entrypath or for_entrypath == link.for_entrypath)
+                (not basename or basename == Path(elink["relpath"]).name)
+                and (
+                    not entrypath or entrypath in (elink["entrypath"], elink["relpath"])
+                )
+                and (not for_entrypath or for_entrypath == elink.get("for_entrypath"))
             )
 
-        filestore = self.filestore
-        username = self.stage.username
-        index = self.stage.index
-        project = self.project
-        version = self.version
-        return [
-            elink
-            for linkdict in elinks
-            if fil(
-                elink := ELink(filestore, linkdict, username, index, project, version)
+        elinks = [elink for elink in self._get_elinks(rel) if fil(elink)]
+        entries = {
+            e.abspath: e
+            for e in self.stage.get_entries_for_entrypaths(
+                l["entrypath"] for l in elinks
             )
-        ]
+            if e is not None
+        }
+        return [ELink(entries[l["entrypath"]], l) for l in elinks]
 
     @property
     def metadata(self):
@@ -2381,7 +2369,6 @@ class MutableLinkStore(LinkStore):
     ) -> ELink:
         new_linkdict = {
             "relpath": file_entry.index_relpath,
-            "hashes": file_entry.hashes,
             "_log": [],
         }
         if for_link:
@@ -2400,15 +2387,7 @@ class MutableLinkStore(LinkStore):
             raise RuntimeError
         key.set(new_linkdict)
         threadlog.info("added %r link %s", rel, file_entry.relpath)
-        stage = self.stage
-        return ELink(
-            self.filestore,
-            new_linkdict,
-            stage.username,
-            stage.index,
-            self.project,
-            self.version,
-        )
+        return ELink(file_entry, new_linkdict)
 
 
 @total_ordering
@@ -2502,6 +2481,10 @@ class SimplelinkMeta:
         self.__user = parts[0]
         self.__index = parts[1]
         self.__relpath = "/".join(parts[2:])
+
+    @property
+    def abspath(self) -> AbsPath:
+        return AbsPath(f"{self.user}/{self.index}/{self.relpath}")
 
     @property
     def basename(self) -> str:

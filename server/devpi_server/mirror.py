@@ -541,7 +541,9 @@ class MirrorData:
                 new_mirrorfile_keys, fetch=True, fill_cache=True, new_for_missing=True
             ):
                 num_new += 1
-                ulid_key.set(data[ulid_key.name])
+                ulid_key.set(
+                    {k: v for k, v in data[ulid_key.name].items() if k != "hashes"}
+                )
                 (projectname, version, _ext) = splitbasename(ulid_key.name)
                 if projectname not in seen_names:
                     assert normalize_name(projectname) == project
@@ -608,7 +610,7 @@ class MirrorData:
             assert not simpledata
             data: dict = {}
             yield data
-            mirrorfiledata.update(data)
+            mirrorfiledata.update({k: v for k, v in data.items() if k != "hashes"})
             simpledata.update(data)
 
 
@@ -1414,8 +1416,7 @@ class MirrorStage(BaseStage):
         return last_serial
 
     def _get_elink_from_entry(self, entry: BaseFileEntry) -> ELink | None:
-        return ELink.from_entry(
-            self.filestore,
+        return ELink(
             entry,
             dict(
                 rel=Rel.ReleaseFile,
