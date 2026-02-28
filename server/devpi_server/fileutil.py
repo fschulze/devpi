@@ -4,6 +4,7 @@ from . import filestore
 from . import readonly
 from .markers import nodefault as _nodefault
 from .normalized import NormalizedName
+from collections.abc import Iterator
 from io import BytesIO
 from struct import error as struct_error
 from struct import pack
@@ -108,6 +109,18 @@ def load(fp, _from_bytes=int.from_bytes, _unpack=unpack):
             stack_append(True)  # noqa: FBT003
         elif opcode == b'T':  # complex
             stack_append(complex(_unpack("!d", read(8))[0], _unpack("!d", read(8))[0]))
+        elif opcode == b"y":  # check len and return
+            if (slen := len(stack[-1])) != (
+                rlen := _from_bytes(read(4), byteorder="big", signed=True)
+            ):
+                msg = f"length {slen} of list on stack doesn't match expected length {rlen}"
+                raise LoadError(msg)
+        elif opcode == b"z":  # append
+            try:
+                value = stack_pop()
+            except IndexError as e:
+                raise LoadError("not enough items for append") from e
+            stack[-1].append(value)
         else:
             msg = f"unknown opcode {opcode!r} - wire protocol corruption?"
             raise LoadError(msg)
@@ -124,7 +137,7 @@ def loads(data):
 
 def _dump_tuple(write, obj, _pack=pack):
     for item in obj:
-        _dispatch[item.__class__](write, item)
+        _dispatch(item)(write, item)
     write(b'@')
     write(_pack("!i", len(obj)))
 
@@ -149,7 +162,7 @@ def _dump_float(write, obj, _pack=pack):
 
 def _dump_frozenset(write, obj, _pack=pack):
     for item in obj:
-        _dispatch[item.__class__](write, item)
+        _dispatch(item)(write, item)
     write(b'E')
     write(_pack("!i", len(obj)))
 
@@ -168,8 +181,8 @@ def _dump_int(write, obj, _pack=pack):
 def _dump_dict(write, obj):
     write(b'J')
     for k, v in obj.items():
-        _dispatch[k.__class__](write, k)
-        _dispatch[v.__class__](write, v)
+        _dispatch(k)(write, k)
+        _dispatch(v)(write, v)
         write(b'P')
 
 
@@ -177,8 +190,8 @@ def _dump_list(write, obj, _pack=pack):
     write(b'K')
     write(_pack("!i", len(obj)))
     for i, v in enumerate(obj):
-        _dispatch[i.__class__](write, i)
-        _dispatch[v.__class__](write, v)
+        _dispatch(i)(write, i)
+        _dispatch(v)(write, v)
         write(b'P')
 
 
@@ -198,7 +211,7 @@ def _dump_str(write, obj, _pack=pack):
 
 def _dump_set(write, obj, _pack=pack):
     for item in obj:
-        _dispatch[item.__class__](write, item)
+        _dispatch(item)(write, item)
     write(b'O')
     write(_pack("!i", len(obj)))
 
@@ -209,7 +222,21 @@ def _dump_complex(write, obj, _pack=pack):
     write(_pack("!d", obj.imag))
 
 
-_dispatch: dict[type, Callable] = {
+def _dump_iter(write, obj, _pack=pack):
+    # empty list
+    write(b"K\x00\x00\x00\x00")
+    length = 0
+    for item in obj:
+        _dispatch(item)(write, item)
+        # append
+        write(b"z")
+        length += 1
+    # check length
+    write(b"y")
+    write(_pack("!i", length))
+
+
+_dispatch_dict: dict[type, Callable] = {
     tuple: _dump_tuple,
     readonly.TupleViewReadonly: _dump_tuple,
     bytes: _dump_bytes,
@@ -231,9 +258,15 @@ _dispatch: dict[type, Callable] = {
 }
 
 
+def _dispatch(obj, _dispatch_dict=_dispatch_dict):
+    if isinstance(obj, Iterator):
+        return _dump_iter
+    return _dispatch_dict[obj.__class__]
+
+
 def _dump(write, obj):
     try:
-        _dispatch[obj.__class__](write, obj)
+        _dispatch(obj)(write, obj)
     except struct_error as e:
         msg = e.args[0]
         if e.__traceback__ is not None:
@@ -253,6 +286,30 @@ def dump(fp, obj):
 
 class _SizeError(Exception):
     pass
+
+
+def dump_iter(obj):
+    if not isinstance(obj, Iterator):
+        raise TypeError("Not an iterator")
+
+    fp = BytesIO()
+    write = fp.write
+    length = 0
+    # empty list
+    write(b"K\x00\x00\x00\x00")
+    for item in obj:
+        _dispatch(item)(write, item)
+        # append
+        write(b"z")
+        yield fp.getvalue()
+        fp.seek(0)
+        fp.truncate()
+        length += 1
+    # check length
+    write(b"y")
+    write(pack("!i", length))
+    write(b"Q")
+    yield fp.getvalue()
 
 
 def dumplen(obj, maxlen=None):
