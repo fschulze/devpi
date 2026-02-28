@@ -749,9 +749,7 @@ class BaseStage:
         self.keyfs = xom.keyfs
         self.filestore = xom.filestore
         self.key_index = self.keyfs.schema.INDEX.locate(user=username, index=index)
-        self.key_projects = self.keyfs.schema.PROJNAMES.locate(
-            user=username, index=index
-        )
+        self.key_project = self.keyfs.schema.PROJECT.search(user=username, index=index)
 
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__} {self.name}>"
@@ -870,9 +868,7 @@ class BaseStage:
         raise NotImplementedError
 
     @abstractmethod
-    def list_projects_perstage(
-        self,
-    ) -> dict[str, NormalizedName | str] | SetViewReadonly[str]:
+    def list_projects_perstage(self) -> dict[str, NormalizedName | str]:
         raise NotImplementedError
 
     @abstractmethod
@@ -1514,11 +1510,7 @@ class PrivateStage(BaseStage):
         assert "+elinks" not in metadata
         project = normalize_name(metadata["name"])
         version = metadata["version"]
-        key_projsimplelinks = self.key_projsimplelinks(project).with_resolved_parent()
-        with key_projsimplelinks.update():
-            # this triggers creation of the simplelinks dict needed
-            # for child keys
-            pass
+        self.add_project_name(project)
         key_projversion = self.key_projversion(project, version).with_resolved_parent()
         with key_projversion.update() as versiondata:
             versiondata.update(metadata)
@@ -1527,17 +1519,14 @@ class PrivateStage(BaseStage):
         with key_projversions.update() as versions:
             if version not in versions:
                 versions.add(version)
-        self.add_project_name(project)
 
     def add_project_name(self, project: NormalizedName | str) -> None:
         project = normalize_name(project)
-        key_projects = self.key_projects.with_resolved_parent()
-        projects = key_projects.get_mutable()
-        if project not in projects:
-            if self.customizer.readonly:
-                raise ReadonlyIndex("index is marked read only")
-            projects.add(project)
-            key_projects.set(projects)
+        key_project = self.key_project(project).with_resolved_parent()
+        if not key_project.exists() and self.customizer.readonly:
+            raise ReadonlyIndex("index is marked read only")
+        with key_project.update() as projectdata:
+            projectdata["name"] = project.original
 
     def del_project(self, project: NormalizedName | str) -> None:
         project = normalize_name(project)
@@ -1545,11 +1534,10 @@ class PrivateStage(BaseStage):
         for version in list(key_projversions.get()):
             self.del_versiondata(project, version, cleanup=False)
         self._regen_simplelinks(project)
-        with self.key_projects.with_resolved_parent().update() as projects:
-            projects.remove(project)
         threadlog.info("deleting project %s", project)
         key_projversions.delete()
         self.key_projsimplelinks(project).with_resolved_parent().delete()
+        self.key_project(project).with_resolved_parent().delete()
 
     def del_versiondata(
         self,
@@ -1615,29 +1603,19 @@ class PrivateStage(BaseStage):
         tx = self.keyfs.tx
         if at_serial is None:
             at_serial = tx.at_serial
-        (last_serial, _projects_ulid, projects) = tx.get_last_serial_and_value_at(
-            self.key_projects.with_resolved_parent(), at_serial
+        (last_serial, _projectname_ulid, projectdata) = tx.get_last_serial_and_value_at(
+            self.key_project(project).with_resolved_parent(), at_serial
         )
-        if isinstance(projects, (Absent, Deleted)):
+        if isinstance(projectdata, (Absent, Deleted)):
             # the whole index never existed or was deleted
-            return -1
-        try:
-            key_projversions = self.key_projversions(project).with_resolved_parent()
-        except KeyError:
-            if project in projects:
-                # no versions ever existed, but the project is known
-                return last_serial
-            # the project never existed or was deleted and didn't have versions
-            return -1
+            return last_serial
+        key_projversions = self.key_projversions(project).with_resolved_parent()
         (versions_serial, _versions_ulid, versions) = tx.get_last_serial_and_value_at(
             key_projversions.with_resolved_parent(), at_serial
         )
         if isinstance(versions, Absent):
-            if project in projects:
-                # no versions ever existed, but the project is known
-                return last_serial
-            # the project never existed or was deleted and didn't have versions
-            return -1
+            # the project never had versions
+            return last_serial
         if isinstance(versions, Deleted):
             # was deleted
             return last_serial
@@ -1729,13 +1707,12 @@ class PrivateStage(BaseStage):
         data_dict = {u"links":links, u"requires_python":requires_python}
         self.key_projsimplelinks(project).with_resolved_parent().set(data_dict)
 
-    def list_projects_perstage(
-        self,
-    ) -> dict[str, NormalizedName | str] | SetViewReadonly[str]:
-        return self.key_projects.with_resolved_parent().get()
+    def list_projects_perstage(self) -> dict[str, NormalizedName | str]:
+        key_project = self.key_project.with_resolved_parent()
+        return {k.name: v["name"] for k, v in key_project.iter_ulidkey_values()}
 
     def has_project_perstage(self, project: NormalizedName | str) -> bool | Unknown:
-        return normalize_name(project) in self.list_projects_perstage()
+        return self.key_project(project).exists(resolve_parents=True)
 
     def store_releasefile(
         self,
@@ -1833,17 +1810,20 @@ class PrivateStage(BaseStage):
         tx = self.keyfs.tx
         if at_serial is None:
             at_serial = tx.at_serial
-        try:
-            (last_serial, projects) = tx.last_serial_and_value_at(
-                self.key_projects.with_resolved_parent(), at_serial
-            )
-        except KeyError:
-            last_serial = -1
-            projects = SetViewReadonly(set())
-        if last_serial >= at_serial:
-            return last_serial
-        assert isinstance(projects, SetViewReadonly)
-        for project in projects:
+        last_serial = -1
+        for project_keydata in tx.conn.iter_keys_at_serial(
+            (self.key_project.with_resolved_parent(),),
+            at_serial=at_serial,
+            fill_cache=False,
+            with_deleted=True,
+        ):
+            last_serial = max(last_serial, project_keydata.key.last_serial)
+            projectdata = project_keydata.value
+            if last_serial >= at_serial:
+                return last_serial
+            if isinstance(projectdata, Deleted):
+                continue
+            project = projectdata["name"]
             (versions_serial, versions) = tx.last_serial_and_value_at(
                 self.key_projversions(project).with_resolved_parent(), at_serial
             )
@@ -2427,37 +2407,33 @@ class Schema(KeyFSSchema):
     )
 
     # type "stage" related
-    PROJSIMPLELINKS = KeyFSSchema.decl_patterned_key(
-        "PROJSIMPLELINKS",
+    PROJECT = KeyFSSchema.decl_patterned_key(
+        "PROJECT",
         "{project}",
         INDEX,
         dict,
         DictViewReadonly,
     )
-    PROJVERSIONS = KeyFSSchema.decl_anonymous_key(
-        "PROJVERSIONS",
-        PROJSIMPLELINKS,
-        set[str],
-        SetViewReadonly[str],
-    )
-    PROJVERSION = KeyFSSchema.decl_patterned_key(
-        "PROJVERSION",
-        "{version}",
-        PROJSIMPLELINKS,
+    PROJSIMPLELINKS = KeyFSSchema.decl_anonymous_key(
+        "PROJSIMPLELINKS",
+        PROJECT,
         dict,
         DictViewReadonly,
     )
-    PROJNAMES = KeyFSSchema.decl_anonymous_key(
-        "PROJNAMES",
-        INDEX,
-        set[str],
-        SetViewReadonly[str],
+    PROJVERSIONS = KeyFSSchema.decl_anonymous_key(
+        "PROJVERSIONS",
+        PROJECT,
+        set,
+        SetViewReadonly,
+    )
+    PROJVERSION = KeyFSSchema.decl_patterned_key(
+        "PROJVERSION", "{version}", PROJECT, dict, DictViewReadonly
     )
     VERSIONFILELIST = KeyFSSchema.decl_anonymous_key(
         "VERSIONFILELIST",
         PROJVERSION,
-        set[str],
-        SetViewReadonly[str],
+        set,
+        SetViewReadonly,
     )
     VERSIONFILE = KeyFSSchema.decl_patterned_key(
         "VERSIONFILE",
@@ -2479,8 +2455,8 @@ class Schema(KeyFSSchema):
         "DIGESTULIDS",
         "{digest}",
         None,
-        set[int],
-        SetViewReadonly[int],
+        set,
+        SetViewReadonly,
     )
 
     def register_key_subscribers(self, xom: XOM, keyfs: KeyFS) -> None:
