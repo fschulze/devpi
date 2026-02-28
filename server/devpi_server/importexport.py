@@ -164,7 +164,7 @@ def import_(pluginmanager=None, argv=None):
 
 
 class Exporter:
-    DUMPVERSION = "2"
+    DUMPVERSION = "3"
     export: dict[str, Any]
     export_users: dict[str, Any]
     export_indexes: dict[str, Any]
@@ -358,7 +358,7 @@ class Migrator:
 
     @dumpversion.validator
     def _validate_dumpversion(self, _attribute, value):
-        if value not in {1, 2}:
+        if value not in {1, 2, 3}:
             msg = f"incompatible dumpversion: {self.dumpversion}"
             raise Fatal(msg)
 
