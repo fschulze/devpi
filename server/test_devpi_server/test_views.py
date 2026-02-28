@@ -1886,7 +1886,7 @@ def test_delete_mirror(mapp, monkeypatch, simpypi, testapp, xom):
         stage = testapp.xom.model.getstage(api.stagename)
         assert stage is None
         assert not getentry(testapp, path).file_exists()
-        assert not getentry(testapp, path).key.exists()
+        assert not getentry(testapp, path).key.exists(resolve_parents=True)
 
     # patch async_get to simulate broken PyPI
     async def async_get(url, **kwargs):  # noqa: ARG001 - testing

@@ -671,7 +671,7 @@ class MirrorStage(BaseStage):
                 # called from the notification thread
                 if not self.keyfs.tx.write:
                     self.keyfs.restart_read_transaction()
-                k = self.keyfs.schema.MIRRORNAMESINIT(
+                k = self.keyfs.schema.MIRRORNAMESINIT.locate(
                     user=self.username, index=self.index
                 ).with_resolved_parent()
                 # when 0 it is new, when 1 it is pre 6.6.0 with
@@ -769,8 +769,14 @@ class MirrorStage(BaseStage):
                 cache.get("requires_python", []),
                 cache.get("yanked", []))
             if self.offline and links_with_data:
-                links_with_data = ensure_deeply_readonly(list(
-                    filter(self._is_file_cached, links_with_data)))
+                entries = self.get_entries_for_entrypaths(x[1] for x in links_with_data)
+                links_with_data = ensure_deeply_readonly(
+                    [
+                        link
+                        for (link, entry) in zip(links_with_data, entries, strict=True)
+                        if entry is not None and entry.file_exists()
+                    ]
+                )
 
         return (is_expired, links_with_data, serial, etag)
 
@@ -1021,7 +1027,9 @@ class MirrorStage(BaseStage):
         # the async loop has no transaction
         # we don't resolve the key here, as _async_fetch_releaselinks runs
         # in a separate thread and only needs access to the relpath
-        key_index = self.keyfs.schema.INDEX(user=self.user.name, index=self.index)
+        key_index = self.keyfs.schema.INDEX.locate(
+            user=self.user.name, index=self.index
+        )
         _key_from_link = partial(key_from_link, self.keyfs, key_index=key_index)
         try:
             self.xom.run_coroutine_threadsafe(
