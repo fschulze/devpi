@@ -199,7 +199,7 @@ def test_get_mirror_whitelist_info_with_fetched_upstream(mirrorstage, simpypi, s
 @pytest.mark.nomocking
 @pytest.mark.writetransaction
 def test_whitelisted_with_unfetched_upstream(mirrorstage, simpypi, stage):
-    stage.ixconfig["mirror_whitelist"] = ["pkg"]
+    stage.ixconfig._data["mirror_whitelist"] = ["pkg"]
     simpypi.add_release("pkg", pkgver="pkg-1.0.zip")
     assert stage.has_project("pkg") is unknown
     info = stage.get_mirror_whitelist_info("pkg")
@@ -223,7 +223,7 @@ def test_whitelisted_with_unfetched_upstream(mirrorstage, simpypi, stage):
 @pytest.mark.nomocking
 @pytest.mark.writetransaction
 def test_whitelisted_with_fetched_upstream(mirrorstage, simpypi, stage):
-    stage.ixconfig["mirror_whitelist"] = ["pkg"]
+    stage.ixconfig._data["mirror_whitelist"] = ["pkg"]
     simpypi.add_release("pkg", pkgver="pkg-1.0.zip")
     (link,) = mirrorstage.get_releaselinks_perstage("pkg")
     assert link.basename == "pkg-1.0.zip"

@@ -730,16 +730,19 @@ class FileReplicationSharedData:
 
     def on_import(self, serial, changes):
         keyfs = self.xom.keyfs
-        user_keyname = keyfs.schema.USER.name
-        for key in changes:
-            if key.name == user_keyname:
-                self.update_index_types(keyfs, serial, key, *changes[key])
+        index_keyname = keyfs.schema.INDEX.name
+        for key, (val, _back_serial) in changes.items():
+            if key.name == index_keyname:
+                index_type = None if val is None else val["type"]
+                username = key.params["user"]
+                indexname = key.params["index"]
+                self.set_index_type_for(f"{username}/{indexname}", index_type)
         file_keynames = frozenset(
             (keyfs.schema.STAGEFILE.name, keyfs.schema.PYPIFILE_NOMD5.name)
         )
-        for key in changes:
+        for key, (val, back_serial) in changes.items():
             if key.name in file_keynames:
-                self.on_import_file(keyfs, serial, key, *changes[key])
+                self.on_import_file(keyfs, serial, key, val, back_serial)
 
     def on_import_file(self, keyfs, serial, key, val, back_serial):
         skip_indexes = self.skip_indexes
@@ -783,30 +786,6 @@ class FileReplicationSharedData:
         self.queue.put((
             index_type, -serial, key.relpath, key.name, val, back_serial))
         self.last_added = time.time()
-
-    def update_index_types(self, keyfs, serial, key, val, back_serial):
-        if val is None:
-            val = {}
-        current_index_types = {
-            name: config["type"]
-            for name, config in val.get("indexes", {}).items()}
-        val = {}
-        if back_serial >= 0:
-            try:
-                val = keyfs.tx.get_value_at(key, back_serial)
-            except KeyError:
-                pass
-        old_index_types = {
-            name: config["type"]
-            for name, config in val.get("indexes", {}).items()}
-        username = key.params["user"]
-        removed_indexes = set(old_index_types).difference(current_index_types)
-        for indexname in removed_indexes:
-            self.set_index_type_for(
-                f"{username}/{indexname}", None)
-        for indexname, indextype in current_index_types.items():
-            self.set_index_type_for(
-                f"{username}/{indexname}", indextype)
 
     def next_ts(self, delay):
         return time.time() + delay
