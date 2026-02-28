@@ -15,4 +15,7 @@ def test_keyfs_view(testapp):
 
 def test_keyfs_changelog_view(testapp):
     r = testapp.get("/+keyfs/0", headers=dict(accept="text/html"))
-    assert "<strong>USER root/.config</strong>" in r.text
+    assert (
+        "<strong>USER</strong>&nbsp;<code>&lt;dict&gt;</code> <strong>root</strong>"
+        in r.text
+    )
