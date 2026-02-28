@@ -719,7 +719,7 @@ class PyPIView:
             vary=set(["Accept", "User-Agent"]))
         if stage.ixconfig['type'] == 'mirror':
             serial = (
-                stage.key_projsimplelinks(project)
+                stage.key_projectcacheinfo(project)
                 .with_resolved_parent()
                 .get()
                 .get("serial")
