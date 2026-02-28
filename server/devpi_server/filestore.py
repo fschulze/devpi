@@ -26,10 +26,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from typing import overload
 from urllib.parse import unquote
-from wsgiref.handlers import format_date_time
 from zipfile import BadZipFile
 from zipfile import ZipFile
+import datetime
 import hashlib
+import httpdate
 import mimetypes
 import re
 import warnings
@@ -479,6 +480,19 @@ def split_name_version_pyversion_ext(
     raise ValueError(f"{fn!r} does not match {project}")
 
 
+def parse_last_modified(last_modified):
+    try:
+        _last_modified = datetime.datetime.strptime(
+            last_modified, "%Y-%m-%dT%H:%M:%S%z"
+        )
+    except ValueError:
+        _last_modified = datetime.datetime.fromtimestamp(
+            httpdate.httpdate_to_unixtime(last_modified),
+            tz=datetime.UTC,
+        )
+    return _last_modified.astimezone(datetime.UTC)
+
+
 def unicode_if_bytes(val):
     if isinstance(val, bytes):
         return val.decode('ascii')
@@ -540,6 +554,7 @@ class FileStore:
         *,
         dir_hash_spec: str | None = None,
         hashes: Digests | None = None,
+        last_modified: str | None = None,
     ) -> MutableFileEntry:
         # dir_hash_spec is set for toxresult files
         if dir_hash_spec is None:
@@ -560,7 +575,9 @@ class FileStore:
             filename=basename,
         )
         entry = MutableFileEntry(key)
-        entry.file_set_content(content_or_file, hashes=hashes)
+        entry.file_set_content(
+            content_or_file, hashes=hashes, last_modified=last_modified
+        )
         return entry
 
 
@@ -769,9 +786,13 @@ class BaseFileEntry:
         hashes: Digests | None = None,
     ) -> None:
         if last_modified != -1:
-            if last_modified is None:
-                last_modified = unicode_if_bytes(format_date_time(None))
-            self.last_modified = last_modified
+            self.last_modified = (
+                datetime.datetime.now(tz=datetime.UTC)
+                if last_modified is None
+                else parse_last_modified(last_modified)
+            ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        else:
+            raise RuntimeError
         hashes = Digests() if hashes is None else Digests(hashes)
         if hash_spec:
             hashes.add_spec(hash_spec)
@@ -812,7 +833,14 @@ class BaseFileEntry:
     def gethttpheaders(self) -> dict[str, str]:
         assert self.file_exists()
         headers = {}
-        headers["last-modified"] = str(self.last_modified)
+        if last_modified := self.last_modified:
+            headers["last-modified"] = httpdate.unixtime_to_httpdate(
+                int(
+                    datetime.datetime.strptime(
+                        last_modified, "%Y-%m-%dT%H:%M:%S%z"
+                    ).timestamp()
+                )
+            )
         m = mimetypes.guess_type(self.basename)[0]
         headers["content-type"] = "application/octet-stream" if m is None else m
         headers["content-length"] = str(self.file_size())
