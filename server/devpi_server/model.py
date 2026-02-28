@@ -1857,8 +1857,8 @@ class PrivateStage(BaseStage):
         with key_simpledata.update() as simpledata:
             simpledata["entrypath"] = link.entry.relpath
             simpledata["hashes"] = link.entry.hashes
-            if "requires_python" in versiondata:
-                simpledata["requires_python"] = versiondata["requires_python"]
+            if rp := versiondata.get("requires_python"):
+                simpledata["requires_python"] = rp
         return link
 
     def store_doczip(
