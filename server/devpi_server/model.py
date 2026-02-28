@@ -885,6 +885,14 @@ class BaseStage:
         raise NotImplementedError
 
     @abstractmethod
+    def has_version_perstage(self, project: str, version: str) -> bool:
+        raise NotImplementedError
+
+    @abstractmethod
+    def _get_elink_from_entry(self, entry: BaseFileEntry) -> ELink | None:
+        raise NotImplementedError
+
+    @abstractmethod
     def normalize_indexconfig_value(self, key: str, value: Any) -> Any:
         raise NotImplementedError
 
@@ -1596,6 +1604,12 @@ class PrivateStage(BaseStage):
         key_version = self.key_version(project).with_resolved_parent()
         return {x.name for x in key_version.iter_ulidkeys()}
 
+    def _get_elink_from_entry(self, entry: BaseFileEntry) -> ELink | None:
+        key = self.key_versionfile(entry.project, entry.version, entry.basename)
+        if not key.exists(resolve_parents=True):
+            return None
+        return ELink.from_entry(self.filestore, entry, key.with_resolved_parent().get())
+
     def _get_elinks(self, project, version):
         if not self.key_versionmetadata(project, version).exists(resolve_parents=True):
             return []
@@ -1605,9 +1619,6 @@ class PrivateStage(BaseStage):
             .with_resolved_parent()
             .iter_ulidkey_values()
         ]
-
-    def get_has_versiondata_perstage(self, project, version):
-        return self.key_versionmetadata(project, version).exists(resolve_parents=True)
 
     def get_last_project_change_serial_perstage(self, project, at_serial=None):
         project = normalize_name(project)
@@ -1704,6 +1715,9 @@ class PrivateStage(BaseStage):
     def has_project_perstage(self, project: NormalizedName | str) -> bool | Unknown:
         return self.key_project(project).exists(resolve_parents=True)
 
+    def has_version_perstage(self, project: str, version: str) -> bool:
+        return self.key_versionmetadata(project, version).exists(resolve_parents=True)
+
     def store_releasefile(
         self,
         project: NormalizedName | str,
@@ -1718,12 +1732,12 @@ class PrivateStage(BaseStage):
             raise ReadonlyIndex("index is marked read only")
         project = normalize_name(project)
         filename = ensure_unicode(filename)
-        if not self.get_has_versiondata_perstage(project, version):
+        if not self.has_version_perstage(project, version):
             # There's a chance the version was guessed from the
             # filename, which might have swapped dashes to underscores
             if '_' in version:
                 version = version.replace('_', '-')
-                if not self.get_has_versiondata_perstage(project, version):
+                if not self.has_version_perstage(project, version):
                     raise MissesRegistration("%s-%s", project, version)
             else:
                 raise MissesRegistration("%s-%s", project, version)
@@ -1759,7 +1773,7 @@ class PrivateStage(BaseStage):
             threadlog.info("store_doczip: derived version of %s is %s",
                            project, version)
         basename = "%s-%s.doc.zip" % (project, version)
-        if not self.get_has_versiondata_perstage(project, version):
+        if not self.has_version_perstage(project, version):
             self.set_versiondata({'name': project, 'version': version})
         linkstore = self.get_mutable_linkstore_perstage(project, version)
         return linkstore.create_linked_entry(
@@ -1904,6 +1918,12 @@ class ELink:
         self.project = project
         self.version = version
 
+    @classmethod
+    def from_entry(cls, filestore, entry, linkdict):
+        elink = ELink(filestore, linkdict, entry.project, entry.version)
+        elink._entry = entry
+        return elink
+
     @property
     def index(self):
         return self.entry.index
@@ -1982,8 +2002,7 @@ class LinkStore:
         self.filestore = stage.filestore
         self.project = normalize_name(project)
         self.version = version
-        self.verdata = stage.get_versiondata_perstage(self.project, version)
-        if not self.verdata:
+        if not self.stage.has_version_perstage(project, version):
             raise MissesRegistration(
                 "%s-%s on stage %s at %s",
                 project, version, stage.name, stage.keyfs.tx.at_serial)
@@ -1997,6 +2016,8 @@ class LinkStore:
         elif for_entrypath is not None:
             assert "#" not in for_entrypath
 
+        elinks = self.stage._get_elinks(self.project, self.version)
+
         def fil(link):
             return (
                 (not rel or rel == link.rel)
@@ -2007,22 +2028,21 @@ class LinkStore:
 
         return [
             elink
-            for linkdict in self.verdata.get("+elinks", [])
+            for linkdict in elinks
             if fil(elink := ELink(self.filestore, linkdict, self.project, self.version))
         ]
 
     @property
     def metadata(self):
+        verdata = self.stage.get_versiondata_perstage(
+            self.project, self.version, with_elinks=False
+        )
         return ensure_deeply_readonly(
-            {k: v for k, v in self.verdata.items() if not k.startswith("+")}
+            {k: v for k, v in verdata.items() if not k.startswith("+")}
         )
 
 
 class MutableLinkStore(LinkStore):
-    def __init__(self, stage, project, version):
-        super().__init__(stage, project, version)
-        self.verdata = get_mutable_deepcopy(self.verdata)
-
     def create_linked_entry(
         self,
         rel: Rel,
@@ -2109,7 +2129,6 @@ class MutableLinkStore(LinkStore):
         if del_links:
             for link in del_links:
                 filename = link.entry.basename
-                self.verdata["+elinks"].remove(link.linkdict)
                 link.entry.delete()
                 key_versionfile(filename).delete()
                 was_deleted.append(link.relpath)
@@ -2158,7 +2177,6 @@ class MutableLinkStore(LinkStore):
         self.key_versionfile(file_entry.basename).with_resolved_parent().set(
             new_linkdict
         )
-        self.verdata.setdefault("+elinks", []).append(new_linkdict)
         threadlog.info("added %r link %s", rel, file_entry.relpath)
         return ELink(self.filestore, new_linkdict, self.project, self.version)
 
