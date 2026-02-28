@@ -922,15 +922,25 @@ class TestImportExport:
         mapp1.upload_doc("hello.zip", content, "hello", "")
         with mapp1.xom.keyfs.read_transaction():
             stage = mapp1.xom.model.getstage(api.stagename)
-            entry = stage.get_doczip_entry("hello", "1.0")
-            last_modified = entry.last_modified
+            link = stage.get_doczip_link("hello", "1.0")
+            last_modified = link.entry.last_modified
+            (log,) = link.get_logs()
+            what = log["what"]
+            when = log["when"]
+            who = log["who"]
+            assert what == "upload"
+            assert who == api.user
         sleep(1.5)
         impexp.export()
         mapp2 = impexp.new_import()
         with mapp2.xom.keyfs.read_transaction():
             stage = mapp2.xom.model.getstage(api.stagename)
-            entry = stage.get_doczip_entry("hello", "1.0")
-            assert entry.last_modified == last_modified
+            link = stage.get_doczip_link("hello", "1.0")
+            assert link.entry.last_modified == last_modified
+            (log,) = link.get_logs()
+            assert log["what"] == what
+            assert log["when"] == when
+            assert log["who"] == who
             doczip = stage.get_doczip("hello", "1.0")
             archive = Archive(BytesIO(doczip))
             assert 'index.html' in archive.namelist()
