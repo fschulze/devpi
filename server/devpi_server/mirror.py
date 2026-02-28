@@ -10,11 +10,9 @@ from .config import hookimpl
 from .exceptions import lazy_format_exception
 from .filestore import AbsPath
 from .filestore import Digests
-from .filestore import index_relpath
 from .filestore import key_from_link
 from .htmlpage import HTMLPage
 from .httpclient import FatalResponse
-from .keyfs_types import RelPath
 from .log import threadlog
 from .markers import Absent
 from .markers import absent
@@ -449,19 +447,19 @@ class MirrorData:
         stage = self.get_stage()
         tx = stage.keyfs.tx
         data: dict[str, CacheLink] = {}
-        username = stage.username
-        index = stage.index
         key_index = stage.key_index.resolve(fetch=True)
-        for fn, ep, rp, y in join_links_data(releaselinks, key_index):
-            (entrypath, sep, hash_spec) = ep.partition("#")
-            link_data = data[fn] = CacheLink(
-                relpath=index_relpath(username, index, RelPath(entrypath))
-            )
-            if sep == "#" and hash_spec:
+        keyfs = stage.keyfs
+        for releaselink in releaselinks:
+            fn = releaselink.basename
+            key = key_from_link(keyfs, releaselink, key_index)
+            link_data = data[fn] = CacheLink(relpath=key.name)
+            if hash_spec := releaselink.hash_spec:
                 link_data["hashes"] = Digests.from_spec(hash_spec)
-            if rp:
+            if rp := releaselink.requires_python:
                 link_data["requires_python"] = rp
-            if y is not None:
+            if (
+                y := None if releaselink.yanked is False else releaselink.yanked
+            ) is not None:
                 link_data["yanked"] = y
         with self.key_project.with_resolved_parent().update() as projectdata:
             projectdata["name"] = project.original
