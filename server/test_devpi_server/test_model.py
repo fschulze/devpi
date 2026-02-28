@@ -579,7 +579,7 @@ class TestStage:
         ('*', ['*'])])
     def test_whitelist_setting(self, stage, setting, expected):
         stage.modify(mirror_whitelist=setting)
-        ixconfig = stage.get()
+        ixconfig = stage.ixconfig
         # BBB old devpi versions had pypi_whitelist, here we check that it's gone
         assert 'pypi_whitelist' not in ixconfig
         assert ixconfig['mirror_whitelist'] == expected
