@@ -5,6 +5,7 @@ from .auth import verify_and_update_password_hash
 from .config import hookimpl
 from .filestore import Digests
 from .filestore import FileEntry
+from .filestore import get_hashes
 from .keyfs_schema import KeyFSSchema
 from .keyfs_types import RelPath
 from .keyfs_types import is_dict_key
@@ -22,6 +23,7 @@ from .readonly import SetViewReadonly
 from .readonly import ensure_deeply_readonly
 from .readonly import get_mutable_deepcopy
 from abc import abstractmethod
+from contextlib import suppress
 from devpi_common.metadata import get_latest_version
 from devpi_common.metadata import parse_version
 from devpi_common.metadata import splitbasename
@@ -86,6 +88,9 @@ class Rel(enum.StrEnum):
     DocZip = "doczip"
     ReleaseFile = "releasefile"
     ToxResult = "toxresult"
+
+
+VERSIONDATA_DESCRIPTION_SIZE_THRESHOLD = 8192
 
 
 def apply_filter_iter(items, filter_iter):
@@ -1603,10 +1608,26 @@ class PrivateStage(BaseStage):
         with key_version.update() as versiondata:
             if (rp := metadata.get("requires_python")) is not None:
                 versiondata["requires_python"] = rp
+        if (
+            len(content := metadata.get("description", "").encode())
+            > VERSIONDATA_DESCRIPTION_SIZE_THRESHOLD
+        ):
+            entry = self.filestore.store(
+                user=self.username,
+                index=self.index,
+                basename=f"{project}-{version}.readme",
+                content_or_file=content,
+                hashes=get_hashes(content),
+            )
+            metadata["description"] = {
+                "relpath": entry.index_relpath,
+                "hashes": entry.hashes,
+            }
         key_versionmetadata = self.key_versionmetadata(
             project, version
         ).with_resolved_parent()
         with key_versionmetadata.update() as versionmetadata:
+            versionmetadata.clear()
             versionmetadata.update(metadata)
         threadlog.info("set_metadata %s-%s", project, version)
 
@@ -1639,8 +1660,20 @@ class PrivateStage(BaseStage):
                                 (version, project, self.name))
         linkstore = self.get_mutable_linkstore_perstage(project, version)
         linkstore.remove_links()
-        self.key_versionmetadata(project, version).with_resolved_parent().delete()
+        key_versionmetadata = self.key_versionmetadata(
+            project, version
+        ).with_resolved_parent()
         self.key_version(project, version).with_resolved_parent().delete()
+        metadata = key_versionmetadata.get()
+        if "description" in metadata and not isinstance(metadata["description"], str):
+            entry = self.filestore.get_file_entry(
+                RelPath(
+                    f"{self.username}/{self.index}/{metadata['description']['relpath']}"
+                )
+            )
+            if entry is not None:
+                entry.delete()
+        key_versionmetadata.delete()
         if cleanup:
             key_version = self.key_version(project).with_resolved_parent()
             has_versions = next(key_version.iter_ulidkeys(), absent) is not absent
@@ -1782,6 +1815,17 @@ class PrivateStage(BaseStage):
         if not key_versionmetadata.exists(resolve_parents=True):
             return ensure_deeply_readonly({})
         verdata = key_versionmetadata.with_resolved_parent().get()
+        if "description" in verdata and not isinstance(verdata["description"], str):
+            entry = self.filestore.get_file_entry(
+                RelPath(
+                    f"{self.username}/{self.index}/{verdata['description']['relpath']}"
+                )
+            )
+            verdata = get_mutable_deepcopy(verdata)
+            # if the file doesn't exist we return the dict as fallback
+            if entry is not None:
+                with suppress(FileNotFoundError):
+                    verdata["description"] = entry.file_get_content().decode()
         assert "+elinks" not in verdata
         if with_elinks:
             elinks = self._get_elinks(project, version)
