@@ -1342,6 +1342,9 @@ class BaseStage:
     def delete(self) -> None:
         self.model.delete_stage(self.username, self.index)
 
+    def del_entry(self, entry: MutableFileEntry, *, cleanup: bool = True) -> None:
+        raise NotImplementedError
+
     def get_releaselinks(self, project):
         # compatibility access method used by devpi-web and tests
         project = normalize_name(project)
@@ -2023,7 +2026,7 @@ class PrivateStage(BaseStage):
         self.key_version(project, version).with_resolved_parent().delete()
         metadata = key_versionmetadata.get()
         if "description" in metadata and not isinstance(metadata["description"], str):
-            entry = self.filestore.get_file_entry(
+            entry = self.filestore.get_mutable_file_entry(
                 RelPath(
                     f"{self.username}/{self.index}/{metadata['description']['relpath']}"
                 )
@@ -2037,7 +2040,7 @@ class PrivateStage(BaseStage):
             if not has_versions:
                 self.del_project(project)
 
-    def del_entry(self, entry: BaseFileEntry, *, cleanup: bool = True) -> None:
+    def del_entry(self, entry: MutableFileEntry, *, cleanup: bool = True) -> None:
         # we need to store project and version for use in cleanup part below
         project = entry.project
         version = entry.version
@@ -2515,6 +2518,10 @@ class ELink:
             self._entry = entry
         return entry
 
+    @property
+    def mutable_entry(self) -> MutableFileEntry:
+        return self.filestore.get_mutable_file_entry(self.relpath)
+
     def add_log(
         self,
         what: str,
@@ -2743,7 +2750,7 @@ class MutableLinkStore(LinkStore):
         if del_links:
             for link in del_links:
                 filename = link.entry.basename
-                link.entry.delete()
+                link.mutable_entry.delete()
                 match link.rel:
                     case Rel.DocZip:
                         key_doczip.delete()

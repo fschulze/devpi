@@ -170,7 +170,7 @@ class TestFileStore:
         assert entry.hashes.get_default_spec() == hashes.get_default_spec()
 
         # reget
-        entry = filestore.get_file_entry(entry.relpath)
+        entry = filestore.get_mutable_file_entry(entry.relpath)
         assert entry.file_exists()
         assert entry.url == link.url
         assert entry.best_available_hash_spec == hash_spec

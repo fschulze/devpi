@@ -1312,7 +1312,7 @@ class TestStage:
         # now we test deletions
         with xom.keyfs.read_transaction():
             (link,) = stage2.get_releaselinks_perstage('hello')
-            entry = link.entry
+            entry = link.mutable_entry
         actions = [
             ("del_entry", (entry,), dict(cleanup=False)),
             ("del_versiondata", ("hello", "1.0"), dict(cleanup=False)),
@@ -1446,7 +1446,7 @@ class TestStage:
             # no change in db yet
             assert tx.at_serial == (first_serial + 8)
             # delete only the release without removing the version
-            stage.del_entry(link.entry, cleanup=False)
+            stage.del_entry(link.mutable_entry, cleanup=False)
         with xom.keyfs.read_transaction() as tx:
             # the deletion of the release updated the db
             assert tx.at_serial == (first_serial + 9)
@@ -1455,7 +1455,7 @@ class TestStage:
             # no change in db yet
             assert tx.at_serial == (first_serial + 9)
             # delete only the release without removing the version
-            stage.del_entry(other_link.entry, cleanup=False)
+            stage.del_entry(other_link.mutable_entry, cleanup=False)
         with xom.keyfs.read_transaction() as tx:
             # the deletion of the other release updated the db
             assert tx.at_serial == (first_serial + 10)

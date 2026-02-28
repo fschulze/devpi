@@ -1011,7 +1011,7 @@ class MirrorStage(BaseStage):
             raise KeyError("project not found")
         mirrorlinks = self._get_mirrordata(project)
         if (links := mirrorlinks.get_links()) is not None:
-            for entry in (self._entry_from_href(x[1]) for x in links):
+            for entry in (self._mutable_entry_from_href(x[1]) for x in links):
                 if entry is None:
                     continue
                 if entry.file_exists():
@@ -1040,7 +1040,7 @@ class MirrorStage(BaseStage):
         mirrorlinks = self._get_mirrordata(project)
         if (links := mirrorlinks.get_links()) is not None:
             entries_to_check = []
-            for entry in (self._entry_from_href(x[1]) for x in links):
+            for entry in (self._mutable_entry_from_href(x[1]) for x in links):
                 if entry is None:
                     continue
                 if entry.version == version and entry.file_exists():
@@ -1057,7 +1057,7 @@ class MirrorStage(BaseStage):
                     key.delete()
                 self.key_project(project).with_resolved_parent().delete()
 
-    def del_entry(self, entry: BaseFileEntry, *, cleanup: bool = True) -> None:
+    def del_entry(self, entry: MutableFileEntry, *, cleanup: bool = True) -> None:
         project = entry.project
         if project is None:
             raise self.NotFound("no project set on entry %r" % entry)
@@ -1236,6 +1236,11 @@ class MirrorStage(BaseStage):
         # extract relpath from href by cutting of the hash
         relpath = RelPath(re.sub(r"#.*$", "", href))
         return self.filestore.get_file_entry(relpath)
+
+    def _mutable_entry_from_href(self, href: str) -> MutableFileEntry | None:
+        # extract relpath from href by cutting of the hash
+        relpath = RelPath(re.sub(r"#.*$", "", href))
+        return self.filestore.get_mutable_file_entry(relpath)
 
     def _is_file_cached(self, link):
         entry = self._entry_from_href(link[1])
