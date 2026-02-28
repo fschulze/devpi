@@ -19,6 +19,7 @@ from devpi_common.metadata import BasenameMeta
 from devpi_common.metadata import is_archive_of_project
 from devpi_common.metadata import parse_version
 from devpi_common.metadata import splitbasename
+from devpi_common.metadata import version_sort_string
 from devpi_common.types import cached_property
 from devpi_common.url import URL
 from devpi_server.config import hookimpl
@@ -700,6 +701,10 @@ class RemoteData:
             old[k.name] = v
             assert v["relpath"].endswith(f"/{k.name}"), (k, v)
         if old != data:
+            encoded_version_map = {
+                v: version_sort_string(parse_version(v))
+                for v in set(name_version_map.values())
+            }
             threadlog.debug(
                 "processing changed simplelinks for %s in %s", project, stage.index
             )
@@ -716,7 +721,8 @@ class RemoteData:
                     num_deleted += 1
                     name_key_remotefile_map[name].delete()
                     key_simpledata(
-                        version=name_version_map[name], filename=name
+                        version=encoded_version_map[name_version_map[name]],
+                        filename=name,
                     ).delete()
                 else:
                     num_changed += 1
@@ -729,9 +735,10 @@ class RemoteData:
                     entry.project = project
                     entry.version = name_version_map[name]
                     del entry
-                    key_simpledata(version=name_version_map[name], filename=name).set(
-                        cast("dict", new_value)
-                    )
+                    key_simpledata(
+                        version=encoded_version_map[name_version_map[name]],
+                        filename=name,
+                    ).set(cast("dict", new_value))
                 del name
             del old
             new_remotefile_keys = [key_remotefile(name) for name in data]
@@ -749,8 +756,11 @@ class RemoteData:
                     assert normalize_name(projectname) == project
                     seen_names.add(projectname)
                 new_simpledata_keys.append(
-                    key_simpledata(version=version, filename=ulid_key.name)
+                    key_simpledata(
+                        version=encoded_version_map[version], filename=ulid_key.name
+                    )
                 )
+            del encoded_version_map
             del new_remotefile_keys
             for _k, ulid_key in tx.resolve_keys(
                 new_file_keys, fetch=True, fill_cache=True, new_for_missing=True
@@ -800,7 +810,7 @@ class RemoteData:
         stage = self.get_stage()
         key_remotefile = stage.key_remotefile(project, filename).with_resolved_parent()
         key_simpledata = stage.key_simpledata(
-            project, (version, filename)
+            project, (version_sort_string(parse_version(version)), filename)
         ).with_resolved_parent()
         with (
             key_remotefile.update() as remotefiledata,
