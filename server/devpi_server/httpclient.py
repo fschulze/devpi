@@ -5,7 +5,6 @@ from .exceptions import lazy_format_exception_only
 from .log import threadlog
 from devpi_common.types import cached_property
 from devpi_common.url import URL
-from requests.utils import DEFAULT_CA_BUNDLE_PATH
 from typing import TYPE_CHECKING
 import httpx
 import inspect
@@ -79,10 +78,8 @@ class HTTPClient:
     @cached_property
     def _ssl_context(self) -> ssl.SSLContext:
         # create an SSLContext object that uses the same CA certs as requests
-        cafile: str | None = (
-            os.environ.get("REQUESTS_CA_BUNDLE")
-            or os.environ.get("CURL_CA_BUNDLE")
-            or DEFAULT_CA_BUNDLE_PATH
+        cafile: str | None = os.environ.get("REQUESTS_CA_BUNDLE") or os.environ.get(
+            "CURL_CA_BUNDLE"
         )
         if cafile and not os.path.exists(cafile):
             threadlog.warning(
