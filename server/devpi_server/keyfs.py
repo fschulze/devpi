@@ -378,7 +378,7 @@ class KeyFS(Generic[Schema]):
             ) -> Iterable[FilePathInfo]:
                 for relpath in relpaths:
                     key_data = conn.get_relpath_at(relpath, serial)
-                    if key_data.value is None:
+                    if isinstance(key_data.value, Deleted):
                         # the file was deleted, get the data from before
                         key_data = conn.get_relpath_at(relpath, key_data.back_serial)
                     val = key_data.value
@@ -411,7 +411,7 @@ class KeyFS(Generic[Schema]):
             records: list[Record] = []
             subscriber_changes = {}
             for relpath, (keyname, back_serial, val) in changes.items():
-                old_val: KeyFSTypesRO | Absent | None
+                old_val: KeyFSTypesRO | Absent | Deleted
                 try:
                     old_val = conn.get_relpath_at(relpath, serial - 1).value
                 except KeyError:
@@ -809,15 +809,15 @@ class Transaction:
         self,
         typedkey: LocatedKey[KeyType, KeyTypeRO],
         at_serial: int,
-    ) -> tuple[int, KeyTypeRO] | tuple[int, None] | None:
+    ) -> tuple[int, KeyTypeRO] | tuple[int, Absent] | tuple[int, Deleted]:
         relpath = typedkey.relpath
         try:
             data = self.conn.get_relpath_at(relpath, at_serial)
         except KeyError:
-            return None
+            return (-1, absent)
         val = data.value
-        if val is None:
-            return (data.last_serial, None)
+        if isinstance(val, Deleted):
+            return (data.last_serial, deleted)
         return (data.last_serial, cast("KeyTypeRO", val))
 
     def get_value_at(
@@ -830,15 +830,12 @@ class Transaction:
             return self.at_serial
         return self.get_original(typedkey)[0]
 
-    def last_serial_and_value_at(
-        self, typedkey: LocatedKey[KeyType, KeyTypeRO], at_serial: int
-    ) -> tuple[int, KeyTypeRO]:
+    def last_serial_and_value_at(self, typedkey, at_serial):
         relpath = typedkey.relpath
         data = self.conn.get_relpath_at(relpath, at_serial)
-        val = data.value
-        if val is None:
+        if data.value is deleted:
             raise KeyError(relpath)  # was deleted
-        return (data.last_serial, cast("KeyTypeRO", val))
+        return (data.last_serial, data.value)
 
     def is_dirty(self, typedkey):
         return typedkey in self.dirty
@@ -849,19 +846,16 @@ class Transaction:
         """ Return original value from start of transaction,
             without changes from current transaction."""
         if typedkey not in self._original:
-            tup = self.get_last_serial_and_value_at(typedkey, self.at_serial)
-            if tup is None:
-                serial = -1
+            (serial, val) = self.get_last_serial_and_value_at(typedkey, self.at_serial)
+            if isinstance(val, Absent):
                 self._original[typedkey] = (serial, absent)
+            elif isinstance(val, Deleted):
+                self._original[typedkey] = (serial, deleted)
             else:
-                (serial, val) = tup
                 assert is_deeply_readonly(val)
-                if val is None:
-                    self._original[typedkey] = (serial, deleted)
-                else:
-                    if TYPE_CHECKING:
-                        assert isinstance(val, KeyFSTypesRO)
-                    self._original[typedkey] = (serial, val)
+                if TYPE_CHECKING:
+                    assert isinstance(val, KeyFSTypesRO)
+                self._original[typedkey] = (serial, val)
         (rserial, rval) = self._original[typedkey]
         if isinstance(rval, Absent):
             return (rserial, absent)
