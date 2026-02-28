@@ -87,7 +87,7 @@ class TestRenameFileLogic:
             hello_path_info = FilePathInfo(RelPath("file1"), hello_digest)
             assert fs.os_path(hello_path_info) == str(file1)
             assert fs.get_content(hello_path_info) == hello_content
-            fs.delete(hello_path_info)
+            fs.delete(hello_path_info, is_last_of_hash=True)
             (rel_rename,) = list(fs.iter_rel_renames())
             assert tmpdir.join(rel_rename) == str(file1)
             assert file1.exists()
@@ -109,7 +109,7 @@ class TestRenameFileLogic:
             hello_path_info = FilePathInfo(RelPath("file1"), hello_digest)
             assert fs.os_path(hello_path_info) == str(file1)
             assert fs.get_content(hello_path_info) == hello_content
-            fs.delete(hello_path_info)
+            fs.delete(hello_path_info, is_last_of_hash=True)
             (rel_rename,) = list(fs.iter_rel_renames())
             assert tmpdir.join(rel_rename) == str(file1)
             assert file1.exists()

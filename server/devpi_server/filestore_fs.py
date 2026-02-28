@@ -62,7 +62,11 @@ class File:
     def os_path(self) -> Path:
         return self.path
 
-    def remove(self) -> list[str]:
+    def remove(
+        self,
+        *,
+        is_last_of_hash: bool,  # noqa: ARG002
+    ) -> list[str]:
         assert tmpsuffix_for_path(self.path) is None
         with suppress(OSError):
             os.remove(self.path)
@@ -84,9 +88,6 @@ class DirtyFile(File):
 
     def drop(self) -> None:
         os.remove(self.path)
-
-    def remove(self) -> list[str]:
-        raise NotImplementedError
 
 
 @provider(IDirtyFileFactory, IFileFactory)
