@@ -1156,6 +1156,12 @@ class BaseStorage:
                 sa.Column("parent_ulid", sa.BigInteger),
                 prefixes=["TEMPORARY"],
             ),
+            nodeinfo_table=sa.Table(
+                "nodeinfo",
+                metadata_obj,
+                sa.Column("key", sa.String, nullable=False),
+                sa.Column("value", binary_type, nullable=False),
+            ),
             parent_ulid_keytype_table=sa.Table(
                 "parent_ulid_keytype",
                 metadata_obj,
