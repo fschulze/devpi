@@ -24,11 +24,11 @@ from webtest import TestApp as TApp
 from webtest import TestResponse
 from webtest.forms import Upload
 import httpdate
+import httpx
 import json
 import mimetypes
 import pytest
 import re
-import requests
 import shutil
 import socket
 import subprocess
@@ -40,9 +40,6 @@ import webtest
 if TYPE_CHECKING:
     from collections.abc import Callable
     from devpi_server.markers import NotSet
-
-
-pytest_plugins = ["test_devpi_server.reqmock"]
 
 
 def pytest_configure(config):
@@ -1159,8 +1156,10 @@ class FunctionalResponseWrapper(object):
 class MyFunctionalTestApp(MyTestApp):
     def __init__(self, host_port):
         import json
+
         self.base_url = "http://%s:%s" % host_port
         self.headers = {}
+        self.httpx = httpx
         self.JSONEncoder = json.JSONEncoder
 
     def _gen_request(self, method, url, params=None, headers=None, **kw):
@@ -1192,9 +1191,9 @@ class MyFunctionalTestApp(MyTestApp):
                     kw["data"] = params
             else:
                 kw['params'] = params
-        meth = getattr(requests, method.lower())
         if '://' not in url:
             url = self.base_url + url
+        meth = getattr(self.httpx, method.lower())
         r = meth(url, **kw)
         return FunctionalResponseWrapper(r)
 

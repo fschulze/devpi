@@ -8,7 +8,6 @@ from test_devpi_server.simpypi import getmd5
 import hashlib
 import httpx
 import pytest
-import requests.exceptions
 import time
 
 
@@ -1192,7 +1191,7 @@ def test_requests_http_get_negative_status_code(xom, monkeypatch):
 def test_requests_http_get_timeout(xom, monkeypatch):
     def http_get(_url, **kw):
         assert kw["timeout"] == 1.2
-        raise requests.exceptions.Timeout
+        raise httpx.TimeoutException("")
 
     monkeypatch.setattr(xom._http.client, "get", http_get)
     r = xom.http.get("http://notexists.qwe", allow_redirects=False, timeout=1.2)
@@ -1200,7 +1199,7 @@ def test_requests_http_get_timeout(xom, monkeypatch):
 
 
 @pytest.mark.nomocking
-@pytest.mark.parametrize("exc", [OSError, requests.exceptions.ConnectionError])
+@pytest.mark.parametrize("exc", [OSError])
 def test_requests_http_get_error(exc, xom, monkeypatch):
     def http_get(_url, **_kw):
         raise exc()
