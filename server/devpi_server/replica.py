@@ -49,7 +49,7 @@ if TYPE_CHECKING:
     from .httpclient import GetResponse
     from .httpclient import HTTPClient
     from .keyfs_types import KeyFSTypesRO
-    from .keyfs_types import TypedKey
+    from .keyfs_types import LocatedKey
     from .main import XOM
     from .mirror import MirrorStage
     from collections.abc import Iterator
@@ -686,7 +686,9 @@ class ReplicaThread:
 
 
 def register_key_subscribers(xom: XOM) -> None:
-    xom.keyfs.schema.PROJSIMPLELINKS.on_key_change(SimpleLinksChanged(xom))
+    xom.keyfs.notifier.on_key_change(
+        xom.keyfs.schema.PROJSIMPLELINKS, SimpleLinksChanged(xom)
+    )
 
 
 class FileReplicationSharedData:
@@ -730,18 +732,18 @@ class FileReplicationSharedData:
 
     def on_import(self, serial, changes):
         keyfs = self.xom.keyfs
-        index_keyname = keyfs.schema.INDEX.name
+        index_keyname = keyfs.schema.INDEX.key_name
         for key, (val, _back_serial) in changes.items():
-            if key.name == index_keyname:
+            if key.key_name == index_keyname:
                 index_type = None if val is None else val["type"]
                 username = key.params["user"]
                 indexname = key.params["index"]
                 self.set_index_type_for(f"{username}/{indexname}", index_type)
         file_keynames = frozenset(
-            (keyfs.schema.STAGEFILE.name, keyfs.schema.PYPIFILE_NOMD5.name)
+            (keyfs.schema.STAGEFILE.key_name, keyfs.schema.PYPIFILE_NOMD5.key_name)
         )
         for key, (val, back_serial) in changes.items():
-            if key.name in file_keynames:
+            if key.key_name in file_keynames:
                 self.on_import_file(keyfs, serial, key, val, back_serial)
 
     def on_import_file(self, keyfs, serial, key, val, back_serial):
@@ -783,8 +785,9 @@ class FileReplicationSharedData:
                 return
 
         # note the negated serial for the PriorityQueue
-        self.queue.put((
-            index_type, -serial, key.relpath, key.name, val, back_serial))
+        self.queue.put(
+            (index_type, -serial, key.relpath, key.key_name, val, back_serial)
+        )
         self.last_added = time.time()
 
     def next_ts(self, delay):
@@ -798,11 +801,11 @@ class FileReplicationSharedData:
             (ts, delay, index_type, serial, key, keyname, value, back_serial))
         self.last_errored = time.time()
 
-    def get_index_name_for(self, key: TypedKey) -> str:
+    def get_index_name_for(self, key: LocatedKey) -> str:
         return f"{key.params['user']}/{key.params['index']}"
 
     def get_index_type_for(
-        self, key: TypedKey, default: IndexType | Absent = absent
+        self, key: LocatedKey, default: IndexType | Absent = absent
     ) -> IndexType:
         result = self.index_types.get(self.get_index_name_for(key), absent)
         if isinstance(result, Absent):

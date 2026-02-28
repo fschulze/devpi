@@ -12,11 +12,10 @@ from zope.interface.verify import verifyObject
 
 if TYPE_CHECKING:
     from .keyfs_types import FilePathInfo
-    from .keyfs_types import PTypedKey
+    from .keyfs_types import IKeyFSKey
     from .keyfs_types import Record
     from .keyfs_types import RelPath
     from .keyfs_types import RelpathInfo
-    from .keyfs_types import TypedKey
     from collections.abc import Callable
     from collections.abc import Iterable
     from collections.abc import Iterator
@@ -131,7 +130,7 @@ class IStorage(Interface):
     last_commit_timestamp: float = Attribute("""
         The timestamp of the last commit. """)
 
-    def add_key(key: PTypedKey | TypedKey) -> None:
+    def add_key(key: IKeyFSKey) -> None:
         """Register key information."""
 
     @overload
@@ -187,7 +186,7 @@ class IStorageConnection(Interface):
         Raises KeyError if not found."""
 
     def iter_relpaths_at(
-        typedkeys: Iterable[PTypedKey | TypedKey], at_serial: int
+        typedkeys: Iterable[IKeyFSKey], at_serial: int
     ) -> Iterator[RelpathInfo]:
         """Iterate over all relpaths of the given typed keys starting
         from at_serial until the first serial in the database."""
