@@ -946,6 +946,7 @@ class BaseStage:
             dict(
                 entrypath=link_meta.path,
                 hashes=link_meta.hashes,
+                rel=Rel.ReleaseFile,
                 require_python=link_meta.require_python,
                 yanked=link_meta.yanked,
             ),
@@ -1664,6 +1665,14 @@ class PrivateStage(BaseStage):
         key_version = self.key_version(project).with_resolved_parent()
         return {x.name for x in key_version.iter_ulidkeys()}
 
+    @cached_property
+    def _key_name_rel_map(self) -> dict[str, str]:
+        return {
+            self.keyfs.schema.DOCZIP.key_name: str(Rel.DocZip),
+            self.keyfs.schema.TOXRESULT.key_name: str(Rel.ToxResult),
+            self.keyfs.schema.VERSIONFILE.key_name: str(Rel.ReleaseFile),
+        }
+
     def _get_elink_from_entry(self, entry: BaseFileEntry) -> ELink | None:
         project = entry.project
         version = entry.version
@@ -1673,12 +1682,13 @@ class PrivateStage(BaseStage):
             self.key_toxresult(project, version, basename).with_resolved_parent(),
             self.key_versionfile(project, version, basename).with_resolved_parent(),
         ]
+        key_name_rel_map = self._key_name_rel_map
         result = []
-        for _k, v in self.keyfs.tx.iter_ulidkey_values_for(keys):
+        for k, v in self.keyfs.tx.iter_ulidkey_values_for(keys):
             assert isinstance(v, DictViewReadonly)
             if Path(v["entrypath"]).name != basename:
                 continue
-            result.append(v)
+            result.append(dict((*v.items(), ("rel", key_name_rel_map[k.key_name]))))
         if not result:
             return None
         (data,) = result
@@ -1697,7 +1707,16 @@ class PrivateStage(BaseStage):
             keys.append(self.key_toxresult(project, version).with_resolved_parent())
         if Rel.ReleaseFile in rels:
             keys.append(self.key_versionfile(project, version).with_resolved_parent())
-        return [v for k, v in self.keyfs.tx.iter_ulidkey_values_for(keys)]
+        key_name_rel_map = self._key_name_rel_map
+        return [
+            dict(
+                (
+                    *cast("DictViewReadonly", v).items(),
+                    ("rel", key_name_rel_map[k.key_name]),
+                )
+            )
+            for k, v in self.keyfs.tx.iter_ulidkey_values_for(keys)
+        ]
 
     def get_last_project_change_serial_perstage(self, project, at_serial=None):
         project = normalize_name(project)
@@ -1869,7 +1888,7 @@ class PrivateStage(BaseStage):
         doczip = self.key_doczip(project, version).with_resolved_parent().get()
         if not doczip:
             return None
-        return ELink(self.filestore, doczip, project, version)
+        return ELink(self.filestore, dict(doczip, rel=Rel.DocZip), project, version)
 
     def get_doczip_entry(self, project, version):
         """ get entry of documentation zip or None if no docs exists. """
@@ -2293,7 +2312,6 @@ class MutableLinkStore(LinkStore):
         self, rel: Rel, file_entry: BaseFileEntry, for_link: ELink | str | None = None
     ) -> ELink:
         new_linkdict = {
-            "rel": str(rel),
             "entrypath": file_entry.relpath,
             "hashes": file_entry.hashes,
             "_log": [],
