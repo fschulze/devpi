@@ -1324,7 +1324,7 @@ class TestIndex:
         # now we test deletions
         with xom.keyfs.read_transaction():
             (link,) = stage2.get_releaselinks_perstage('hello')
-            entry = link.entry
+            entry = stage2.filestore.get_mutable_file_entry(link.relpath)
         actions = [
             ("del_entry", (entry,), dict(cleanup=False)),
             ("del_versiondata", ("hello", "1.0"), dict(cleanup=False)),
