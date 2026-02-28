@@ -3,8 +3,9 @@ from __future__ import annotations
 from .interfaces import IIOFile
 from .keyfs_types import RelPath
 from .log import threadlog
-from .markers import Deleted
-from .markers import deleted
+from .markers import Absent
+from .markers import absent
+from attrs import define
 from collections import defaultdict
 from contextlib import suppress
 from pathlib import Path
@@ -45,7 +46,7 @@ class IFile(Interface):
     def os_path() -> Path:
         """The canonical path to the file on the filesystem."""
 
-    def remove() -> list[str]:
+    def remove(*, is_last_of_hash: bool) -> list[str]:
         """Remove the file."""
 
 
@@ -69,9 +70,14 @@ class IFileFactory(Interface):
         """Return file."""
 
 
+@define(frozen=True, kw_only=True)
+class DeletedFile:
+    is_last_of_hash: bool
+
+
 @implementer(IIOFile)
 class FSIOFileBase:
-    _dirty_files: dict[RelPath, IDirtyFile | Deleted]
+    _dirty_files: dict[RelPath, IDirtyFile | DeletedFile]
     _relpath_file_path_info_map: defaultdict[RelPath, set[FilePathInfo]]
     file_factory: IFileFactory
     dirtyfile_factory: IDirtyFileFactory
@@ -110,26 +116,26 @@ class FSIOFileBase:
         files_commit = []
         for relpath, dirty_file in self._dirty_files.items():
             (file_path_info,) = _relpath_file_path_info_map[relpath]
-            if isinstance(dirty_file, Deleted):
+            if isinstance(dirty_file, DeletedFile):
                 fp = self.file_factory.get_file(basedir, file_path_info)
-                files_del.extend(fp.remove())
+                files_del.extend(fp.remove(is_last_of_hash=dirty_file.is_last_of_hash))
             else:
                 files_commit.extend(dirty_file.commit())
         if files_commit or files_del:
             threadlog.debug(msg, LazyChangesFormatter({}, files_commit, files_del))
 
-    def delete(self, path: FilePathInfo) -> None:
-        old = self._dirty_files.get(path.relpath, deleted)
-        if not isinstance(old, Deleted):
+    def delete(self, path: FilePathInfo, *, is_last_of_hash: bool) -> None:
+        old = self._dirty_files.get(path.relpath, absent)
+        if not isinstance(old, (Absent, DeletedFile)):
             old.drop()
-        self._dirty_files[path.relpath] = deleted
+        self._dirty_files[path.relpath] = DeletedFile(is_last_of_hash=is_last_of_hash)
         self._relpath_file_path_info_map[path.relpath].add(path)
 
     def exists(self, path: FilePathInfo) -> bool:
         fp: IFile
         if path.relpath in self._dirty_files:
             dirty_file = self._dirty_files[path.relpath]
-            if isinstance(dirty_file, Deleted):
+            if isinstance(dirty_file, DeletedFile):
                 return False
             fp = dirty_file
         else:
@@ -140,7 +146,7 @@ class FSIOFileBase:
         fp: IFile
         if path.relpath in self._dirty_files:
             dirty_file = self._dirty_files[path.relpath]
-            if isinstance(dirty_file, Deleted):
+            if isinstance(dirty_file, DeletedFile):
                 raise FileNotFoundError(path.relpath)
             fp = dirty_file
         else:
@@ -169,7 +175,7 @@ class FSIOFileBase:
         fp: IFile
         if path.relpath in self._dirty_files:
             dirty_file = self._dirty_files[path.relpath]
-            if isinstance(dirty_file, Deleted):
+            if isinstance(dirty_file, DeletedFile):
                 raise FileNotFoundError(path.relpath)
             fp = dirty_file
         else:
@@ -189,7 +195,7 @@ class FSIOFileBase:
         fp: IFile
         if path.relpath in self._dirty_files:
             dirty_file = self._dirty_files[path.relpath]
-            if isinstance(dirty_file, Deleted):
+            if isinstance(dirty_file, DeletedFile):
                 return None
             fp = dirty_file
         else:
@@ -208,7 +214,7 @@ class FSIOFileBase:
         basedir = self.basedir
         for relpath, dirty_file in self._dirty_files.items():
             (file_path_info,) = _relpath_file_path_info_map[relpath]
-            if isinstance(dirty_file, Deleted):
+            if isinstance(dirty_file, DeletedFile):
                 yield self.file_factory.get_file(
                     basedir, file_path_info
                 ).get_rel_rename()
@@ -286,7 +292,7 @@ class FSIOFileBase:
 
     def rollback(self) -> None:
         for dirty_file in self._dirty_files.values():
-            if not isinstance(dirty_file, Deleted):
+            if not isinstance(dirty_file, DeletedFile):
                 dirty_file.drop()
         self._dirty_files.clear()
         self._relpath_file_path_info_map.clear()
