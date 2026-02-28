@@ -231,6 +231,9 @@ class LinkStore:
     def _get_elinks(self, rel):
         return self.stage._get_elinks(self.project, self.version, rel=rel)
 
+    def _get_entries_for_entrypaths(self, elinks):
+        return self.stage.get_entries_for_entrypaths(elinks)
+
     def get_links(
         self,
         rel: Rel | None = None,
@@ -258,9 +261,7 @@ class LinkStore:
         elinks = [elink for elink in self._get_elinks(rel) if fil(elink)]
         entries = {
             e.abspath: e
-            for e in self.stage.get_entries_for_entrypaths(
-                l["entrypath"] for l in elinks
-            )
+            for e in self._get_entries_for_entrypaths(l["entrypath"] for l in elinks)
             if e is not None
         }
         return [ELink(entries[l["entrypath"]], l) for l in elinks]
@@ -307,6 +308,9 @@ class MutableLinkStore(LinkStore):
         if overwrite is not None:
             link.add_log("overwrite", None, count=overwrite + 1)
         return link
+
+    def _get_entries_for_entrypaths(self, elinks):
+        return self.stage.get_mutable_entries_for_entrypaths(elinks)
 
     def key_doczip(self) -> LocatedKey[dict, DictViewReadonly]:
         return self.stage.key_doczip(self.project, self.version)
