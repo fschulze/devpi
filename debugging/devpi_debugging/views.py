@@ -4,6 +4,8 @@ from devpi_server.markers import Deleted
 from difflib import SequenceMatcher
 from functools import singledispatch
 from itertools import chain
+from itertools import groupby
+from operator import attrgetter
 from operator import itemgetter
 from pyramid.httpexceptions import HTTPForbidden
 from pyramid.view import view_config
@@ -134,17 +136,53 @@ def keyfs_changelog_view(request: Request) -> dict:
     with storage.get_connection() as conn:
         last_changelog_serial = conn.last_changelog_serial
         rel_renames = sorted(conn.iter_rel_renames(serial))
-        for keydata in conn.iter_changes_at(serial):
-            prev_formatted = ''
+        raw_changes = list(conn.iter_changes_at(serial))
+        keys = {keydata.key for keydata in raw_changes}
+        raw_parent_keys = {
+            parent_key
+            for key in keys
+            if (parent_key := key.parent_key) is not None and parent_key not in keys
+        }
+        parent_keys = sorted(
+            (
+                dict(
+                    fragment=f"{int(keydata.key.ulid)}",
+                    name=keydata.key.key_name,
+                    type=html_key_types_map[keydata.key.key_name],
+                    relpath=keydata.key.relpath,
+                    serial=keydata.serial,
+                )
+                for keydata in conn.iter_keys_at_serial(
+                    raw_parent_keys, serial, with_deleted=False
+                )
+            ),
+            key=itemgetter("name", "relpath"),
+        )
+        back_serial_keys_keydata = {
+            serial: {
+                keydata.key: keydata
+                for keydata in conn.iter_keys_at_serial(
+                    (kd.key for kd in keysdata), serial, with_deleted=False
+                )
+            }
+            for serial, keysdata in groupby(
+                sorted(raw_changes, key=attrgetter("back_serial")),
+                attrgetter("back_serial"),
+            )
+            if serial >= 0
+        }
+        for keydata in raw_changes:
+            prev_formatted = ""
             if keydata.back_serial >= 0:
                 prev_formatted = pformat(
-                    conn.get_key_at_serial(
-                        keydata.key, keydata.back_serial
-                    ).mutable_value
+                    back_serial_keys_keydata[keydata.back_serial][
+                        keydata.key
+                    ].mutable_value
                 )
             formatted = pformat(keydata.mutable_value)
             diffed = diff(prev_formatted, formatted)
             latest_serial = conn.last_key_serial(keydata.key)
+            parent_key = keydata.key.parent_key
             changes.append(
                 dict(
                     fragment=f"{int(keydata.key.ulid)}",
@@ -154,13 +192,23 @@ def keyfs_changelog_view(request: Request) -> dict:
                     previous_serial=keydata.back_serial,
                     latest_serial=latest_serial,
                     diffed=diffed,
+                    parent_key=dict(
+                        fragment=f"{int(parent_key.ulid)}",
+                        name=parent_key.key_name,
+                        type=html_key_types_map[parent_key.key_name],
+                        relpath=parent_key.relpath,
+                    )
+                    if parent_key is not None
+                    else None,
                 )
             )
     changes.sort(key=itemgetter("name", "relpath"))
     return dict(
         changes=changes,
         rel_renames=rel_renames,
+        parent_keys=parent_keys,
         pformat=pformat,
         last_changelog_serial=last_changelog_serial,
         serial=int(serial),
-        query=query)
+        query=query,
+    )
