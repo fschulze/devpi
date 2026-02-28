@@ -36,8 +36,10 @@ import time
 
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
     from collections.abc import Iterator
     from collections.abc import Sequence
+    from devpi_server.keyfs_types import IKeyFSKey
     from devpi_server.keyfs_types import LocatedKey
     from devpi_server.keyfs_types import Record
 
@@ -277,8 +279,10 @@ class Connection:
             self._relpath_cache.put((serial, cache_key), result)
         return result
 
-    def iter_relpaths_at(self, typedkeys, at_serial):
-        keynames = frozenset(k.key_name for k in typedkeys)
+    def iter_keys_at_serial(
+        self, keys: Iterable[IKeyFSKey], at_serial: int
+    ) -> Iterator[KeyData]:
+        keynames = frozenset(k.key_name for k in keys)
         keyname_id_values = {"keynameid%i" % i: k for i, k in enumerate(keynames)}
         q = """
             SELECT key, keyname
