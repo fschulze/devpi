@@ -298,7 +298,6 @@ First initialize it::
     INFO  NOCTX Loading node info from /tmp/home/.devpi/server/.nodeinfo
     INFO  NOCTX generated uuid: 446e22e0db5e41a5989fd671e98ec30b
     INFO  NOCTX wrote nodeinfo to: /tmp/home/.devpi/server/.nodeinfo
-    INFO  NOCTX DB: Creating schema
     INFO  [Wtx-1] setting password for user 'root'
     INFO  [Wtx-1] created user 'root'
     INFO  [Wtx-1] created root user
