@@ -341,8 +341,10 @@ def test_file_tx_rollback(filestore, gen):
 
 
 @pytest.mark.notransaction
-def test_store_and_iter(filestore):
+def test_store_and_iter(filestore, model):
     with filestore.keyfs.write_transaction():
+        user = model.create_user("user", "")
+        model.create_stage(user, "index")
         content = b"hello"
         hashes = get_hashes(content)
         entry = filestore.store(
