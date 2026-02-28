@@ -722,13 +722,12 @@ def test_changelog(keyfs):
 
 
 @notransaction
-class TestDeriveKey:
+class TestMatchKey:
     def test_direct_from_file(self, keyfs):
         D = keyfs.schema.typedkey("NAME", "hello", dict, DictViewReadonly)
         with keyfs.write_transaction():
-            D.set({1:1})
-        with keyfs.read_transaction() as tx:
-            key = tx.derive_key(D.relpath)
+            D.set({1: 1})
+        key = keyfs.match_key(D.relpath, D)
         assert key == D
         assert key.params == {}
 
@@ -737,10 +736,9 @@ class TestDeriveKey:
         params = dict(name="hello", index="world")
         D = pkey(**params)
         with keyfs.write_transaction():
-            D.set({1:1})
+            D.set({1: 1})
         assert not hasattr(keyfs, "tx")
-        with keyfs.read_transaction() as tx:
-            key = tx.derive_key(D.relpath)
+        key = keyfs.match_key(D.relpath, D)
         assert key == D
         assert key.params == params
 
@@ -748,7 +746,7 @@ class TestDeriveKey:
         D = keyfs.schema.typedkey("NAME", "hello", dict, DictViewReadonly)
         with keyfs.write_transaction():
             D.set({})
-            key = keyfs.tx.derive_key(D.relpath)
+            key = keyfs.match_key(D.relpath, D)
             assert key == D
             assert key.params == {}
 
@@ -756,9 +754,9 @@ class TestDeriveKey:
         pkey = keyfs.schema.ptypedkey("NAME", "{name}/{index}", dict, DictViewReadonly)
         params = dict(name="hello", index="world")
         D = pkey(**params)
-        with keyfs.write_transaction() as tx:
+        with keyfs.write_transaction():
             D.set({})
-            key = tx.derive_key(D.relpath)
+            key = keyfs.match_key(D.relpath, D)
             assert key == D
             assert key.params == params
 
