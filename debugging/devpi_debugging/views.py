@@ -3,7 +3,6 @@ from __future__ import annotations
 from devpi_server.markers import Deleted
 from difflib import SequenceMatcher
 from functools import singledispatch
-from hashlib import sha256
 from itertools import chain
 from operator import itemgetter
 from pyramid.httpexceptions import HTTPForbidden
@@ -125,7 +124,8 @@ def keyfs_changelog_view(request: Request) -> dict:
     if not xom.config.args.debug_keyfs:
         raise HTTPForbidden("+keyfs views disabled")
     html_key_types_map = {
-        k.key_name: str(k.type.__name__).replace(" ", "\xa0") for k in xom.keyfs.schema
+        k.key_name: str(k.key_type.__name__).replace(" ", "\xa0")
+        for k in xom.keyfs.schema
     }
     storage = xom.keyfs._storage
     serial = int(request.matchdict["serial"])
@@ -146,9 +146,7 @@ def keyfs_changelog_view(request: Request) -> dict:
             latest_serial = conn.last_key_serial(key)
             changes.append(
                 dict(
-                    fragment=sha256(
-                        f"{keydata.keyname}-{keydata.relpath}".encode()
-                    ).hexdigest(),
+                    fragment=f"{int(keydata.ulid)}",
                     name=keydata.keyname,
                     type=html_key_types_map[keydata.keyname],
                     relpath=keydata.relpath,
