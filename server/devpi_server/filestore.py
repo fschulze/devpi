@@ -440,18 +440,11 @@ class FileStore:
         content_or_file: ContentOrFile,
         *,
         dir_hash_spec: str | None = None,
-        hashes: Digests | None = None,
+        hashes: Digests,
         last_modified: str | None = None,
     ) -> MutableFileEntry:
         # dir_hash_spec is set for toxresult files
         if dir_hash_spec is None:
-            if hashes is None:
-                warnings.warn(
-                    "Storing data without supplying hashes is deprecated.",
-                    DeprecationWarning,
-                    stacklevel=2,
-                )
-                hashes = get_hashes(content_or_file)
             dir_hash_spec = hashes.get_default_spec()
         hashdir_a, hashdir_b = make_splitdir(dir_hash_spec)
         key = self.keyfs.schema.STAGEFILE(
@@ -670,7 +663,7 @@ class BaseFileEntry:
         *,
         last_modified: str | None = None,
         hash_spec: str | None = None,
-        hashes: Digests | None = None,
+        hashes: Digests,
     ) -> None:
         if last_modified != -1:
             self.last_modified = (
@@ -685,12 +678,8 @@ class BaseFileEntry:
             hashes.add_spec(hash_spec)
         missing_hash_types = hashes.get_missing_hash_types()
         if missing_hash_types:
-            warnings.warn(
-                "Setting file content without supplying hashes is deprecated.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            hashes.update(get_hashes(content_or_file, hash_types=missing_hash_types))
+            msg = f"Missing hash types: {missing_hash_types!r}"
+            raise RuntimeError(msg)
         if not hash_spec:
             hash_spec = hashes.get_default_spec()
         self._hash_spec = hash_spec
@@ -708,11 +697,8 @@ class BaseFileEntry:
     ) -> None:
         missing_hash_types = hashes.get_missing_hash_types()
         if missing_hash_types:
-            warnings.warn(
-                "Setting file content without supplying hashes is deprecated.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
+            msg = f"Missing hash types: {missing_hash_types!r}"
+            raise RuntimeError(msg)
         file_path_info = self.file_path_info
         file_path_info.hash_digest = hashes[DEFAULT_HASH_TYPE]
         self.tx.io_file.set_content(file_path_info, content_or_file)
