@@ -14,7 +14,9 @@ from devpi_server.model import ensure_list
 from devpi_server.model import run_passwd
 from devpi_server.model import unknown
 from devpi_server.readonly import ensure_deeply_readonly
+from devpi_server.readonly import get_mutable_deepcopy
 from io import BytesIO
+from operator import itemgetter
 from typing import TYPE_CHECKING
 import getpass
 import inspect
@@ -1875,3 +1877,36 @@ def test_get_indexconfig_values(xom, input, expected):
     else:
         (result, unknown) = stage.get_indexconfig_from_kwargs(**input)
         assert result == expected
+
+
+def test_elinks(stage: PrivateStage) -> None:
+    register_and_store(stage, "some-1.0.zip")
+    elinks = {
+        version: sorted(
+            get_mutable_deepcopy(
+                stage.get_versiondata_perstage("some", version)["+elinks"]
+            ),
+            key=itemgetter("entrypath"),
+        )
+        for version in stage.list_versions_perstage("some")
+    }
+    assert elinks
+    assert any("hashes" in el for velinks in elinks.values() for el in velinks)
+    assert all(
+        el["rel"] == "releasefile" for velinks in elinks.values() for el in velinks
+    )
+    entries = {
+        version: sorted(
+            (
+                {}
+                if (el := None if e is None else stage._get_elink_from_entry(e)) is None
+                else el.linkdict
+                for e in stage.get_entries_for_entrypaths(
+                    v["entrypath"] for v in velinks
+                )
+            ),
+            key=itemgetter("entrypath"),
+        )
+        for version, velinks in elinks.items()
+    }
+    assert elinks == entries
