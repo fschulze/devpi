@@ -20,7 +20,7 @@ def test_original_project_name(pypistage):
     result = set()
     with xom.keyfs.read_transaction():
         pypistage.mock_simple_projects(projects)
-        for project in iter_projects(xom):
+        for project in iter_projects(xom, offline=False):
             data = preprocess_project(project)
             result.add(data['name'])
     assert result == projects
