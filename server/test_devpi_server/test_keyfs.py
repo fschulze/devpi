@@ -13,7 +13,6 @@ from devpi_server.readonly import is_deeply_readonly
 from functools import partial
 from typing import TYPE_CHECKING
 import contextlib
-import py
 import pytest
 
 
@@ -343,19 +342,22 @@ class TestKey:
     ],
 )
 def test_trans_get_not_modify(keyfs, type, rotype, val, monkeypatch):  # noqa: A002
+    from devpi_server.keyfs import Transaction
+
     attr = keyfs.schema.typedkey("NAME", "hello", type, rotype)
     with keyfs.write_transaction():
         attr.set(val)
     with keyfs.read_transaction():
         assert attr.get() == val
     # make sure keyfs doesn't write during the transaction and its commit
-    orig_write = py.path.local.write
+    orig_close = Transaction._close
 
-    def write_checker(path, content):
-        assert not path.endswith(attr.relpath)
-        orig_write(path, content)
+    def _close_checker(self):
+        assert self.commit_serial is None
+        orig_close(self)
+        assert self.commit_serial is None
 
-    monkeypatch.setattr(py.path.local, "write", write_checker)
+    monkeypatch.setattr(Transaction, "_close", _close_checker)
     with keyfs.read_transaction():
         x = attr.get()
     assert x == val
