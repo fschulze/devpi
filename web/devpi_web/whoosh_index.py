@@ -456,6 +456,8 @@ class IndexerThread(object):
         last_time = time.time()
         event_serial = None
         serial = -1
+        # let other threads initialize
+        self.thread.sleep(1.0)
         while 1:
             try:
                 if time.time() - last_time > 5:
@@ -480,10 +482,20 @@ class IndexerThread(object):
 class InitialQueueThread(object):
     def __init__(self, xom, shared_data):
         self.xom = xom
+        self.event_serial = None
+        notifier = getattr(self.xom.keyfs, "notifier", None)
+        if notifier is not None:
+            self.event_serial = notifier.read_event_serial()
         self.shared_data = shared_data
 
     def thread_run(self):
         thread_push_log("[IDXQ]")
+        if self.event_serial == -1:
+            # on first start we don't queue
+            # the event handling will trigger the indexing
+            return
+        # let other threads initialize
+        self.thread.sleep(1.0)
         with self.xom.keyfs.read_transaction() as tx:
             indexer = get_indexer(self.xom)
             searcher = indexer.get_project_ix().searcher()
