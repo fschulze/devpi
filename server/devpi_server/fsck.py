@@ -64,7 +64,7 @@ def fsck():
         log.info("serverdir: %s", xom.config.server_path)
         log.info("uuid: %s", xom.config.nodeinfo["uuid"])
         keyfs = xom.keyfs
-        keys = (keyfs.get_key('PYPIFILE_NOMD5'), keyfs.get_key('STAGEFILE'))
+        keys = (keyfs.schema.FILE_NOHASH, keyfs.schema.FILE)
         timed_log = TimeDeltaChecker(5)
         processed = 0
         error_count = 0
