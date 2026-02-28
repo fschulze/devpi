@@ -130,7 +130,6 @@ def keyfs_changelog_view(request):
     changes = []
     with storage.get_connection() as conn:
         last_changelog_serial = conn.last_changelog_serial
-        rel_renames = sorted(conn.iter_rel_renames(serial))
         for keydata in conn.iter_changes_at(serial):
             prev_formatted = ''
             if keydata.back_serial >= 0:
@@ -156,7 +155,6 @@ def keyfs_changelog_view(request):
     changes.sort(key=itemgetter("name", "relpath"))
     return dict(
         changes=changes,
-        rel_renames=rel_renames,
         pformat=pformat,
         last_changelog_serial=last_changelog_serial,
         serial=int(serial),
