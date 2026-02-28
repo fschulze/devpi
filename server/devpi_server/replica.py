@@ -21,10 +21,10 @@ from .markers import Absent
 from .markers import Deleted
 from .markers import absent
 from .markers import deleted
+from .mirror import FileStreamer
 from .model import UpstreamError
 from .normalized import normalize_name
 from .readonly import DictViewReadonly
-from .views import FileStreamer
 from .views import H_PRIMARY_UUID
 from devpi_common.types import cached_property
 from devpi_common.url import URL
