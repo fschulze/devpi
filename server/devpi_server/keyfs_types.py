@@ -9,6 +9,7 @@ from collections.abc import Hashable
 from typing import Generic
 from typing import TYPE_CHECKING
 from typing import TypeVar
+from typing import get_origin
 from typing import overload
 import contextlib
 import os.path
@@ -125,7 +126,10 @@ class PTypedKey(Generic[KeyType, KeyTypeRO]):
         self.keyfs = keyfs
         assert isinstance(key, str)
         self.pattern = key
-        self.type: type[KeyType] = key_type
+        _key_type = get_origin(key_type)
+        if _key_type is None:
+            _key_type = key_type
+        self.type: type[KeyType] = _key_type
         self.name = name
 
         def repl(match):
@@ -169,7 +173,10 @@ class TypedKey(Generic[KeyType, KeyTypeRO]):
     ) -> None:
         self.keyfs = keyfs
         self.relpath = relpath
-        self.type: type[KeyType] = key_type
+        _key_type = get_origin(key_type)
+        if _key_type is None:
+            _key_type = key_type
+        self.type: type[KeyType] = _key_type
         self.name = name
         self.params = params or {}
 
