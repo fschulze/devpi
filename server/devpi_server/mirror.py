@@ -487,19 +487,17 @@ class MirrorStage(BaseStage):
 
     def delete(self) -> None:
         # delete all projects on this index
-        key_projects = self.key_projects.with_resolved_parent()
-        for name in key_projects.get():
-            self.del_project(name)
-        key_projects.delete()
+        key_project = self.key_project.with_resolved_parent()
+        for key in list(key_project.iter_ulidkeys()):
+            self.del_project(key.name)
+            key.delete()
         BaseStage.delete(self)
 
     def add_project_name(self, project: NormalizedName | str) -> None:
         project = normalize_name(project)
-        key_projects = self.key_projects.with_resolved_parent()
-        projects = key_projects.get_mutable()
-        if project not in projects:
-            projects.add(project)
-            key_projects.set(projects)
+        key_project = self.key_project(project).with_resolved_parent()
+        with key_project.update() as projectdata:
+            projectdata["name"] = project.original
 
     def del_project(self, project: NormalizedName | str) -> None:
         if not self.is_project_cached(project):
@@ -512,12 +510,8 @@ class MirrorStage(BaseStage):
                 if entry.file_exists():
                     entry.delete()
         self.key_projsimplelinks(project).with_resolved_parent().delete()
-        key_projects = self.key_projects.with_resolved_parent()
-        projects = key_projects.get_mutable()
-        if project in projects:
-            projects.remove(project)
-            self.cache_retrieve_times.expire(project)
-            key_projects.set(projects)
+        self.cache_retrieve_times.expire(project)
+        self.key_project(project).with_resolved_parent().delete()
 
     def del_versiondata(
         self,
@@ -543,12 +537,8 @@ class MirrorStage(BaseStage):
                 elif cleanup:
                     entries_to_check.append(entry)
             if cleanup and not any(x.file_exists() for x in entries_to_check):
-                key_projects = self.key_projects.with_resolved_parent()
-                projects = key_projects.get_mutable()
-                if project in projects:
-                    projects.remove(project)
-                    key_projects.set(projects)
                 self.key_projsimplelinks(project).with_resolved_parent().delete()
+                self.key_project(project).with_resolved_parent().delete()
 
     def del_entry(self, entry, cleanup=True):
         project = entry.project
@@ -562,12 +552,7 @@ class MirrorStage(BaseStage):
             if links is None:
                 return
             if not any(self._is_file_cached(x) for x in links):
-                key_projects = self.key_projects.with_resolved_parent()
-                projects = key_projects.get_mutable()
-                if project in projects:
-                    projects.remove(project)
-                    key_projects.set(projects)
-                self.key_projsimplelinks(project).with_resolved_parent().delete()
+                self.key_project(project).with_resolved_parent().delete()
 
     @property
     def _list_projects_perstage_lock(self):
@@ -636,8 +621,11 @@ class MirrorStage(BaseStage):
         )
 
     def _stale_list_projects_perstage(self) -> set[NormalizedName]:
-        key_projects = self.key_projects.with_resolved_parent()
-        return {normalize_name(x) for x in key_projects.get()}
+        key_project = self.key_project.with_resolved_parent()
+        return {
+            normalize_name(v["name"])
+            for k, v in key_project.iter_ulidkey_values(fill_cache=False)
+        }
 
     def _update_projects(
         self, timeout: float | None = None
@@ -744,8 +732,8 @@ class MirrorStage(BaseStage):
         serial: int,
         etag: str | None,
     ) -> None:
-        assert isinstance(serial, int)
-        assert project == normalize_name(project), project
+        assert isinstance(serial, int), serial
+        assert isinstance(project, NormalizedName), project
         data: CacheLinks = {
             "etag": etag,
             "links": links,
@@ -753,6 +741,8 @@ class MirrorStage(BaseStage):
             "serial": serial,
             "yanked": yanked,
         }
+        with self.key_project(project).with_resolved_parent().update() as projectdata:
+            projectdata["name"] = project.original
         key = self.key_projsimplelinks(project).with_resolved_parent()
         old = cast("CacheLinks", key.get())
         if old != data:
@@ -775,6 +765,9 @@ class MirrorStage(BaseStage):
         self, project: NormalizedName | str
     ) -> tuple[bool, list | None, int, str | None]:
         (is_expired, links_with_data, serial, etag) = (True, None, -1, None)
+
+        if not self.key_project(project).exists(resolve_parents=True):
+            return (is_expired, links_with_data, serial, etag)
 
         cache = cast(
             "CacheLinks", self.key_projsimplelinks(project).with_resolved_parent().get()
@@ -1126,14 +1119,14 @@ class MirrorStage(BaseStage):
 
     def has_project_perstage(self, project: NormalizedName | str) -> bool | Unknown:
         project = normalize_name(project)
-        if self.is_project_cached(project):
+        if self.key_project(project).exists(resolve_parents=True):
             return True
         if self.no_project_list:
-            if project in self._stale_list_projects_perstage():
-                return True
             return unknown
         # recheck full project list while abiding to expiration etc
         # use the internal method to avoid a copy
+        if self.offline:
+            return unknown
         (projects, stale) = self._list_projects_perstage(timeout=self.timeout)
         if project in projects:
             return True
@@ -1152,6 +1145,8 @@ class MirrorStage(BaseStage):
         tx = self.keyfs.tx
         if at_serial is None:
             at_serial = tx.at_serial
+        if not self.key_projsimplelinks(project).exists(resolve_parents=True):
+            return -1
         (last_serial, _ulid_key, _links) = tx.get_last_serial_and_value_at(
             self.key_projsimplelinks(project).with_resolved_parent(), at_serial
         )

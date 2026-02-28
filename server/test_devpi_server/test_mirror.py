@@ -482,11 +482,11 @@ class TestExtPYPIDB:
 
         with pypistage.keyfs.read_transaction():
             assert "mirror_ignore_serial_header" not in pypistage.ixconfig
+            assert not pypistage.key_project("pytest").exists(resolve_parents=True)
+            assert len(pypistage.get_releaselinks("pytest")) == 1
             key_projsimplelinks = pypistage.key_projsimplelinks(
                 "pytest"
             ).with_resolved_parent()
-            assert key_projsimplelinks.get() == {}
-            assert len(pypistage.get_releaselinks("pytest")) == 1
             assert key_projsimplelinks.get()["serial"] == 10
         pypistage.mock_simple("pytest", text="", pypiserial=9)
         with pypistage.keyfs.read_transaction():
@@ -1486,14 +1486,14 @@ def test_cleanup_after_last_entry_deletion(mapp, simpypi):
     assert r == content
     with mapp.xom.keyfs.write_transaction():
         stage = mapp.xom.model.getstage("mirror/mirror")
-        assert stage.key_projects.with_resolved_parent().get() == {"pkg"}
+        assert stage.key_project("pkg").exists(resolve_parents=True)
         assert stage.key_projsimplelinks("pkg").exists(resolve_parents=True)
         ls = stage.get_linkstore_perstage("pkg", "1.0")
         (link,) = ls.get_links()
         stage.del_entry(link.entry)
     with mapp.xom.keyfs.read_transaction():
         stage = mapp.xom.model.getstage("mirror/mirror")
-        assert not stage.key_projects.with_resolved_parent().get()
+        assert not stage.key_project("pkg").exists(resolve_parents=True)
         assert not stage.key_projsimplelinks("pkg").exists(resolve_parents=True)
 
 
@@ -1517,12 +1517,12 @@ def test_cleanup_after_last_version_deletion(mapp, simpypi):
     assert r == content1
     with mapp.xom.keyfs.write_transaction():
         stage = mapp.xom.model.getstage("mirror/mirror")
-        assert stage.key_projects.with_resolved_parent().get() == {"pkg"}
+        assert stage.key_project("pkg").exists(resolve_parents=True)
         assert stage.key_projsimplelinks("pkg").exists(resolve_parents=True)
         stage.del_versiondata("pkg", "1.0")
     with mapp.xom.keyfs.read_transaction():
         stage = mapp.xom.model.getstage("mirror/mirror")
-        assert not stage.key_projects.with_resolved_parent().get()
+        assert not stage.key_project("pkg").exists(resolve_parents=True)
         assert not stage.key_projsimplelinks("pkg").exists(resolve_parents=True)
 
 
