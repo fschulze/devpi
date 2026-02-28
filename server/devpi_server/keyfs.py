@@ -279,10 +279,9 @@ class TxNotificationThread(Generic[Schema]):
             changes: list[KeyData] = list(conn.iter_changes_at(event_serial))
         # we first check for missing files before we call subscribers
         for change in changes:
-            if change.key.key_name in (
-                "STAGEFILE",
-                "PYPIFILE_NOMD5",
-            ) and not isinstance(change.value, Deleted):
+            if change.key.key_name in ("FILE", "FILE_NOHASH") and not isinstance(
+                change.value, Deleted
+            ):
                 assert is_dict_key(change.key)
                 self.check_file_change(change, event_serial)
         # all files exist or are deleted in a later serial,
@@ -450,8 +449,8 @@ class KeyFS(Generic[Schema]):
                     if (
                         key := self.match_key(
                             relpath,
-                            self.schema.PYPIFILE_NOMD5,  # type: ignore[attr-defined]
-                            self.schema.STAGEFILE,  # type: ignore[attr-defined]
+                            self.schema.FILE_NOHASH,  # type: ignore[attr-defined]
+                            self.schema.FILE,  # type: ignore[attr-defined]
                         )
                     ) is not None:
                         key = key.with_resolved_parent(resolve=resolve)
