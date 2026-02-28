@@ -317,7 +317,7 @@ def key_from_link(
         # so let's take the first 3 bytes which gives
         # us a maximum of 16^3 = 4096 entries in the root dir
         a, b = make_splitdir(link.hash_spec)
-        return keyfs.schema.STAGEFILE.locate(
+        return keyfs.schema.FILE.locate(
             parent_key=key_index, hashdir_a=a, hashdir_b=b, filename=link.basename
         )
     else:
@@ -325,7 +325,7 @@ def key_from_link(
         assert parts
         dirname = "_".join(parts[:-1])
         dirname = re.sub('[^a-zA-Z0-9_.-]', '_', dirname)
-        return keyfs.schema.PYPIFILE_NOMD5.locate(
+        return keyfs.schema.FILE_NOHASH.locate(
             parent_key=key_index, dirname=unquote(dirname), basename=link.basename
         )
 
@@ -381,7 +381,7 @@ class FileStore:
 
     def get_file_entry(self, relpath: RelPath) -> FileEntry | None:
         if key := self.keyfs.match_key(
-            relpath, self.keyfs.schema.PYPIFILE_NOMD5, self.keyfs.schema.STAGEFILE
+            relpath, self.keyfs.schema.FILE_NOHASH, self.keyfs.schema.FILE
         ):
             for ancestor in reversed(list(iter_lineage(key))):
                 if ancestor.with_resolved_parent().deleted():
@@ -415,7 +415,7 @@ class FileStore:
         if ref_hash_spec is None:
             ref_hash_spec = hashes.get_default_spec()
         hashdir_a, hashdir_b = make_splitdir(ref_hash_spec)
-        key = self.keyfs.schema.STAGEFILE.locate(
+        key = self.keyfs.schema.FILE.locate(
             user=user,
             index=index,
             hashdir_a=hashdir_a,

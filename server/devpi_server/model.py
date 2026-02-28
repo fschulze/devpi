@@ -947,8 +947,8 @@ class BaseStage:
         return [
             self.keyfs.match_key(
                 entrypath.rsplit("#", 1)[0],
-                self.keyfs.schema.PYPIFILE_NOMD5,
-                self.keyfs.schema.STAGEFILE,
+                self.keyfs.schema.FILE_NOHASH,
+                self.keyfs.schema.FILE,
             ).with_resolved_parent()
             for entrypath in entrypaths
         ]
@@ -2352,9 +2352,9 @@ class Schema(KeyFSSchema):
         DictViewReadonly,
     )
 
-    # type mirror related data
-    PYPIFILE_NOMD5 = KeyFSSchema.decl_patterned_key(
-        "PYPIFILE_NOMD5",
+    # mirror related data
+    FILE_NOHASH = KeyFSSchema.decl_patterned_key(
+        "FILE_NOHASH",
         "+e/{dirname}/{basename}",
         INDEX,
         dict,
@@ -2367,7 +2367,7 @@ class Schema(KeyFSSchema):
         int,
     )
 
-    # type "stage" related
+    # "stage" related
     PROJECT = KeyFSSchema.decl_patterned_key(
         "PROJECT",
         "{project}",
@@ -2402,8 +2402,8 @@ class Schema(KeyFSSchema):
         dict,
         DictViewReadonly,
     )
-    STAGEFILE = KeyFSSchema.decl_patterned_key(
-        "STAGEFILE",
+    FILE = KeyFSSchema.decl_patterned_key(
+        "FILE",
         "+f/{hashdir_a}/{hashdir_b}/{filename}",
         INDEX,
         dict,
@@ -2423,7 +2423,7 @@ class Schema(KeyFSSchema):
         sub = EventSubscribers(xom)
         notifier = keyfs.notifier
         notifier.on_key_change(self.VERSIONMETADATA, sub.on_changed_version_config)
-        notifier.on_key_change(self.STAGEFILE, sub.on_changed_file_entry)
+        notifier.on_key_change(self.FILE, sub.on_changed_file_entry)
         notifier.on_key_change(self.MIRRORNAMESINIT, sub.on_mirror_initialnames)
         notifier.on_key_change(self.INDEX, sub.on_changed_index)
 
