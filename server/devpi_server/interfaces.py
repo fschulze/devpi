@@ -172,9 +172,6 @@ class IStorageConnection(Interface):
         """Return the latest serial for given key.
         Raises KeyError if not found."""
 
-    def get_changes(serial: int) -> dict:
-        """Returns deserialized readonly changes for given serial."""
-
     def get_raw_changelog_entry(serial: int) -> bytes | None:
         """Returns serialized changes for given serial."""
 
@@ -185,6 +182,9 @@ class IStorageConnection(Interface):
         """Get tuple of (last_serial, back_serial, value) for given relpath
         at given serial.
         Raises KeyError if not found."""
+
+    def iter_changes_at(serial: int) -> Iterator[KeyData]:
+        """Returns deserialized readonly changes for given serial."""
 
     def iter_relpaths_at(
         typedkeys: Iterable[IKeyFSKey], at_serial: int
