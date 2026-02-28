@@ -603,7 +603,7 @@ class TestStage:
             user = xom.model.create_user("hello", password="123")
             config = udict(index="world", bases=(), type="stage", volatile=True)
             stage = user.create_stage(**config)
-            with stage.key_index.update() as ixconfig:
+            with stage.key_index.with_resolved_parent().update() as ixconfig:
                 # here we inject the legacy setting
                 ixconfig["pypi_whitelist"] = []
             del user
@@ -804,7 +804,7 @@ class TestStage:
             stage = user.create_stage(**config)
             assert stage.ixconfig["mirror_whitelist_inheritance"] == "intersection"
             assert stage.get_whitelist_inheritance() == "intersection"
-            with stage.key_index.update() as ixconfig:
+            with stage.key_index.with_resolved_parent().update() as ixconfig:
                 # here we remove the value to simulate an old stage
                 del ixconfig["mirror_whitelist_inheritance"]
         with keyfs.read_transaction():
@@ -1228,7 +1228,7 @@ class TestStage:
         with xom.keyfs.write_transaction():
             stage = user.create_stage(**udict(
                 index="world", bases=(), type="stage", volatile=True))
-            with pytest.raises(KeyError, match=r"Key.*INDEX.*hello.*world"):
+            with pytest.raises(KeyError, match=r"Key.*INDEX.*world.*hello"):
                 stage.get_last_change_serial_perstage()
         assert current_serial == xom.keyfs.get_current_serial() - 1
         current_serial = xom.keyfs.get_current_serial()
@@ -1350,7 +1350,7 @@ class TestStage:
         with xom.keyfs.write_transaction() as tx:
             # no change in db yet
             assert tx.at_serial == (first_serial + 1)
-            with stage.key_projects.update() as projects:
+            with stage.key_projects.with_resolved_parent().update() as projects:
                 projects.remove('pkg')
             assert stage.list_projects_perstage() == set()
         with xom.keyfs.read_transaction() as tx:

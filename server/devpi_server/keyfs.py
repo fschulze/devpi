@@ -207,9 +207,9 @@ class TxNotificationThread(Generic[Schema]):
         if cache_key in self._get_ixconfig_cache:
             return self._get_ixconfig_cache[cache_key]
         with keyfs.read_transaction():
-            key = keyfs.schema.USER(user=user)
+            key = keyfs.schema.USER(user=user).with_resolved_parent()
             value = key.get_mutable()
-            key = keyfs.schema.INDEX(user=user, index=index)
+            key = keyfs.schema.INDEX(user=user, index=index).with_resolved_parent()
             ixconfig = key.get_mutable()
         if not value:
             # the user doesn't exist anymore
@@ -252,7 +252,7 @@ class TxNotificationThread(Generic[Schema]):
         if event_serial < serial:
             # there are newer serials existing
             with self.keyfs.read_transaction() as tx:
-                current_val = tx.get(change.key)
+                current_val = tx.get(change.key.with_resolved_parent())
             if not current_val:
                 # entry was deleted
                 return
@@ -803,7 +803,7 @@ class Transaction:
         | tuple[int, Absent, Absent],
     ]
     _success_listeners: list[Callable]
-    _ulid_keys: dict[LocatedKey, ULIDKey | Absent]
+    _ulid_keys: dict[LocatedKey, ULIDKey | Absent | Deleted]
     commit_serial: int | None
 
     def __init__(
@@ -860,6 +860,7 @@ class Transaction:
         last_serial: int,
     ) -> Iterator[tuple[int, KeyTypeRO]]:
         if not isinstance(key, ULIDKey):
+            assert key.has_resolved_parent()
             key = self.resolve(key, fetch=True)
         while last_serial >= 0:
             data = self.conn.get_key_at_serial(key, last_serial)
@@ -877,6 +878,7 @@ class Transaction:
         | tuple[int, Absent, Absent]
     ):
         if not isinstance(key, ULIDKey):
+            assert key.has_resolved_parent()
             try:
                 key = self.resolve_at(key, at_serial)
             except KeyError:
@@ -901,6 +903,7 @@ class Transaction:
         self, key: LocatedKey[KeyType, KeyTypeRO] | ULIDKey[KeyType, KeyTypeRO]
     ) -> int:
         if not isinstance(key, ULIDKey):
+            assert key.has_resolved_parent()
             try:
                 key = self.resolve(key, fetch=True)
             except KeyError:
@@ -909,6 +912,7 @@ class Transaction:
 
     def last_serial(self, key: LocatedKey | ULIDKey) -> int:
         if not isinstance(key, ULIDKey):
+            assert key.has_resolved_parent()
             try:
                 key = self.resolve(key, fetch=True)
             except KeyError:
@@ -923,6 +927,7 @@ class Transaction:
         at_serial: int,
     ) -> tuple[int, KeyTypeRO]:
         if not isinstance(key, ULIDKey):
+            assert key.has_resolved_parent()
             key = self.resolve_at(key, at_serial)
         data = self.conn.get_key_at_serial(key, at_serial)
         if isinstance(data.value, Deleted):
@@ -931,6 +936,7 @@ class Transaction:
 
     def is_dirty(self, key: LocatedKey | ULIDKey) -> bool:
         if not isinstance(key, ULIDKey):
+            assert key.has_resolved_parent()
             try:
                 key = self.resolve(key, fetch=False)
             except KeyError:
@@ -947,6 +953,7 @@ class Transaction:
         """ Return original value from start of transaction,
             without changes from current transaction."""
         if not isinstance(key, ULIDKey):
+            assert key.has_resolved_parent()
             key = self.resolve(key, fetch=True)
         if key not in self._original:
             (serial, ulid_key, val) = self.get_last_serial_and_value_at(
@@ -976,11 +983,17 @@ class Transaction:
         | tuple[ULIDKey, KeyTypeRO]
         | tuple[ULIDKey, Deleted]
         | tuple[Absent, Absent]
+        | tuple[Absent, Deleted]
     ):
         if not isinstance(key, ULIDKey):
+            assert key.has_resolved_parent()
             try:
                 key = self.resolve(key, fetch=True)
             except KeyError:
+                if isinstance(key, LocatedKey) and isinstance(
+                    self._ulid_keys.get(key), Deleted
+                ):
+                    return (absent, deleted)
                 return (absent, absent)
         ulid_key: ULIDKey | Absent
         val: KeyType | KeyTypeRO | Absent | Deleted
@@ -1023,9 +1036,15 @@ class Transaction:
         return get_mutable_deepcopy(val)
 
     def exists(
-        self, key: LocatedKey[KeyType, KeyTypeRO] | ULIDKey[KeyType, KeyTypeRO]
+        self,
+        key: LocatedKey[KeyType, KeyTypeRO] | ULIDKey[KeyType, KeyTypeRO],
+        *,
+        resolve_parents: bool = False,
     ) -> bool:
         if not isinstance(key, ULIDKey):
+            if not resolve_parents and not key.has_resolved_parent():
+                msg = f"{key} has unresolved parent"
+                raise RuntimeError(msg)
             try:
                 key = self.resolve(key, fetch=True)
             except KeyError:
@@ -1035,7 +1054,11 @@ class Transaction:
             val = cast("KeyTypeRO | Deleted", self._dirty[key])
         else:
             val = self.get_original(key)[2]
-        return not isinstance(val, (Absent, Deleted))
+        if isinstance(val, (Absent, Deleted)):
+            return False
+        if key.parent_key is None:
+            return True
+        return self.exists(key.parent_key, resolve_parents=resolve_parents)
 
     def delete(self, key: LocatedKey | ULIDKey) -> None:
         if not self.write:
@@ -1043,6 +1066,7 @@ class Transaction:
         if isinstance(key, ULIDKey):
             ulid_key = key
         else:
+            assert key.has_resolved_parent()
             try:
                 ulid_key = self.resolve(key, fetch=True)
             except KeyError:
@@ -1056,19 +1080,41 @@ class Transaction:
             self._dirty[ulid_key] = deleted
 
     def deleted(
-        self, key: LocatedKey[KeyType, KeyTypeRO] | ULIDKey[KeyType, KeyTypeRO]
+        self,
+        key: LocatedKey[KeyType, KeyTypeRO] | ULIDKey[KeyType, KeyTypeRO],
+        *,
+        resolve_parents: bool = False,
     ) -> bool:
         if not isinstance(key, ULIDKey):
+            if not resolve_parents and not key.has_resolved_parent():
+                msg = f"{key} has unresolved parent"
+                raise RuntimeError(msg)
             try:
                 key = self.resolve(key, fetch=True)
             except KeyError:
+                if key.parent_key is not None:
+                    return self.deleted(key.parent_key)
                 return False
         val: KeyTypeRO | Absent | Deleted
         if key in self._dirty:
             val = cast("KeyTypeRO | Deleted", self._dirty[key])
         else:
             val = self.get_original(key)[2]
-        return val is deleted
+        if val is deleted:
+            return True
+        if key.parent_key is None:
+            return False
+        return self.deleted(key.parent_key, resolve_parents=resolve_parents)
+
+    def key_for_ulid(self, ulid: ULID) -> ULIDKey:
+        keydata = self.conn.get_ulid_at_serial(ulid, self.at_serial)
+        if keydata.key not in self._original:
+            self._original[keydata.key] = (
+                keydata.last_serial,
+                keydata.key,
+                keydata.value,
+            )
+        return keydata.key
 
     def resolve(
         self, key: LocatedKey[KeyType, KeyTypeRO], *, fetch: bool
@@ -1078,10 +1124,11 @@ class Transaction:
         except KeyError:
             pass
         else:
-            if isinstance(ulid_key, Absent):
+            if isinstance(ulid_key, (Absent, Deleted)):
                 raise KeyError(key)
             return ulid_key
         fetched_ulid_key: ULIDKey[KeyType, KeyTypeRO] | Absent
+        key = key.with_resolved_parent()
         if fetch:
             fetched_keydata = next(
                 self.conn.iter_keys_at_serial(
@@ -1093,6 +1140,11 @@ class Transaction:
                 fetched_ulid_key = absent
             else:
                 fetched_ulid_key = fetched_keydata.key
+                parent_key = fetched_ulid_key.parent_key
+                if parent_key is not None and not parent_key.exists():
+                    # parent was deleted
+                    self._ulid_keys[key] = deleted
+                    raise KeyError(key)
                 if fetched_ulid_key not in self._original:
                     fetched_value = fetched_keydata.value
                     if isinstance(fetched_value, Deleted):

@@ -305,7 +305,9 @@ def relpath_prefix(content_or_file, hash_type=absent):
 
 
 def key_from_link(
-    keyfs: KeyFS[Schema], link: URL, user: str, index: str
+    keyfs: KeyFS[Schema],
+    link: URL,
+    key_index: LocatedKey[dict, DictViewReadonly] | ULIDKey[dict, DictViewReadonly],
 ) -> LocatedKey[dict, DictViewReadonly]:
     if link.hash_spec:
         # we can only create 32K entries per directory
@@ -313,7 +315,7 @@ def key_from_link(
         # us a maximum of 16^3 = 4096 entries in the root dir
         a, b = make_splitdir(link.hash_spec)
         return keyfs.schema.STAGEFILE(
-            user=user, index=index, hashdir_a=a, hashdir_b=b, filename=link.basename
+            parent_key=key_index, hashdir_a=a, hashdir_b=b, filename=link.basename
         )
     else:
         parts = link.torelpath().split("/")
@@ -321,7 +323,7 @@ def key_from_link(
         dirname = "_".join(parts[:-1])
         dirname = re.sub('[^a-zA-Z0-9_.-]', '_', dirname)
         return keyfs.schema.PYPIFILE_NOMD5(
-            user=user, index=index, dirname=unquote(dirname), basename=link.basename
+            parent_key=key_index, dirname=unquote(dirname), basename=link.basename
         )
 
 
@@ -354,7 +356,8 @@ class FileStore:
         return f"<{self.__class__.__name__} {self.keyfs!r}>"
 
     def maplink(self, link, user, index, project):
-        key = key_from_link(self.keyfs, link, user, index)
+        key_index = self.keyfs.schema.INDEX(user=user, index=index)
+        key = key_from_link(self.keyfs, link, key_index).with_resolved_parent()
         entry = MutableFileEntry(key)
         entry.url = link.geturl_nofragment().url
         if digest := link.hash_value:
@@ -377,9 +380,12 @@ class FileStore:
         if key := self.keyfs.match_key(
             relpath, self.keyfs.schema.PYPIFILE_NOMD5, self.keyfs.schema.STAGEFILE
         ):
-            if key.last_serial < 0:
+            key = key.with_resolved_parent()
+            (_ulid_key, val) = self.keyfs.tx._get(key)
+            if val is absent:
                 return None
-            return FileEntry(key)
+            val = {} if isinstance(val, Deleted) else val
+            return FileEntry(key, val)
         return None
 
     def get_file_entry_from_key(self, key, meta=_nodefault):
@@ -406,7 +412,7 @@ class FileStore:
             hashdir_a=hashdir_a,
             hashdir_b=hashdir_b,
             filename=basename,
-        )
+        ).with_resolved_parent()
         entry = MutableFileEntry(key)
         entry.file_set_content(
             content_or_file, hashes=hashes, last_modified=last_modified
