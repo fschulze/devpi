@@ -204,7 +204,8 @@ class RootModel:
         return user
 
     def create_stage(self, user, index, type="stage", **kwargs):
-        if index in user.key_indexes.get():
+        key_indexes = user.key_indexes.with_resolved_parent()
+        if index in key_indexes.get():
             raise InvalidIndex("indexname '%s' already exists" % index)
         if not is_valid_name(index):
             raise InvalidIndex(
@@ -220,7 +221,7 @@ class RootModel:
         for key, value in stage.customizer.get_default_config_items():
             kwargs.setdefault(key, value)
         stage._modify(**kwargs)
-        with user.key_indexes.update() as indexes:
+        with key_indexes.update() as indexes:
             indexes.add(index)
         threadlog.debug("created index %s: %s", stage.name, stage.ixconfig)
         return stage
@@ -238,8 +239,8 @@ class RootModel:
         if stage is None:
             threadlog.info("index %s/%s does not exist", username, index)
             return
-        stage.key_index.delete()
-        with user.key_indexes.update() as indexes:
+        stage.key_index.with_resolved_parent().delete()
+        with user.key_indexes.with_resolved_parent().update() as indexes:
             if index not in indexes:
                 threadlog.info("index %s/%s does not exist", username, index)
                 return
@@ -271,7 +272,7 @@ class RootModel:
         _user = self.get_user(username)
         if _user is None:
             return None
-        ixconfig = _user.key_index(indexname).get_mutable()
+        ixconfig = _user.key_index(indexname).with_resolved_parent().get_mutable()
         if not ixconfig:
             return None
         return _user._getstage(indexname, ixconfig["type"], ixconfig)
@@ -456,7 +457,7 @@ class User:
 
     def delete(self) -> None:
         # delete all projects on the index
-        for name in self.key_indexes.get():
+        for name in self.key_indexes.with_resolved_parent().get():
             stage = self.getstage(name)
             assert stage is not None
             stage.delete()
@@ -493,8 +494,8 @@ class User:
 
     def get_indexes(self):
         indexes = {}
-        for index in self.key_indexes.get():
-            indexes[index] = self.key_index(index).get_mutable()
+        for index in self.key_indexes.with_resolved_parent().get():
+            indexes[index] = self.key_index(index).with_resolved_parent().get_mutable()
         return indexes
 
     def create_stage(self, index, type="stage", **kwargs):
@@ -884,7 +885,7 @@ class BaseStage:
 
     @property
     def ixconfig_mutable(self) -> dict:
-        return self.key_index.get_mutable()
+        return self.key_index.with_resolved_parent().get_mutable()
 
     def delete(self) -> None:
         self.model.delete_stage(self.username, self.index)
@@ -1141,7 +1142,8 @@ class BaseStage:
                     ["indexconfig got unexpected keyword arguments: %s"
                      % ", ".join("%s=%s" % x for x in unknown.items())])
         # modify indexconfig
-        with self.key_index.update() as newconfig:
+        key_index = self.key_index.with_resolved_parent()
+        with key_index.update() as newconfig:
             oldconfig = dict(self.ixconfig)
             for key, value in list(ixconfig.items()):
                 if value is RemoveValue:
@@ -1469,34 +1471,42 @@ class PrivateStage(BaseStage):
         assert "+elinks" not in metadata
         project = normalize_name(metadata["name"])
         version = metadata["version"]
-        key_projversion = self.key_projversion(project, version)
+        key_projsimplelinks = self.key_projsimplelinks(project).with_resolved_parent()
+        with key_projsimplelinks.update():
+            # this triggers creation of the simplelinks dict needed
+            # for child keys
+            pass
+        key_projversion = self.key_projversion(project, version).with_resolved_parent()
         with key_projversion.update() as versiondata:
             versiondata.update(metadata)
         threadlog.info("set_metadata %s-%s", project, version)
-        with self.key_projversions(project).update() as versions:
+        key_projversions = self.key_projversions(project).with_resolved_parent()
+        with key_projversions.update() as versions:
             if version not in versions:
                 versions.add(version)
         self.add_project_name(project)
 
     def add_project_name(self, project: NormalizedName | str) -> None:
         project = normalize_name(project)
-        projects = self.key_projects.get_mutable()
+        key_projects = self.key_projects.with_resolved_parent()
+        projects = key_projects.get_mutable()
         if project not in projects:
             if self.customizer.readonly:
                 raise ReadonlyIndex("index is marked read only")
             projects.add(project)
-            self.key_projects.set(projects)
+            key_projects.set(projects)
 
     def del_project(self, project: NormalizedName | str) -> None:
         project = normalize_name(project)
-        for version in list(self.key_projversions(project).get()):
+        key_projversions = self.key_projversions(project).with_resolved_parent()
+        for version in list(key_projversions.get()):
             self.del_versiondata(project, version, cleanup=False)
         self._regen_simplelinks(project)
-        with self.key_projects.update() as projects:
+        with self.key_projects.with_resolved_parent().update() as projects:
             projects.remove(project)
         threadlog.info("deleting project %s", project)
-        self.key_projversions(project).delete()
-        self.key_projsimplelinks(project).delete()
+        key_projversions.delete()
+        self.key_projsimplelinks(project).with_resolved_parent().delete()
 
     def del_versiondata(
         self,
@@ -1508,16 +1518,17 @@ class PrivateStage(BaseStage):
         if not self.has_project_perstage(project):
             raise self.NotFound("project %r not found on stage %r" %
                                 (project, self.name))
-        versions = self.key_projversions(project).get_mutable()
+        key_projversions = self.key_projversions(project).with_resolved_parent()
+        versions = key_projversions.get_mutable()
         if version not in versions:
             raise self.NotFound("version %r of project %r not found on stage %r" %
                                 (version, project, self.name))
         linkstore = self.get_mutable_linkstore_perstage(project, version)
         linkstore.remove_links()
         versions.remove(version)
-        self.key_projversion(project, version).delete()
-        self.key_versionfilelist(project, version).delete()
-        self.key_projversions(project).set(versions)
+        self.key_versionfilelist(project, version).with_resolved_parent().delete()
+        self.key_projversion(project, version).with_resolved_parent().delete()
+        key_projversions.set(versions)
         if cleanup:
             self._regen_simplelinks(project)
             if not versions:
@@ -1536,17 +1547,25 @@ class PrivateStage(BaseStage):
             self._regen_simplelinks(project)
 
     def list_versions_perstage(self, project):
-        return self.key_projversions(project).get()
+        project = normalize_name(project)
+        if not self.has_project_perstage(project):
+            return set()
+        return self.key_projversions(project).with_resolved_parent().get()
 
     def _get_elinks(self, project, version):
-        filenames = self.key_versionfilelist(project, version).get()
+        filenames = (
+            self.key_versionfilelist(project, version).with_resolved_parent().get()
+        )
         return [
-            self.key_versionfile(project, version, filename).get()
+            self.key_versionfile(project, version, filename)
+            .with_resolved_parent()
+            .get()
             for filename in sorted(filenames)
         ]
 
     def get_has_versiondata_perstage(self, project, version):
-        return self.key_projversion(project, version).exists()
+        key_projversion = self.key_projversion(project, version)
+        return key_projversion.exists(resolve_parents=True)
 
     def get_last_project_change_serial_perstage(self, project, at_serial=None):  # noqa: PLR0911, PLR0912
         project = normalize_name(project)
@@ -1554,13 +1573,21 @@ class PrivateStage(BaseStage):
         if at_serial is None:
             at_serial = tx.at_serial
         (last_serial, _projects_ulid, projects) = tx.get_last_serial_and_value_at(
-            self.key_projects, at_serial
+            self.key_projects.with_resolved_parent(), at_serial
         )
         if isinstance(projects, (Absent, Deleted)):
             # the whole index never existed or was deleted
             return -1
+        try:
+            key_projversions = self.key_projversions(project).with_resolved_parent()
+        except KeyError:
+            if project in projects:
+                # no versions ever existed, but the project is known
+                return last_serial
+            # the project never existed or was deleted and didn't have versions
+            return -1
         (versions_serial, _versions_ulid, versions) = tx.get_last_serial_and_value_at(
-            self.key_projversions(project), at_serial
+            key_projversions.with_resolved_parent(), at_serial
         )
         if isinstance(versions, Absent):
             if project in projects:
@@ -1575,7 +1602,8 @@ class PrivateStage(BaseStage):
         for version in versions:
             (version_serial, _version_info_ulid, version_value) = (
                 tx.get_last_serial_and_value_at(
-                    self.key_projversion(project, version), at_serial
+                    self.key_projversion(project, version).with_resolved_parent(),
+                    at_serial,
                 )
             )
             if version_value in (absent, deleted):
@@ -1585,7 +1613,8 @@ class PrivateStage(BaseStage):
                 return last_serial
             (versionfiles_serial, _versionfiles_info_ulid, versionfiles_value) = (
                 tx.get_last_serial_and_value_at(
-                    self.key_versionfilelist(project, version), at_serial
+                    self.key_versionfilelist(project, version).with_resolved_parent(),
+                    at_serial,
                 )
             )
             if isinstance(versionfiles_value, (Absent, Deleted)):
@@ -1596,7 +1625,10 @@ class PrivateStage(BaseStage):
             for filename in versionfiles_value:
                 (versionfile_serial, _versionfile_info_ulid, versionfile_value) = (
                     tx.get_last_serial_and_value_at(
-                        self.key_versionfile(project, version, filename), at_serial
+                        self.key_versionfile(
+                            project, version, filename
+                        ).with_resolved_parent(),
+                        at_serial,
                     )
                 )
                 if isinstance(versionfile_value, (Absent, Deleted)):
@@ -1617,7 +1649,11 @@ class PrivateStage(BaseStage):
         with_elinks: bool = True,
     ) -> DictViewReadonly[str, Any]:
         project = normalize_name(project)
-        verdata = self.key_projversion(project, version).get()
+        key_projversion = self.key_projversion(project, version)
+        if not key_projversion.exists(resolve_parents=True):
+            return ensure_deeply_readonly({})
+        key_projversion = key_projversion.with_resolved_parent()
+        verdata = key_projversion.get()
         assert "+elinks" not in verdata
         if with_elinks:
             elinks = self._get_elinks(project, version)
@@ -1627,7 +1663,7 @@ class PrivateStage(BaseStage):
         return ensure_deeply_readonly(verdata)
 
     def get_simplelinks_perstage(self, project: NormalizedName | str) -> SimpleLinks:
-        data = self.key_projsimplelinks(project).get()
+        data = self.key_projsimplelinks(project).with_resolved_parent().get()
         links = cast("LinksList", data.get("links", []))
         requires_python = cast("RequiresPythonList", data.get("requires_python", []))
         yanked: YankedList = []  # PEP 592 isn't supported for private stages yet
@@ -1647,12 +1683,12 @@ class PrivateStage(BaseStage):
             ).get("requires_python")
             requires_python.extend([require_python] * len(releases))
         data_dict = {u"links":links, u"requires_python":requires_python}
-        self.key_projsimplelinks(project).set(data_dict)
+        self.key_projsimplelinks(project).with_resolved_parent().set(data_dict)
 
     def list_projects_perstage(
         self,
     ) -> dict[str, NormalizedName | str] | SetViewReadonly[str]:
-        return self.key_projects.get()
+        return self.key_projects.with_resolved_parent().get()
 
     def has_project_perstage(self, project: NormalizedName | str) -> bool | Unknown:
         return normalize_name(project) in self.list_projects_perstage()
@@ -1755,7 +1791,7 @@ class PrivateStage(BaseStage):
             at_serial = tx.at_serial
         try:
             (last_serial, projects) = tx.last_serial_and_value_at(
-                self.key_projects, at_serial
+                self.key_projects.with_resolved_parent(), at_serial
             )
         except KeyError:
             last_serial = -1
@@ -1765,7 +1801,7 @@ class PrivateStage(BaseStage):
         assert isinstance(projects, SetViewReadonly)
         for project in projects:
             (versions_serial, versions) = tx.last_serial_and_value_at(
-                self.key_projversions(project), at_serial
+                self.key_projversions(project).with_resolved_parent(), at_serial
             )
             last_serial = max(last_serial, versions_serial)
             if last_serial >= at_serial:
@@ -1773,7 +1809,8 @@ class PrivateStage(BaseStage):
             assert isinstance(versions, SetViewReadonly)
             for version in versions:
                 (version_serial, _version_value) = tx.last_serial_and_value_at(
-                    self.key_projversion(project, version), at_serial
+                    self.key_projversion(project, version).with_resolved_parent(),
+                    at_serial,
                 )
                 last_serial = max(last_serial, version_serial)
                 if last_serial >= at_serial:
@@ -1781,7 +1818,10 @@ class PrivateStage(BaseStage):
                 try:
                     (versionfiles_serial, versionfilenames) = (
                         tx.last_serial_and_value_at(
-                            self.key_versionfilelist(project, version), at_serial
+                            self.key_versionfilelist(
+                                project, version
+                            ).with_resolved_parent(),
+                            at_serial,
                         )
                     )
                 except KeyError:
@@ -1793,7 +1833,9 @@ class PrivateStage(BaseStage):
                     try:
                         (versionfile_serial, _versionfile_info) = (
                             tx.last_serial_and_value_at(
-                                self.key_versionfile(project, version, filename),
+                                self.key_versionfile(
+                                    project, version, filename
+                                ).with_resolved_parent(),
                                 at_serial,
                             )
                         )
@@ -1803,7 +1845,7 @@ class PrivateStage(BaseStage):
                     if last_serial >= at_serial:
                         return last_serial
         # no project uploaded yet
-        key_index = self.key_index
+        key_index = self.key_index.with_resolved_parent()
         (index_serial, _index_config) = tx.last_serial_and_value_at(
             key_index, at_serial
         )
@@ -2056,19 +2098,22 @@ class MutableLinkStore(LinkStore):
             rel=rel, basename=basename, for_entrypath=for_entrypath
         )
         was_deleted = []
+        key_versionfilelist = self.key_versionfilelist(
+            self.project, self.version
+        ).with_resolved_parent()
         if del_links:
-            with self.key_versionfilelist(
-                self.project, self.version
-            ).update() as versionfilenames:
+            with key_versionfilelist.update() as versionfilenames:
                 for link in del_links:
                     filename = link.entry.basename
                     self.verdata["+elinks"].remove(link.linkdict)
                     link.entry.delete()
                     versionfilenames.remove(filename)
-                    self.key_versionfile(self.project, self.version, filename).delete()
+                    self.key_versionfile(
+                        self.project, self.version, filename
+                    ).with_resolved_parent().delete()
                     was_deleted.append(link.relpath)
                     threadlog.info("deleted %r link %s", link.rel, link.relpath)
-        if was_deleted and self.key_versionfilelist(self.project, self.version).get():
+        if was_deleted and key_versionfilelist.get():
             for relpath in was_deleted:
                 self.remove_links(for_entrypath=relpath)
 
@@ -2106,14 +2151,16 @@ class MutableLinkStore(LinkStore):
         if for_link:
             assert isinstance(for_link, ELink)
             new_linkdict["for_entrypath"] = for_link.relpath
-        with self.key_versionfilelist(
+        key_versionfilelist = self.key_versionfilelist(
             self.project, self.version
-        ).update() as versionfilelist:
+        ).with_resolved_parent()
+        with key_versionfilelist.update() as versionfilelist:
             assert file_entry.basename not in versionfilelist, file_entry.basename
             versionfilelist.add(file_entry.basename)
-        self.key_versionfile(self.project, self.version, file_entry.basename).set(
-            new_linkdict
-        )
+        key_versionfile = self.key_versionfile(
+            self.project, self.version, file_entry.basename
+        ).with_resolved_parent()
+        key_versionfile.set(new_linkdict)
         self.verdata.setdefault("+elinks", []).append(new_linkdict)
         threadlog.info("added %r link %s", rel, file_entry.relpath)
         return ELink(self.filestore, new_linkdict, self.project, self.version)
