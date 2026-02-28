@@ -40,7 +40,11 @@ def getentry(testapp, path):
 
 
 def get_pypi_project_names(testapp):
-    return testapp.xom.model.getstage('root/pypi').key_projects.get()
+    return (
+        testapp.xom.model.getstage("root/pypi")
+        .key_projects.with_resolved_parent()
+        .get()
+    )
 
 
 @pytest.mark.parametrize("kind", ["user", "index"])
@@ -651,7 +655,7 @@ def test_simple_refresh(mapp, xom, pypistage, testapp):
     assert input.attrs['name'] == 'refresh'
     assert input.attrs['value'] == 'Refresh'
     with xom.keyfs.read_transaction():
-        info = pypistage.key_projsimplelinks("hello").get()
+        info = pypistage.key_projsimplelinks("hello").with_resolved_parent().get()
     assert info != {}
     assert info["links"] == []
     assert info["serial"] == 10000
@@ -660,7 +664,7 @@ def test_simple_refresh(mapp, xom, pypistage, testapp):
     assert r.status_code == 302
     assert r.location.endswith("/root/pypi/+simple/hello/")
     with xom.keyfs.read_transaction():
-        info = pypistage.key_projsimplelinks("hello").get()
+        info = pypistage.key_projsimplelinks("hello").with_resolved_parent().get()
     assert info["links"] == [
         ('hello-1.0.zip', 'root/pypi/+e/https_pypi.org_hello/hello-1.0.zip')]
     assert info["serial"] == 10001
@@ -704,7 +708,7 @@ def test_simple_refresh_inherited(mapp, xom, pypistage, testapp, project,
     input, = r.html.select('form input')
     assert input.attrs['name'] == 'refresh'
     with xom.keyfs.read_transaction():
-        info = pypistage.key_projsimplelinks(project).get()
+        info = pypistage.key_projsimplelinks(project).with_resolved_parent().get()
     assert info != {}
     pypistage.mock_simple(project, '<a href="/%s-2.0.zip" />' % project,
                           serial=200)
@@ -712,7 +716,7 @@ def test_simple_refresh_inherited(mapp, xom, pypistage, testapp, project,
     assert r.status_code == 302
     assert r.location.endswith("/%s/+simple/%s/" % (stagename, project))
     with xom.keyfs.read_transaction():
-        info = pypistage.key_projsimplelinks(project).get()
+        info = pypistage.key_projsimplelinks(project).with_resolved_parent().get()
     elist = info["links"]
     assert len(elist) == 1
     assert elist[0][0].endswith("-2.0.zip")
@@ -1636,7 +1640,7 @@ def test_acl_toxresults_upload(mapp, testapp, tox_result_data):
     # still allow upload to anonymous
     with mapp.xom.keyfs.write_transaction():
         stage = mapp.xom.model.getstage('user1/dev')
-        with stage.key_index.update() as ixconfig:
+        with stage.key_index.with_resolved_parent().update() as ixconfig:
             del ixconfig["acl_toxresult_upload"]
     r = testapp.post(path, json.dumps(tox_result_data), headers=headers)
     assert r.status_code == 200
@@ -1704,8 +1708,8 @@ def test_upload_and_delete_project(mapp, testapp):
     mapp.getjson(api.index + "/pkg1/2.7", code=404)
     with mapp.xom.keyfs.read_transaction():
         stage = mapp.xom.model.getstage(api.stagename)
-        assert not stage.key_projversions("pkg1").exists()
-        assert not stage.key_projsimplelinks("pkg1").exists()
+        assert not stage.key_projversions("pkg1").exists(resolve_parents=True)
+        assert not stage.key_projsimplelinks("pkg1").exists(resolve_parents=True)
 
 
 def test_upload_with_acl(mapp):
@@ -1909,7 +1913,7 @@ def test_delete_mirror(mapp, monkeypatch, simpypi, testapp, xom):
     r = testapp.xget(200, link)
     with testapp.xom.keyfs.read_transaction():
         stage = testapp.xom.model.getstage(api.stagename)
-        assert stage.key_projects.get() == set([name])
+        assert stage.key_projects.with_resolved_parent().get() == {name}
         assert getentry(testapp, path).file_exists()
     # remove
     mapp.delete_index(api.stagename)
@@ -1939,9 +1943,8 @@ def test_delete_mirror(mapp, monkeypatch, simpypi, testapp, xom):
     assert getlinks(r.text) == []
     with testapp.xom.keyfs.read_transaction():
         stage = testapp.xom.model.getstage(api.stagename)
-        assert stage.key_projects.get() == set()
-        assert not getentry(testapp, path).file_exists()
-        assert not getentry(testapp, path).key.exists()
+        assert stage.key_projects.with_resolved_parent().get() == set()
+        assert getentry(testapp, path) is None
 
 
 def test_delete_from_mirror(mapp, pypistage, testapp):

@@ -787,7 +787,7 @@ class TestImportExport:
         with mapp1.xom.keyfs.write_transaction():
             stage = mapp1.xom.model.getstage(api.stagename)
             key_projversion = stage.key_projversion("hello", "1.0")
-            with key_projversion.update() as verdata:
+            with key_projversion.with_resolved_parent().update() as verdata:
                 del verdata["version"]
         impexp.export()
 
@@ -1065,7 +1065,7 @@ class TestImportExport:
         api = mapp1.create_and_use()
         with mapp1.xom.keyfs.write_transaction():
             stage = mapp1.xom.model.getstage(api.stagename)
-            with stage.key_index.update() as ixconfig:
+            with stage.key_index.with_resolved_parent().update() as ixconfig:
                 ixconfig["uploadtrigger_jenkins"] = None
         with mapp1.xom.keyfs.read_transaction():
             stage = mapp1.xom.model.getstage(api.stagename)
