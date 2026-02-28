@@ -54,6 +54,7 @@ import traceback
 
 
 if TYPE_CHECKING:
+    from .filestore import MutableFileEntry
     from .httpclient import GetResponse
     from .httpclient import HTTPClient
     from .keyfs import KeyChangeEvent
@@ -1204,7 +1205,7 @@ class FileReplicationThread:
         threadlog.debug("FileReplicationThread.importer for %s, %s", key, val)
         keyfs = self.xom.keyfs
         relpath = key.relpath
-        entry = self.xom.filestore.get_file_entry_from_key(key, meta=val)
+        entry: FileEntry | MutableFileEntry | None
         if isinstance(val, Deleted) and back_serial >= 0:
             # check for existence with metadata from old serial
             with keyfs.read_transaction(at_serial=back_serial):
@@ -1225,6 +1226,7 @@ class FileReplicationThread:
                     entry.file_delete(is_last_of_hash=is_last_of_hash)
             self.shared_data.errors.remove(entry)
             return
+        entry = self.xom.filestore.get_file_entry_from_key(key, meta=val)
         if entry.deleted_or_never_fetched:
             # there is no remote file
             self.shared_data.errors.remove(entry)

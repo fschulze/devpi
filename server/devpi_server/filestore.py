@@ -9,6 +9,7 @@ from .keyfs_types import FilePathInfo
 from .keyfs_types import RelPath
 from .keyfs_types import ULID
 from .keyfs_types import ULIDKey
+from .keyfs_types import is_dict_key
 from .keyfs_types import iter_lineage
 from .log import threadlog
 from .markers import Absent
@@ -392,7 +393,12 @@ class FileStore:
             entry.version = version
         return entry
 
-    def get_file_entry(self, abspath: AbsPath) -> FileEntry | None:
+    def _get_file_entry_info(
+        self, abspath: AbsPath
+    ) -> (
+        tuple[LocatedKey | ULIDKey, DictViewReadonly | dict | Deleted]
+        | tuple[None, dict]
+    ):
         if key := self.keyfs.match_key(
             abspath, self.keyfs.schema.FILE_NOHASH, self.keyfs.schema.FILE
         ):
@@ -400,17 +406,34 @@ class FileStore:
                 if ancestor.with_resolved_parent().deleted():
                     # we special case deleted index
                     # to allow proper 410 Gone responses
-                    return FileEntry(key, {})
+                    return (key, {})
             key = key.with_resolved_parent()
+            assert is_dict_key(key)
             (_ulid_key, val) = self.keyfs.tx._get(key)
-            if val is absent:
+            if isinstance(val, Absent):
                 if not key.deleted():
-                    return None
+                    return (None, {})
                 val = deleted
-            return FileEntry(key, val)
-        return None
+            return (key, val)
+        return (None, {})
 
-    def get_file_entry_from_key(self, key, meta=_nodefault):
+    def get_file_entry(self, abspath: AbsPath) -> FileEntry | None:
+        (key, val) = self._get_file_entry_info(abspath)
+        if key is None:
+            return None
+        return FileEntry(key, val)
+
+    def get_mutable_file_entry(self, abspath: AbsPath) -> MutableFileEntry | None:
+        (key, val) = self._get_file_entry_info(abspath)
+        if key is None:
+            return None
+        return MutableFileEntry(key, val)
+
+    def get_file_entry_from_key(
+        self,
+        key: LocatedKey | ULIDKey,
+        meta: DictViewReadonly | dict | Absent | Deleted | NoDefault = _nodefault,
+    ) -> MutableFileEntry:
         return MutableFileEntry(key, meta=meta)
 
     def store(
@@ -600,43 +623,6 @@ class BaseFileEntry:
             raise RuntimeError(msg)
         return self.tx.io_file.os_path(self.file_path_info)
 
-    def file_set_content(
-        self,
-        content_or_file: ContentOrFile,
-        *,
-        last_modified: str | None = None,
-        hashes: Digests,
-    ) -> None:
-        if last_modified != -1:
-            self.last_modified = (
-                datetime.datetime.now(tz=datetime.UTC)
-                if last_modified is None
-                else parse_last_modified(last_modified)
-            ).strftime("%Y-%m-%dT%H:%M:%SZ")
-        else:
-            raise RuntimeError
-        hashes = Digests(hashes)
-        missing_hash_types = hashes.get_missing_hash_types()
-        if missing_hash_types:
-            msg = f"Missing hash types: {missing_hash_types!r}"
-            raise RuntimeError(msg)
-        self._hashes = self.hashes | hashes
-        self.tx.io_file.set_content(self.file_path_info, content_or_file)
-        # we make sure we always refresh the meta information
-        # when we set the file content. Otherwise we might
-        # end up only committing file content without any keys
-        # changed which will not replay correctly at a replica.
-        assert isinstance(self.meta, dict)
-        self.key.set(self.meta)
-        with self.key_digestulids.update() as digest_ulids:
-            ulid = (
-                self.key.resolve(fetch=False)
-                if not isinstance(self.key, ULIDKey)
-                else self.key
-            ).ulid
-            assert isinstance(ulid, ULID)
-            digest_ulids.add(int(ulid))
-
     def file_set_content_no_meta(
         self, content_or_file: ContentOrFile, *, hashes: Digests
     ) -> None:
@@ -676,11 +662,6 @@ class BaseFileEntry:
 
     def __hash__(self):
         return hash(self.relpath)
-
-    def delete(self) -> None:
-        self.delete_file_only()
-        self.key.delete()
-        self._meta = DictViewReadonly({}) if self.readonly else {}
 
     def delete_file_only(self) -> None:
         key_digestulids = self.key_digestulids
@@ -735,6 +716,41 @@ class FileEntry(BaseFileEntry):
 
 
 class MutableFileEntry(BaseFileEntry):
+    def delete(self):
+        self.delete_file_only()
+        self.key.delete()
+        self._meta = {}
+
+    def file_set_content(self, content_or_file, *, last_modified=None, hashes):
+        if last_modified != -1:
+            self.last_modified = (
+                datetime.datetime.now(tz=datetime.UTC)
+                if last_modified is None
+                else parse_last_modified(last_modified)
+            ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        else:
+            raise RuntimeError
+        hashes = Digests(hashes)
+        missing_hash_types = hashes.get_missing_hash_types()
+        if missing_hash_types:
+            msg = f"Missing hash types: {missing_hash_types!r}"
+            raise RuntimeError(msg)
+        self._hashes = self.hashes | hashes
+        self.tx.io_file.set_content(self.file_path_info, content_or_file)
+        # we make sure we always refresh the meta information
+        # when we set the file content. Otherwise we might
+        # end up only committing file content without any keys
+        # changed which will not replay correctly at a replica.
+        self.key.set(self.meta)
+        with self.key_digestulids.update() as digest_ulids:
+            ulid = (
+                self.key.resolve(fetch=False)
+                if not isinstance(self.key, ULIDKey)
+                else self.key
+            ).ulid
+            assert isinstance(ulid, ULID)
+            digest_ulids.add(int(ulid))
+
     @property
     def meta(self) -> dict:
         _meta = self._meta

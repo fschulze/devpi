@@ -1516,7 +1516,7 @@ def test_cleanup_after_last_entry_deletion(mapp, simpypi):
         assert stage.key_project("pkg").exists(resolve_parents=True)
         assert list(stage.key_remotefile("pkg").with_resolved_parent().iter_ulidkeys())
         assert list(stage.key_simpledata("pkg").with_resolved_parent().iter_ulidkeys())
-        ls = stage.get_linkstore_perstage("pkg", "1.0")
+        ls = stage.get_mutable_linkstore_perstage("pkg", "1.0")
         (link,) = ls.get_links()
         stage.del_entry(link.entry)
     with mapp.xom.keyfs.read_transaction():
