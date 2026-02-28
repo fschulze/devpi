@@ -859,7 +859,8 @@ class BaseStage:
         # only few methods need the user object.
         return self.model.get_user(self.username)
 
-    def get(self):
+    @property
+    def ixconfig_mutable(self) -> dict:
         userconfig = self.user.get()
         return userconfig.get("indexes", {}).get(self.index)
 
