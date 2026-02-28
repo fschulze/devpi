@@ -126,8 +126,10 @@ class ThreadPool:
         finally:
             self.shutdown()
 
-    def start(self) -> None:
+    def start(self, *, ignore_running: bool = False) -> None:
         for obj in self._objects:
+            if ignore_running and obj.thread.is_alive():
+                continue
             self.start_one(obj)
 
     def start_one(self, obj):
