@@ -1179,7 +1179,7 @@ class TestStage:
                 results.append((entry.basename, entry.file_exists()))
 
         mapp.xom.keyfs.notifier.on_key_change(
-            mapp.xom.keyfs.schema.PYPIFILE_NOMD5, subscriber
+            mapp.xom.keyfs.schema.FILE_NOHASH, subscriber
         )
         content = b"123"
         pypistage.mock_extfile("/simple/pytest/pytest-1.0.zip", content)
