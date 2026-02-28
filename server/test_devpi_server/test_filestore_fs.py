@@ -153,6 +153,12 @@ class TestRenameFileLogic:
         content = b"foo"
         hashes = get_hashes(content)
         with xom.keyfs.write_transaction() as tx:
+            key_user = tx.keyfs.schema.USER(user="user")
+            key_user.set({})
+            key_index = tx.keyfs.schema.INDEX(
+                user="user", index="index"
+            ).with_resolved_parent()
+            key_index.set({})
             hashdir_a, hashdir_b = make_splitdir(hashes.get_default_spec())
             key = tx.keyfs.schema.STAGEFILE(
                 user="user",
@@ -160,7 +166,7 @@ class TestRenameFileLogic:
                 hashdir_a=hashdir_a,
                 hashdir_b=hashdir_b,
                 filename="foo.txt",
-            )
+            ).with_resolved_parent()
             entry = MutableFileEntry(key)
             entry.file_set_content(content, hashes=hashes)
             path = Path(tx.io_file.os_path(entry.file_path_info))

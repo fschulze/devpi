@@ -29,7 +29,7 @@ def test_permissions_for_unknown_index(mapp, xom):
     # change index type to unknown
     with xom.keyfs.write_transaction():
         stage = xom.model.getstage(api.stagename)
-        with stage.key_index.update() as ixconfig:
+        with stage.key_index.with_resolved_parent().update() as ixconfig:
             ixconfig["type"] = "unknown"
     with xom.keyfs.write_transaction():
         stage = xom.model.getstage(api.stagename)
