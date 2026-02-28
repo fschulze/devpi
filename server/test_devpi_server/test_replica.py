@@ -212,8 +212,8 @@ def get_raw_changelog_entry(xom, serial):
 
 class TestReplicaThread:
     @pytest.fixture
-    def rt(self, makexom):
-        xom = makexom(["--primary-url=http://localhost"])
+    def rt(self, makexom, secretfile):
+        xom = makexom(["--primary-url=http://localhost", f"--secretfile={secretfile}"])
         return xom.replica_thread
 
     @pytest.fixture
@@ -1305,7 +1305,7 @@ def test_replica_user_auth_before_other_plugins(makexom):
             auth._get_auth_status(replica.REPLICA_USER_NAME, '')
 
 
-def test_pkg_read_permission(makemapp, maketestapp, makexom):
+def test_pkg_read_permission(makemapp, maketestapp, makexom, secretfile):
     from devpi_common.types import ensure_unicode
     from devpi_server.config import hookimpl
     from devpi_server.model import ACLList
@@ -1322,8 +1322,7 @@ def test_pkg_read_permission(makemapp, maketestapp, makexom):
             return ixconfig.get("acl_pkg_read", None)
 
     plugin = Plugin()
-    xom = makexom(plugins=[plugin])
-    xom.config.nodeinfo["role"] = "primary"
+    xom = makexom([f"--secretfile={secretfile}", "--role=primary"], plugins=[plugin])
     testapp = maketestapp(xom)
     mapp = makemapp(testapp)
     auth_serializer = itsdangerous.TimedSerializer(mapp.xom.config.get_replica_secret())
