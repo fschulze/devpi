@@ -161,6 +161,9 @@ class IStorageConnection(Interface):
 
     storage: IStorage = Attribute(""" The storage instance for this connection. """)
 
+    def analyze() -> None:
+        """Run database analyze."""
+
     def close() -> None:
         """Close the storage."""
 
