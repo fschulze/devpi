@@ -1070,11 +1070,9 @@ def test_crash_recovery(caplog, keyfs, storage_info):
     content = b'foo'
     hashes = get_hashes(content)
     key = keyfs.schema.patterned_key(
-        "PYPIFILE_NOMD5", "+e/{path}", None, dict, DictViewReadonly
+        "FILE_NOHASH", "+e/{path}", None, dict, DictViewReadonly
     )
-    key = keyfs.schema.patterned_key(
-        "STAGEFILE", "+f/{path}", None, dict, DictViewReadonly
-    )
+    key = keyfs.schema.patterned_key("FILE", "+f/{path}", None, dict, DictViewReadonly)
     file_path_info = FilePathInfo(RelPath("+f/foo"), hashes.get_default_value())
     with keyfs.write_transaction() as tx:
         key(path="foo").set(dict(hashes=hashes))
