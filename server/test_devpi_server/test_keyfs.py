@@ -105,7 +105,7 @@ class TestKeyFS:
             assert not k.exists()
 
     def test_no_slashkey(self, keyfs):
-        pkey = keyfs.schema.named_key_factory(
+        pkey = keyfs.schema.patterned_key(
             "NAME", "{hello}", None, dict, DictViewReadonly
         )
         with pytest.raises(ValueError):
@@ -135,9 +135,11 @@ class TestKeyFS:
         with keyfs.read_transaction() as tx:
             assert tx.at_serial == 1
             assert tx.get(key) == {'bar'}
+            ulid = tx.get_ulid(key)
         with keyfs.read_transaction(at_serial=0) as tx:
             assert tx.at_serial == 0
             assert tx.get(key) == {'bar', 'egg'}
+            assert tx.get_ulid(key) == ulid
 
     @notransaction
     def test_double_set(self, keyfs):
@@ -155,6 +157,18 @@ class TestKeyFS:
             assert tx.get(key) == {u'foo': u'bar', u'ham': u'egg'}
 
     @notransaction
+    def test_multi_set_same_transaction(self, keyfs):
+        key = keyfs.schema.located_key("NAME", "", "somekey", dict, DictViewReadonly)
+        with keyfs.write_transaction() as tx:
+            tx.set(key, {"foo": "bar", "ham": "egg"})
+            # set different value
+            tx.set(key, {})
+            # set to same value again in same transaction
+            tx.set(key, {"foo": "bar", "ham": "egg"})
+        with keyfs.read_transaction() as tx:
+            assert tx.get(key) == {"foo": "bar", "ham": "egg"}
+
+    @notransaction
     @pytest.mark.parametrize(
         ("before", "after", "rotype"),
         [
@@ -167,9 +181,31 @@ class TestKeyFS:
         key = keyfs.schema.located_key("NAME", "", "somekey", type(before), rotype)
         with keyfs.write_transaction() as tx:
             tx.set(key, before)
+            ulid = tx.get_ulid(key)
         with keyfs.write_transaction() as tx:
             tx.delete(key)
         with keyfs.write_transaction() as tx:
+            tx.set(key, after)
+            assert tx.get_ulid(key) != ulid
+        with keyfs.read_transaction() as tx:
+            assert tx.get(key) == after
+            assert tx.get_ulid(key) != ulid
+
+    @notransaction
+    @pytest.mark.parametrize(
+        ("before", "after", "rotype"),
+        [
+            ({"a": 1}, {"b": 2}, DictViewReadonly),
+            ({3}, {4}, SetViewReadonly),
+            (5, 6, int),
+        ],
+    )
+    def test_delete_and_readd_same_transaction(self, keyfs, before, after, rotype):
+        key = keyfs.schema.located_key("NAME", "", "somekey", type(before), rotype)
+        with keyfs.write_transaction() as tx:
+            tx.set(key, before)
+        with keyfs.write_transaction() as tx:
+            tx.delete(key)
             tx.set(key, after)
         with keyfs.read_transaction() as tx:
             assert tx.get(key) == after
@@ -178,10 +214,10 @@ class TestKeyFS:
     def test_not_exists_cached(self, keyfs, monkeypatch):
         key = keyfs.schema.located_key("NAME", "", "somekey", dict, DictViewReadonly)
         with keyfs.read_transaction() as tx:
-            assert key not in tx.cache
+            assert key not in tx._dirty
             assert key not in tx._original
             assert not tx.exists(key)
-            assert key not in tx.cache
+            assert key not in tx._dirty
             assert key in tx._original
             # make get_value_at fail if it is called
             monkeypatch.setattr(tx, "get_value_at", lambda k, s: 0 / 0)
@@ -203,7 +239,7 @@ class TestGetKey:
         assert key.key_name == "NAME"
 
     def test_pattern_key(self, keyfs):
-        pkey = keyfs.schema.named_key_factory(
+        pkey = keyfs.schema.patterned_key(
             "NAME", "{hello}/{this}", None, dict, DictViewReadonly
         )
         found_key = keyfs.get_key("NAME")
@@ -240,9 +276,7 @@ class Test_addkey_combinations:
         assert attr.get() == type()
 
     def test_addkey_param(self, keyfs, type, rotype, val):  # noqa: A002
-        pattr = keyfs.schema.named_key_factory(
-            "NAME", "hello/{some}", None, type, rotype
-        )
+        pattr = keyfs.schema.patterned_key("NAME", "hello/{some}", None, type, rotype)
         attr = pattr(some="this")
         assert not attr.exists()
         assert attr.get() == type()
@@ -259,9 +293,7 @@ class Test_addkey_combinations:
         assert attr.get() == type()
 
     def test_addkey_unicode(self, keyfs, type, rotype, val):  # noqa: A002
-        pattr = keyfs.schema.named_key_factory(
-            "NAME", "hello/{some}", None, type, rotype
-        )
+        pattr = keyfs.schema.patterned_key("NAME", "hello/{some}", None, type, rotype)
         attr = pattr(some=b'\xe4'.decode("latin1"))
         assert not attr.exists()
         assert attr.get() == type()
@@ -276,7 +308,7 @@ class TestKey:
     def test_addkey_type_mismatch(self, keyfs):
         dictkey = keyfs.schema.located_key("NAME1", "", "some", dict, DictViewReadonly)
         pytest.raises(TypeError, lambda: dictkey.set("hello"))
-        dictkey = keyfs.schema.named_key_factory(
+        dictkey = keyfs.schema.patterned_key(
             "NAME2", "{that}/some", None, dict, DictViewReadonly
         )
         pytest.raises(TypeError, lambda: dictkey(that="t").set("hello"))
@@ -449,13 +481,14 @@ class TestTransactionIsolation:
         tx_1 = Transaction(keyfs, write=True)
         tx_2 = Transaction(keyfs)
         ser = tx_1.conn.last_changelog_serial + 1
-        tx_1.set(D, {1:1})
+        tx_1.set(D, {1: 1})
         tx1_serial = tx_1.commit()
         assert tx1_serial == ser
         assert tx_2.at_serial == ser - 1
         with keyfs._storage.get_connection() as conn:
             assert conn.last_changelog_serial == ser
-        assert D not in tx_2.cache and D not in tx_2.dirty
+        assert D not in tx_2._dirty
+        assert D not in tx_2._dirty
         assert tx_2.get(D) == {}
 
     def test_concurrent_tx_sees_original_value_on_delete(self, keyfs):
@@ -565,7 +598,7 @@ class TestTransactionIsolation:
                        keyfs._storage.CHANGELOG_CACHE_SIZE + 1
 
     def test_import_changes_subscriber(self, keyfs, storage_info, tmpdir):
-        pkey = keyfs.schema.named_key_factory(
+        pkey = keyfs.schema.patterned_key(
             "NAME", "hello/{name}", None, dict, DictViewReadonly
         )
         D = pkey(name="world")
@@ -574,7 +607,7 @@ class TestTransactionIsolation:
         assert keyfs.get_current_serial() == 0
 
         class Schema(KeyFSSchema):
-            NAME = KeyFSSchema.decl_named_key_factory(
+            NAME = KeyFSSchema.decl_patterned_key(
                 "NAME", "hello/{name}", None, dict, DictViewReadonly
             )
 
@@ -592,7 +625,7 @@ class TestTransactionIsolation:
     def test_import_changes_subscriber_error(
         self, keyfs, storage_info, storage_io_file_factory, tmpdir
     ):
-        pkey = keyfs.schema.named_key_factory(
+        pkey = keyfs.schema.patterned_key(
             "NAME", "hello/{name}", None, dict, DictViewReadonly
         )
         D = pkey(name="world")
@@ -605,7 +638,7 @@ class TestTransactionIsolation:
             io_file_factory=storage_io_file_factory,
             schema=KeyFSSchema,
         )
-        pkey = new_keyfs.schema.named_key_factory(
+        pkey = new_keyfs.schema.patterned_key(
             "NAME", "hello/{name}", None, dict, DictViewReadonly
         )
         new_keyfs.subscribe_on_import(lambda *args: 0 / 0)
@@ -635,14 +668,12 @@ class TestTransactionIsolation:
             io_file_factory=storage_io_file_factory,
             schema=KeyFSSchema,
         )
-        pkey1 = keyfs1.schema.named_key_factory(
+        D1 = keyfs1.schema.patterned_key(
             "NAME1", "hello1/{name}", None, dict, DictViewReadonly
-        )
-        pkey2 = keyfs1.schema.named_key_factory(
+        )(name="world1")
+        D2 = keyfs1.schema.patterned_key(
             "NAME2", "hello2/{name}", None, dict, DictViewReadonly
-        )
-        D1 = pkey1(name="world1")
-        D2 = pkey2(name="world2")
+        )(name="world2")
         for i in range(2):
             with keyfs1.write_transaction():
                 assert D1.get() == {}
@@ -674,14 +705,12 @@ class TestTransactionIsolation:
             changes1 = [list(conn1.iter_changes_at(i)) for i in range(serial1 + 1)]
         # create new keyfs
         keyfs2 = KeyFS(tmpdir.join("newkeyfs"), storage_info, schema=KeyFSSchema)
-        pkey1 = keyfs2.schema.named_key_factory(
+        D1 = keyfs2.schema.patterned_key(
             "NAME1", "hello1/{name}", None, dict, DictViewReadonly
-        )
-        pkey2 = keyfs2.schema.named_key_factory(
+        )(name="world1")
+        D2 = keyfs2.schema.patterned_key(
             "NAME2", "hello2/{name}", None, dict, DictViewReadonly
-        )
-        D1 = pkey1(name="world1")
-        D2 = pkey2(name="world2")
+        )(name="world2")
 
         # add a subscriber to get into that branch in keyfs2.import_changes
 
@@ -745,7 +774,7 @@ class TestMatchKey:
         assert key.params == {}
 
     def test_pattern_from_file(self, keyfs):
-        pkey = keyfs.schema.named_key_factory(
+        pkey = keyfs.schema.patterned_key(
             "NAME", "{name}/{index}", None, dict, DictViewReadonly
         )
         params = dict(name="hello", index="world")
@@ -766,7 +795,7 @@ class TestMatchKey:
             assert key.params == {}
 
     def test_pattern_not_committed(self, keyfs):
-        pkey = keyfs.schema.named_key_factory(
+        pkey = keyfs.schema.patterned_key(
             "NAME", "{name}/{index}", None, dict, DictViewReadonly
         )
         params = dict(name="hello", index="world")
@@ -866,7 +895,7 @@ class TestSubscriber:
         assert key1.keyfs.notifier.read_event_serial() == 0
 
     def test_subscribe_pattern_key(self, keyfs, queue, pool):
-        pkey = keyfs.schema.named_key_factory("NAME1", "{name}", None, int, int)
+        pkey = keyfs.schema.patterned_key("NAME1", "{name}", None, int, int)
 
         def subscriber(ev: KeyChangeEvent) -> None:
             queue.put(ev)
@@ -883,7 +912,7 @@ class TestSubscriber:
 
     @pytest.mark.parametrize("meth", ["wait_event_serial", "wait_tx_serial"])
     def test_wait_event_serial(self, keyfs, pool, queue, meth):
-        pkey = keyfs.schema.named_key_factory("NAME1", "{name}", None, int, int)
+        pkey = keyfs.schema.patterned_key("NAME1", "{name}", None, int, int)
         key = pkey(name="hello")
 
         class T:
@@ -914,6 +943,7 @@ class TestSubscriber:
     def test_wait_tx_async(self, keyfs, pool, queue):
         from devpi_server.interfaces import IWriter
         from devpi_server.keyfs_types import Record
+        from devpi_server.keyfs_types import ULID
         from devpi_server.markers import absent
 
         # start a thread which waits for the next serial
@@ -934,7 +964,7 @@ class TestSubscriber:
             io_file = cstack.enter_context(keyfs.io_file_factory(conn))
             _wtx = cstack.enter_context(conn.write_transaction(io_file))
             wtx = IWriter(_wtx)
-            wtx.records_set([Record(key, 1, -1, absent)])
+            wtx.records_set([Record(key, ULID.new(), 1, -1, absent, absent)])
 
         # check wait_tx_serial() call from the thread returned True
         assert queue.get() is True
@@ -981,10 +1011,8 @@ class TestSubscriber:
             assert tx.at_serial == -1
 
     def test_last_key_serial(self, keyfs):
-        key1 = keyfs.schema.named_key_factory(
-            "SOME1", "{some}", None, set, SetViewReadonly
-        )
-        key2 = keyfs.schema.named_key_factory("SOME2", "{some}", None, int, int)
+        key1 = keyfs.schema.patterned_key("SOME1", "{some}", None, set, SetViewReadonly)
+        key2 = keyfs.schema.patterned_key("SOME2", "{some}", None, int, int)
         for i in range(10):
             with keyfs.write_transaction() as tx:
                 key1(some="foo").set({i})
@@ -1021,10 +1049,10 @@ def test_crash_recovery(caplog, keyfs, storage_info):
         pytest.skip("The storage doesn't have marker 'storage_with_filesystem'.")
     content = b'foo'
     hashes = get_hashes(content)
-    key = keyfs.schema.named_key_factory(
+    key = keyfs.schema.patterned_key(
         "PYPIFILE_NOMD5", "+e/{path}", None, dict, DictViewReadonly
     )
-    key = keyfs.schema.named_key_factory(
+    key = keyfs.schema.patterned_key(
         "STAGEFILE", "+f/{path}", None, dict, DictViewReadonly
     )
     file_path_info = FilePathInfo(RelPath("+f/foo"), hashes.get_default_value())
@@ -1164,7 +1192,7 @@ def test_keyfs_sqla_lite_hash_hl(file_digest, gen_path, sorted_serverdir):
 
 @notransaction
 def test_iter_keys_at_serial(keyfs):
-    pkey = keyfs.schema.named_key_factory("NAME1", "{name}", None, int, int)
+    pkey = keyfs.schema.patterned_key("NAME1", "{name}", None, int, int)
     key = pkey(name="hello")
     with keyfs.read_transaction() as tx:
         assert list(tx.iter_keys_at_serial([key], tx.at_serial)) == []
