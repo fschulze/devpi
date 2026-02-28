@@ -1611,10 +1611,7 @@ class PrivateStage(BaseStage):
         self.key_project(project).with_resolved_parent().delete()
 
     def del_versiondata(
-        self,
-        project: NormalizedName | str,
-        version: str,
-        cleanup: bool = True,  # noqa: ARG002,FBT001,FBT002
+        self, project: NormalizedName | str, version: str, *, cleanup: bool = True
     ) -> None:
         project = normalize_name(project)
         if not self.has_project_perstage(project):
@@ -1634,7 +1631,7 @@ class PrivateStage(BaseStage):
             if not has_versions:
                 self.del_project(project)
 
-    def del_entry(self, entry, cleanup=True):
+    def del_entry(self, entry: BaseFileEntry, *, cleanup: bool = True) -> None:
         # we need to store project and version for use in cleanup part below
         project = entry.project
         version = entry.version
