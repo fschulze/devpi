@@ -641,9 +641,7 @@ def test_simple_refresh(xom, pypistage, testapp):
             pypistage.key_projectcacheinfo("hello").with_resolved_parent().get()
         )
     assert mirrorfiles == {
-        "hello-1.0.zip": dict(
-            entrypath="root/pypi/+e/https_pypi.org_hello/hello-1.0.zip"
-        )
+        "hello-1.0.zip": dict(relpath="+e/https_pypi.org_hello/hello-1.0.zip")
     }
     assert simpledata != {}
     assert cache_info["serial"] == 10001
