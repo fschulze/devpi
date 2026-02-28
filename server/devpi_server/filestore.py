@@ -31,8 +31,8 @@ import re
 if TYPE_CHECKING:
     from .interfaces import ContentOrFile
     from .keyfs import KeyFS
+    from .keyfs_types import LocatedKey
     from .keyfs_types import RelPath
-    from .keyfs_types import TypedKey
     from .markers import Absent
     from .model import Schema
     from .readonly import SetViewReadonly
@@ -305,7 +305,7 @@ def relpath_prefix(content_or_file, hash_type=absent):
 
 def key_from_link(
     keyfs: KeyFS[Schema], link: URL, user: str, index: str
-) -> TypedKey[dict, DictViewReadonly]:
+) -> LocatedKey[dict, DictViewReadonly]:
     if link.hash_spec:
         # we can only create 32K entries per directory
         # so let's take the first 3 bytes which gives
@@ -439,7 +439,7 @@ class BaseFileEntry:
     BadGateway = BadGateway
     _hashes = metaprop("hashes")  # e.g. dict(md5="120938012")
     _meta: DictViewReadonly | dict | NoDefault
-    key: TypedKey[dict, DictViewReadonly]
+    key: LocatedKey[dict, DictViewReadonly]
     last_modified = metaprop("last_modified")
     url = metaprop("url")
     project = metaprop("project")
@@ -447,7 +447,7 @@ class BaseFileEntry:
 
     def __init__(
         self,
-        key: TypedKey[dict, DictViewReadonly],
+        key: LocatedKey[dict, DictViewReadonly],
         meta: DictViewReadonly | dict | Deleted | NoDefault = _nodefault,
     ) -> None:
         self.key = key
@@ -651,7 +651,7 @@ class BaseFileEntry:
         )
 
     @property
-    def key_digestpaths(self) -> TypedKey[set[str], SetViewReadonly[str]]:
+    def key_digestpaths(self) -> LocatedKey[set[str], SetViewReadonly[str]]:
         keyfs = cast("KeyFS[Schema]", self.key.keyfs)
         return keyfs.schema.DIGESTPATHS(digest=self.hashes[DEFAULT_HASH_TYPE])
 
