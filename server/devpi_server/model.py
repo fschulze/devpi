@@ -7,7 +7,11 @@ from .filestore import Digests
 from .filestore import FileEntry
 from .keyfs_schema import KeyFSSchema
 from .log import threadlog
+from .markers import Absent
+from .markers import Deleted
 from .markers import NotSet
+from .markers import absent
+from .markers import deleted
 from .markers import notset
 from .markers import unknown
 from .normalized import normalize_name
@@ -1547,58 +1551,50 @@ class PrivateStage(BaseStage):
         tx = self.keyfs.tx
         if at_serial is None:
             at_serial = tx.at_serial
-        projects_info = tx.get_last_serial_and_value_at(self.key_projects, at_serial)
-        if projects_info is None:
-            # never existed
+        (last_serial, projects) = tx.get_last_serial_and_value_at(
+            self.key_projects, at_serial
+        )
+        if isinstance(projects, (Absent, Deleted)):
+            # the whole index never existed or was deleted
             return -1
-        (last_serial, projects) = projects_info
-        if projects is None:
-            # the whole index was deleted
-            return -1
-        versions_info = tx.get_last_serial_and_value_at(
+        (versions_serial, versions) = tx.get_last_serial_and_value_at(
             self.key_projversions(project), at_serial
         )
-        if versions_info is None:
+        if isinstance(versions, Absent):
             if project in projects:
                 # no versions ever existed, but the project is known
                 return last_serial
             # the project never existed or was deleted and didn't have versions
             return -1
-        (last_serial, versions) = versions_info
-        if last_serial >= at_serial:
-            return last_serial
-        if versions is None:
+        if isinstance(versions, Deleted):
             # was deleted
             return last_serial
+        last_serial = versions_serial
         for version in versions:
-            version_info = tx.get_last_serial_and_value_at(
+            (version_serial, version_value) = tx.get_last_serial_and_value_at(
                 self.key_projversion(project, version), at_serial
             )
-            if version_info is None:
+            if version_value in (absent, deleted):
                 continue
-            (version_serial, _version_value) = version_info
             last_serial = max(last_serial, version_serial)
             if last_serial >= at_serial:
                 return last_serial
-            versionfiles_info = tx.get_last_serial_and_value_at(
+            (versionfiles_serial, versionfiles_value) = tx.get_last_serial_and_value_at(
                 self.key_versionfilelist(project, version), at_serial
             )
-            if versionfiles_info is None:
+            if isinstance(versionfiles_value, (Absent, Deleted)):
                 continue
-            (versionfiles_serial, versionfiles_value) = versionfiles_info
             last_serial = max(last_serial, versionfiles_serial)
             if last_serial >= at_serial:
                 return last_serial
-            if versionfiles_value is None:
-                # was deleted
-                return last_serial
             for filename in versionfiles_value:
-                versionfile_info = tx.get_last_serial_and_value_at(
-                    self.key_versionfile(project, version, filename), at_serial
+                (versionfile_serial, versionfile_value) = (
+                    tx.get_last_serial_and_value_at(
+                        self.key_versionfile(project, version, filename), at_serial
+                    )
                 )
-                if versionfile_info is None:
+                if isinstance(versionfile_value, (Absent, Deleted)):
                     continue
-                (versionfile_serial, _versionfile_value) = versionfile_info
                 last_serial = max(last_serial, versionfile_serial)
                 if last_serial >= at_serial:
                     return last_serial
