@@ -6,8 +6,10 @@ for all indexes.
 from __future__ import annotations
 
 from .keyfs_types import FilePathInfo
+from .log import threadlog
 from .markers import Deleted
 from .markers import NoDefault
+from .markers import absent
 from .markers import nodefault as _nodefault
 from .normalized import normalize_name
 from .readonly import DictViewReadonly
@@ -18,8 +20,6 @@ from devpi_common.metadata import ALLOWED_ARCHIVE_EXTS
 from devpi_common.metadata import splitbasename
 from devpi_common.metadata import splitext_archive
 from devpi_common.types import parse_hash_spec
-from devpi_server.log import threadlog
-from devpi_server.markers import absent
 from inspect import currentframe
 from io import BytesIO
 from pathlib import Path
@@ -485,18 +485,14 @@ class FileStore:
             entry.version = version
         return entry
 
-    def get_key_from_relpath(self, relpath):
-        try:
-            key = self.keyfs.tx.derive_key(relpath)
-        except KeyError:
-            return None
-        return key
-
     def get_file_entry(self, relpath: RelPath) -> FileEntry | None:
-        key = self.get_key_from_relpath(relpath)
-        if key is None:
-            return None
-        return FileEntry(key)
+        if key := self.keyfs.match_key(
+            relpath, self.keyfs.schema.PYPIFILE_NOMD5, self.keyfs.schema.STAGEFILE
+        ):
+            if key.last_serial < 0:
+                return None
+            return FileEntry(key)
+        return None
 
     def get_file_entry_from_key(self, key, meta=_nodefault):
         return MutableFileEntry(key, meta=meta)
