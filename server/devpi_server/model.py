@@ -2431,12 +2431,12 @@ class Schema(KeyFSSchema):
     )
 
     # files related
-    DIGESTPATHS = KeyFSSchema.decl_patterned_key(
-        "DIGESTPATHS",
+    DIGESTULIDS = KeyFSSchema.decl_patterned_key(
+        "DIGESTULIDS",
         "{digest}",
         None,
-        set[str],
-        SetViewReadonly[str],
+        set[int],
+        SetViewReadonly[int],
     )
 
     def register_key_subscribers(self, xom: XOM, keyfs: KeyFS) -> None:
