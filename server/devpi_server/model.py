@@ -951,7 +951,7 @@ class BaseStage:
         content_or_file: ContentOrFile,
         *,
         filename: str | None = None,
-        hashes: Digests | None = None,
+        hashes: Digests,
         last_modified: str | None = None,
     ) -> ELink:
         if self.customizer.readonly:
@@ -1627,7 +1627,7 @@ class PrivateStage(BaseStage):
         filename: str,
         content_or_file: ContentOrFile,
         *,
-        hashes: Digests | None = None,
+        hashes: Digests,
         last_modified: str | None = None,
     ) -> ELink:
         if self.customizer.readonly:
@@ -1660,7 +1660,7 @@ class PrivateStage(BaseStage):
         version: str,
         content_or_file: ContentOrFile,
         *,
-        hashes: Digests | None = None,
+        hashes: Digests,
         last_modified: str | None = None,
     ) -> ELink:
         if self.customizer.readonly:
@@ -1969,7 +1969,7 @@ class LinkStore:
         basename: str,
         content_or_file: ContentOrFile,
         *,
-        hashes: Digests | None = None,
+        hashes: Digests,
         last_modified: str | None = None,
     ) -> ELink:
         overwrite = None
@@ -1998,7 +1998,7 @@ class LinkStore:
         for_entrypath: ELink | str | None,
         *,
         filename: str | None = None,
-        hashes: Digests | None = None,
+        hashes: Digests,
         last_modified: str | None = None,
     ) -> ELink:
         if isinstance(for_entrypath, ELink):
@@ -2066,7 +2066,7 @@ class LinkStore:
         basename: str,
         content_or_file: ContentOrFile,
         *,
-        hashes: Digests | None = None,
+        hashes: Digests,
         last_modified: str | None = None,
         ref_hash_spec: str | None = None,
     ) -> MutableFileEntry:
