@@ -1426,7 +1426,7 @@ class PrivateStage(BaseStage):
 
     def key_projversions(
         self, project: NormalizedName | str
-    ) -> LocatedKey[set[str], SetViewReadonly[str]]:
+    ) -> LocatedKey[set, SetViewReadonly[str]]:
         return self.keyfs.schema.PROJVERSIONS(
             user=self.username,
             index=self.index,
@@ -1552,13 +1552,13 @@ class PrivateStage(BaseStage):
         tx = self.keyfs.tx
         if at_serial is None:
             at_serial = tx.at_serial
-        (last_serial, projects) = tx.get_last_serial_and_value_at(
+        (last_serial, _projects_ulid, projects) = tx.get_last_serial_and_value_at(
             self.key_projects, at_serial
         )
         if isinstance(projects, (Absent, Deleted)):
             # the whole index never existed or was deleted
             return -1
-        (versions_serial, versions) = tx.get_last_serial_and_value_at(
+        (versions_serial, _versions_ulid, versions) = tx.get_last_serial_and_value_at(
             self.key_projversions(project), at_serial
         )
         if isinstance(versions, Absent):
@@ -1572,16 +1572,20 @@ class PrivateStage(BaseStage):
             return last_serial
         last_serial = versions_serial
         for version in versions:
-            (version_serial, version_value) = tx.get_last_serial_and_value_at(
-                self.key_projversion(project, version), at_serial
+            (version_serial, _version_info_ulid, version_value) = (
+                tx.get_last_serial_and_value_at(
+                    self.key_projversion(project, version), at_serial
+                )
             )
             if version_value in (absent, deleted):
                 continue
             last_serial = max(last_serial, version_serial)
             if last_serial >= at_serial:
                 return last_serial
-            (versionfiles_serial, versionfiles_value) = tx.get_last_serial_and_value_at(
-                self.key_versionfilelist(project, version), at_serial
+            (versionfiles_serial, _versionfiles_info_ulid, versionfiles_value) = (
+                tx.get_last_serial_and_value_at(
+                    self.key_versionfilelist(project, version), at_serial
+                )
             )
             if isinstance(versionfiles_value, (Absent, Deleted)):
                 continue
@@ -1589,7 +1593,7 @@ class PrivateStage(BaseStage):
             if last_serial >= at_serial:
                 return last_serial
             for filename in versionfiles_value:
-                (versionfile_serial, versionfile_value) = (
+                (versionfile_serial, _versionfile_info_ulid, versionfile_value) = (
                     tx.get_last_serial_and_value_at(
                         self.key_versionfile(project, version, filename), at_serial
                     )
@@ -2288,7 +2292,7 @@ def normalize_bases(model, bases):
 
 class Schema(KeyFSSchema):
     # users and index configuration
-    USER = KeyFSSchema.decl_named_key_factory(
+    USER = KeyFSSchema.decl_patterned_key(
         "USER",
         "{user}",
         None,
@@ -2301,8 +2305,12 @@ class Schema(KeyFSSchema):
         set[str],
         SetViewReadonly[str],
     )
-    INDEX = KeyFSSchema.decl_named_key_factory(
-        "INDEX", "{index}", USER, dict, DictViewReadonly
+    INDEX = KeyFSSchema.decl_patterned_key(
+        "INDEX",
+        "{index}",
+        USER,
+        dict,
+        DictViewReadonly,
     )
     INDEXLIST = KeyFSSchema.decl_anonymous_key(
         "INDEXLIST",
@@ -2312,7 +2320,7 @@ class Schema(KeyFSSchema):
     )
 
     # type mirror related data
-    PYPIFILE_NOMD5 = KeyFSSchema.decl_named_key_factory(
+    PYPIFILE_NOMD5 = KeyFSSchema.decl_patterned_key(
         "PYPIFILE_NOMD5",
         "+e/{dirname}/{basename}",
         INDEX,
@@ -2327,7 +2335,7 @@ class Schema(KeyFSSchema):
     )
 
     # type "stage" related
-    PROJSIMPLELINKS = KeyFSSchema.decl_named_key_factory(
+    PROJSIMPLELINKS = KeyFSSchema.decl_patterned_key(
         "PROJSIMPLELINKS",
         "{project}",
         INDEX,
@@ -2340,7 +2348,7 @@ class Schema(KeyFSSchema):
         set[str],
         SetViewReadonly[str],
     )
-    PROJVERSION = KeyFSSchema.decl_named_key_factory(
+    PROJVERSION = KeyFSSchema.decl_patterned_key(
         "PROJVERSION",
         "{version}",
         PROJSIMPLELINKS,
@@ -2359,14 +2367,14 @@ class Schema(KeyFSSchema):
         set[str],
         SetViewReadonly[str],
     )
-    VERSIONFILE = KeyFSSchema.decl_named_key_factory(
+    VERSIONFILE = KeyFSSchema.decl_patterned_key(
         "VERSIONFILE",
         "{filename}",
         PROJVERSION,
         dict,
         DictViewReadonly,
     )
-    STAGEFILE = KeyFSSchema.decl_named_key_factory(
+    STAGEFILE = KeyFSSchema.decl_patterned_key(
         "STAGEFILE",
         "+f/{hashdir_a}/{hashdir_b}/{filename}",
         INDEX,
@@ -2375,7 +2383,7 @@ class Schema(KeyFSSchema):
     )
 
     # files related
-    DIGESTPATHS = KeyFSSchema.decl_named_key_factory(
+    DIGESTPATHS = KeyFSSchema.decl_patterned_key(
         "DIGESTPATHS",
         "{digest}",
         None,
