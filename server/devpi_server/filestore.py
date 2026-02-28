@@ -346,13 +346,15 @@ def relpath_prefix(content_or_file, hash_type=absent):
     return "/".join(make_splitdir(hash_spec))
 
 
-def key_from_link(keyfs: KeyFS, link: URL, user: str, index: str) -> TypedKey[dict]:
+def key_from_link(
+    keyfs: KeyFS, link: URL, user: str, index: str
+) -> TypedKey[dict, DictViewReadonly]:
     if link.hash_spec:
         # we can only create 32K entries per directory
         # so let's take the first 3 bytes which gives
         # us a maximum of 16^3 = 4096 entries in the root dir
         a, b = make_splitdir(link.hash_spec)
-        return cast("PTypedKey[dict]", keyfs.STAGEFILE)(
+        return cast("PTypedKey[dict, DictViewReadonly]", keyfs.STAGEFILE)(
             user=user, index=index, hashdir_a=a, hashdir_b=b, filename=link.basename
         )
     else:
@@ -360,7 +362,7 @@ def key_from_link(keyfs: KeyFS, link: URL, user: str, index: str) -> TypedKey[di
         assert parts
         dirname = "_".join(parts[:-1])
         dirname = re.sub('[^a-zA-Z0-9_.-]', '_', dirname)
-        return cast("PTypedKey[dict]", keyfs.PYPIFILE_NOMD5)(
+        return cast("PTypedKey[dict, DictViewReadonly]", keyfs.PYPIFILE_NOMD5)(
             user=user, index=index, dirname=unquote(dirname), basename=link.basename
         )
 
@@ -438,7 +440,7 @@ class FileStore:
                 hashes = get_hashes(content_or_file)
             dir_hash_spec = hashes.get_default_spec()
         hashdir_a, hashdir_b = make_splitdir(dir_hash_spec)
-        key = cast("PTypedKey[dict]", self.keyfs.STAGEFILE)(
+        key = cast("PTypedKey[dict, DictViewReadonly]", self.keyfs.STAGEFILE)(
             user=user,
             index=index,
             hashdir_a=hashdir_a,
@@ -477,7 +479,7 @@ class BaseFileEntry:
     _hash_spec = metaprop("hash_spec")  # e.g. "md5=120938012"
     _hashes = metaprop("hashes")  # e.g. dict(md5="120938012")
     _meta: DictViewReadonly | dict | NoDefault
-    key: TypedKey[dict]
+    key: TypedKey[dict, DictViewReadonly]
     last_modified = metaprop("last_modified")
     url = metaprop("url")
     project = metaprop("project")
@@ -485,7 +487,7 @@ class BaseFileEntry:
 
     def __init__(
         self,
-        key: TypedKey[dict],
+        key: TypedKey[dict, DictViewReadonly],
         meta: DictViewReadonly | dict | Deleted | NoDefault = _nodefault,
     ) -> None:
         self.key = key
