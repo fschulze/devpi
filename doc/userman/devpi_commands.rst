@@ -522,8 +522,8 @@ devpi command reference (server)
                         [--trusted-proxy-headers TRUSTED_PROXY_HEADERS]
                         [--max-request-body-size MAX_REQUEST_BODY_SIZE]
                         [--outside-url URL] [--absolute-urls]
-                        [--enable-core-metadata] [--profile-requests NUM]
-                        [--mirror-cache-expiry SECS] [--primary-url PRIMARY_URL]
+                        [--enable-core-metadata] [--mirror-cache-expiry SECS]
+                        [--primary-url PRIMARY_URL]
                         [--master-url DEPRECATED_MASTER_URL]
                         [--replica-file-search-path PATH] [--hard-links]
                         [--file-replication-threads NUM]
@@ -604,10 +604,6 @@ devpi command reference (server)
       --enable-core-metadata
                             (experimental) Enable minimal core-metadata support in
                             simple API. [False]
-      --profile-requests NUM
-                            profile NUM requests and print out cumulative stats.
-                            After print profiling is restarted. By default no
-                            profiling is performed. [0]
 
     mirroring options:
       --mirror-cache-expiry SECS
