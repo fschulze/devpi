@@ -190,8 +190,8 @@ class TestIndexingSharedData:
     def test_mirror_priority(self, shared_data):
         mirror = FakeStage('mirror')
         stage = FakeStage('stage')
-        mirror_prj = ProjectIndexingInfo(stage=mirror, name='mirror_prj')
-        stage_prj = ProjectIndexingInfo(stage=stage, name='stage_prj')
+        mirror_prj = ProjectIndexingInfo(stage=mirror, name="mirror_prj", num_names=2)
+        stage_prj = ProjectIndexingInfo(stage=stage, name="stage_prj", num_names=2)
         result = []
 
         def handler(is_from_mirror, serial, indexname, names):
@@ -218,7 +218,7 @@ class TestIndexingSharedData:
     @pytest.mark.parametrize("index_type", ["mirror", "stage"])
     def test_serial_priority(self, index_type, shared_data):
         stage = FakeStage(index_type)
-        prj = ProjectIndexingInfo(stage=stage, name='prj')
+        prj = ProjectIndexingInfo(stage=stage, name="prj", num_names=1)
         result = []
 
         def handler(is_from_mirror, serial, indexname, names):
@@ -237,7 +237,7 @@ class TestIndexingSharedData:
 
     def test_error_queued(self, shared_data):
         stage = FakeStage('stage')
-        prj = ProjectIndexingInfo(stage=stage, name='prj')
+        prj = ProjectIndexingInfo(stage=stage, name="prj", num_names=1)
 
         next_ts_result = []
         handler_result = []
@@ -300,17 +300,18 @@ class TestIndexingSharedData:
     def test_extend_differing_stage(self, shared_data):
         mirror = FakeStage('mirror')
         stage = FakeStage('stage')
-        mirror_prj = ProjectIndexingInfo(stage=mirror, name='mirror_prj')
-        stage_prj = ProjectIndexingInfo(stage=stage, name='stage_prj')
+        mirror_prj = ProjectIndexingInfo(stage=mirror, name="mirror_prj", num_names=2)
+        stage_prj = ProjectIndexingInfo(stage=stage, name="stage_prj", num_names=2)
         with pytest.raises(ValueError, match="Project isn't from same index"):
             shared_data.extend([mirror_prj, stage_prj], 0)
 
     def test_extend_max_names(self, shared_data):
         shared_data.QUEUE_MAX_NAMES = 3
         mirror = FakeStage('mirror')
-        prjs = []
-        for i in range(10):
-            prjs.append(ProjectIndexingInfo(stage=mirror, name='prj%d' % i))
+        prjs = [
+            ProjectIndexingInfo(stage=mirror, name=f"prj{i}", num_names=10)
+            for i in range(10)
+        ]
 
         result = []
 
@@ -348,9 +349,10 @@ class TestIndexingSharedData:
         shared_data.QUEUE_MAX_NAMES = 3
         mirror = FakeStage('mirror')
         mirror.serial = 0
-        prjs = []
-        for i in range(10):
-            prjs.append(ProjectIndexingInfo(stage=mirror, name='prj%d' % i))
+        prjs = [
+            ProjectIndexingInfo(stage=mirror, name=f"prj{i}", num_names=10)
+            for i in range(10)
+        ]
 
         result = []
 
@@ -421,9 +423,10 @@ class TestIndexingSharedData:
         # add one project on the mirror at serial 0
         mirror.serials['mirror1'] = 0
         shared_data.queue_projects(
-            [
-                ProjectIndexingInfo(stage=mirror, name='mirror1')],
-            0, searcher)
+            [ProjectIndexingInfo(stage=mirror, name="mirror1", num_names=1)],
+            0,
+            searcher,
+        )
         assert shared_data.queue.qsize() == 1
         while shared_data.queue.qsize():
             shared_data.process_next(handler)
@@ -434,9 +437,12 @@ class TestIndexingSharedData:
         mirror.serials['mirror2'] = 1
         shared_data.queue_projects(
             [
-                ProjectIndexingInfo(stage=mirror, name='mirror1'),
-                ProjectIndexingInfo(stage=mirror, name='mirror2')],
-            1, searcher)
+                ProjectIndexingInfo(stage=mirror, name="mirror1", num_names=2),
+                ProjectIndexingInfo(stage=mirror, name="mirror2", num_names=2),
+            ],
+            1,
+            searcher,
+        )
         assert shared_data.queue.qsize() == 1
         while shared_data.queue.qsize():
             shared_data.process_next(handler)
@@ -447,10 +453,13 @@ class TestIndexingSharedData:
         stage.serials['prj'] = 2
         shared_data.queue_projects(
             [
-                ProjectIndexingInfo(stage=mirror, name='mirror1'),
-                ProjectIndexingInfo(stage=mirror, name='mirror2'),
-                ProjectIndexingInfo(stage=stage, name='prj')],
-            2, searcher)
+                ProjectIndexingInfo(stage=mirror, name="mirror1", num_names=3),
+                ProjectIndexingInfo(stage=mirror, name="mirror2", num_names=3),
+                ProjectIndexingInfo(stage=stage, name="prj", num_names=3),
+            ],
+            2,
+            searcher,
+        )
         assert shared_data.queue.qsize() == 1
         while shared_data.queue.qsize():
             shared_data.process_next(handler)
@@ -460,10 +469,13 @@ class TestIndexingSharedData:
         # now re-add everything at a later serial
         shared_data.queue_projects(
             [
-                ProjectIndexingInfo(stage=mirror, name='mirror1'),
-                ProjectIndexingInfo(stage=mirror, name='mirror2'),
-                ProjectIndexingInfo(stage=stage, name='prj')],
-            3, searcher)
+                ProjectIndexingInfo(stage=mirror, name="mirror1", num_names=3),
+                ProjectIndexingInfo(stage=mirror, name="mirror2", num_names=3),
+                ProjectIndexingInfo(stage=stage, name="prj", num_names=3),
+            ],
+            3,
+            searcher,
+        )
         assert shared_data.queue.qsize() == 1
         while shared_data.queue.qsize():
             shared_data.process_next(handler)
