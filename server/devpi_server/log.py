@@ -8,6 +8,7 @@ import logging
 import logging.config
 import sys
 import threading
+import time
 
 
 if TYPE_CHECKING:
@@ -160,3 +161,17 @@ def _thread_current_log() -> TagLogger:
     if taglogger is None:
         taglogger = TagLogger(prefix="NOCTX")
     return taglogger
+
+
+class TimeDeltaChecker:
+    def __init__(self, delta: float, current: float | None = None) -> None:
+        self.delta = delta
+        self.last_time = time.monotonic() if current is None else current
+
+    def is_due(self, new_time: float | None = None) -> bool:
+        if new_time is None:
+            new_time = time.monotonic()
+        if new_time - self.last_time > self.delta:
+            self.last_time = new_time
+            return True
+        return False
