@@ -25,7 +25,7 @@ jobs:
           persist-credentials: false
       - uses: "actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405" # v6.2.0
         with:
-          python-version: "3.10"
+          python-version: "3.11"
       - name: "Install dependencies"
         run: |
           set -xe -o nounset
@@ -57,7 +57,7 @@ jobs:
           persist-credentials: false
       - uses: "actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405" # v6.2.0
         with:
-          python-version: "3.10"
+          python-version: "3.11"
       - name: "Install dependencies"
         run: |
           set -xe -o nounset
@@ -245,17 +245,17 @@ jobs:
       matrix:
         include:
           - project: "server"
-            python-version: "3.9"
+            python-version: "3.11"
             os: "ubuntu-latest"
-            tox-envs: "py39"
+            tox-envs: "py311"
           - project: "server"
-            python-version: "3.9"
+            python-version: "3.11"
             os: "ubuntu-latest"
-            tox-envs: "py39-hash_hl"
+            tox-envs: "py311-hash_hl"
           - project: "server"
-            python-version: "3.9"
+            python-version: "3.11"
             os: "ubuntu-latest"
-            tox-envs: "py39-keyfs_sqlite"
+            tox-envs: "py311-keyfs_sqlite"
           - project: "server"
             python-version: "3.14"
             os: "ubuntu-latest"
@@ -300,13 +300,13 @@ jobs:
       matrix:
         include:
           - project: "web"
-            python-version: "3.9"
+            python-version: "3.11"
             os: "ubuntu-latest"
-            tox-envs: "py39"
+            tox-envs: "py311"
           - project: "web"
-            python-version: "3.9"
+            python-version: "3.11"
             os: "ubuntu-latest"
-            tox-envs: "py39-keyfs"
+            tox-envs: "py311-keyfs"
           - project: "web"
             python-version: "3.14"
             os: "ubuntu-latest"
@@ -509,13 +509,13 @@ jobs:
       matrix:
         include:
           - project: "server"
-            python-version: "3.9"
+            python-version: "3.11"
             os: "ubuntu-latest"
-            tox-envs: "py39"
+            tox-envs: "py311"
           - project: "web"
-            python-version: "3.9"
+            python-version: "3.11"
             os: "ubuntu-latest"
-            tox-envs: "py39"
+            tox-envs: "py311"
 
     env:
       PY_COLORS: 1
@@ -563,21 +563,21 @@ jobs:
       matrix:
         include:
           # - project: "postgresql"
-          #   python-version: "3.9"
+          #   python-version: "3.11"
           #   os: "ubuntu-latest"
-          #   tox-envs: "py39-postgresql"
+          #   tox-envs: "py311-postgresql"
           - project: "postgresql"
-            python-version: "3.9"
+            python-version: "3.11"
             os: "ubuntu-latest"
-            tox-envs: "py39-server"
+            tox-envs: "py311-server"
           # - project: "postgresql"
-          #   python-version: "3.9"
+          #   python-version: "3.11"
           #   os: "ubuntu-latest"
-          #   tox-envs: "py39-server_postgresql_ssl"
+          #   tox-envs: "py311-server_postgresql_ssl"
           - project: "postgresql"
-            python-version: "3.9"
+            python-version: "3.11"
             os: "ubuntu-latest"
-            tox-envs: "py39-dont_use_copy-server"
+            tox-envs: "py311-dont_use_copy-server"
           # - project: "postgresql"
           #   python-version: "3.14"
           #   os: "ubuntu-latest"
@@ -645,9 +645,9 @@ jobs:
       matrix:
         include:
           - project: "postgresql"
-            python-version: "3.9"
+            python-version: "3.11"
             os: "ubuntu-latest"
-            tox-envs: "py39-web"
+            tox-envs: "py311-web"
           - project: "postgresql"
             python-version: "3.14"
             os: "ubuntu-latest"
@@ -657,9 +657,9 @@ jobs:
             os: "ubuntu-latest"
             tox-envs: "pypy3-web"
           - project: "postgresql"
-            python-version: "3.9"
+            python-version: "3.11"
             os: "ubuntu-latest"
-            tox-envs: "py39-dont_use_copy-web"
+            tox-envs: "py311-dont_use_copy-web"
 
     env:
       PY_COLORS: 1
@@ -823,14 +823,14 @@ jobs:
             tox-envs: "py37"
             pytest-options: "--timeout 300"
           - project: "server"
-            python-version: "3.9"
+            python-version: "3.11"
             os: "windows-latest"
-            tox-envs: "py39"
+            tox-envs: "py311"
             pytest-options: ""
           - project: "web"
-            python-version: "3.9"
+            python-version: "3.11"
             os: "windows-latest"
-            tox-envs: "py39"
+            tox-envs: "py311"
             pytest-options: ""
 
     env:
@@ -886,16 +886,16 @@ jobs:
             tox-envs: "py38"
             pytest-options: "--timeout 300"
           - project: "server"
-            python-version: "3.9"
+            python-version: "3.11"
             os: "macos-latest"
             # os-version: "13"
-            tox-envs: "py39"
+            tox-envs: "py311"
             pytest-options: ""
           - project: "web"
-            python-version: "3.9"
+            python-version: "3.11"
             os: "macos-latest"
             # os-version: "13"
-            tox-envs: "py39"
+            tox-envs: "py311"
             pytest-options: ""
 
     env:

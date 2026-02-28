@@ -58,12 +58,11 @@ if TYPE_CHECKING:
     from devpi_common.metadata import Version
     from typing import Any
     from typing import Literal
-    from typing import Union
 
     LinksList = list[tuple[str, str]]
-    RequiresPython = Union[str, None]
+    RequiresPython = str | None
     RequiresPythonList = list[RequiresPython]
-    Yanked = Union[Literal[True], str, None]
+    Yanked = Literal[True] | str | None
     YankedList = list[Yanked]
     JoinedLink = tuple[str, str, RequiresPython, Yanked]
     JoinedLinkList = list[JoinedLink]
