@@ -38,7 +38,6 @@ from devpi_common.types import cached_property
 from devpi_common.url import URL
 from functools import partial
 from html.parser import HTMLParser
-from itertools import zip_longest
 from pyramid.authentication import b64encode
 from typing import TYPE_CHECKING
 from typing import TypedDict
@@ -59,6 +58,7 @@ if TYPE_CHECKING:
     from .httpclient import HTTPClient
     from .keyfs_types import LocatedKey
     from .keyfs_types import SearchKey
+    from .keyfs_types import ULIDKey
     from .main import XOM
     from .markers import Unknown
     from .model import JoinedLink
@@ -66,16 +66,12 @@ if TYPE_CHECKING:
     from .model import SimpleLinks
     from .model import Yanked
     from .readonly import DictViewReadonly
-    from collections.abc import Callable
     from collections.abc import Iterator
     from typing import Any
     from typing import NotRequired
     import asyncio
 
     ProjectsResult = tuple[set[NormalizedName], str | None]
-    LinksList = list[tuple[str, str]]
-    RequiresPythonList = list[RequiresPython]
-    YankedList = list[Yanked]
     JoinedLinkList = list[JoinedLink]
     ReleaseLinks = list["Link"]
 
@@ -96,9 +92,6 @@ class CacheInfo(TypedDict):
 class NewLinks:
     cache_info: CacheInfo
     releaselinks: ReleaseLinks
-    key_hrefs: LinksList
-    requires_python: RequiresPythonList
-    yanked: YankedList
     devpi_serial: str | None
 
 
@@ -255,15 +248,25 @@ def parse_index_v1_json(disturl: URL | str, text: str) -> ReleaseLinks:
 
 
 def join_links_data(
-    links: LinksList, requires_python: RequiresPythonList, yanked: YankedList
+    releaselinks: ReleaseLinks,
+    key_index: LocatedKey | ULIDKey,
 ) -> JoinedLinkList:
     # build list of (key, href, require_python, yanked) tuples
     result = []
-    for link, require_python, link_yanked in zip_longest(
-        links, requires_python, yanked, fillvalue=None
-    ):
-        assert link is not None
-        result.append((*link, require_python, link_yanked))
+    keyfs = key_index.keyfs
+    for releaselink in releaselinks:
+        key = key_from_link(keyfs, releaselink, key_index)
+        href = str(key.relpath)
+        if releaselink.hash_spec:
+            href = f"{href}#{releaselink.hash_spec}"
+        result.append(
+            (
+                releaselink.basename,
+                href,
+                releaselink.requires_python,
+                None if releaselink.yanked is False else releaselink.yanked,
+            )
+        )
     return result
 
 
@@ -438,9 +441,7 @@ class MirrorData:
 
     def _save_cache_links(  # noqa: PLR0912
         self,
-        links: LinksList,
-        requires_python: RequiresPythonList,
-        yanked: YankedList,
+        releaselinks: ReleaseLinks,
         cache_info: CacheInfo | None,
     ) -> None:
         project = self.project
@@ -449,7 +450,8 @@ class MirrorData:
         data: dict[str, CacheLink] = {}
         username = stage.username
         index = stage.index
-        for fn, ep, rp, y in join_links_data(links, requires_python, yanked):
+        key_index = stage.key_index.resolve(fetch=True)
+        for fn, ep, rp, y in join_links_data(releaselinks, key_index):
             (entrypath, sep, hash_spec) = ep.partition("#")
             link_data = data[fn] = CacheLink(
                 relpath=index_relpath(username, index, RelPath(entrypath))
@@ -1028,7 +1030,6 @@ class MirrorStage(BaseStage):
         newlinks_future: NewLinksFuture,
         project: NormalizedName | str,
         cache_info: CacheInfo,
-        _key_from_link: Callable,
     ) -> None:
         # get the simple page for the project
         url = self.mirror_url.joinpath(project).asdir()
@@ -1093,25 +1094,10 @@ class MirrorStage(BaseStage):
             releaselinks = parse_index_v1_json(response_url, text)
         else:
             releaselinks = parse_index(response_url, text).releaselinks
-        num_releaselinks = len(releaselinks)
-        key_hrefs: list = [None] * num_releaselinks
-        requires_python: RequiresPythonList = [None] * num_releaselinks
-        yanked: YankedList = [None] * num_releaselinks
-        for index, releaselink in enumerate(releaselinks):
-            key = _key_from_link(releaselink)
-            href = key.relpath
-            if releaselink.hash_spec:
-                href = f"{href}#{releaselink.hash_spec}"
-            key_hrefs[index] = (releaselink.basename, href)
-            requires_python[index] = releaselink.requires_python
-            yanked[index] = None if releaselink.yanked is False else releaselink.yanked
         newlinks_future.set_result(
             NewLinks(
                 cache_info=CacheInfo(serial=serial, etag=response.headers.get("ETag")),
                 releaselinks=releaselinks,
-                key_hrefs=key_hrefs,
-                requires_python=requires_python,
-                yanked=yanked,
                 devpi_serial=response.headers.get("X-DEVPI-SERIAL"),
             )
         )
@@ -1177,9 +1163,7 @@ class MirrorStage(BaseStage):
                 pass
             # this stores the simple links info
             self._get_mirrordata(project)._save_cache_links(
-                info.key_hrefs,
-                info.requires_python,
-                info.yanked,
+                info.releaselinks,
                 info.cache_info,
             )
             return self.SimpleLinks(newlinks)
@@ -1194,7 +1178,7 @@ class MirrorStage(BaseStage):
         info = await newlinks_future
         threadlog.debug("Got simple links for %r", project)
 
-        newlinks = join_links_data(info.key_hrefs, info.requires_python, info.yanked)
+        newlinks = join_links_data(info.releaselinks, self.key_index)
         with self.keyfs.write_transaction():
             self.keyfs.tx.on_finished(lock.release)
             # fetch current links
@@ -1260,19 +1244,9 @@ class MirrorStage(BaseStage):
                         "project %s not found" % project)
 
         newlinks_future = cast("NewLinksFuture", self.xom.create_future())
-        # we need to set this up here, as these access the database and
-        # the async loop has no transaction
-        # we don't resolve the key here, as _async_fetch_releaselinks runs
-        # in a separate thread and only needs access to the relpath
-        key_index = self.keyfs.schema.INDEX.locate(
-            user=self.user.name, index=self.index
-        )
-        _key_from_link = partial(key_from_link, self.keyfs, key_index=key_index)
         try:
             self.xom.run_coroutine_threadsafe(
-                self._async_fetch_releaselinks(
-                    newlinks_future, project, cache_info, _key_from_link
-                ),
+                self._async_fetch_releaselinks(newlinks_future, project, cache_info),
                 timeout=self.timeout,
             )
         except TimeoutError as e:
@@ -1322,7 +1296,7 @@ class MirrorStage(BaseStage):
 
         info = newlinks_future.result()
 
-        newlinks = join_links_data(info.key_hrefs, info.requires_python, info.yanked)
+        newlinks = join_links_data(info.releaselinks, self.key_index)
         if links is not None and set(links) == set(newlinks):
             # no changes
             self.cache_retrieve_times.refresh(project, info.cache_info["etag"])
