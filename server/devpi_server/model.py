@@ -395,14 +395,7 @@ class User:
             raise InvalidUserconfig(
                 "Unknown keys in user config: %s" % ", ".join(unknown_keys))
 
-    def _set(self, newuserconfig: dict) -> None:
-        assert "indexes" not in newuserconfig
-        with self.key.update() as userconfig:
-            userconfig.update(newuserconfig)
-            threadlog.info("internal: set user information %r", self.name)
-
     def _modify(self, password=None, pwhash=None, **kwargs):
-        self.validate_config(**kwargs)
         modified: dict[str, object] = {}
         with self.key.update() as userconfig:
             if password is not None or pwhash:
@@ -427,12 +420,14 @@ class User:
                 if "created" not in kwargs:
                     # only set modified if not created at the same time
                     modified_ts = strftime("%Y-%m-%dT%H:%M:%SZ", gmtime())
-                    modified["modified"] = userconfig["modified"] = modified_ts
+                    if modified_ts != userconfig["created"]:
+                        modified["modified"] = userconfig["modified"] = modified_ts
             assert "indexes" not in userconfig
         return ["%s=%s" % (k, v) for k, v in sorted(modified.items())]
 
     def modify(self, **kwargs):
         kwargs = self.get_cleaned_config(**kwargs)
+        self.validate_config(**kwargs)
         modified = self._modify(**kwargs)
         threadlog.info("modified user %r: %s", self.name,
                        ", ".join(modified))
