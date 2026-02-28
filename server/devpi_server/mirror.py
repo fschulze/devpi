@@ -35,7 +35,6 @@ from pyramid.authentication import b64encode
 from typing import TYPE_CHECKING
 from typing import TypedDict
 from typing import cast
-import asyncio
 import json
 import re
 import threading
@@ -60,10 +59,10 @@ if TYPE_CHECKING:
     from .readonly import DictViewReadonly
     from collections.abc import Callable
     from typing import Any
-    from typing import Optional
-    from typing_extensions import NotRequired
+    from typing import NotRequired
+    import asyncio
 
-    ProjectsResult = tuple[dict[NormalizedName, str], Optional[str]]
+    ProjectsResult = tuple[dict[NormalizedName, str], str | None]
     ReleaseLinks = list["Link"]
 
     class CacheLinks(TypedDict):
@@ -693,7 +692,7 @@ class MirrorStage(BaseStage):
                 self._get_remote_projects(projects_future),
                 timeout=projects_timeout,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             threadlog.warn(
                 "serving stale projects for %r, getting data timed out after %s seconds",
                 self.index,
@@ -977,7 +976,7 @@ class MirrorStage(BaseStage):
                 user=self.user.name, index=self.index, project=project)
             existing_info = set(links or ())
             # calling mapkey on the links creates the entries in the database
-            for newinfo, link in zip(newlinks, info.releaselinks):
+            for newinfo, link in zip(newlinks, info.releaselinks, strict=True):
                 if newinfo in existing_info:
                     continue
                 maplink(link)
@@ -1077,20 +1076,26 @@ class MirrorStage(BaseStage):
                 ),
                 timeout=self.timeout,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError as e:
             if not self.xom.is_replica():
                 # we process the future in the background
                 # but only on primary, the replica will get the update
                 # via the replication thread
                 self.xom.create_task(
-                    self._update_simplelinks_in_future(newlinks_future, project, lock.defer()))
+                    self._update_simplelinks_in_future(
+                        newlinks_future, project, lock.defer()
+                    )
+                )
             if links is not None:
                 threadlog.warn(
                     "serving stale links for %r, getting data timed out after %s seconds",
-                    project, self.timeout)
+                    project,
+                    self.timeout,
+                )
                 return self.SimpleLinks(links, stale=True)
             raise self.UpstreamError(
-                f"timeout after {self.timeout} seconds while getting data for {project!r}")
+                f"timeout after {self.timeout} seconds while getting data for {project!r}"
+            ) from e
         except self.UpstreamNotModified as e:
             if links is not None:
                 # immediately update the cache
@@ -1098,7 +1103,8 @@ class MirrorStage(BaseStage):
                 return self.SimpleLinks(links)
             if e.etag is None:
                 threadlog.error(
-                    "server returned 304 Not Modified, but we have no links")
+                    "server returned 304 Not Modified, but we have no links"
+                )
                 raise
             # should not happen, but clear ETag and try again
             self.cache_retrieve_times.expire(project, etag=None)
@@ -1110,7 +1116,8 @@ class MirrorStage(BaseStage):
             if links is not None:
                 threadlog.warn(
                     "serving stale links, because of exception %s",
-                    lazy_format_exception(e))
+                    lazy_format_exception(e),
+                )
                 return self.SimpleLinks(links, stale=True)
             raise
 
