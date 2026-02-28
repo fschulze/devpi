@@ -1,0 +1,1 @@
+Removed ``hash_spec`` from JSON responses, use ``hashes`` instead.
