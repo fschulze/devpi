@@ -22,14 +22,12 @@ table td {
     vertical-align: top;
     padding: 0.5em;
 }
-table div.serial span {
-    text-align: right;
-    padding-right: 2em;
-}
-table div.serial span,
-table div.serial a {
-    display: block;
-    width: 100%;
+table div.serial {
+    display: flex;
+    justify-content: space-between;
+    & > span {
+        padding-right: 2em;
+    }
 }
 table td pre {
     margin: 0;
