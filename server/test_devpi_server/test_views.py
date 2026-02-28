@@ -40,11 +40,9 @@ def getentry(testapp, path):
 
 
 def get_pypi_project_names(testapp):
-    return (
-        testapp.xom.model.getstage("root/pypi")
-        .key_projects.with_resolved_parent()
-        .get()
-    )
+    stage = testapp.xom.model.getstage("root/pypi")
+    key_project = stage.key_project.with_resolved_parent()
+    return {key.name for key in key_project.iter_ulidkeys()}
 
 
 @pytest.mark.parametrize("kind", ["user", "index"])
@@ -1913,7 +1911,8 @@ def test_delete_mirror(mapp, monkeypatch, simpypi, testapp, xom):
     r = testapp.xget(200, link)
     with testapp.xom.keyfs.read_transaction():
         stage = testapp.xom.model.getstage(api.stagename)
-        assert stage.key_projects.with_resolved_parent().get() == {name}
+        key_project = stage.key_project.with_resolved_parent()
+        assert {x.name for x in key_project.iter_ulidkeys()} == {name}
         assert getentry(testapp, path).file_exists()
     # remove
     mapp.delete_index(api.stagename)
@@ -1943,7 +1942,8 @@ def test_delete_mirror(mapp, monkeypatch, simpypi, testapp, xom):
     assert getlinks(r.text) == []
     with testapp.xom.keyfs.read_transaction():
         stage = testapp.xom.model.getstage(api.stagename)
-        assert stage.key_projects.with_resolved_parent().get() == set()
+        key_project = stage.key_project.with_resolved_parent()
+        assert {x.name for x in key_project.iter_ulidkeys()} == set()
         assert getentry(testapp, path) is None
 
 
