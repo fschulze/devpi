@@ -14,12 +14,14 @@ from attrs import define
 from attrs import field
 from attrs import frozen
 from collections.abc import Hashable
+from functools import lru_cache
 from string import Formatter
 from typing import Generic
 from typing import NewType
 from typing import TYPE_CHECKING
 from typing import TypeVar
 from typing import get_origin
+from typing import overload
 import contextlib
 import random
 import re
@@ -38,8 +40,14 @@ if TYPE_CHECKING:
     from pathlib import Path
     from re import Match
     from re import Pattern
+    from typing import Protocol
     from typing import Self
     from typing import TypeGuard
+
+    class Resolve(Protocol):
+        def __call__(
+            self, key: LocatedKey[KeyType, KeyTypeRO], *, fetch: bool
+        ) -> ULIDKey[KeyType, KeyTypeRO]: ...
 
 
 KeyFSTypesRO = (
@@ -188,7 +196,35 @@ def get_rex_reverse(pattern: str) -> Pattern:
     return re.compile(f"^{rex_pattern}$")
 
 
+@lru_cache(maxsize=128)
+def get_simple_pattern_key(pattern: str) -> str | None:
+    result = list(_formatter.parse(pattern))
+    if len(result) != 1:
+        return None
+    ((literal_text, field_name, format_spec, conversion),) = result
+    if literal_text == "" and format_spec == "" and conversion is None:
+        return field_name
+    return None
+
+
+@overload
+def iter_lineage(key: LocatedKey) -> Iterator[LocatedKey]:
+    pass
+
+
+@overload
 def iter_lineage(key: PatternedKey) -> Iterator[PatternedKey]:
+    pass
+
+
+@overload
+def iter_lineage(key: ULIDKey) -> Iterator[ULIDKey]:
+    pass
+
+
+def iter_lineage(
+    key: LocatedKey | PatternedKey | ULIDKey,
+) -> Iterator[LocatedKey | PatternedKey | ULIDKey]:
     ancestor_key = key.parent_key
     while ancestor_key:
         yield ancestor_key
@@ -199,26 +235,37 @@ H = TypeVar("H", bound=Hashable)
 
 
 class LocatedKey(Generic[KeyType, KeyTypeRO]):
-    __slots__ = ("_hash", "_keyfs", "key_name", "key_type", "location", "params")
+    __slots__ = (
+        "_hash",
+        "_keyfs",
+        "key_name",
+        "key_type",
+        "name",
+        "params",
+        "parent_key",
+    )
     _hash: int
     _keyfs: weakref.ReferenceType[KeyFS]
     key_name: str
     key_type: type[KeyType]
-    location: str
+    name: str
+    parent_key: LocatedKey | ULIDKey | None
     params: dict[str, str]
 
     def __init__(
         self,
         keyfs: KeyFS,
         key_name: str,
-        location: str,
+        name: str,
+        parent_key: LocatedKey | ULIDKey | None,
         key_type: type[KeyType],
         params: dict | None = None,
     ) -> None:
         self._keyfs = weakref.ref(keyfs)
         self.key_name = key_name
-        assert "{" not in location
-        self.location = location
+        assert "{" not in name
+        self.name = name
+        self.parent_key = parent_key
         _key_type = get_origin(key_type)
         if _key_type is None:
             _key_type = key_type
@@ -237,22 +284,26 @@ class LocatedKey(Generic[KeyType, KeyTypeRO]):
         return self.key_name == other.key_name and self.relpath == other.relpath
 
     def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} {self.key_name} {self.key_type.__name__} {self.location!r}>"
+        return f"<{self.__class__.__name__} {self.key_name} {self.key_type.__name__} {self.name!r} {self.parent_key!r}>"
 
     def delete(self) -> None:
         return self.keyfs.tx.delete(self)
 
-    def deleted(self) -> bool:
-        return self.keyfs.tx.deleted(self)
+    def deleted(self, *, resolve_parents: bool = False) -> bool:
+        return self.keyfs.tx.deleted(self, resolve_parents=resolve_parents)
 
-    def exists(self) -> bool:
-        return self.keyfs.tx.exists(self)
+    def exists(self, *, resolve_parents: bool = False) -> bool:
+        return self.keyfs.tx.exists(self, resolve_parents=resolve_parents)
 
     def get(self, default: KeyType | KeyTypeRO | Absent = absent) -> KeyTypeRO:
         return self.keyfs.tx.get(self, default=default)
 
     def get_mutable(self) -> KeyType:
         return self.keyfs.tx.get_mutable(self)
+
+    def has_resolved_parent(self) -> bool:
+        parent_key = self.parent_key
+        return parent_key is None or isinstance(parent_key, ULIDKey)
 
     def is_dirty(self) -> bool:
         return self.keyfs.tx.is_dirty(self)
@@ -265,23 +316,69 @@ class LocatedKey(Generic[KeyType, KeyTypeRO]):
     def last_serial(self) -> int:
         return self.keyfs.tx.last_serial(self)
 
-    def make_ulid_key(self, ulid: ULID) -> ULIDKey[KeyType, KeyTypeRO]:
-        return ULIDKey(
+    def make_ulid_key(
+        self,
+        ulid: ULID,
+        *,
+        parent_key: ULIDKey | Absent | None = absent,
+        parent_ulid: ULID | Absent | None = absent,
+    ) -> ULIDKey[KeyType, KeyTypeRO]:
+        if not isinstance(parent_key, Absent):
+            assert isinstance(parent_ulid, Absent)
+            parent_ulid = None if parent_key is None else parent_key.ulid
+        if isinstance(parent_ulid, Absent):
+            assert isinstance(parent_key, Absent)
+            parent_ulid = self.parent_ulid
+        ulid_key: ULIDKey[KeyType, KeyTypeRO] = ULIDKey(
             self.keyfs,
             self.key_name,
             self.location,
+            self.name,
             ulid,
+            parent_ulid,
             self.key_type,
             params=self.params,
         )
+        if isinstance(parent_key, ULIDKey):
+            ulid_key._parent_key = parent_key
+        return ulid_key
 
     def new_ulidkey(self) -> ULIDKey[KeyType, KeyTypeRO]:
+        assert self.has_resolved_parent()
         ulid = self.keyfs._new_ulid()
-        return self.make_ulid_key(ulid)
+        parent_key = self.parent_key
+        return self.make_ulid_key(
+            ulid, parent_key=parent_key if isinstance(parent_key, ULIDKey) else absent
+        )
+
+    @property
+    def parent_ulid(self) -> ULID | None:
+        parent_key = self.parent_key
+        if parent_key is None:
+            return None
+        assert isinstance(parent_key, ULIDKey)
+        return parent_key.ulid
+
+    @property
+    def query_parent_ulid(self) -> int:
+        parent_ulid = self.parent_ulid
+        return -1 if parent_ulid is None else int(parent_ulid)
+
+    @property
+    def location(self) -> str:
+        if self.parent_key is None:
+            return ""
+        return self.parent_key.relpath
 
     @property
     def relpath(self) -> RelPath:
-        return RelPath(self.location)
+        location = self.location
+        name = self.name
+        if location and name:
+            return RelPath(f"{location}/{name}")
+        if location:
+            return RelPath(location)
+        return RelPath(name)
 
     @property
     def keyfs(self) -> KeyFS:
@@ -293,10 +390,12 @@ class LocatedKey(Generic[KeyType, KeyTypeRO]):
         return self.keyfs.tx.resolve(self, fetch=fetch)
 
     def set(self, val: KeyType) -> None:
+        assert self.has_resolved_parent()
         self.keyfs.tx.set(self, val)
 
     @contextlib.contextmanager
     def update(self) -> Iterator[KeyType]:
+        assert self.has_resolved_parent()
         keyfs = self._keyfs()
         assert keyfs is not None
         val = keyfs.tx.get_mutable(self)
@@ -305,18 +404,43 @@ class LocatedKey(Generic[KeyType, KeyTypeRO]):
         # no exception, so we can set and thus mark dirty the object
         keyfs.tx.set(self, val)
 
+    def with_resolved_parent(
+        self, *, resolve: Resolve | None = None
+    ) -> LocatedKey[KeyType, KeyTypeRO]:
+        parent_key = self.parent_key
+        if parent_key is None or isinstance(parent_key, ULIDKey):
+            return self
+        keyfs = self._keyfs()
+        assert keyfs is not None
+        resolve = resolve or keyfs.tx.resolve
+        parent_ulidkey = resolve(parent_key, fetch=False)
+        return LocatedKey(
+            keyfs,
+            self.key_name,
+            self.name,
+            parent_ulidkey,
+            self.key_type,
+            params=self.params,
+        )
+
 
 class PatternedKey(Generic[KeyType, KeyTypeRO]):
     __slots__ = (
+        "_full_rex_reverse",
         "_keyfs",
+        "_keys",
         "_rex_reverse",
+        "_simple_pattern_key",
         "key_name",
         "key_type",
         "parent_key",
         "pattern",
     )
+    _full_rex_reverse: Pattern
     _keyfs: weakref.ReferenceType[KeyFS]
+    _keys: frozenset[str]
     _rex_reverse: Pattern
+    _simple_pattern_key: str | None
     key_name: str
     key_type: type[KeyType]
     parent_key: PatternedKey | None
@@ -339,21 +463,99 @@ class PatternedKey(Generic[KeyType, KeyTypeRO]):
             _key_type = key_type
         self.key_type = _key_type
 
-    def __call__(self, **kw: NormalizedName | str) -> LocatedKey[KeyType, KeyTypeRO]:
+    def __call__(
+        self, *args: str, **kw: LocatedKey | ULIDKey | NormalizedName | str
+    ) -> LocatedKey[KeyType, KeyTypeRO]:
+        given_parent_key = kw.pop("parent_key", absent)
+        assert isinstance(given_parent_key, (LocatedKey, ULIDKey, Absent))
         for val in kw.values():
+            assert isinstance(val, str)
             if "/" in val:
                 raise ValueError(val)
-        location = self.full_pattern.format_map(kw)
+        if not isinstance(given_parent_key, Absent):
+            kw.update(given_parent_key.params)
+        parent_key: LocatedKey | ULIDKey | None = (
+            None if self.parent_key is None else self.parent_key(**kw)
+        )
+        if not isinstance(given_parent_key, Absent):
+            assert parent_key is not None
+            assert given_parent_key.key_name == parent_key.key_name
+            assert given_parent_key.relpath == parent_key.relpath
+            parent_key = given_parent_key
         keyfs = self._keyfs()
         assert keyfs is not None
-        return LocatedKey(keyfs, self.key_name, location, self.key_type, params=kw)
+        if len(missing := self.keys.difference(kw)) == 1 and len(args) == 1:
+            (k,) = missing
+            (val,) = args
+            kw[k] = val
+        elif args:
+            msg = f"{self.__class__.__name__}.__call__() takes at most 1 positional argument {len(args)} were given"
+            raise TypeError(msg)
+        if self.simple_pattern_key is not None:
+            name = kw[self.simple_pattern_key]
+            assert isinstance(name, str)
+        else:
+            name = self.pattern.format_map(kw)
+        return LocatedKey(
+            keyfs, self.key_name, name, parent_key, self.key_type, params=kw
+        )
 
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__} {self.key_name} {self.key_type.__name__} {self.pattern!r} {self.parent_key!r}>"
 
     def extract_params(self, relpath: str) -> dict:
-        m = self.rex_reverse.match(relpath)
+        m = self.full_rex_reverse.match(relpath)
         return m.groupdict() if m is not None else {}
+
+    @property
+    def keys(self) -> frozenset[str]:
+        _keys = getattr(self, "_keys", None)
+        if _keys is None:
+            _keys = self._keys = get_pattern_keys(self.pattern)
+        return _keys
+
+    def make_ulid_key(
+        self,
+        location: str,
+        name: str,
+        ulid: ULID,
+        parent_key: ULIDKey | Absent | None = absent,
+        parent_ulid: ULID | Absent | None = absent,
+        parent_params: dict | None = None,
+    ) -> ULIDKey[KeyType, KeyTypeRO]:
+        if not isinstance(parent_key, Absent):
+            assert isinstance(parent_ulid, Absent)
+            parent_ulid = None if parent_key is None else parent_key.ulid
+        else:
+            assert not isinstance(parent_ulid, Absent)
+        if parent_ulid is None and self.simple_pattern_key is not None:
+            params = {self.simple_pattern_key: name}
+        elif parent_params is not None and self.simple_pattern_key is not None:
+            params = parent_params | {self.simple_pattern_key: name}
+        else:
+            if location and name:
+                relpath = f"{location}/{name}"
+            elif location:
+                relpath = location
+            else:
+                relpath = name
+            m = self.full_rex_reverse.match(relpath)
+            params = m.groupdict() if m is not None else {}
+        keyfs = self._keyfs()
+        assert keyfs is not None
+        ulid_key: ULIDKey[KeyType, KeyTypeRO] = ULIDKey(
+            keyfs,
+            self.key_name,
+            location,
+            name,
+            ulid,
+            parent_ulid,
+            self.key_type,
+            params=params,
+        )
+        if isinstance(parent_key, ULIDKey):
+            ulid_key._parent_key = parent_key
+        return ulid_key
 
     def iter_patterns(self) -> Iterator[str]:
         lineage_patterns: Iterator[str] = (x.pattern for x in iter_lineage(self))
@@ -369,20 +571,51 @@ class PatternedKey(Generic[KeyType, KeyTypeRO]):
         return "/".join(self.iter_patterns())
 
     @property
+    def full_rex_reverse(self) -> Pattern:
+        _full_rex_reverse = getattr(self, "_full_rex_reverse", None)
+        if _full_rex_reverse is None:
+            _full_rex_reverse = self._full_rex_reverse = get_rex_reverse(
+                self.full_pattern
+            )
+        return _full_rex_reverse
+
+    @property
     def rex_reverse(self) -> Pattern:
         _rex_reverse = getattr(self, "_rex_reverse", None)
         if _rex_reverse is None:
-            _rex_reverse = self._rex_reverse = get_rex_reverse(self.full_pattern)
+            _rex_reverse = self._rex_reverse = get_rex_reverse(self.pattern)
         return _rex_reverse
+
+    @property
+    def simple_pattern_key(self) -> str | None:
+        _simple_pattern_key = getattr(self, "_simple_pattern_key", absent)
+        if isinstance(_simple_pattern_key, Absent):
+            _simple_pattern_key = self._simple_pattern_key = get_simple_pattern_key(
+                self.pattern
+            )
+        return _simple_pattern_key
 
 
 class ULIDKey(Generic[KeyType, KeyTypeRO]):
-    __slots__ = ("key_name", "key_type", "keyfs", "location", "params", "ulid")
+    __slots__ = (
+        "_parent_key",
+        "key_name",
+        "key_type",
+        "keyfs",
+        "location",
+        "name",
+        "params",
+        "parent_ulid",
+        "ulid",
+    )
+    _parent_key: ULIDKey
     keyfs: KeyFS
     key_name: str
     key_type: type[KeyType]
     location: str
+    name: str
     params: dict[str, str]
+    parent_ulid: ULID | None
     ulid: ULID
 
     def __init__(
@@ -390,20 +623,25 @@ class ULIDKey(Generic[KeyType, KeyTypeRO]):
         keyfs: KeyFS,
         key_name: str,
         location: str,
+        name: str,
         ulid: ULID,
+        parent_ulid: ULID | None,
         key_type: type[KeyType],
         params: dict | None = None,
     ) -> None:
         self.keyfs = keyfs
         self.key_name = key_name
         assert "{" not in location
+        assert "{" not in name
         self.location = location
+        self.name = name
         _key_type = get_origin(key_type)
         if _key_type is None:
             _key_type = key_type
         self.key_type = _key_type
         self.params = {} if params is None else params
         self.ulid = ulid
+        self.parent_ulid = parent_ulid
 
     def __hash__(self) -> int:
         return hash(self.ulid)
@@ -414,13 +652,16 @@ class ULIDKey(Generic[KeyType, KeyTypeRO]):
         return self.ulid == other.ulid
 
     def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} {self.key_name} {self.key_type.__name__} {self.location!r} {self.ulid!r}>"
+        return f"<{self.__class__.__name__} {self.key_name} {self.key_type.__name__} {self.location!r} {self.parent_ulid!r} {self.name!r} {self.ulid!r}>"
 
     def delete(self) -> None:
         return self.keyfs.tx.delete(self)
 
-    def exists(self) -> bool:
-        return self.keyfs.tx.exists(self)
+    def deleted(self, *, resolve_parents: bool = False) -> bool:
+        return self.keyfs.tx.deleted(self, resolve_parents=resolve_parents)
+
+    def exists(self, *, resolve_parents: bool = False) -> bool:
+        return self.keyfs.tx.exists(self, resolve_parents=resolve_parents)
 
     def get(self, default: KeyType | KeyTypeRO | Absent = absent) -> KeyTypeRO:
         return self.keyfs.tx.get(self, default=default)
@@ -445,14 +686,36 @@ class ULIDKey(Generic[KeyType, KeyTypeRO]):
             self.keyfs,
             self.key_name,
             self.location,
+            self.name,
             ulid,
+            self.parent_ulid,
             self.key_type,
             params=self.params,
         )
 
     @property
+    def parent_key(self) -> ULIDKey | None:
+        if self.parent_ulid is None:
+            return None
+        _parent_key = getattr(self, "_parent_key", None)
+        if _parent_key is None:
+            raise RuntimeError
+        return _parent_key
+
+    @property
+    def query_parent_ulid(self) -> int:
+        parent_ulid = self.parent_ulid
+        return -1 if parent_ulid is None else int(parent_ulid)
+
+    @property
     def relpath(self) -> RelPath:
-        return RelPath(self.location)
+        location = self.location
+        name = self.name
+        if location and name:
+            return RelPath(f"{location}/{name}")
+        if location:
+            return RelPath(location)
+        return RelPath(name)
 
     def set(self, val: KeyType) -> None:
         self.keyfs.tx.set(self, val)
@@ -463,6 +726,13 @@ class ULIDKey(Generic[KeyType, KeyTypeRO]):
         yield val
         # no exception, so we can set and thus mark dirty the object
         self.set(val)
+
+    def with_resolved_parent(self) -> ULIDKey[KeyType, KeyTypeRO]:
+        parent_key = self.parent_key
+        if parent_key is None:
+            return self
+        assert isinstance(parent_key, ULIDKey)
+        return self
 
 
 def is_dict_key(

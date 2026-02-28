@@ -105,7 +105,11 @@ class LocatedKeyDescriptor(Generic[KeyType, KeyTypeRO]):
         self, instance: KeyFSSchema, owner: type[KeyFSSchema] | None = None
     ) -> LocatedKey[KeyType, KeyTypeRO]:
         key: LocatedKey[KeyType, KeyTypeRO] = LocatedKey(
-            instance.keyfs, self.key_name, f"{self.location}/{self.name}", self.key_type
+            instance.keyfs,
+            self.key_name,
+            f"{self.location}/{self.name}",
+            None,
+            self.key_type,
         )
         # cache attribute
         instance.__dict__[self.key_name] = key
