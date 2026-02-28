@@ -1137,13 +1137,9 @@ class MirrorStage(BaseStage):
         tx = self.keyfs.tx
         if at_serial is None:
             at_serial = tx.at_serial
-        info = tx.get_last_serial_and_value_at(
+        (last_serial, _links) = tx.get_last_serial_and_value_at(
             self.key_projsimplelinks(project), at_serial
         )
-        if info is None:
-            # never existed
-            return -1
-        (last_serial, links) = info
         return last_serial
 
     def get_versiondata_perstage(
