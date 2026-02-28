@@ -487,17 +487,19 @@ class MirrorStage(BaseStage):
 
     def delete(self) -> None:
         # delete all projects on this index
-        for name in self.key_projects.get():
+        key_projects = self.key_projects.with_resolved_parent()
+        for name in key_projects.get():
             self.del_project(name)
-        self.key_projects.delete()
+        key_projects.delete()
         BaseStage.delete(self)
 
     def add_project_name(self, project: NormalizedName | str) -> None:
         project = normalize_name(project)
-        projects = self.key_projects.get_mutable()
+        key_projects = self.key_projects.with_resolved_parent()
+        projects = key_projects.get_mutable()
         if project not in projects:
             projects.add(project)
-            self.key_projects.set(projects)
+            key_projects.set(projects)
 
     def del_project(self, project: NormalizedName | str) -> None:
         if not self.is_project_cached(project):
@@ -509,12 +511,13 @@ class MirrorStage(BaseStage):
                     continue
                 if entry.file_exists():
                     entry.delete()
-        self.key_projsimplelinks(project).delete()
-        projects = self.key_projects.get_mutable()
+        self.key_projsimplelinks(project).with_resolved_parent().delete()
+        key_projects = self.key_projects.with_resolved_parent()
+        projects = key_projects.get_mutable()
         if project in projects:
             projects.remove(project)
             self.cache_retrieve_times.expire(project)
-            self.key_projects.set(projects)
+            key_projects.set(projects)
 
     def del_versiondata(
         self,
@@ -540,11 +543,12 @@ class MirrorStage(BaseStage):
                 elif cleanup:
                     entries_to_check.append(entry)
             if cleanup and not any(x.file_exists() for x in entries_to_check):
-                projects = self.key_projects.get_mutable()
+                key_projects = self.key_projects.with_resolved_parent()
+                projects = key_projects.get_mutable()
                 if project in projects:
                     projects.remove(project)
-                    self.key_projects.set(projects)
-                self.key_projsimplelinks(project).delete()
+                    key_projects.set(projects)
+                self.key_projsimplelinks(project).with_resolved_parent().delete()
 
     def del_entry(self, entry, cleanup=True):
         project = entry.project
@@ -558,11 +562,12 @@ class MirrorStage(BaseStage):
             if links is None:
                 return
             if not any(self._is_file_cached(x) for x in links):
-                projects = self.key_projects.get_mutable()
+                key_projects = self.key_projects.with_resolved_parent()
+                projects = key_projects.get_mutable()
                 if project in projects:
                     projects.remove(project)
-                    self.key_projects.set(projects)
-                self.key_projsimplelinks(project).delete()
+                    key_projects.set(projects)
+                self.key_projsimplelinks(project).with_resolved_parent().delete()
 
     @property
     def _list_projects_perstage_lock(self):
@@ -634,7 +639,8 @@ class MirrorStage(BaseStage):
         )
 
     def _stale_list_projects_perstage(self) -> dict[NormalizedName, str]:
-        return {normalize_name(x): x for x in self.key_projects.get()}
+        key_projects = self.key_projects.with_resolved_parent()
+        return {normalize_name(x): x for x in key_projects.get()}
 
     def _update_projects(
         self, timeout: float | None = None
@@ -679,7 +685,7 @@ class MirrorStage(BaseStage):
                     self.keyfs.restart_read_transaction()
                 k = self.keyfs.schema.MIRRORNAMESINIT(
                     user=self.username, index=self.index
-                )
+                ).with_resolved_parent()
                 # when 0 it is new, when 1 it is pre 6.6.0 with
                 # only normalized names
                 if k.get() in (0, 1):
@@ -730,7 +736,7 @@ class MirrorStage(BaseStage):
 
     def is_project_cached(self, project):
         """ return True if we have some cached simpelinks information. """
-        return self.key_projsimplelinks(project).exists()
+        return self.key_projsimplelinks(project).exists(resolve_parents=True)
 
     def _save_cache_links(
         self,
@@ -750,7 +756,7 @@ class MirrorStage(BaseStage):
             "serial": serial,
             "yanked": yanked,
         }
-        key = self.key_projsimplelinks(project)
+        key = self.key_projsimplelinks(project).with_resolved_parent()
         old = cast("CacheLinks", key.get())
         if old != data:
             threadlog.debug("saving changed simplelinks for %s: %s", project, data)
@@ -773,7 +779,9 @@ class MirrorStage(BaseStage):
     ) -> tuple[bool, list | None, int, str | None]:
         (is_expired, links_with_data, serial, etag) = (True, None, -1, None)
 
-        cache = cast("CacheLinks", self.key_projsimplelinks(project).get())
+        cache = cast(
+            "CacheLinks", self.key_projsimplelinks(project).with_resolved_parent().get()
+        )
         if cache:
             is_expired = self.cache_retrieve_times.is_expired(project, self.cache_expiry)
             serial = cache["serial"]
@@ -801,7 +809,7 @@ class MirrorStage(BaseStage):
         # we have to set to an empty dict instead of removing the key, so
         # replicas behave correctly
         self.cache_retrieve_times.expire(project)
-        self.key_projsimplelinks(project).set({})
+        self.key_projsimplelinks(project).with_resolved_parent().set({})
         threadlog.debug("cleared cache for %s", project)
 
     async def _async_fetch_releaselinks(
@@ -1039,8 +1047,10 @@ class MirrorStage(BaseStage):
         newlinks_future = cast("NewLinksFuture", self.xom.create_future())
         # we need to set this up here, as these access the database and
         # the async loop has no transaction
-        _key_from_link = partial(
-            key_from_link, self.keyfs, user=self.user.name, index=self.index)
+        # we don't resolve the key here, as _async_fetch_releaselinks runs
+        # in a separate thread and only needs access to the relpath
+        key_index = self.keyfs.schema.INDEX(user=self.user.name, index=self.index)
+        _key_from_link = partial(key_from_link, self.keyfs, key_index=key_index)
         try:
             self.xom.run_coroutine_threadsafe(
                 self._async_fetch_releaselinks(
@@ -1137,8 +1147,8 @@ class MirrorStage(BaseStage):
         tx = self.keyfs.tx
         if at_serial is None:
             at_serial = tx.at_serial
-        (last_serial, _ulid, _links) = tx.get_last_serial_and_value_at(
-            self.key_projsimplelinks(project), at_serial
+        (last_serial, _ulid_key, _links) = tx.get_last_serial_and_value_at(
+            self.key_projsimplelinks(project).with_resolved_parent(), at_serial
         )
         return last_serial
 

@@ -61,6 +61,10 @@
         <ul>
             <li tal:repeat="rename rel_renames"><code>${rename}<code></li>
         </ul>
+        <h3>Parent keys</h3>
+        <ul>
+            <li tal:repeat="parent_key parent_keys">${parent_key.name} <a name="${parent_key.fragment}">${parent_key.relpath}</a> at serial <a href="${request.route_url('keyfs_changelog', serial=parent_key.serial,_query=dict(query=query),_anchor=parent_key.fragment)}">${parent_key.serial}</a></li>
+        </ul>
         <h3>Changes</h3>
         <ul>
             <li tal:repeat="change changes">${change.name} <a href="#${change.fragment}">${change.relpath}</a></li>
@@ -76,8 +80,9 @@
                 <tr tal:repeat="change changes">
                     <td>
                         <div><a name="${change.fragment}"><strong>${change.name}</strong>&nbsp;<code>&lt;${change.type}&gt;</code> <strong>${change.relpath}</strong></a></div>
-                        <div class="serial">Previous serial<span><a href="${request.route_url('keyfs_changelog', serial=change.previous_serial, _query=dict(query=query)) + '#' + change.fragment}" tal:omit-tag="change.previous_serial < 0">${change.previous_serial}</a></span></div>
-                        <div class="serial">Latest serial<span><a href="${request.route_url('keyfs_changelog', serial=change.latest_serial, _query=dict(query=query)) + '#' + change.fragment}" tal:omit-tag="change.latest_serial < 0">${change.latest_serial}</a></span></div>
+                        <div class="serial">Previous serial<span><a href="${request.route_url('keyfs_changelog', serial=change.previous_serial, _query=dict(query=query)) + '#' + change.fragment}" tal:omit-tag="change.previous_serial < 0 or change.previous_serial == serial">${change.previous_serial}</a></span></div>
+                        <div class="serial">Latest serial<span><a href="${request.route_url('keyfs_changelog', serial=change.latest_serial, _query=dict(query=query)) + '#' + change.fragment}" tal:omit-tag="change.latest_serial < 0 or change.latest_serial == serial">${change.latest_serial}</a></span></div>
+                        <div tal:condition="change.parent_key">Parent key ${change.parent_key.name} <a href="#${change.parent_key.fragment}">${change.parent_key.relpath}</a></div>
                     </td>
                     <td>
                         <pre>
