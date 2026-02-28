@@ -12,6 +12,7 @@ dependencies = [
     'devpi-server',
     'devpi-web',
     'pyramid-debugtoolbar',
+    "sqlalchemy>=2",
 ]
 license = {file = "LICENSE"}
 requires-python = ">=3.11"
