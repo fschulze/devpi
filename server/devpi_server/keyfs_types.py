@@ -40,18 +40,21 @@ if TYPE_CHECKING:
         | str
         | TupleViewReadonly
     )
+    KeyFSTypes = (
+        bool | bytes | dict | float | frozenset | int | list | set | str | tuple
+    )
 
 
-KeyFSTypes = bool | bytes | dict | float | frozenset | int | list | set | str | tuple
 KeyType = TypeVar("KeyType")
+KeyTypeRO = TypeVar("KeyTypeRO")
 
 
 @frozen
-class Record(Generic[KeyType]):
-    key: PTypedKey[KeyType] | TypedKey[KeyType]
+class Record(Generic[KeyType, KeyTypeRO]):
+    key: PTypedKey[KeyType, KeyTypeRO] | TypedKey[KeyType, KeyTypeRO]
     value: KeyType
     back_serial: int
-    old_value: KeyFSTypesRO | None
+    old_value: KeyTypeRO | None
 
     def __attrs_post_init__(self) -> None:
         if (value := self.value) is not None:
@@ -91,7 +94,7 @@ class FilePathInfo:
         return hash(self.relpath)
 
 
-class PTypedKey(Generic[KeyType]):
+class PTypedKey(Generic[KeyType, KeyTypeRO]):
     __slots__ = ('keyfs', 'name', 'pattern', 'rex_reverse', 'type')
     rex_braces = re.compile(r'\{(.+?)\}')
 
@@ -115,7 +118,7 @@ class PTypedKey(Generic[KeyType]):
         rex_pattern = self.rex_braces.sub(repl, rex_pattern)
         self.rex_reverse = re.compile("^" + rex_pattern + "$")
 
-    def __call__(self, **kw: NormalizedName | str) -> TypedKey[KeyType]:
+    def __call__(self, **kw: NormalizedName | str) -> TypedKey[KeyType, KeyTypeRO]:
         for val in kw.values():
             if "/" in val:
                 raise ValueError(val)
@@ -136,7 +139,7 @@ class PTypedKey(Generic[KeyType]):
 H = TypeVar("H", bound=Hashable)
 
 
-class TypedKey(Generic[KeyType]):
+class TypedKey(Generic[KeyType, KeyTypeRO]):
     __slots__ = ('keyfs', 'name', 'params', 'relpath', 'type')
 
     def __init__(
@@ -163,98 +166,21 @@ class TypedKey(Generic[KeyType]):
         return f"<TypedKey {self.name} {self.type.__name__} {self.relpath}>"
 
     @overload
-    def get(self: TypedKey[bool], *, readonly: None = None) -> bool: ...
-
-    @overload
-    def get(self: TypedKey[bytes], *, readonly: None = None) -> bytes: ...
-
-    @overload
-    def get(self: TypedKey[dict], *, readonly: None = None) -> DictViewReadonly: ...
-
-    @overload
-    def get(self: TypedKey[float], *, readonly: None = None) -> float: ...
-
-    @overload
-    def get(self: TypedKey[frozenset], *, readonly: None = None) -> frozenset: ...
-
-    @overload
-    def get(self: TypedKey[int], *, readonly: None = None) -> int: ...
-
-    @overload
-    def get(self: TypedKey[list], *, readonly: None = None) -> ListViewReadonly: ...
-
-    @overload
-    def get(self: TypedKey[set], *, readonly: None = None) -> SetViewReadonly: ...
-
-    @overload
-    def get(self: TypedKey[str], *, readonly: None = None) -> str: ...
-
-    @overload
-    def get(self: TypedKey[tuple], *, readonly: None = None) -> TupleViewReadonly: ...
-
-    @overload
-    def get(self: TypedKey[bool], *, readonly: Literal[True]) -> bool: ...
-
-    @overload
-    def get(self: TypedKey[bytes], *, readonly: Literal[True]) -> bytes: ...
-
-    @overload
-    def get(self: TypedKey[dict], *, readonly: Literal[True]) -> DictViewReadonly: ...
-
-    @overload
-    def get(self: TypedKey[float], *, readonly: Literal[True]) -> float: ...
-
-    @overload
-    def get(self: TypedKey[frozenset], *, readonly: Literal[True]) -> frozenset: ...
-
-    @overload
-    def get(self: TypedKey[int], *, readonly: Literal[True]) -> int: ...
-
-    @overload
-    def get(self: TypedKey[list], *, readonly: Literal[True]) -> ListViewReadonly: ...
+    def get(
+        self: TypedKey[KeyType, KeyTypeRO], *, readonly: None = None
+    ) -> KeyTypeRO: ...
 
     @overload
     def get(
-        self: TypedKey[set[H]], *, readonly: Literal[True]
-    ) -> SetViewReadonly[H]: ...
+        self: TypedKey[KeyType, KeyTypeRO], *, readonly: Literal[True]
+    ) -> KeyTypeRO: ...
 
     @overload
-    def get(self: TypedKey[str], *, readonly: Literal[True]) -> str: ...
+    def get(
+        self: TypedKey[KeyType, KeyTypeRO], *, readonly: Literal[False]
+    ) -> KeyType: ...
 
-    @overload
-    def get(self: TypedKey[tuple], *, readonly: Literal[True]) -> TupleViewReadonly: ...
-
-    @overload
-    def get(self: TypedKey[bool], *, readonly: Literal[False]) -> bool: ...
-
-    @overload
-    def get(self: TypedKey[bytes], *, readonly: Literal[False]) -> bytes: ...
-
-    @overload
-    def get(self: TypedKey[dict], *, readonly: Literal[False]) -> dict: ...
-
-    @overload
-    def get(self: TypedKey[float], *, readonly: Literal[False]) -> float: ...
-
-    @overload
-    def get(self: TypedKey[frozenset], *, readonly: Literal[False]) -> frozenset: ...
-
-    @overload
-    def get(self: TypedKey[int], *, readonly: Literal[False]) -> int: ...
-
-    @overload
-    def get(self: TypedKey[list], *, readonly: Literal[False]) -> list: ...
-
-    @overload
-    def get(self: TypedKey[set], *, readonly: Literal[False]) -> set: ...
-
-    @overload
-    def get(self: TypedKey[str], *, readonly: Literal[False]) -> str: ...
-
-    @overload
-    def get(self: TypedKey[tuple], *, readonly: Literal[False]) -> tuple: ...
-
-    def get(self, *, readonly: bool | None = None) -> KeyFSTypesRO | KeyFSTypes:
+    def get(self, *, readonly: bool | None = None) -> KeyType | KeyTypeRO:
         if readonly is None:
             readonly = True
         else:
