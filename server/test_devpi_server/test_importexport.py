@@ -848,6 +848,29 @@ class TestImportExport:
             assert 'index.html' in archive.namelist()
             assert archive.read("index.html").decode('utf-8') == "<html/>"
 
+    def test_log_when(self, impexp):
+        mapp = impexp.mapp1
+        api = mapp.create_and_use()
+        content = b"content"
+        mapp.upload_file_pypi("hello-1.0.tar.gz", content, "hello", "1.0")
+
+        with mapp.xom.keyfs.read_transaction():
+            stage = mapp.xom.model.getstage(api.stagename)
+            (link,) = stage.get_mutable_linkstore_perstage("hello", "1.0").get_links()
+            (log_entry,) = link.get_logs()
+            when = log_entry["when"]
+            assert isinstance(when, tuple)
+
+        impexp.export()
+
+        mapp2 = impexp.new_import()
+
+        with mapp2.xom.keyfs.read_transaction():
+            stage = mapp2.xom.model.getstage(api.stagename)
+            (link,) = stage.get_mutable_linkstore_perstage("hello", "1.0").get_links()
+            (log_entry,) = link.get_logs()
+            assert log_entry["when"] == when
+
     def test_name_mangling_relates_to_issue132(self, impexp):
         mapp1 = impexp.mapp1
         api = mapp1.create_and_use()
