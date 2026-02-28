@@ -388,6 +388,7 @@ def makexom(
             )
             if fsbackend is not None:
                 with xom.keyfs.get_connection() as conn:
+                    assert xom.keyfs.io_file_factory is not None
                     assert (
                         xom.keyfs.io_file_factory(conn)
                         .__module__.split(".")[-1]
