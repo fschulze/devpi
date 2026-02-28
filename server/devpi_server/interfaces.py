@@ -175,9 +175,6 @@ class IStorageConnection(Interface):
     def get_raw_changelog_entry(serial: int) -> bytes | None:
         """Returns serialized changes for given serial."""
 
-    def get_rel_renames(serial: int) -> Iterable[str] | None:
-        """Returns deserialized rel_renames for given serial."""
-
     def get_key_at_serial(key: LocatedKey, serial: int) -> KeyData:
         """Get tuple of (last_serial, back_serial, value) for given relpath
         at given serial.
@@ -185,6 +182,9 @@ class IStorageConnection(Interface):
 
     def iter_changes_at(serial: int) -> Iterator[KeyData]:
         """Returns deserialized readonly changes for given serial."""
+
+    def iter_rel_renames(serial: int) -> Iterator[str]:
+        """Returns deserialized rel_renames for given serial."""
 
     def iter_relpaths_at(
         typedkeys: Iterable[IKeyFSKey], at_serial: int
