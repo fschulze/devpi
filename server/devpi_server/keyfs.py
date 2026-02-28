@@ -805,74 +805,40 @@ class Transaction:
             yield (data.last_serial, data.value)
             last_serial = data.back_serial
 
-    @overload
     def get_last_serial_and_value_at(
         self,
         typedkey: LocatedKey[KeyType, KeyTypeRO],
         at_serial: int,
-        *,
-        raise_on_error: Literal[False],
-    ) -> tuple[int, KeyTypeRO] | tuple[int, None] | None: ...
-
-    @overload
-    def get_last_serial_and_value_at(
-        self,
-        typedkey: LocatedKey[KeyType, KeyTypeRO],
-        at_serial: int,
-        *,
-        raise_on_error: Literal[True],
-    ) -> tuple[int, KeyTypeRO]: ...
-
-    @overload
-    def get_last_serial_and_value_at(
-        self,
-        typedkey: LocatedKey[KeyType, KeyTypeRO],
-        at_serial: int,
-        *,
-        raise_on_error: None = None,
-    ) -> tuple[int, KeyTypeRO]: ...
-
-    @overload
-    def get_last_serial_and_value_at(
-        self,
-        typedkey: LocatedKey[KeyType, KeyTypeRO],
-        at_serial: int,
-        *,
-        raise_on_error: bool,
-    ) -> tuple[int, KeyTypeRO] | tuple[int, None] | None: ...
-
-    def get_last_serial_and_value_at(
-        self,
-        typedkey: LocatedKey[KeyType, KeyTypeRO],
-        at_serial: int,
-        *,
-        raise_on_error: bool | None = None,
     ) -> tuple[int, KeyTypeRO] | tuple[int, None] | None:
         relpath = typedkey.relpath
-        if raise_on_error is None:
-            raise_on_error = True
         try:
             data = self.conn.get_relpath_at(relpath, at_serial)
         except KeyError:
-            if not raise_on_error:
-                return None
-            raise
+            return None
         val = data.value
         if val is None:
-            if raise_on_error:
-                raise KeyError(relpath)  # was deleted
             return (data.last_serial, None)
         return (data.last_serial, cast("KeyTypeRO", val))
 
     def get_value_at(
         self, typedkey: LocatedKey[KeyType, KeyTypeRO], at_serial: int
     ) -> KeyTypeRO | None:
-        return self.get_last_serial_and_value_at(typedkey, at_serial)[1]
+        return self.last_serial_and_value_at(typedkey, at_serial)[1]
 
     def last_serial(self, typedkey: LocatedKey[KeyType, KeyTypeRO]) -> int:
         if typedkey in self.cache:
             return self.at_serial
         return self.get_original(typedkey)[0]
+
+    def last_serial_and_value_at(
+        self, typedkey: LocatedKey[KeyType, KeyTypeRO], at_serial: int
+    ) -> tuple[int, KeyTypeRO]:
+        relpath = typedkey.relpath
+        data = self.conn.get_relpath_at(relpath, at_serial)
+        val = data.value
+        if val is None:
+            raise KeyError(relpath)  # was deleted
+        return (data.last_serial, cast("KeyTypeRO", val))
 
     def is_dirty(self, typedkey):
         return typedkey in self.dirty
@@ -883,8 +849,7 @@ class Transaction:
         """ Return original value from start of transaction,
             without changes from current transaction."""
         if typedkey not in self._original:
-            tup = self.get_last_serial_and_value_at(
-                typedkey, self.at_serial, raise_on_error=False)
+            tup = self.get_last_serial_and_value_at(typedkey, self.at_serial)
             if tup is None:
                 serial = -1
                 self._original[typedkey] = (serial, absent)
