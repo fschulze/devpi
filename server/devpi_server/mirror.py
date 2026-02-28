@@ -8,12 +8,13 @@ from __future__ import annotations
 
 from .config import hookimpl
 from .exceptions import lazy_format_exception
+from .filestore import AbsPath
 from .filestore import Digests
+from .filestore import index_relpath
 from .filestore import key_from_link
 from .filestore import split_name_version_pyversion_ext
 from .htmlpage import HTMLPage
 from .httpclient import FatalResponse
-from .keyfs_types import RelPath
 from .log import threadlog
 from .markers import Absent
 from .markers import absent
@@ -80,7 +81,7 @@ if TYPE_CHECKING:
 
 
 class CacheLink(TypedDict):
-    entrypath: str
+    relpath: str
     hashes: NotRequired[dict[str, str]]
     requires_python: NotRequired[RequiresPython]
     yanked: NotRequired[Yanked]
@@ -380,9 +381,11 @@ class MirrorData:
             key_simpledata = stage.key_simpledata(
                 project=self.project
             ).with_resolved_parent()
+            username = stage.username
+            index = stage.index
             links_with_data = []
             for k, v in key_simpledata.iter_ulidkey_values():
-                entrypath = v["entrypath"]
+                entrypath = f"{username}/{index}/{v['relpath']}"
                 if (
                     "hashes" in v
                     and (hash_spec := Digests(v["hashes"]).best_available_spec)
@@ -431,9 +434,13 @@ class MirrorData:
         stage = self.get_stage()
         tx = stage.keyfs.tx
         data: dict[str, CacheLink] = {}
+        username = stage.username
+        index = stage.index
         for fn, ep, rp, y in join_links_data(links, requires_python, yanked):
             (entrypath, sep, hash_spec) = ep.partition("#")
-            link_data = data[fn] = CacheLink(entrypath=entrypath)
+            link_data = data[fn] = CacheLink(
+                relpath=index_relpath(username, index, AbsPath(entrypath))
+            )
             if sep == "#" and hash_spec:
                 link_data["hashes"] = Digests.from_spec(hash_spec)
             if rp:
@@ -461,7 +468,7 @@ class MirrorData:
                 seen_names.add(projectname)
             name_version_map[k.name] = version
             old[k.name] = v
-            assert v["entrypath"].endswith(f"/{k.name}"), (k, v)
+            assert v["relpath"].endswith(f"/{k.name}"), (k, v)
         if old != data:
             threadlog.debug(
                 "processing changed simplelinks for %s in %s", project, stage.index
@@ -1015,8 +1022,8 @@ class MirrorStage(BaseStage):
 
     def _entry_from_href(self, href: str) -> FileEntry | None:
         # extract relpath from href by cutting of the hash
-        relpath = RelPath(re.sub(r"#.*$", "", href))
-        return self.filestore.get_file_entry(relpath)
+        abspath = AbsPath(re.sub(r"#.*$", "", href))
+        return self.filestore.get_file_entry(abspath)
 
     def _is_file_cached(self, link):
         entry = self._entry_from_href(link[1])
@@ -1400,7 +1407,12 @@ class MirrorStage(BaseStage):
         return ELink.from_entry(
             self.filestore,
             entry,
-            dict(rel=Rel.ReleaseFile, entrypath=entry.relpath, hashes=entry.hashes),
+            dict(
+                rel=Rel.ReleaseFile,
+                entrypath=entry.relpath,
+                relpath=entry.index_relpath,
+                hashes=entry.hashes,
+            ),
         )
 
     def _get_elinks(
@@ -1435,7 +1447,12 @@ class MirrorStage(BaseStage):
                 if with_elinks:
                     elinks = verdata.setdefault("+elinks", [])
                     elinks.append(
-                        dict(rel=Rel.ReleaseFile, entrypath=sm.path, hashes=sm.hashes)
+                        dict(
+                            rel=Rel.ReleaseFile,
+                            relpath=sm.relpath,
+                            entrypath=sm.path,
+                            hashes=sm.hashes,
+                        )
                     )
         return ensure_deeply_readonly(verdata)
 
