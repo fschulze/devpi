@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from .keyfs_types import PatternedKey
     from .keyfs_types import Record
     from .keyfs_types import RelPath
+    from .keyfs_types import SearchKey
     from .keyfs_types import ULID
     from .keyfs_types import ULIDKey
     from collections.abc import Callable
@@ -203,11 +204,15 @@ class IStorageConnection(Interface):
 
     def iter_keys_at_serial(
         typedkeys: Iterable[
-            LocatedKey[KeyType, KeyTypeRO] | PatternedKey[KeyType, KeyTypeRO]
+            LocatedKey[KeyType, KeyTypeRO]
+            | PatternedKey[KeyType, KeyTypeRO]
+            | SearchKey[KeyType, KeyTypeRO]
+            | ULIDKey[KeyType, KeyTypeRO]
         ],
         at_serial: int,
         *,
         skip_ulid_keys: set[ULIDKey[KeyType, KeyTypeRO]] = emptyset,
+        fill_cache: bool,
         with_deleted: bool,
     ) -> Iterator[KeyData[KeyType, KeyTypeRO]]:
         """Iterate over all relpaths of the given typed keys starting
@@ -218,11 +223,14 @@ class IStorageConnection(Interface):
 
     def iter_ulidkeys_at_serial(
         keys: Iterable[
-            LocatedKey[KeyType, KeyTypeRO] | PatternedKey[KeyType, KeyTypeRO]
+            LocatedKey[KeyType, KeyTypeRO]
+            | PatternedKey[KeyType, KeyTypeRO]
+            | SearchKey[KeyType, KeyTypeRO]
         ],
         at_serial: int,
         *,
         skip_ulid_keys: set[ULIDKey] = emptyset,
+        fill_cache: bool,
         with_deleted: bool,
     ) -> Iterator[ULIDKey[KeyType, KeyTypeRO]]:
         """Get ULIDKey for given LocatedKeys."""

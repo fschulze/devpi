@@ -8,11 +8,13 @@ from __future__ import annotations
 from .keyfs_types import FilePathInfo
 from .keyfs_types import ULID
 from .keyfs_types import ULIDKey
+from .keyfs_types import iter_lineage
 from .log import threadlog
 from .markers import Absent
 from .markers import Deleted
 from .markers import NoDefault
 from .markers import absent
+from .markers import deleted
 from .markers import nodefault as _nodefault
 from .readonly import DictViewReadonly
 from .readonly import ensure_deeply_readonly
@@ -315,7 +317,7 @@ def key_from_link(
         # so let's take the first 3 bytes which gives
         # us a maximum of 16^3 = 4096 entries in the root dir
         a, b = make_splitdir(link.hash_spec)
-        return keyfs.schema.STAGEFILE(
+        return keyfs.schema.STAGEFILE.locate(
             parent_key=key_index, hashdir_a=a, hashdir_b=b, filename=link.basename
         )
     else:
@@ -323,7 +325,7 @@ def key_from_link(
         assert parts
         dirname = "_".join(parts[:-1])
         dirname = re.sub('[^a-zA-Z0-9_.-]', '_', dirname)
-        return keyfs.schema.PYPIFILE_NOMD5(
+        return keyfs.schema.PYPIFILE_NOMD5.locate(
             parent_key=key_index, dirname=unquote(dirname), basename=link.basename
         )
 
@@ -357,7 +359,7 @@ class FileStore:
         return f"<{self.__class__.__name__} {self.keyfs!r}>"
 
     def maplink(self, link, user, index, project):
-        key_index = self.keyfs.schema.INDEX(user=user, index=index)
+        key_index = self.keyfs.schema.INDEX.locate(user=user, index=index)
         key = key_from_link(self.keyfs, link, key_index).with_resolved_parent()
         entry = MutableFileEntry(key)
         entry.url = link.geturl_nofragment().url
@@ -381,11 +383,17 @@ class FileStore:
         if key := self.keyfs.match_key(
             relpath, self.keyfs.schema.PYPIFILE_NOMD5, self.keyfs.schema.STAGEFILE
         ):
+            for ancestor in reversed(list(iter_lineage(key))):
+                if ancestor.with_resolved_parent().deleted():
+                    # we special case deleted index
+                    # to allow proper 410 Gone responses
+                    return FileEntry(key, {})
             key = key.with_resolved_parent()
             (_ulid_key, val) = self.keyfs.tx._get(key)
             if val is absent:
-                return None
-            val = {} if isinstance(val, Deleted) else val
+                if not key.deleted():
+                    return None
+                val = deleted
             return FileEntry(key, val)
         return None
 
@@ -407,7 +415,7 @@ class FileStore:
         if ref_hash_spec is None:
             ref_hash_spec = hashes.get_default_spec()
         hashdir_a, hashdir_b = make_splitdir(ref_hash_spec)
-        key = self.keyfs.schema.STAGEFILE(
+        key = self.keyfs.schema.STAGEFILE.locate(
             user=user,
             index=index,
             hashdir_a=hashdir_a,
@@ -677,7 +685,7 @@ class BaseFileEntry:
     @property
     def key_digestulids(self) -> LocatedKey[set[int], SetViewReadonly[int]]:
         keyfs = cast("KeyFS[Schema]", self.key.keyfs)
-        return keyfs.schema.DIGESTULIDS(digest=self.hashes[DEFAULT_HASH_TYPE])
+        return keyfs.schema.DIGESTULIDS.locate(digest=self.hashes[DEFAULT_HASH_TYPE])
 
     def validate(self, content_or_file: ContentOrFile | None = None) -> dict | None:
         if content_or_file is None:
