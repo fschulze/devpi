@@ -71,7 +71,6 @@ extend-ignore = [
     "ARG002", # maybe cleanup later - unused method argument
     "B007", # maybe cleanup later
     "B904", # maybe cleanup later
-    "BLE001", # cleanup soon - blind exception
     "FBT002", # cleanup soon - boolean positional argument
     "FIX003", # cleanup later - xxx
     "PERF401", # maybe cleanup later - list comprehension
