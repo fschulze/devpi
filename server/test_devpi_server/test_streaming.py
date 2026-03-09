@@ -1,8 +1,7 @@
 import base64
 import contextlib
-import json
+import httpx
 import pytest
-import requests
 import sys
 
 
@@ -20,23 +19,22 @@ def host_port(primary_host_port):
 
 @pytest.fixture
 def server_url_session(host_port, simpypi):
-    s = requests.Session()
-    s.headers = {'Accept': 'application/json', 'Content-Type': 'application/json'}
-    url = 'http://%s:%s/' % host_port
-    r = s.post(url + '+login', json.dumps({'user': 'root', 'password': ''})).json()
-    auth = '%s:%s' % ('root', r['result']['password'])
-    s.headers['X-Devpi-Auth'] = base64.b64encode(auth.encode('utf-8'))
-    existing = s.get(url).json()['result']
-    if 'mirror' not in existing['root']['indexes']:
-        indexconfig = dict(
-            type="mirror",
-            mirror_url=simpypi.simpleurl,
-            mirror_cache_expiry=0)
-        r = s.put(url + 'root/mirror', json.dumps(indexconfig)).json()
-        assert r['type'] == 'indexconfig'
-        assert r['result']['mirror_url'] == simpypi.simpleurl
-    yield (url, s)
-    s.close()
+    with httpx.Client() as s:
+        s.headers["Accept"] = "application/json"
+        s.headers["Content-Type"] = "application/json"
+        url = "http://%s:%s/" % host_port
+        r = s.post(url + "+login", json={"user": "root", "password": ""}).json()
+        auth = "%s:%s" % ("root", r["result"]["password"])
+        s.headers["X-Devpi-Auth"] = base64.b64encode(auth.encode()).decode()
+        existing = s.get(url).json()["result"]
+        if "mirror" not in existing["root"]["indexes"]:
+            indexconfig = dict(
+                type="mirror", mirror_url=simpypi.simpleurl, mirror_cache_expiry=0
+            )
+            r = s.put(url + "root/mirror", json=indexconfig).json()
+            assert r["type"] == "indexconfig"
+            assert r["result"]["mirror_url"] == simpypi.simpleurl
+        yield (url, s)
 
 
 @pytest.fixture(scope="session")
@@ -72,9 +70,8 @@ class TestStreaming(object):
             r = r.json()
         assert pkg_version in r['result'], r
         href = r['result'][pkg_version]['+links'][0]['href']
-        r = requests.get(href, stream=True)
-        with contextlib.closing(r):
-            stream = r.iter_content(1024)
+        with httpx.stream("get", href) as r:
+            stream = r.iter_bytes(1024)
             data = next(stream)
             assert data == b'deadbeaf' * 128
             part = next(stream)
@@ -97,7 +94,6 @@ class TestStreaming(object):
     @pytest.mark.parametrize("size_factor,pkg_version,pkg_name", [
         (2, '1.2', 'pkg3'), (0.5, '1.3', 'pkg4')])
     def test_streaming_differing_content_size(self, content_digest, files_path, pkg_version, pkg_name, server_url_session, simpypi, size_factor, storage_info):
-        from requests.exceptions import ChunkedEncodingError
         if "storage_with_filesystem" not in storage_info.get('_test_markers', []):
             pytest.skip("The storage doesn't have marker 'storage_with_filesystem'.")
         (content, digest) = content_digest
@@ -111,9 +107,8 @@ class TestStreaming(object):
             r = _r.json()
         assert pkg_version in r['result'], r
         href = r['result'][pkg_version]['+links'][0]['href']
-        r = requests.get(href, stream=True)
-        with contextlib.closing(r):
-            stream = r.iter_content(1024)
+        with httpx.stream("get", href) as r:
+            stream = r.iter_bytes(1024)
             data = next(stream)
             assert data == b'deadbeaf' * 128
             part = next(stream)
@@ -123,7 +118,7 @@ class TestStreaming(object):
             try:
                 for part in stream:
                     data = data + part
-            except ChunkedEncodingError:
+            except httpx.RemoteProtocolError:
                 pass
         pkg_file = files_path.joinpath(
             'root', 'pypi', '+f', digest[:3], digest[3:16], pkgzip)
