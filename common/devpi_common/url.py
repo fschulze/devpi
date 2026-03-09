@@ -4,7 +4,6 @@ from contextlib import suppress
 from devpi_common.types import cached_property
 from devpi_common.types import ensure_unicode
 from devpi_common.types import parse_hash_spec
-from requests.models import parse_url
 from typing import TYPE_CHECKING
 from urllib.parse import parse_qs
 from urllib.parse import parse_qsl
@@ -17,7 +16,16 @@ import posixpath
 
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from typing import Any
+    from typing import Union
+
+
+parse_url: Union[Callable, None]
+try:
+    from requests.models import parse_url
+except ImportError:
+    parse_url = None
 
 
 def _joinpath(url, args, *, asdir=False):
@@ -175,9 +183,11 @@ class URL:
         return urlparse(self.url)
 
     def is_valid_http_url(self):
+        if parse_url is None:
+            return self.scheme in ("http", "https")
         try:
             x = parse_url(self.url)
-        except Exception:
+        except Exception:  # noqa: BLE001
             return False
         return x.scheme in ("http", "https")
 
