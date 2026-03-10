@@ -33,7 +33,9 @@ class RuffConfig:
 
     @cached_property
     def _pyproject_toml(self):
-        return load_toml(self.base / "pyproject.toml").get("tool", {}).get("ruff", {})
+        path = self.base / "pyproject.toml"
+        config = load_toml(path) if path.exists() else {}
+        return config.get("tool", {}).get("ruff", {})
 
     @cached_property
     def base(self):
@@ -167,6 +169,7 @@ class Ruff:
             del fn_lines
 
     async def _format_range(self, fn, start, end):
+        project = Path(fn).parts[0]
         cmd = [
             self._ruff,
             "format",
@@ -175,6 +178,7 @@ class Ruff:
             "--force-exclude",
             "--check",
             "--diff",
+            *self[project].target_version_args,
             fn,
             "--range",
             f"{start[0]}:{start[1]}-{end[0]}:{end[1]}",
