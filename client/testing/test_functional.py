@@ -150,7 +150,6 @@ class Mapp(MappMixin):
         return params
 
     def create_index(self, indexname, indexconfig=None, code=200):
-        #user, password = self.auth
         params = self._indexconfig_to_cmdline_keyvalue(indexconfig)
         self.out_devpi("index", "-c", indexname, *params, code=code)
 

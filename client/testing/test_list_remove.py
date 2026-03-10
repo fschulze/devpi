@@ -32,11 +32,6 @@ def test_out_index(loghub, input, output):
     ({"1.0": linkver("root/dev", "p1-1.0.tar.gz"),
       "1.1": linkver("root/dev", "p1-1.1.tar.gz")},
      ["*p1-1.1.tar.gz*", "*p1-1.0.tar.gz*"]),
-    #({"1.0": {"+links": dict(
-    #    rel="releasefile", href="root/dev/pkg/1.0/p1-1.0.tar.gz"),
-    #          "+shadowing": [{"+files":
-    #                {"p1-1.0.tar.gz": "root/prod/pkg/1.0/p1-1.0.tar.gz"}}]}},
-    #["*dev*p1-1.0.tar.gz*", "*prod*p1-1.0.tar.gz"]),
 ])
 def test_out_project(loghub, input, output, monkeypatch):
     from devpi import list_remove

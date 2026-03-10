@@ -103,7 +103,7 @@ class TarArchive(BaseArchive):
 
 class ZipArchive(BaseArchive):
     def __init__(self, file):
-        super(ZipArchive, self).__init__(file)
+        super().__init__(file)
         self._archive = zipfile.ZipFile(file)
 
     def printdir(self, *args, **kwargs):

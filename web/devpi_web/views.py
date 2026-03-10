@@ -1099,7 +1099,7 @@ class SearchView:
             highlight = None
             if text_type == 'project':
                 continue
-            elif text_type in ('title', 'page'):
+            if text_type in ("title", "page"):
                 docs = self.get_docs(stage, data)
                 entry = docs[sub_data['text_path']]
                 text = entry['text']

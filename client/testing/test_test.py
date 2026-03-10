@@ -303,14 +303,18 @@ class TestWheel:
         assert 'only universal wheels' not in '\n'.join(loghub._getmatcher().lines)
 
     @pytest.mark.skipif("config.option.fast")
-    @pytest.mark.parametrize("pkgname", (
-        "prep1",
-        "prep-dash",
-        "prep_under",
-        "prep.dot",
-        "prep.dot-dash",
-        "prep.dot_under",
-        "Upper"))
+    @pytest.mark.parametrize(
+        "pkgname",
+        [
+            "prep1",
+            "prep-dash",
+            "prep_under",
+            "prep.dot",
+            "prep.dot-dash",
+            "prep.dot_under",
+            "Upper",
+        ],
+    )
     def test_prepare_toxrun_args(self, loghub, pkgname, pseudo_current, tmpdir, reqmock, initproj):
         initproj((pkgname, "1.0"), filedefs={})
         subprocess.check_call(["python", "setup.py", "sdist", "--formats=gztar,zip"])
