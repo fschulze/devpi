@@ -2,8 +2,10 @@ class GetPassException(Exception):
     pass
 
 
-def failing_getpass(msg):
-    raise GetPassException()
+def failing_getpass(
+    msg,  # noqa: ARG001
+):
+    raise GetPassException
 
 
 def test_passwd_no_user(monkeypatch, out_devpi):

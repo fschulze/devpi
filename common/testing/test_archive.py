@@ -102,7 +102,9 @@ class TestArchive:
 def test_tarfile_outofbound(tmpdir):
     from pathlib import Path
     path = Path(__file__).parent / "data" / "slash.tar.gz"
-    with Archive(path) as archive, pytest.raises(ValueError, match="archive name '.*' out of bound"):
+    with Archive(path) as archive, pytest.raises(
+        ValueError, match=r"archive name '.*' out of bound"
+    ):
         archive.extract(tmpdir)
 
 

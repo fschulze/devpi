@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import suppress
 from devpi_common.types import cached_property
 from devpi_common.types import ensure_unicode
 from devpi_common.types import parse_hash_spec
@@ -133,10 +134,8 @@ class URL:
         for field in ('scheme', 'netloc', 'path', 'query', 'fragment'):
             value = kwargs.get(field, getattr(_parsed, field))
             if field == 'query':
-                try:
+                with suppress(TypeError):
                     value = urlencode(value)
-                except TypeError:
-                    pass
             url.append(value)
         return URL(urlunsplit(url))
 

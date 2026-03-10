@@ -99,7 +99,7 @@ def iter_toxresults(links, load, newest=True):
     for link in reversed(links):
         try:
             toxresult = load(link)
-        except IOError:
+        except OSError:
             yield link, None
             continue
         try:

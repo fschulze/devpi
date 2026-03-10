@@ -108,27 +108,22 @@ extend-ignore = [
     "BLE001", # cleanup soon - blind exception
     "C402", # maybe cleanup later - rewrite as dict comprehension
     "C405", # cleanup soon - set literal instead of set call
-    "ERA001", # cleanup soon
     "FBT002", # cleanup soon - boolean positional argument
     "FIX003", # cleanup later - xxx
-    "FURB110", # maybe cleanup later - or instead of ternary
     "PERF401", # maybe cleanup later - list comprehension
     "PLR0912", # maybe cleanup later
     "PLW0108", # maybe cleanup later - lamba unnecessary
     "PLW2901", # maybe cleanup later
     "PT006", # maybe cleanup later - wrong type for pytest.mark.parametrize
-    "PT007", # maybe cleanup later - wrong type for pytest.mark.parametrize
     "PT011", # cleanup soon - pytest.raises match
     "PT018", # maybe cleanup later - composite assert
     "RET502", # maybe cleanup later - implicit return None
     "RET503", # maybe cleanup later - missing return
     "RET504", # maybe cleanup later - unnecessary assignment before return
     "RET505", # maybe cleanup later - unnecessary elif after return
-    "RET506", # maybe cleanup later - unnecessary elif after raise
     "RUF005", # cleanup later
     "RUF012", # cleanup later
     "RUF059", # cleanup later - unpacked variable unused
-    "RSE102", # maybe cleanup later
     "SIM102", # maybe cleanup later
     "SIM108", # cleanup later
     "SIM117", # cleanup later
@@ -180,7 +175,6 @@ extend-ignore = [
 ]
 "testing/test_upload.py" = [
     "I001", # maybe cleanup later - import block unsorted
-    "RUF061", # cleanup later - context manager form of pytest.raises
 ]
 "testing/test_use.py" = [
     "I001", # maybe cleanup later - import block unsorted

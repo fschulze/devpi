@@ -55,11 +55,10 @@ def test_search_docs(keep_docs_packed, mapp, testapp):
     mapp.upload_file_pypi(
         "pkg_hello-2.6-py2.py3-none-any.whl", b"content", "pkg_hello", "2.6")
     content = zip_dict(
-        {"index.html": "\n".join([
-            "<html>",
-            "<head><title>Foo</title></head>",
-            "<body>Bar</body>",
-            "</html>"])})
+        {
+            "index.html": "<html>\n<head><title>Foo</title></head>\n<body>Bar</body>\n</html>"
+        }
+    )
     mapp.upload_doc("pkg-hello-2.6.doc.zip", content, "pkg_hello", "2.6", code=200,
                     waithooks=True)
     indexer_thread = get_indexer(mapp.xom).indexer_thread

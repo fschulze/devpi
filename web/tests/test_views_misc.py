@@ -104,7 +104,8 @@ def test_root_pypi_upstream_error(url, mapp, testapp, pypistage):
 def test_error_html_only(mapp, testapp, monkeypatch):
     def error(self):
         from pyramid.httpexceptions import HTTPBadGateway
-        raise HTTPBadGateway()
+
+        raise HTTPBadGateway
     monkeypatch.setattr("devpi_server.views.PyPIView.user_list", error)
     r = testapp.get_json("/")
     assert r.status_code == 502
@@ -307,11 +308,6 @@ class TestStatusView:
         result = {bs_text(x.select('th')): bs_text(x.select('td')) for x in html.select('table.status tr')}
         assert not xom.is_replica()
         assert result['Role'] in ('MASTER', 'PRIMARY')
-
-    # def test_exception(self, dummyrequest, plugin):
-    #     from devpi_web.main import status_info
-    #     plugin.results = [ValueError("Foo")]
-    #     result = status_info(dummyrequest)
 
     def test_nothing(self, dummyrequest, plugin):
         from devpi_web.main import status_info

@@ -190,7 +190,7 @@ def test_push_devpi_index_option_with_environment(loghub, monkeypatch, mock_http
     assert len(mock_http_api.called) == 3
 
 
-@pytest.mark.parametrize("spec", ("pkg==1.0", "pkg-1.0"))
+@pytest.mark.parametrize("spec", ["pkg==1.0", "pkg-1.0"])
 def test_main_push_pypi(capsys, monkeypatch, tmpdir, spec):
     from devpi.push import main
     l = []

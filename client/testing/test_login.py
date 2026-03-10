@@ -9,8 +9,10 @@ class GetPassException(Exception):
     pass
 
 
-def getpass(msg):
-    raise GetPassException()
+def getpass(
+    msg,  # noqa: ARG001
+):
+    raise GetPassException
 
 
 @pytest.fixture

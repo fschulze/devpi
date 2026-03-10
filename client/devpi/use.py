@@ -230,7 +230,7 @@ class Current:
         url = self._get_normalized_url(url)
         client_cert = self._value_from_dict_by_url(
             self._get_client_cert_dict(), url)
-        return client_cert if client_cert else None
+        return client_cert or None
 
     def reconfigure(self, data):
         for name in data:
