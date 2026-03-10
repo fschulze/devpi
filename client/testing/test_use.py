@@ -519,9 +519,6 @@ class TestUnit:
         assert current.get_index_url() == "http://world/root/some/"
         assert current.get_project_url("pytest") == "http://world/root/some/pytest/"
 
-        #hub = cmd_devpi("use", "--delete")
-        #assert not hub.current.exists()
-
     def test_main_list(self, out_devpi, cmd_devpi, mock_http_api):
         mock_http_api.set("http://world/+api", result=dict(
             pypisubmit="",

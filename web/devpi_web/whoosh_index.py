@@ -616,11 +616,12 @@ class Index:
             for key, boost in text_keys:
                 if key not in project:
                     continue
-                add_document(**{
-                    "path": data['path'],
-                    "type": key,
-                    "text": project[key],
-                    "_text_boost": boost})
+                add_document(
+                    path=data["path"],
+                    type=key,
+                    text=project[key],
+                    _text_boost=boost,
+                )
                 next(counter)
             if '+doczip' not in project:
                 return
@@ -630,19 +631,21 @@ class Index:
             for page in project['+doczip'].values():
                 if page is None:
                     continue
-                add_document(**{
-                    "path": data['path'],
-                    "type": "title",
-                    "text": page['title'],
-                    "text_path": page['path'],
-                    "text_title": page['title']})
+                add_document(
+                    path=data["path"],
+                    type="title",
+                    text=page["title"],
+                    text_path=page["path"],
+                    text_title=page["title"],
+                )
                 next(counter)
-                add_document(**{
-                    "path": data['path'],
-                    "type": "page",
-                    "text": page['text'],
-                    "text_path": page['path'],
-                    "text_title": page['title']})
+                add_document(
+                    path=data["path"],
+                    type="page",
+                    text=page["text"],
+                    text_path=page["path"],
+                    text_title=page["title"],
+                )
                 next(counter)
 
     def update_projects(self, projects, clear=False):

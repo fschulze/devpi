@@ -373,7 +373,8 @@ def test_parent_subpath(tmpdir):
     assert find_parent_subpath(tmpdir.mkdir("a"), "xyz") == s
     assert find_parent_subpath(tmpdir.ensure("a", "b"), "xyz") == s
     assert find_parent_subpath(s, "xyz") == s
-    pytest.raises(ValueError, lambda: find_parent_subpath(tmpdir, "poiqel123"))
+    with pytest.raises(ValueError, match="no subpath 'poiqel123' from"):
+        find_parent_subpath(tmpdir, "poiqel123")()
 
 
 @pytest.mark.skipif("config.option.fast")

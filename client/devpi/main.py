@@ -166,8 +166,7 @@ class Hub:
             self._last_http_stati.append(-1)
             if verify is not None:
                 raise
-            else:
-                self.fatal("SSL verification failed %r:\n%s" % (url, e))
+            self.fatal("SSL verification failed %r:\n%s" % (url, e))
         except self.http.Errors as e:
             self._last_http_stati.append(-1)
             self.fatal("could not connect to %r:\n%s" % (url, e))
