@@ -51,6 +51,7 @@ import functools
 import getpass
 import json
 import re
+import warnings
 
 
 if TYPE_CHECKING:
@@ -69,9 +70,11 @@ if TYPE_CHECKING:
     from collections.abc import MutableSequence
     from collections.abc import Sequence
     from devpi_common.metadata import Version
+    from types import TracebackType
     from typing import Any
     from typing import Literal
     from typing import NotRequired
+    from typing import Self
 
     RequiresPython = str | None
     Yanked = Literal[True] | str | None
@@ -724,6 +727,33 @@ class SimpleLinks:
         return f"<{clsname} stale={self.stale!r} [{content}]>"
 
 
+class check_upstream_error:
+    def __init__(self, current: BaseStage, other: BaseStage) -> None:
+        self.current = current
+        self.other = other
+        self.failed = False
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(
+        self,
+        cls: type[BaseException] | None,
+        val: BaseException | None,
+        tb: TracebackType | None,
+    ) -> bool:
+        if not isinstance(val, UpstreamError):
+            return False
+        if self.other is self.current:
+            # If we are currently checking ourself raise the error, it is fatal
+            return False
+        threadlog.warn(
+            "Failed to check mirror whitelist. Assume it does not exist (%s)", val
+        )
+        self.failed = True
+        return True
+
+
 class BaseStage:
     keyfs: KeyFS[Schema]
     offline: bool
@@ -1078,10 +1108,13 @@ class BaseStage:
         return set(apply_filter_iter(versions, iterator))
 
     def list_versions(self, project: NormalizedName | str) -> set[str]:
-        assert isinstance(project, str), "project %r not text" % project
+        project = normalize_name(project)
         versions = set()
-        for stage, res in self.op_sro_check_mirror_whitelist(
-                "list_versions_perstage", project=project):
+        for stage in self.get_mergeable_stages(project, "list_versions"):
+            with check_upstream_error(self, stage) as checker:
+                res = stage.list_versions_perstage(project)
+            if checker.failed:
+                continue
             versions.update(res)
         return self.filter_versions(project, versions)
 
@@ -1104,13 +1137,16 @@ class BaseStage:
     def get_versiondata(
         self, project: NormalizedName | str, version: str
     ) -> dict[str, Any]:
-        assert isinstance(project, str), "project %r not text" % project
         result: dict[str, Any] = {}
         if not self.filter_versions(project, {version}):
             return result
-        for stage, res in self.op_sro_check_mirror_whitelist(
-                "get_versiondata_perstage",
-                project=project, version=version):
+        for stage in self.get_mergeable_stages(
+            normalize_name(project), "get_versiondata"
+        ):
+            with check_upstream_error(self, stage) as checker:
+                res = stage.get_versiondata_perstage(project, version)
+            if checker.failed:
+                continue
             if res:
                 if not result:
                     result.update(res)
@@ -1127,12 +1163,16 @@ class BaseStage:
         and "key" is usually the basename of the link or else
         the egg-ID if the link points to an egg.
         """
+        project = normalize_name(project)
         all_links = self.SimpleLinks([])
         seen = set()
 
         try:
-            for stage, res in self.op_sro_check_mirror_whitelist(
-                    "get_simplelinks_perstage", project=project):
+            for stage in self.get_mergeable_stages(project, "get_simplelinks"):
+                with check_upstream_error(self, stage) as checker:
+                    res = stage.get_simplelinks_perstage(project)
+                if checker.failed:
+                    continue
                 if res is not None:
                     res = self.SimpleLinks(res)
                     all_links.stale = all_links.stale or res.stale
@@ -1152,6 +1192,8 @@ class BaseStage:
         return all_links
 
     def get_whitelist_inheritance(self) -> str:
+        # the default value, if the setting is missing, is the old behavior,
+        # so existing indexes work as before
         return self.ixconfig.get("mirror_whitelist_inheritance", "union")
 
     def get_mirror_whitelist_info(
@@ -1208,19 +1250,21 @@ class BaseStage:
             return projects
         return frozenset(apply_filter_iter(projects, iterator))
 
-    def has_project(self, project):
+    def has_project(self, project: NormalizedName | str) -> bool | Unknown:
         if not self.filter_projects([project]):
             return False
-        for stage, res in self.op_sro("has_project_perstage", project=project):
+        for stage in self.sro():
+            res = stage.has_project_perstage(project)
             if res is unknown:
                 return res
             if res:
                 return True
         return False
 
-    def list_projects(self):
+    def list_projects(self) -> list[tuple[BaseStage, dict[str, NormalizedName | str]]]:
         result = []
-        for stage, projects in self.op_sro("list_projects_perstage"):
+        for stage in self.sro():
+            projects = stage.list_projects_perstage()
             result.append((
                 stage,
                 self.filter_projects(projects)))
@@ -1260,22 +1304,13 @@ class BaseStage:
         threadlog.info("modified index %s: %s", self.name, newconfig)
         return newconfig
 
-    def op_sro(self, opname, **kw):
-        if "project" in kw:
-            project = normalize_name(kw["project"])
-            if not self.filter_projects([project]):
-                return
-        for stage in self.sro():
-            yield stage, getattr(stage, opname)(**kw)
-
-    def op_sro_check_mirror_whitelist(self, opname, **kw):
-        project = normalize_name(kw["project"])
+    def get_mergeable_stages(  # noqa: PLR0912
+        self, project: NormalizedName, opname: str
+    ) -> Iterable[BaseStage]:
         if not self.filter_projects([project]):
             return
         whitelisted: BaseStage | Literal[False] = False
-        private_hit: BaseStage | bool = whitelisted
-        # the default value if the setting is missing is the old behaviour,
-        # so existing indexes work as before
+        private_hit = False
         whitelist_inheritance = self.get_whitelist_inheritance()
         whitelist = None
         for stage in self.sro():
@@ -1305,20 +1340,44 @@ class BaseStage:
                 elif stage.has_project_perstage(project):
                     private_hit = True
 
-            try:
+            with check_upstream_error(self, stage):
                 exists = stage.has_project_perstage(project)
                 if not private_hit and exists is unknown and stage.no_project_list:
                     # direct fetching is allowed
                     pass
                 elif not exists:
                     continue
+                yield stage
+
+    def op_sro(self, opname, **kw):
+        warnings.warn(
+            "The 'op_sro' method is deprecated, use 'sro' instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        if "project" in kw:
+            project = normalize_name(kw["project"])
+            if not self.filter_projects([project]):
+                return
+        for stage in self.sro():
+            yield stage, getattr(stage, opname)(**kw)
+
+    def op_sro_check_mirror_whitelist(self, opname, **kw):
+        warnings.warn(
+            "The 'op_sro_check_mirror_whitelist' method is deprecated, "
+            "use 'get_mergeable_stages' instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        project = normalize_name(kw["project"])
+        if not self.filter_projects([project]):
+            return
+        for stage in self.get_mergeable_stages(project, opname):
+            with check_upstream_error(self, stage) as checker:
                 res = getattr(stage, opname)(**kw)
-                yield stage, res
-            except self.UpstreamError as exc:
-                # If we are currently checking ourself raise the error, it is fatal
-                if stage is self:
-                    raise
-                threadlog.warn('Failed to check mirror whitelist. Assume it does not exist (%s)', exc)
+            if checker.failed:
+                continue
+            yield stage, res
 
     def sro(self):
         """ return stage resolution order. """
