@@ -293,6 +293,9 @@ class TestStage:
             assert orig == name.original
 
     def test_inheritance_cycle(self, model, pypistage):
+        from devpi_server.model import InheritanceCycle
+        from devpi_server.model import SkippedTraversal
+
         pypistage.mock_simple("someproject", "<a href='someproject-1.0.zip' /a>")
         user = model.create_user("user", password="123")
         index_a = user.create_stage(index="A", bases=[])
@@ -310,6 +313,22 @@ class TestStage:
             (index_a, {}),
             (rootpypi, {"someproject": "someproject"}),
         ]
+        assert (
+            SkippedTraversal(
+                name=index_b.name,
+                reason=InheritanceCycle(name=index_b.name),
+                src=index_a.name,
+            )
+            in index_b.get_index_bases().traversal_infos
+        )
+        assert (
+            SkippedTraversal(
+                name=index_a.name,
+                reason=InheritanceCycle(name=index_a.name),
+                src=index_b.name,
+            )
+            in index_a.get_index_bases().traversal_infos
+        )
 
     def test_inheritance_simple(self, pypistage, stage):
         stage.modify(bases=("root/pypi",), mirror_whitelist=['someproject'])
