@@ -397,11 +397,6 @@ def test_sro_skip_plugin(makemapp, maketestapp, makexom, pypistage):
             'http://localhost/someuser/dev/+simple/package/',
             'someuser/dev',
             'root/pypi',
-            None),
-        (
-            'http://localhost/someuser/dev/+simple/package/',
-            'someuser/dev',
-            'root/pypi',
             None)]
     plugin.calls.clear()
     api2 = mapp.create_and_use(
@@ -413,11 +408,6 @@ def test_sro_skip_plugin(makemapp, maketestapp, makexom, pypistage):
     r = testapp.get(api2.index + "/+simple/package/")
     assert r.status_code == 404
     assert plugin.calls == [
-        (
-            'http://localhost/otheruser/dev/+simple/package/',
-            'otheruser/dev',
-            'someuser/dev',
-            True),
         (
             'http://localhost/otheruser/dev/+simple/package/',
             'otheruser/dev',
