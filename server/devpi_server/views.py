@@ -845,7 +845,7 @@ class PyPIView:
         return response
 
     @view_config(request_method="GET", route_name="/{user}/{index}/+simple/")
-    def simple_list_all(self):
+    def simple_list_all(self) -> Response:
         self.log.info("starting +simple")
         stage = self.context.stage
         try:
