@@ -24,7 +24,9 @@ from .readonly import DictViewReadonly
 from .readonly import SetViewReadonly
 from .readonly import ensure_deeply_readonly
 from .readonly import get_mutable_deepcopy
+from abc import ABC
 from abc import abstractmethod
+from attrs import define
 from contextlib import suppress
 from devpi_common.metadata import get_latest_version
 from devpi_common.metadata import parse_version
@@ -34,6 +36,7 @@ from devpi_common.types import ensure_unicode
 from devpi_common.url import URL
 from devpi_common.validation import validate_metadata
 from functools import total_ordering
+from lazy import lazy
 from operator import iconcat
 from pathlib import Path
 from pyramid.authorization import Allow
@@ -66,7 +69,9 @@ if TYPE_CHECKING:
     from .main import XOM
     from .markers import Unknown
     from .normalized import NormalizedName
+    from collections.abc import Callable
     from collections.abc import Iterable
+    from collections.abc import Iterator
     from collections.abc import MutableSequence
     from collections.abc import Sequence
     from devpi_common.metadata import Version
@@ -754,6 +759,179 @@ class check_upstream_error:
         return True
 
 
+@define(frozen=True, kw_only=True)
+class SkipReason(ABC):
+    name: str
+
+    @abstractmethod
+    def __str__(self) -> str: ...
+
+
+class InheritanceCycle(SkipReason):
+    def __str__(self) -> str:
+        return f"skipped {self.name} due to an inheritance cycle"
+
+
+class MissingIndex(SkipReason):
+    def __str__(self) -> str:
+        return f"skipped {self.name} because it does not exist"
+
+
+class SROSkipHook(SkipReason):
+    def __str__(self) -> str:
+        return f"skipped {self.name} by devpiserver_sro_skip result"
+
+
+@define(frozen=True, kw_only=True)
+class TraversalInfo(ABC):
+    name: str
+
+
+@define(frozen=True, kw_only=True)
+class PostponedTraversal(TraversalInfo):
+    pass
+
+
+@define(frozen=True, kw_only=True)
+class TraversedStage(TraversalInfo):
+    seen: bool
+    stage: BaseStage
+
+
+@define(frozen=True, kw_only=True)
+class UntrustedTraversal(TraversedStage):
+    pass
+
+
+@define(frozen=True, kw_only=True)
+class SkippedTraversal(TraversalInfo):
+    reason: SkipReason
+    src: str
+
+
+class IndexBases:
+    def __init__(
+        self, stage: BaseStage, *, devpiserver_sro_skip: Callable, model: RootModel
+    ) -> None:
+        self.devpiserver_sro_skip = devpiserver_sro_skip
+        self.model = model
+        self.stage = stage
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self.bases)
+
+    def __reversed__(self) -> Iterator[str]:
+        return iter(reversed(self.bases))
+
+    @cached_property
+    def bases(self) -> tuple[str]:
+        """Returns bases as tuple of strings."""
+        return tuple(self.stage.ixconfig.get("bases", ()))
+
+    def iter_stages(self) -> Iterator[BaseStage]:
+        """Iterates stages in defined order without loops."""
+        for traversal_info in self.traversal_infos:
+            match traversal_info:
+                case (
+                    PostponedTraversal()
+                    | SkippedTraversal(reason=InheritanceCycle())
+                    | TraversedStage(seen=True)
+                ):
+                    continue
+                case SkippedTraversal(name=name, reason=MissingIndex(), src=src):
+                    threadlog.warn(
+                        "Index %s refers to non-existing base %s.", src, name
+                    )
+                    continue
+                case SkippedTraversal(name=name, reason=SROSkipHook(), src=src):
+                    threadlog.warn(
+                        "Index %s base %s excluded via devpiserver_sro_skip.",
+                        src,
+                        name,
+                    )
+                    continue
+                case TraversedStage(seen=False, stage=stage):
+                    yield stage
+                case _:
+                    raise RuntimeError(traversal_info)
+
+    def is_untrusted(self, stage: BaseStage) -> bool:
+        # we have to postpone mirrors, as there
+        # may be private releases in other paths
+        return stage.index_type == "mirror"
+
+    @cached_property
+    def traversal_infos(self) -> list[TraversalInfo]:
+        """Returns traversal information."""
+        devpiserver_sro_skip = self.devpiserver_sro_skip
+        getstage = self.model.getstage
+        info: list[TraversalInfo] = []
+        postponed: list[tuple[BaseStage, list[str]]] = []
+        seen = set()
+        is_untrusted = self.is_untrusted
+        stage = self.stage
+        todo = [(stage, list(reversed(stage.index_bases)))]
+        while todo:
+            (current_stage, bases) = todo[-1]
+            current_name = current_stage.name
+            if bases or current_name not in seen:
+                info.append(
+                    (
+                        UntrustedTraversal
+                        if is_untrusted(current_stage)
+                        else TraversedStage
+                    )(
+                        name=current_name,
+                        seen=current_name in seen,
+                        stage=current_stage,
+                    )
+                )
+            seen.add(current_name)
+            if not bases:
+                todo.pop()
+                if not todo:
+                    todo.extend(postponed)
+                    postponed.clear()
+                continue
+            next_name = bases.pop()
+            if next_name in seen:
+                info.append(
+                    SkippedTraversal(
+                        name=next_name,
+                        reason=InheritanceCycle(name=next_name),
+                        src=current_name,
+                    )
+                )
+                continue
+            next_stage = getstage(next_name)
+            if next_stage is None:
+                info.append(
+                    SkippedTraversal(
+                        name=next_name,
+                        reason=MissingIndex(name=next_name),
+                        src=current_name,
+                    )
+                )
+                seen.add(next_name)
+                continue
+            if devpiserver_sro_skip(stage=stage, base_stage=next_stage):
+                info.append(
+                    SkippedTraversal(
+                        name=next_name,
+                        reason=SROSkipHook(name=next_name),
+                        src=current_name,
+                    )
+                )
+                seen.add(next_name)
+                continue
+            if is_untrusted(next_stage):
+                info.append(PostponedTraversal(name=next_name))
+                postponed.append((next_stage, list(reversed(next_stage.index_bases))))
+            else:
+                todo.append((next_stage, list(reversed(next_stage.index_bases))))
+        return info
+
+
 class BaseStage:
     keyfs: KeyFS[Schema]
     offline: bool
@@ -780,6 +958,10 @@ class BaseStage:
 
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__} {self.name}>"
+
+    @lazy
+    def index_bases(self) -> IndexBases:
+        return self.get_index_bases()
 
     @cached_property
     def index_type(self):
@@ -1200,7 +1382,8 @@ class BaseStage:
         self, project: NormalizedName | str
     ) -> dict[str, Any]:
         project = ensure_unicode(project)
-        private_hit = whitelisted = False
+        private_hit: bool | Unknown = False
+        whitelisted = False
         whitelist_inheritance = self.get_whitelist_inheritance()
         whitelist = None
         for stage in self.sro():
@@ -1300,9 +1483,17 @@ class BaseStage:
             return newconfig
 
     def modify(self, index=None, **kw):
+        lazy.invalidate(self, "index_bases")
         newconfig = self._modify(**kw)
         threadlog.info("modified index %s: %s", self.name, newconfig)
         return newconfig
+
+    def get_index_bases(self) -> IndexBases:
+        return IndexBases(
+            self,
+            devpiserver_sro_skip=self.xom.config.hook.devpiserver_sro_skip,
+            model=self.model,
+        )
 
     def get_mergeable_stages(  # noqa: PLR0912
         self, project: NormalizedName, opname: str
@@ -1351,7 +1542,7 @@ class BaseStage:
 
     def op_sro(self, opname, **kw):
         warnings.warn(
-            "The 'op_sro' method is deprecated, use 'sro' instead.",
+            "The 'op_sro' method is deprecated, use 'index_bases.iter_stages()' instead.",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -1379,39 +1570,9 @@ class BaseStage:
                 continue
             yield stage, res
 
-    def sro(self):
+    def sro(self) -> Iterator[BaseStage]:
         """ return stage resolution order. """
-        todo = [self]
-        todo_mirrors = []
-        seen = set()
-        devpiserver_sro_skip = self.xom.config.hook.devpiserver_sro_skip
-        while todo:
-            stage = todo.pop(0)
-            yield stage
-            seen.add(stage.name)
-            for base in stage.ixconfig.get("bases", ()):
-                if base in seen:
-                    continue
-                current_stage = self.model.getstage(base)
-                if current_stage is None:
-                    threadlog.warn(
-                        "Index %s refers to non-existing base %s.",
-                        self.name, base)
-                    continue
-                if devpiserver_sro_skip(stage=self, base_stage=current_stage):
-                    threadlog.warn(
-                        "Index %s base %s excluded via devpiserver_sro_skip.",
-                        self.name, base)
-                    continue
-                if current_stage.index_type == "mirror":
-                    todo_mirrors.append(current_stage)
-                    # mirrors are processed last,
-                    # but we need to prevent duplicates
-                    seen.add(base)
-                else:
-                    todo.append(current_stage)
-        for stage in todo_mirrors:
-            yield stage
+        return self.index_bases.iter_stages()
 
     def __acl__(self):
         permissions = (
