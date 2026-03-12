@@ -1116,6 +1116,8 @@ class MirrorStage(BaseStage):
         self,
         project: NormalizedName | str,
         version: str,
+        *,
+        with_elinks: bool = True,
     ) -> DictViewReadonly[str, Any]:
         # we do not use normalize_name name here, so the returned data
         # contains whatever this method was called with, which is hopefully
@@ -1131,10 +1133,11 @@ class MirrorStage(BaseStage):
                     verdata['requires_python'] = sm.require_python
                 if sm.yanked is not None and sm.yanked is not False:
                     verdata['yanked'] = sm.yanked
-                elinks = verdata.setdefault("+elinks", [])
-                elinks.append(
-                    dict(rel=Rel.ReleaseFile, entrypath=sm.path, hashes=sm.hashes)
-                )
+                if with_elinks:
+                    elinks = verdata.setdefault("+elinks", [])
+                    elinks.append(
+                        dict(rel=Rel.ReleaseFile, entrypath=sm.path, hashes=sm.hashes)
+                    )
         return ensure_deeply_readonly(verdata)
 
 
