@@ -1,8 +1,16 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
 
+if TYPE_CHECKING:
+    from .main import XOM
+    from typing import Any
+
+
 class OutsideURLMiddleware:
-    def __init__(self, app, xom):
+    def __init__(self, app: Any, xom: XOM) -> None:
         self.app = app
         self.xom = xom
 

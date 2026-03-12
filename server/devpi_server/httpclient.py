@@ -43,7 +43,7 @@ class FatalResponse:
     status_code = -1
     url: str
 
-    def __init__(self, url: URL | str, reason: str):
+    def __init__(self, url: URL | str, reason: str) -> None:
         self.url = str(url)
         self.reason_phrase = reason
         self.status = self.status_code

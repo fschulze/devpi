@@ -15,6 +15,7 @@ from .normalized import normalize_name
 from .readonly import DictViewReadonly
 from .readonly import SetViewReadonly
 from .readonly import get_mutable_deepcopy
+from abc import abstractmethod
 from devpi_common.metadata import get_latest_version
 from devpi_common.metadata import parse_version
 from devpi_common.metadata import splitbasename
@@ -51,6 +52,7 @@ if TYPE_CHECKING:
     from .keyfs_types import RelPath
     from .keyfs_types import TypedKey
     from .main import XOM
+    from .markers import Unknown
     from .normalized import NormalizedName
     from collections.abc import Sequence
     from devpi_common.metadata import Version
@@ -172,7 +174,7 @@ class NonVolatile(ModelException):
 class RootModel:
     """ per-process root model object. """
 
-    def __init__(self, xom: XOM):
+    def __init__(self, xom: XOM) -> None:
         self.xom = xom
         self.keyfs = xom.keyfs
 
@@ -217,11 +219,11 @@ class RootModel:
         threadlog.info("created index %s: %s", stage.name, stage.ixconfig)
         return stage
 
-    def delete_user(self, username):
+    def delete_user(self, username: str) -> None:
         with cast("TypedKey[set]", self.keyfs.USERLIST).update() as userlist:
             userlist.remove(username)
 
-    def delete_stage(self, username, index):
+    def delete_stage(self, username: str, index: str) -> None:
         user = self.get_user(username)
         if user is None:
             threadlog.info("user %s does not exist", username)
@@ -341,7 +343,7 @@ name_char_blocklist_regexp = re.compile(
     r' !"#$%&\'()*+,/:;<=>?\[\\\\\]^`{|}~]')
 
 
-def is_valid_name(name):
+def is_valid_name(name: str) -> bool:
     return not name_char_blocklist_regexp.search(name)
 
 
@@ -373,7 +375,7 @@ class User:
     # visible_keys are returned via json
     visible_keys = ignored_keys.union(info_keys, public_keys)
 
-    def __init__(self, parent, name):
+    def __init__(self, parent: RootModel, name: str) -> None:
         self.parent = parent
         self.keyfs = parent.keyfs
         self.xom = parent.xom
@@ -397,7 +399,7 @@ class User:
             raise InvalidUserconfig(
                 "Unknown keys in user config: %s" % ", ".join(unknown_keys))
 
-    def _set(self, newuserconfig):
+    def _set(self, newuserconfig: dict) -> None:
         with self.key.update() as userconfig:
             userconfig.update(newuserconfig)
             threadlog.info("internal: set user information %r", self.name)
@@ -445,7 +447,7 @@ class User:
             userconfig["pwhash"] = hash_password(password)
         threadlog.info("setting password for user %r", self.name)
 
-    def delete(self):
+    def delete(self) -> None:
         # delete all projects on the index
         userconfig = self.get()
         for name in list(userconfig.get("indexes", {})):
@@ -456,7 +458,7 @@ class User:
         self.key.delete()
         self.parent.delete_user(self.name)
 
-    def validate(self, password):
+    def validate(self, password: str) -> bool:
         userconfig = self.key.get()
         if not userconfig:
             return False
@@ -536,7 +538,7 @@ def get_principals(value):
 class BaseStageCustomizer:
     readonly = False
 
-    def __init__(self, stage):
+    def __init__(self, stage: BaseStage) -> None:
         self.stage = stage
         self.hooks = self.stage.xom.config.hook
 
@@ -683,7 +685,7 @@ class SimpleLinks:
     def __iter__(self):
         return self._links.__iter__()
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self._links)
 
     def __eq__(self, other):
@@ -702,7 +704,7 @@ class SimpleLinks:
     def sort(self, *args, **kw):
         self._links.sort(*args, **kw)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         clsname = f"{self.__class__.__module__}.{self.__class__.__name__}"
         content = ', '.join(repr(x) for x in self._links)
         return f"<{clsname} stale={self.stale!r} [{content}]>"
@@ -710,8 +712,16 @@ class SimpleLinks:
 
 class BaseStage:
     keyfs: KeyFS
+    offline: bool
 
-    def __init__(self, xom, username, index, ixconfig, customizer_cls):
+    def __init__(
+        self,
+        xom: XOM,
+        username: str,
+        index: str,
+        ixconfig: DictViewReadonly[str, Any],
+        customizer_cls: type,
+    ) -> None:
         self.xom = xom
         self.username = username
         self.index = index
@@ -725,12 +735,16 @@ class BaseStage:
             user=username, index=index
         )
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<{self.__class__.__name__} {self.name}>"
 
     @property
-    def model(self):
+    def model(self) -> RootModel:
         return self.xom.model
+
+    @abstractmethod
+    def add_project_name(self, project: NormalizedName | str) -> None:
+        raise NotImplementedError
 
     def get_indexconfig_from_kwargs(self, **kwargs):
         """Normalizes values and validates keys.
@@ -814,12 +828,27 @@ class BaseStage:
         ixconfig["type"] = index_type
         return (ixconfig, kwargs)
 
+    @abstractmethod
     def get_default_config_items(self) -> Sequence[tuple[str, Any]]:
         raise NotImplementedError
 
+    @abstractmethod
     def get_possible_indexconfig_keys(self) -> Sequence:
         raise NotImplementedError
 
+    @abstractmethod
+    def get_versiondata_perstage(self, project, version, readonly=None):
+        raise NotImplementedError
+
+    @abstractmethod
+    def list_projects_perstage(self) -> dict[str, NormalizedName | str] | SetViewReadonly[str]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def has_project_perstage(self, project: NormalizedName | str) -> bool | Unknown:
+        raise NotImplementedError
+
+    @abstractmethod
     def normalize_indexconfig_value(self, key: str, value: Any) -> Any:
         raise NotImplementedError
 
@@ -832,7 +861,7 @@ class BaseStage:
         userconfig = self.user.get()
         return userconfig.get("indexes", {}).get(self.index)
 
-    def delete(self):
+    def delete(self) -> None:
         self.model.delete_stage(self.username, self.index)
 
     def key_projsimplelinks(self, project: str) -> TypedKey[dict]:
@@ -893,7 +922,7 @@ class BaseStage:
     def get_link_from_entrypath(self, entrypath):
         relpath = entrypath.rsplit("#", 1)[0]
         entry = self.xom.filestore.get_file_entry(relpath)
-        if entry.project is None:
+        if entry is None or entry.project is None:
             return None
         linkstore = self.get_linkstore_perstage(entry.project,
                                                 entry.version)
@@ -901,6 +930,7 @@ class BaseStage:
         assert len(links) < 2
         return links[0] if links else None
 
+    @abstractmethod
     def get_simplelinks_perstage(self, project: NormalizedName | str) -> SimpleLinks:
         raise NotImplementedError
 
@@ -948,6 +978,7 @@ class BaseStage:
             versions.update(res)
         return self.filter_versions(project, versions)
 
+    @abstractmethod
     def list_versions_perstage(self, project: str) -> set:
         raise NotImplementedError
 
@@ -1323,7 +1354,14 @@ class PrivateStage(BaseStage):
 
     use_external_url = False
 
-    def __init__(self, xom, username, index, ixconfig, customizer_cls):
+    def __init__(
+        self,
+        xom: XOM,
+        username: str,
+        index: str,
+        ixconfig: DictViewReadonly[str, Any],
+        customizer_cls: type,
+    ) -> None:
         super().__init__(xom, username, index, ixconfig, customizer_cls)
         self.httpget = xom.httpget
         self.async_httpget = xom.async_httpget
@@ -1366,7 +1404,7 @@ class PrivateStage(BaseStage):
         if key in ("custom_data", "description", "title"):
             return value
 
-    def delete(self):
+    def delete(self) -> None:
         # delete all projects on this index
         for name in self.list_projects_perstage():
             self.del_project(name)
@@ -1415,7 +1453,7 @@ class PrivateStage(BaseStage):
             self.key_projversions(project).set(versions)
         self.add_project_name(project)
 
-    def add_project_name(self, project):
+    def add_project_name(self, project: NormalizedName | str) -> None:
         project = normalize_name(project)
         projects = self.key_projects.get_mutable()
         if project not in projects:
@@ -1424,7 +1462,7 @@ class PrivateStage(BaseStage):
             projects.add(project)
             self.key_projects.set(projects)
 
-    def del_project(self, project):
+    def del_project(self, project: NormalizedName | str) -> None:
         project = normalize_name(project)
         for version in list(self.key_projversions(project).get()):
             self.del_versiondata(project, version, cleanup=False)
@@ -1435,7 +1473,12 @@ class PrivateStage(BaseStage):
         self.key_projversions(project).delete()
         self.key_projsimplelinks(project).delete()
 
-    def del_versiondata(self, project, version, cleanup=True):
+    def del_versiondata(
+        self,
+        project: NormalizedName | str,
+        version: str,
+        cleanup: bool = True,  # noqa: ARG002,FBT001,FBT002
+    ) -> None:
         project = normalize_name(project)
         if not self.has_project_perstage(project):
             raise self.NotFound("project %r not found on stage %r" %
@@ -1552,10 +1595,10 @@ class PrivateStage(BaseStage):
         data_dict = {u"links":links, u"requires_python":requires_python}
         self.key_projsimplelinks(project).set(data_dict)
 
-    def list_projects_perstage(self):
+    def list_projects_perstage(self) -> dict[str, NormalizedName | str] | SetViewReadonly[str]:
         return self.key_projects.get()
 
-    def has_project_perstage(self, project):
+    def has_project_perstage(self, project: NormalizedName | str) -> bool | Unknown:
         return normalize_name(project) in self.list_projects_perstage()
 
     def store_releasefile(
@@ -1845,7 +1888,7 @@ class ELink:
     def matches_hashes(self, hashes):
         return self.hashes == hashes
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "<ELink rel=%r entrypath=%r>" % (self.rel, self.entrypath)
 
     @property
@@ -1883,7 +1926,7 @@ class LinkStore:
                 "%s-%s on stage %s at %s",
                 project, version, stage.name, stage.keyfs.tx.at_serial)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<{self.__class__.__name__} {self.project} {self.stage.name} {self.version}>"
 
     @property
@@ -2011,7 +2054,7 @@ class LinkStore:
         entry.version = self.version
         return entry
 
-    def _mark_dirty(self):
+    def _mark_dirty(self) -> None:
         self.stage._set_versiondata(self.verdata)
 
     def _get_inplace_linkdicts(self):

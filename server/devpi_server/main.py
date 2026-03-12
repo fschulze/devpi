@@ -31,6 +31,7 @@ from devpi_common.types import cached_property
 from operator import iconcat
 from requests import Response
 from requests import exceptions
+from typing import NoReturn
 from typing import TYPE_CHECKING
 import asyncio
 import functools
@@ -43,7 +44,10 @@ import warnings
 
 
 if TYPE_CHECKING:
+    from .config import Config
     from collections.abc import Coroutine
+    from pluggy import PluginManager
+    from typing import Any
     import argparse
 
 
@@ -51,7 +55,7 @@ class Fatal(Exception):
     pass
 
 
-def fatal(msg, *, exc=None):
+def fatal(msg: str, *, exc: Exception | None = None) -> NoReturn:
     warnings.warn(
         "The 'fatal' function is deprecated, raise 'Fatal' exception directly.",
         DeprecationWarning,
@@ -60,7 +64,9 @@ def fatal(msg, *, exc=None):
 
 
 class CommandRunner:
-    def __init__(self, *, pluginmanager=None):
+    return_code: int | None
+
+    def __init__(self, *, pluginmanager: PluginManager | None = None) -> None:
         self._pluginmanager = pluginmanager
         self.return_code = None
 
@@ -77,7 +83,7 @@ class CommandRunner:
     def configure_logging(self, args: argparse.Namespace) -> None:
         configure_cli_logging(args)
 
-    def create_parser(self, *, add_help, description):
+    def create_parser(self, *, add_help: bool, description: str) -> MyArgumentParser:
         return MyArgumentParser(
             add_help=add_help,
             description=description,
@@ -103,7 +109,7 @@ class CommandRunner:
 DATABASE_VERSION = "4"
 
 
-def check_compatible_version(config):
+def check_compatible_version(config: Config) -> None:
     if not config.server_path.exists():
         return
     state_version = get_state_version(config)
@@ -130,7 +136,7 @@ def get_state_version(config):
     return versionfile.read_text()
 
 
-def set_state_version(config, version=DATABASE_VERSION):
+def set_state_version(config: Config, version: str = DATABASE_VERSION) -> None:
     versionfile = config.server_path / ".serverversion"
     versionfile.parent.mkdir(parents=True, exist_ok=True)
     versionfile.write_text(version)
@@ -161,7 +167,7 @@ def xom_from_config(config, init=False):
     return XOM(config)
 
 
-def init_default_indexes(xom):
+def init_default_indexes(xom: XOM) -> None:
     # we deliberately call get_current_serial first to establish a connection
     # to the backend and in case of sqlite create the database
     if xom.keyfs.get_current_serial() == -1 and not xom.is_replica():
@@ -204,7 +210,7 @@ def make_application():
     return XOM(config).create_app()
 
 
-def wsgi_run(xom, app):
+def wsgi_run(xom: XOM, app: Any) -> int:
     from waitress import serve
     log = xom.log
     kwargs = xom.config.waitress_info["kwargs"]
@@ -276,7 +282,11 @@ class XOM:
     class Exiting(SystemExit):
         pass
 
-    def __init__(self, config, http=None, httpget=None):
+    _stagecache: dict[str, dict]
+    async_tasks: set[asyncio.Task]
+    polling_replicas: dict[str, dict]
+
+    def __init__(self, config: Config, http: Any = None, httpget: Any = None) -> None:
         self.config = config
         self.thread_pool = mythread.ThreadPool()
         self.async_thread = AsyncioLoopThread(self)
@@ -348,10 +358,10 @@ class XOM:
         task.add_done_callback(self.async_tasks.discard)
         return task
 
-    async def _wait_for_task(self, task):
+    async def _wait_for_task(self, task: asyncio.Task) -> None:
         await task
 
-    def wait_for_task(self, task):
+    def wait_for_task(self, task: asyncio.Task) -> None:
         self.run_coroutine_threadsafe(self._wait_for_task(task))
 
     def get_singleton(self, indexpath, key):
@@ -361,7 +371,7 @@ class XOM:
         with self._stagecache_lock:
             return self._stagecache[indexpath][key]
 
-    def set_singleton(self, indexpath, key, obj):
+    def set_singleton(self, indexpath: str, key: str, obj: Any) -> None:
         """ set the singleton for indexpath/key to obj. """
         with self._stagecache_lock:
             s = self._stagecache.setdefault(indexpath, {})
@@ -378,7 +388,7 @@ class XOM:
                 s[key] = default
             return s[key]
 
-    def del_singletons(self, indexpath):
+    def del_singletons(self, indexpath: str) -> None:
         """ delete all singletones for the given indexpath """
         with self._stagecache_lock:
             self._stagecache.pop(indexpath, None)
@@ -396,7 +406,7 @@ class XOM:
         return tuple(sorted(results))
 
     @property
-    def model(self):
+    def model(self) -> RootModel:
         """ root model object. """
         try:
             tx = self.keyfs.tx
@@ -421,7 +431,7 @@ class XOM:
             xom.keyfs.restart_as_write_transaction = None  # type: ignore[assignment, method-assign]
         return xom.thread_pool.run(wsgi_run, xom, app)
 
-    def fatal(self, msg):
+    def fatal(self, msg: str) -> NoReturn:
         self.keyfs.release_all_wait_tx()
         self.thread_pool.shutdown()
         raise Fatal(msg)
@@ -477,7 +487,7 @@ class XOM:
     def _httpsession(self):
         return self._new_http_session("server")
 
-    def _close_sessions(self):
+    def _close_sessions(self) -> None:
         self._http.close()
         self._httpsession.close()
 
@@ -747,7 +757,7 @@ def apireturn_for_request(request, *args, **kwargs):
     apireturn(*args, **kwargs)
 
 
-def set_default_indexes(model):
+def set_default_indexes(model: RootModel) -> None:
     root_user = model.get_user("root")
     if not root_user:
         root_user = model.create_user(

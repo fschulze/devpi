@@ -207,7 +207,7 @@ class ContentTypePredicate(object):
     def __init__(self, val, config):
         self.val = val
 
-    def text(self):
+    def text(self) -> str:
         return 'content type = %s' % self.val
     phash = text
 
@@ -408,7 +408,7 @@ class StatusView:
         return status
 
     @view_config(route_name="/+status", accept="application/json")
-    def status(self):
+    def status(self) -> None:
         apireturn(200, type="status", result=self._status())
 
 
@@ -561,7 +561,7 @@ class PyPIView:
     @view_config(route_name="/+api")
     @view_config(route_name="/{user}/+api")
     @view_config(route_name="/{user}/{index}/+api")
-    def apiconfig_index(self):
+    def apiconfig_index(self) -> None:
         request = self.request
         stage = None
         if request.context.index is not None:
@@ -940,7 +940,7 @@ class PyPIView:
         route_name="/{user}/{index}", request_method="PUT")
     @view_config(
         route_name="/{user}/{index}/", request_method="PUT")
-    def index_create(self):
+    def index_create(self) -> None:
         username = self.context.username
         user = self.model.get_user(username)
         if user is None:
@@ -989,7 +989,7 @@ class PyPIView:
     @view_config(
         route_name="/{user}/{index}/", request_method="PATCH",
         permission="index_modify")
-    def index_modify(self):
+    def index_modify(self) -> None:  # noqa: PLR0912
         stage = self.context.stage
         json = getjson(self.request)
         keep_unknown = False
@@ -1052,7 +1052,7 @@ class PyPIView:
     @view_config(
         route_name="/{user}/{index}/", request_method="DELETE",
         permission="index_delete")
-    def index_delete(self):
+    def index_delete(self) -> None:
         stage = self.context.stage
         if not stage.ixconfig["volatile"]:
             apireturn(403, "index %s non-volatile, cannot delete" %
@@ -1469,7 +1469,7 @@ class PyPIView:
 
     @view_config(route_name="/{user}/{index}/{project}",
                  accept="application/json", request_method="GET")
-    def project_get(self):
+    def project_get(self) -> None:
         if not json_preferred(self.request):
             apireturn(415, "unsupported media type %s" %
                       self.request.headers.items())
@@ -1486,7 +1486,7 @@ class PyPIView:
     @view_config(
         route_name="/{user}/{index}/{project}", request_method="DELETE",
         permission="del_project")
-    def del_project(self):
+    def del_project(self) -> None:
         stage = self.context.stage
         project = self.context.project
         force = 'force' in self.request.params
@@ -1501,7 +1501,7 @@ class PyPIView:
                   project=project, sname=stage.name))
 
     @view_config(route_name="/{user}/{index}/{project}/{version}", accept="application/json", request_method="GET")
-    def version_get(self):
+    def version_get(self) -> None:
         verdata = self.context.get_versiondata(perstage=False)
         view_verdata = self._make_view_verdata(verdata)
         apireturn(200, type="versiondata", result=view_verdata)
@@ -1531,7 +1531,7 @@ class PyPIView:
     @view_config(route_name="/{user}/{index}/{project}/{version}",
                  permission="del_verdata",
                  request_method="DELETE")
-    def del_versiondata(self):
+    def del_versiondata(self) -> None:
         stage = self.context.stage
         name, version = self.context.project, self.context.version
         force = 'force' in self.request.params
@@ -1631,7 +1631,7 @@ class PyPIView:
     @view_config(route_name="/{user}/{index}/+f/{relpath:.*}",
                  permission="del_entry",
                  request_method="DELETE")
-    def del_pkg(self):
+    def del_pkg(self) -> None:
         stage = self.context.stage
         force = 'force' in self.request.params
         if not stage.ixconfig["volatile"] and not force:
@@ -1651,7 +1651,7 @@ class PyPIView:
 
     @view_config(route_name="/{user}/{index}", accept="application/json", request_method="GET")
     @view_config(route_name="/{user}/{index}/", accept="application/json", request_method="GET")
-    def index_get(self):
+    def index_get(self) -> None:
         stage = self.context.stage
         result = dict(stage.ixconfig)
         # double negation :(
@@ -1669,7 +1669,7 @@ class PyPIView:
     # login and user handling
     #
     @view_config(route_name="/+login", request_method="POST")
-    def login(self):
+    def login(self) -> None:
         request = self.request
         dict = getjson(request)
         user = dict.get("user", None)
@@ -1729,7 +1729,7 @@ class PyPIView:
     @view_config(
         route_name="/{user}/", request_method="PUT",
         permission="user_create")
-    def user_create(self):
+    def user_create(self) -> None:
         username = self.context.username
         request = self.request
         user = self.model.get_user(username)
@@ -1752,7 +1752,7 @@ class PyPIView:
     @view_config(
         route_name="/{user}/", request_method="DELETE",
         permission="user_delete")
-    def user_delete(self):
+    def user_delete(self) -> None:
         context = self.context
         if not context.user:
             abort(self.request, 404, "required user %r does not exist" % context.username)
@@ -1768,14 +1768,14 @@ class PyPIView:
 
     @view_config(route_name="/{user}", accept="application/json", request_method="GET")
     @view_config(route_name="/{user}/", accept="application/json", request_method="GET")
-    def user_get(self):
+    def user_get(self) -> None:
         if self.context.user is None:
             apireturn(404, "user %r does not exist" % self.context.username)
         userconfig = self.context.user.get()
         apireturn(200, type="userconfig", result=userconfig)
 
     @view_config(route_name="/", accept="application/json", request_method="GET")
-    def user_list(self):
+    def user_list(self) -> None:
         d = {}
         for user in self.model.get_userlist():
             d[user.name] = user.get()

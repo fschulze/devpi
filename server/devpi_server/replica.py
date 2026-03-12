@@ -52,6 +52,8 @@ if TYPE_CHECKING:
     from .keyfs_types import KeyFSTypesRO
     from .keyfs_types import TypedKey
     from .main import XOM
+    from .mirror import MirrorStage
+    from collections.abc import Iterator
     from contextlib import ExitStack
 
 
@@ -82,14 +84,14 @@ class IndexType:
             index_type = index_type._index_type
         self._index_type: str | None = index_type
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash(self._index_type)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<IndexType {self._index_type!r}>"
 
-    def __str__(self):
-        return self._index_type
+    def __str__(self) -> str:
+        return str(self._index_type)
 
     def __lt__(self, other):
         if self._index_type == other._index_type:
@@ -124,9 +126,9 @@ def log_replica_token_error(request, msg):
 
 
 class ReplicaIdentity:
-    def __init__(self):
+    def __init__(self) -> None:
         self.username = REPLICA_USER_NAME
-        self.groups = []
+        self.groups: list[str] = []
 
 
 @hookimpl(tryfirst=True)
@@ -164,19 +166,24 @@ def devpiserver_auth_request(request, userdict, username, password):
         raise HTTPForbidden("Authorization malformed.")
 
 
-class ReadableIterabel(io.RawIOBase):
-    def __init__(self, iterable):
-        self.iterable = iterable
+class ReadableIterator(io.RawIOBase):
+    chunk: bytes | None
+    chunk_pos: int
+    chunk_size: int
+    iterator: Iterator[bytes]
+
+    def __init__(self, iterator: Iterator[bytes]) -> None:
+        self.iterator = iterator
         self.chunk = None
         self.chunk_pos = 0
         self.chunk_size = 0
 
-    def readable(self):
+    def readable(self) -> bool:
         return True
 
     def readinto(self, b):
         if self.chunk is None:
-            self.chunk = next(self.iterable, b"")
+            self.chunk = next(self.iterator, b"")
             self.chunk_pos = 0
             self.chunk_size = len(self.chunk)
         chunk_remaining = self.chunk_size - self.chunk_pos
@@ -221,7 +228,7 @@ class PrimaryChangelogRequest:
         else:  # just a regular request
             yield
 
-    def verify_primary(self):
+    def verify_primary(self) -> None:
         if not self.xom.is_primary():
             raise HTTPForbidden("Replication protocol disabled")
         expected_uuid = self.request.headers.get(
@@ -374,7 +381,7 @@ class ReplicaHTTPClient:
     def auth_serializer(self):
         return get_auth_serializer(self.config)
 
-    def close(self):
+    def close(self) -> None:
         self.http.close()
 
     def get(
@@ -678,7 +685,7 @@ class ReplicaThread:
     def handler_multi(self, response):
         if response.headers.get("content-type", "") == REPLICA_CONTENT_TYPE:
             with contextlib.closing(response):
-                readableiterable = ReadableIterabel(
+                readableiterable = ReadableIterator(
                     response.iter_bytes(REPLICA_CHUNK_SIZE)
                 )
                 stream = io.BufferedReader(
@@ -704,7 +711,7 @@ class ReplicaThread:
         url = self.primary_url.joinpath("+changelog", "%s-" % serial).url
         return self.fetch(self.handler_multi, url)
 
-    def tick(self):
+    def tick(self) -> None:
         self.thread.exit_if_shutdown()
         serial = self.xom.keyfs.get_next_serial()
         result = self.fetch_multi(serial)
@@ -715,7 +722,7 @@ class ReplicaThread:
             # from now on we do polling
             self.initial_fetch = False
 
-    def thread_run(self):
+    def thread_run(self) -> None:
         # within a devpi replica server this thread is the only writer
         self.started_at = time.time()
         self.log = thread_push_log("[REP]")
@@ -735,7 +742,7 @@ class ReplicaThread:
                     "Unhandled exception in replica thread.")
                 self.thread.sleep(1.0)
 
-    def thread_shutdown(self):
+    def thread_shutdown(self) -> None:
         self.http.close()
 
     def wait(self, error_queue=False):
@@ -1214,6 +1221,14 @@ class FileReplicationThread:
                 stagename = "/".join(relpath.split("/")[:2])
                 with self.xom.keyfs.read_transaction(at_serial=serial):
                     stage = self.xom.model.getstage(stagename)
+                if stage is None:
+                    threadlog.warn(
+                        "ignoring file where mirror index was deleted '%s': %s",
+                        stagename,
+                        relpath,
+                    )
+                    self.shared_data.errors.remove(entry)
+                    return
                 if stage.ixconfig["type"] == "mirror":
                     threadlog.warn(
                         "ignoring file which couldn't be retrieved from mirror index '%s': %s",
@@ -1304,11 +1319,11 @@ class FileReplicationThread:
                     serial=serial, back_serial=back_serial,
                     is_from_mirror=index_type == IndexType("mirror"))
 
-    def tick(self):
+    def tick(self) -> None:
         self.thread.exit_if_shutdown()
         self.shared_data.process_next(self.handler)
 
-    def thread_run(self):
+    def thread_run(self) -> None:
         thread_push_log("[FREP]")
         while 1:
             try:
@@ -1327,7 +1342,7 @@ class InitialQueueThread:
         self.xom = xom
         self.shared_data = shared_data
 
-    def thread_run(self):
+    def thread_run(self) -> None:
         thread_push_log("[FREPQ]")
         keyfs = self.xom.keyfs
         threadlog.info("Queuing files for possible download from primary")
@@ -1418,6 +1433,8 @@ class SimpleLinksChanged:
         with self.xom.keyfs.read_transaction():
             mirror_stage = self.xom.model.getstage(username, index)
             if mirror_stage and mirror_stage.ixconfig["type"] == "mirror":
+                if TYPE_CHECKING:
+                    assert isinstance(mirror_stage, MirrorStage)
                 cache_projectnames = mirror_stage.cache_projectnames
                 if cache is None:  # deleted
                     cache_projectnames.discard(project)

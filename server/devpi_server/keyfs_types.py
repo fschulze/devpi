@@ -130,7 +130,7 @@ class PTypedKey(Generic[KeyType]):
     def on_key_change(self, callback: Callable) -> None:
         self.keyfs.notifier.on_key_change(self.name, callback)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<PTypedKey {self.pattern!r} type {self.type.__name__!r}>"
 
 
@@ -160,7 +160,7 @@ class TypedKey(Generic[KeyType]):
     def __eq__(self, other):
         return self.relpath == other.relpath
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<TypedKey {self.name} {self.type.__name__} {self.relpath}>"
 
     @overload

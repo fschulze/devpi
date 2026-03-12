@@ -35,7 +35,7 @@ def current_thread():
 class MyThread(threading.Thread):
     pool: ThreadPool
 
-    def sleep(self, secs):
+    def sleep(self, secs: float) -> None:
         start = time.monotonic()
         remaining = secs
         while 1:
@@ -73,8 +73,12 @@ def has_active_thread(obj):
 
 class ThreadPool:
     Shutdown = Shutdown
+    _fatal_exc: None | BaseException
+    _objects: list
+    _shutdown_funcs: list
+    _started: list
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._a_thread_ended = threading.Event()
         self._fatal_exc = None
         self._objects = []
@@ -122,7 +126,7 @@ class ThreadPool:
         finally:
             self.shutdown()
 
-    def start(self):
+    def start(self) -> None:
         for obj in self._objects:
             self.start_one(obj)
 
@@ -133,16 +137,16 @@ class ThreadPool:
         self._started.append(obj)
         obj.thread.start()
 
-    def exit_if_shutdown(self):
+    def exit_if_shutdown(self) -> None:
         if self._shutdown.is_set():
             raise self.Shutdown()
 
-    def shutdown(self):
+    def shutdown(self) -> None:
         self._shutdown.set()
         for func in self._shutdown_funcs:
             func()
 
-    def kill(self):
+    def kill(self) -> None:
         self.shutdown()
         for obj in self._started:
             if obj.thread.is_alive():

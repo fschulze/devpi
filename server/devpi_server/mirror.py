@@ -11,6 +11,7 @@ from .exceptions import lazy_format_exception
 from .filestore import key_from_link
 from .htmlpage import HTMLPage
 from .httpclient import FatalResponse
+from .keyfs_types import RelPath
 from .log import threadlog
 from .markers import unknown
 from .model import BaseStage
@@ -48,12 +49,15 @@ if TYPE_CHECKING:
     from .httpclient import AsyncGetResponse
     from .httpclient import HTTPClient
     from .keyfs_types import PTypedKey
+    from .main import XOM
+    from .markers import Unknown
     from .model import JoinedLinkList
     from .model import LinksList
     from .model import RequiresPythonList
     from .model import SimpleLinks
     from .model import YankedList
     from .normalized import NormalizedName
+    from .readonly import DictViewReadonly
     from collections.abc import Callable
     from typing import Any
     from typing_extensions import NotRequired
@@ -329,7 +333,16 @@ class MirrorHTTPClient:
 
 
 class MirrorStage(BaseStage):
-    def __init__(self, xom, username, index, ixconfig, customizer_cls):
+    _offline_logging: set[str]
+
+    def __init__(
+        self,
+        xom: XOM,
+        username: str,
+        index: str,
+        ixconfig: DictViewReadonly[str, Any],
+        customizer_cls: type,
+    ) -> None:
         super().__init__(
             xom, username, index, ixconfig, customizer_cls)
         self.xom = xom
@@ -367,7 +380,7 @@ class MirrorStage(BaseStage):
         if self.xom.is_replica():
             (uuid, primary_uuid) = self.xom.config.nodeinfo.make_uuid_headers()
             rt = self.xom.replica_thread
-            token = rt.auth_serializer.dumps(uuid)
+            token = rt.http.auth_serializer.dumps(uuid)
             extra_headers[rt.H_REPLICA_UUID] = uuid
             extra_headers['Authorization'] = 'Bearer %s' % token
         else:
@@ -520,21 +533,21 @@ class MirrorStage(BaseStage):
             return value
         return None
 
-    def delete(self):
+    def delete(self) -> None:
         # delete all projects on this index
         for name in self.key_projects.get():
             self.del_project(name)
         self.key_projects.delete()
         BaseStage.delete(self)
 
-    def add_project_name(self, project):
+    def add_project_name(self, project: NormalizedName | str) -> None:
         project = normalize_name(project)
         projects = self.key_projects.get_mutable()
         if project not in projects:
             projects.add(project)
             self.key_projects.set(projects)
 
-    def del_project(self, project):
+    def del_project(self, project: NormalizedName | str) -> None:
         if not self.is_project_cached(project):
             raise KeyError("project not found")
         (is_expired, links, cache_serial, etag) = self._load_cache_links(project)
@@ -551,7 +564,12 @@ class MirrorStage(BaseStage):
             self.cache_retrieve_times.expire(project)
             self.key_projects.set(projects)
 
-    def del_versiondata(self, project, version, cleanup=True):
+    def del_versiondata(
+        self,
+        project: NormalizedName | str,
+        version: str,
+        cleanup: bool = True,  # noqa: ARG002,FBT001,FBT002
+    ) -> None:
         project = normalize_name(project)
         if not self.has_project_perstage(project):
             raise self.NotFound("project %r not found on stage %r" %
@@ -721,7 +739,7 @@ class MirrorStage(BaseStage):
                     projects = self._update_projects()
         return projects
 
-    def list_projects_perstage(self):
+    def list_projects_perstage(self) -> dict[str, NormalizedName | str]:
         """ Return the project names. """
         # return a read-only version of the cached data,
         # so it can't be modified accidentally and we avoid a copy
@@ -758,7 +776,7 @@ class MirrorStage(BaseStage):
             # deletion and offline mode
             self.add_project_name(project)
 
-        def on_commit():
+        def on_commit() -> None:
             threadlog.debug("setting projects cache for %r", project)
             self.cache_retrieve_times.refresh(project, etag)
             # make project appear in projects list even
@@ -789,14 +807,14 @@ class MirrorStage(BaseStage):
 
     def _entry_from_href(self, href: str) -> FileEntry | None:
         # extract relpath from href by cutting of the hash
-        relpath = re.sub(r"#.*$", "", href)
+        relpath = RelPath(re.sub(r"#.*$", "", href))
         return self.filestore.get_file_entry(relpath)
 
     def _is_file_cached(self, link):
         entry = self._entry_from_href(link[1])
         return entry is not None and entry.file_exists()
 
-    def clear_simplelinks_cache(self, project):
+    def clear_simplelinks_cache(self, project: NormalizedName | str) -> None:
         # we have to set to an empty dict instead of removing the key, so
         # replicas behave correctly
         self.cache_retrieve_times.expire(project)
@@ -1088,7 +1106,7 @@ class MirrorStage(BaseStage):
 
         return self._update_simplelinks(project, info, links, newlinks)
 
-    def has_project_perstage(self, project):
+    def has_project_perstage(self, project: NormalizedName | str) -> bool | Unknown:
         project = normalize_name(project)
         if self.is_project_cached(project):
             return True
@@ -1233,7 +1251,7 @@ class ProjectUpdateInnerLock:
     __slots__ = (
         '__weakref__', 'acquire', 'locked', 'release', 'thread_ident')
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.thread_ident = threading.get_ident()
         lock = threading.Lock()
         self.acquire = lock.acquire
@@ -1286,7 +1304,7 @@ class ProjectUpdateCache:
     _project2lock: weakref.WeakValueDictionary[str, ProjectUpdateInnerLock]
     _project2time: dict[str, tuple[float, str | None]]
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._project2time = {}
         self._project2lock = weakref.WeakValueDictionary()
 

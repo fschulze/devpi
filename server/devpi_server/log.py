@@ -51,7 +51,7 @@ def configure_logging(config_args: argparse.Namespace) -> None:
     _configure_logging(config_args)
 
 
-def configure_cli_logging(config_args):
+def configure_cli_logging(config_args: argparse.Namespace) -> None:
     _configure_logging(config_args)
 
 

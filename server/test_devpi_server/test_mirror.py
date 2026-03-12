@@ -556,7 +556,7 @@ class TestExtPYPIDB:
 
     @pytest.mark.asyncio
     async def test_basic_auth_mirror(self, pypistage):
-        pypistage.ixconfig["mirror_url"] = "https://foo:bar@example.com/simple/"
+        pypistage.ixconfig._data["mirror_url"] = "https://foo:bar@example.com/simple/"
         pypistage.xom.http.mockresponse(
             pypistage.mirror_url_without_auth,
             code=200,
@@ -984,7 +984,7 @@ class TestMirrorStageprojects:
                 <a href='django'>Django</a><br/>
             </body>""",
         )
-        pypistage.ixconfig['mirror_cache_expiry'] = 0
+        pypistage.ixconfig._data["mirror_cache_expiry"] = 0
         projectnames = pypistage.cache_projectnames
         assert not projectnames.exists()
         pypistage.list_projects_perstage()
@@ -1121,20 +1121,20 @@ class TestMirrorStageprojects:
         assert [x for x in msgs if ("foo:***" in x) or ("***:***" in x)]
 
     def test_auth_mirror_url_hidden_in_logs(self, caplog, pypistage):
-        pypistage.ixconfig["mirror_url"] = "https://foo:bar@example.com/simple/"
+        pypistage.ixconfig._data["mirror_url"] = "https://foo:bar@example.com/simple/"
         pypistage.get_releaselinks("pkg")
         msgs = [x.getMessage() for x in caplog.getrecords()]
         assert not [x for x in msgs if "foo:bar" in x and "mockresponse" not in x]
         assert [x for x in msgs if ("foo:***" in x) or ("***:***" in x)]
 
     def test_auth_mirror_url_user_only(self, caplog, pypistage):
-        pypistage.ixconfig["mirror_url"] = "https://foo@example.com/simple/"
+        pypistage.ixconfig._data["mirror_url"] = "https://foo@example.com/simple/"
         pypistage.get_releaselinks("pkg")
         msgs = [x.getMessage() for x in caplog.getrecords()]
         assert [x for x in msgs if ("foo@" in x) or ("***@" in x)]
 
     def test_auth_mirror_url_password_only(self, caplog, pypistage):
-        pypistage.ixconfig["mirror_url"] = "https://:bar@example.com/simple/"
+        pypistage.ixconfig._data["mirror_url"] = "https://:bar@example.com/simple/"
         pypistage.get_releaselinks("pkg")
         msgs = [x.getMessage() for x in caplog.getrecords()]
         assert not [x for x in msgs if "/:bar" in x and "mockresponse" not in x]

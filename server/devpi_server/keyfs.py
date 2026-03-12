@@ -50,7 +50,10 @@ if TYPE_CHECKING:
     from .keyfs_types import KeyFSTypesRO
     from .keyfs_types import KeyType
     from .log import TagLogger
+    from .main import XOM
     from .markers import Deleted
+    from .model import BaseStage
+    from .model import User
     from .mythread import MyThread
     from collections.abc import Callable
     from collections.abc import Iterable
@@ -329,7 +332,7 @@ class KeyFS:
         self.__dict__[name] = key = self._keys[name]
         return key
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<{self.__class__.__name__} {self.base_path}>"
 
     @cached_property
@@ -371,7 +374,7 @@ class KeyFS:
             return contextlib.closing(conn)
         return conn
 
-    def finalize_init(self):
+    def finalize_init(self) -> None:
         if self.io_file_factory is None:
             return
         with self.get_connection() as conn:
@@ -432,7 +435,7 @@ class KeyFS:
     def _notify_on_commit(self, serial):
         self.release_all_wait_tx()
 
-    def release_all_wait_tx(self):
+    def release_all_wait_tx(self) -> None:
         with self._cv_new_transaction:
             self._cv_new_transaction.notify_all()
 
@@ -530,12 +533,12 @@ class KeyFS:
         thread_push_log(self._tx_prefix())
         return tx
 
-    def clear_transaction(self):
+    def clear_transaction(self) -> None:
         prefix = self._tx_prefix()
         del self._threadlocal.tx
         thread_pop_log(prefix)
 
-    def restart_as_write_transaction(self):
+    def restart_as_write_transaction(self) -> None:
         if self._readonly:
             raise self.ReadOnly()
         tx = self.tx
@@ -545,7 +548,7 @@ class KeyFS:
         tx.restart(write=True)
         thread_change_log_prefix(self._tx_prefix(), old_prefix)
 
-    def restart_read_transaction(self):
+    def restart_read_transaction(self) -> None:
         tx = self.tx
         if tx.write:
             raise RuntimeError("Can only restart a read transaction.")
@@ -557,13 +560,13 @@ class KeyFS:
         tx.restart(write=False)
         thread_change_log_prefix(self._tx_prefix(), old_prefix)
 
-    def rollback_transaction_in_thread(self):
+    def rollback_transaction_in_thread(self) -> None:
         try:
             self._threadlocal.tx.rollback()
         finally:
             self.clear_transaction()
 
-    def commit_transaction_in_thread(self):
+    def commit_transaction_in_thread(self) -> None:
         try:
             self._threadlocal.tx.commit()
         finally:
@@ -712,9 +715,9 @@ def iter_serial_and_value_backwards(conn, relpath, last_serial):
 
 
 class TransactionRootModel(RootModel):
-    def __init__(self, xom):
+    def __init__(self, xom: XOM) -> None:
         super().__init__(xom)
-        self.model_cache = {}
+        self.model_cache: dict[str | tuple[str, str], BaseStage | User | None] = {}
 
     def create_user(self, username, password, **kwargs):
         if username in self.model_cache:
@@ -731,13 +734,13 @@ class TransactionRootModel(RootModel):
             user, index, type=type, **kwargs)
         return self.model_cache[key]
 
-    def delete_user(self, username):
+    def delete_user(self, username: str) -> None:
         if username in self.model_cache:
             assert self.model_cache[username] is not None
             del self.model_cache[username]
         super().delete_user(username)
 
-    def delete_stage(self, username, index):
+    def delete_stage(self, username: str, index: str) -> None:
         key = (username, index)
         if key in self.model_cache:
             assert self.model_cache[key] is not None
@@ -774,7 +777,7 @@ class FileStoreTransaction:
         assert self.keyfs.io_file_factory is not None
         return self.keyfs.io_file_factory(self.conn)
 
-    def _close(self):
+    def _close(self) -> None:
         if self.closed:
             # We can reach this when the transaction is restarted and there
             # is an exception after the commit and before the assignment of
@@ -785,11 +788,11 @@ class FileStoreTransaction:
         self.conn.close()
         self.closed = True
 
-    def commit(self):
+    def commit(self) -> None:
         self.io_file.commit()
         self._close()
 
-    def rollback(self):
+    def rollback(self) -> None:
         self.io_file.rollback()
         if hasattr(self.conn, "rollback"):
             self.conn.rollback()
@@ -845,8 +848,8 @@ class Transaction:
         assert self.keyfs.io_file_factory is not None
         return self.keyfs.io_file_factory(self.conn)
 
-    def get_model(self, xom):
-        if self._model is absent:
+    def get_model(self, xom: XOM) -> TransactionRootModel:
+        if isinstance(self._model, Absent):
             self._model = TransactionRootModel(xom)
         return self._model
 
@@ -1099,12 +1102,12 @@ class Transaction:
         self._close()
         self.__dict__ = newtx.__dict__
 
-    def doom(self):
+    def doom(self) -> None:
         """ mark as doomed to automatically rollback any changes """
         self.doomed = True
 
 
-def check_unicode_keys(d):
+def check_unicode_keys(d: dict) -> None:
     for key, val in d.items():
         assert not isinstance(key, bytes), repr(key)
         # not allowing bytes seems ok for now, we might need to relax that

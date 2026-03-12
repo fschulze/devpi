@@ -755,12 +755,17 @@ def devpiserver_makepypistage():
         from devpi_server.main import _pypi_ixconfig_default
         from devpi_server.mirror import MirrorCustomizer
         from devpi_server.mirror import MirrorStage
+        from devpi_server.readonly import ensure_deeply_readonly
+
         # we copy _pypi_ixconfig_default, otherwise the defaults will
         # be modified during config updates later on
         return MirrorStage(
-            xom, username="root", index="pypi",
-            ixconfig=dict(_pypi_ixconfig_default),
-            customizer_cls=MirrorCustomizer)
+            xom,
+            username="root",
+            index="pypi",
+            ixconfig=ensure_deeply_readonly(dict(_pypi_ixconfig_default)),
+            customizer_cls=MirrorCustomizer,
+        )
     return makepypistage
 
 

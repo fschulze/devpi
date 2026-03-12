@@ -90,7 +90,7 @@ class RunningHashes:
     def get_running_hash(self, hash_type):
         return self._hashes[hash_type]
 
-    def start(self):
+    def start(self) -> None:
         if self._algos:
             msg = f"{self.__class__.__name__} already started."
             raise RuntimeError(msg)
@@ -377,7 +377,7 @@ class FileStore:
     def __init__(self, keyfs: KeyFS) -> None:
         self.keyfs = keyfs
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<{self.__class__.__name__} {self.keyfs!r}>"
 
     def maplink(self, link, user, index, project):
@@ -628,7 +628,7 @@ class BaseFileEntry:
     def file_size(self):
         return self.tx.io_file.size(self.file_path_info)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<{self.__class__.__name__} {self.key!r}>"
 
     def file_new_open(self):
