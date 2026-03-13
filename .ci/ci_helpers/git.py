@@ -2,7 +2,7 @@
 
 from functools import cached_property
 from io import StringIO
-from match_diff_lines import parse_unified_diff
+from match_diff_lines import parse_unified_diff  # type: ignore[import-untyped]
 from pathlib import Path
 import asyncio
 import itertools

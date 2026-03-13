@@ -873,6 +873,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - project: ".ci"
+            python-version: "3.11"
+            os: "ubuntu-22.04"
           - project: "client"
             python-version: "3.11"
             os: "ubuntu-22.04"

@@ -1,5 +1,5 @@
 from collections import defaultdict
-from match_diff_lines import match_lines
+from match_diff_lines import match_lines  # type: ignore[import-untyped]
 from pathlib import Path
 from wcmatch.glob import GLOBSTAR
 from wcmatch.glob import globfilter

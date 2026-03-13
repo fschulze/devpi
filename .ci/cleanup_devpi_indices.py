@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from requests import Session
 import datetime
 import subprocess
@@ -25,7 +27,9 @@ def get_projectnames(baseurl: str, username: str, indexname: str) -> list:
     return result["projects"]
 
 
-def get_release_dates(baseurl: str, username: str, indexname: str, projectname: str) -> set:
+def get_release_dates(
+    baseurl: str, username: str, indexname: str, projectname: str
+) -> set[tuple[int, int, int, int, int, int]]:
     response = session.get(baseurl + username + "/" + indexname + "/" + projectname)
     assert response.status_code == 200
     result = response.json()["result"]
@@ -42,7 +46,7 @@ def run() -> None:
     username = "devpi-github"
     for indexname in get_indexes(baseurl, username):
         projectnames = get_projectnames(baseurl, username, indexname)
-        all_dates = set()
+        all_dates: set[tuple[int, int, int, int, int, int]] = set()
         for projectname in projectnames:
             dates = get_release_dates(baseurl, username, indexname, projectname)
             if not dates:
