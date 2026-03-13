@@ -4,7 +4,7 @@
 from ci_helpers import CI
 from collections import defaultdict
 from io import StringIO
-from match_diff_lines import parse_unified_diff
+from match_diff_lines import parse_unified_diff  # type: ignore[import-untyped]
 import argparse
 import asyncio
 import subprocess
