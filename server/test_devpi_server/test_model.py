@@ -283,6 +283,9 @@ class TestStage:
         assert cons_index.list_versions('pkg') == set(['1.0', '2.0', '3.0'])
         assert extagg_index1.list_versions('pkg') == set([])
         assert extagg_index2.list_versions('pkg') == set(['1.0', '2.0', '3.0'])
+        # reverse order of bases
+        extagg_index2.modify(bases=["extagg/index1", "aggregator/index"])
+        assert extagg_index2.list_versions("pkg") == {"1.0", "2.0", "3.0"}
 
     def test_inheritance_complex_issue_214_pypi(self, pypistage, model):
         pypi = model.getstage('root/pypi')
@@ -316,6 +319,9 @@ class TestStage:
         assert cons_index.list_versions('pkg') == set(['1.0'])
         assert extagg_index1.list_versions('pkg') == set(['2.0'])
         assert extagg_index2.list_versions('pkg') == set(['1.0'])
+        # reverse order of bases
+        extagg_index2.modify(bases=["extagg/index1", "aggregator/index"])
+        assert extagg_index2.list_versions("pkg") == {"1.0"}
 
     def test_inheritance_normalize_multipackage(self, pypistage, stage):
         stage.modify(bases=("root/pypi",), mirror_whitelist=['some-project'])
