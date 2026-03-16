@@ -1056,13 +1056,15 @@ class BaseStage:
                 l.append(json.load(f))
         return l
 
-    def filter_versions(self, project, versions):
+    def filter_versions(
+        self, project: NormalizedName | str, versions: set[str]
+    ) -> set[str]:
         iterator = self.customizer.get_versions_filter_iter(project, versions)
         if iterator is None:
             return versions
-        return frozenset(apply_filter_iter(versions, iterator))
+        return set(apply_filter_iter(versions, iterator))
 
-    def list_versions(self, project):
+    def list_versions(self, project: NormalizedName | str) -> set[str]:
         assert isinstance(project, str), "project %r not text" % project
         versions = set()
         for stage, res in self.op_sro_check_mirror_whitelist(
@@ -1086,10 +1088,12 @@ class BaseStage:
                 name, self.list_versions_perstage(name)),
             stable=stable)
 
-    def get_versiondata(self, project, version):
+    def get_versiondata(
+        self, project: NormalizedName | str, version: str
+    ) -> dict[str, Any]:
         assert isinstance(project, str), "project %r not text" % project
         result: dict[str, Any] = {}
-        if not self.filter_versions(project, [version]):
+        if not self.filter_versions(project, {version}):
             return result
         for stage, res in self.op_sro_check_mirror_whitelist(
                 "get_versiondata_perstage",
@@ -1102,7 +1106,9 @@ class BaseStage:
                     l.append(res)
         return result
 
-    def get_simplelinks(self, project, sorted_links=True):
+    def get_simplelinks(
+        self, project: NormalizedName | str, *, sorted_links: bool = True
+    ) -> SimpleLinks:
         """ Return list of (key, href) tuples where "href" is a path
         to a file entry with "#" appended hash-specs or egg-ids
         and "key" is usually the basename of the link or else
@@ -1132,10 +1138,12 @@ class BaseStage:
             all_links.sort(reverse=True)
         return all_links
 
-    def get_whitelist_inheritance(self):
+    def get_whitelist_inheritance(self) -> str:
         return self.ixconfig.get("mirror_whitelist_inheritance", "union")
 
-    def get_mirror_whitelist_info(self, project):
+    def get_mirror_whitelist_info(
+        self, project: NormalizedName | str
+    ) -> dict[str, Any]:
         project = ensure_unicode(project)
         private_hit = whitelisted = False
         whitelist_inheritance = self.get_whitelist_inheritance()
