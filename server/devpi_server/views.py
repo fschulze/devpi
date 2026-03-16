@@ -555,7 +555,7 @@ class PyPIView:
                 "index": request.stage_url(stage),
                 "simpleindex": request.simpleindex_url(stage)
             })
-            if stage.ixconfig["type"] != "mirror":
+            if stage.index_type != "mirror":
                 api["pypisubmit"] = request.route_url(
                     "/{user}/{index}/", user=stage.username, index=stage.index)
         apireturn(200, type="apiconfig", result=api)
@@ -721,7 +721,7 @@ class PyPIView:
             app_iter=buffered_iterator(app_iter),
             content_type=content_type,
             vary=set(["Accept", "User-Agent"]))
-        if stage.ixconfig['type'] == 'mirror':
+        if stage.index_type == "mirror":
             serial = (
                 stage.key_projectcacheinfo(project)
                 .with_resolved_parent()
@@ -821,7 +821,7 @@ class PyPIView:
             "/{user}/{index}/+simple/{project}/refresh",
             user=self.context.username, index=self.context.index,
             project=project)
-        title = "Refresh" if stage.ixconfig["type"] == "mirror" else "Refresh mirror links"
+        title = "Refresh" if stage.index_type == "mirror" else "Refresh mirror links"
         submit = '<input name="refresh" type="submit" value="%s">' % title
         return '<form action="%s" method="post">%s</form>' % (url, submit)
 
@@ -922,7 +922,7 @@ class PyPIView:
     def simple_refresh(self):
         context = self.context
         for stage in context.stage.sro():
-            if stage.ixconfig["type"] != "mirror":
+            if stage.index_type != "mirror":
                 continue
             stage.clear_simplelinks_cache(context.project)
             stage.get_simplelinks_perstage(context.project)
@@ -1594,7 +1594,11 @@ class PyPIView:
                     )
                 url = url.replace(**mirror_url_auth)
                 return HTTPFound(location=url.url)
-            if stage.ixconfig['type'] != "mirror" and not file_exists and not self.xom.is_replica():
+            if (
+                stage.index_type != "mirror"
+                and not file_exists
+                and not self.xom.is_replica()
+            ):
                 # return error when private file is missing and not in
                 # replica mode, otherwise fall through to fetch file
                 abort(self.request, 404, "no such file")
