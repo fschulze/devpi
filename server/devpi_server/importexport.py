@@ -246,16 +246,14 @@ class IndexDump:
         self.basedir = basedir
         self.indexmeta = exporter.export_indexes[stage.name] = {}
         self.indexmeta["indexconfig"] = stage.ixconfig
-
-    def should_dump(self) -> bool:
-        if self.stage.ixconfig["type"] == "mirror":
-            if not self.exporter.config.include_mirrored_files:
-                return False
-        return True
+        self.should_dump = (
+            self.exporter.config.include_mirrored_files
+            or self.stage.index_type != "mirror"
+        )
 
     def dump(self) -> None:
         projects: dict | SetViewReadonly = {}
-        if self.should_dump():
+        if self.should_dump:
             self.stage.offline = True
             self.indexmeta["projects"] = {}
             self.indexmeta["files"] = []
