@@ -881,7 +881,7 @@ class FileReplicationSharedData:
                 # deleted stage
                 self.set_index_type_for(index_name, None)
             else:
-                self.set_index_type_for(stage.name, stage.ixconfig['type'])
+                self.set_index_type_for(stage.name, stage.index_type)
             index_type = self.get_index_type_for(key)
         if index_type != IndexType(None) and str(index_type) in skip_indexes:
             threadlog.debug(
@@ -1297,7 +1297,7 @@ class FileReplicationThread:
                     )
                     self.shared_data.errors.remove(entry)
                     return
-                if stage.ixconfig["type"] == "mirror":
+                if stage.index_type == "mirror":
                     threadlog.warn(
                         "ignoring file which couldn't be retrieved from mirror index '%s': %s",
                         stagename,
@@ -1429,8 +1429,7 @@ class InitialQueueThread:
         with keyfs.read_transaction() as tx:
             for user in self.xom.model.get_userlist():
                 for stage in user.getstages():
-                    self.shared_data.set_index_type_for(
-                        stage.name, stage.ixconfig['type'])
+                    self.shared_data.set_index_type_for(stage.name, stage.index_type)
             for key, value in tx.iter_ulidkey_values_for(keys, fill_cache=False):
                 assert isinstance(value, DictViewReadonly)
                 self.thread.exit_if_shutdown()
@@ -1503,7 +1502,7 @@ class ProjectChanged:
 
         with self.xom.keyfs.read_transaction():
             mirror_stage = self.xom.model.getstage(username, index)
-            if mirror_stage and mirror_stage.ixconfig["type"] == "mirror":
+            if mirror_stage and mirror_stage.index_type == "mirror":
                 if TYPE_CHECKING:
                     assert isinstance(mirror_stage, MirrorStage)
                 cache_projectnames = mirror_stage.cache_projectnames
