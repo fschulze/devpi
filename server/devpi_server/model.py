@@ -736,6 +736,10 @@ class BaseStage:
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__} {self.name}>"
 
+    @cached_property
+    def index_type(self):
+        return self.ixconfig["type"]
+
     @overload
     def key_simpledata(
         self, project: NormalizedName | str, version_filename: tuple[str, str]
@@ -803,7 +807,7 @@ class BaseStage:
 
         Returns the parts touched by kwargs as dict.
         This is not the complete index configuration."""
-        index_type = self.ixconfig['type']
+        index_type = self.index_type
         ixconfig = {}
         # get known keys and validate them
         stage_keys = set(self.get_possible_indexconfig_keys())
@@ -1137,7 +1141,7 @@ class BaseStage:
         whitelist_inheritance = self.get_whitelist_inheritance()
         whitelist = None
         for stage in self.sro():
-            if stage.ixconfig["type"] == "mirror":
+            if stage.index_type == "mirror":
                 if private_hit and not whitelisted:
                     # don't check the mirror for private packages
                     return dict(
@@ -1202,7 +1206,7 @@ class BaseStage:
         return result
 
     def _modify(self, **kw):
-        if 'type' in kw and self.ixconfig["type"] != kw['type']:
+        if "type" in kw and self.index_type != kw["type"]:
             raise InvalidIndexconfig(
                 ["the 'type' of an index can't be changed"])
         kw.pop('type', None)
@@ -1254,7 +1258,7 @@ class BaseStage:
         whitelist_inheritance = self.get_whitelist_inheritance()
         whitelist = None
         for stage in self.sro():
-            if stage.ixconfig["type"] == "mirror":
+            if stage.index_type == "mirror":
                 if private_hit:
                     if not whitelisted:
                         threadlog.debug("%s: private package %r not whitelisted, "
@@ -1319,7 +1323,7 @@ class BaseStage:
                         "Index %s base %s excluded via devpiserver_sro_skip.",
                         self.name, base)
                     continue
-                if current_stage.ixconfig['type'] == 'mirror':
+                if current_stage.index_type == "mirror":
                     todo_mirrors.append(current_stage)
                     # mirrors are processed last,
                     # but we need to prevent duplicates
@@ -2823,7 +2827,7 @@ class EventSubscribers:
         keyfs = self.xom.keyfs
         with keyfs.read_transaction(at_serial=ev.at_serial):
             stage = self.xom.model.getstage(user, index)
-            if stage is not None and stage.ixconfig["type"] == "mirror":
+            if stage is not None and stage.index_type == "mirror":
                 return  # we don't trigger on file changes of pypi mirror
             assert is_dict_key(ev.data.key)
             entry = FileEntry(ev.data.key, meta=ev.data.value)
@@ -2852,7 +2856,7 @@ class EventSubscribers:
         keyfs = self.xom.keyfs
         with keyfs.read_transaction(at_serial=ev.at_serial):
             stage = self.xom.model.getstage(user, index)
-            if stage is not None and stage.ixconfig["type"] == "mirror":
+            if stage is not None and stage.index_type == "mirror":
                 self.xom.config.hook.devpiserver_mirror_initialnames(
                     stage=stage,
                     projectnames=stage.list_projects_perstage()
