@@ -41,7 +41,7 @@ class IndexCache:
 
     def is_mirror(self, user: str, index: str) -> bool:
         stage = self.get(user, index)
-        return stage is not None and stage.ixconfig["type"] == "mirror"
+        return stage is not None and stage.index_type == "mirror"
 
 
 def fsck():
