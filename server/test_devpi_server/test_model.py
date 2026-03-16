@@ -287,8 +287,15 @@ class TestStage:
         extagg_index2.modify(bases=["extagg/index1", "aggregator/index"])
         assert extagg_index2.list_versions("pkg") == {"1.0", "2.0", "3.0"}
 
-    def test_inheritance_complex_issue_214_pypi(self, pypistage, model):
-        pypi = model.getstage('root/pypi')
+    def test_inheritance_complex_issue_214_pypi(
+        self, pypistage, mock, model, monkeypatch
+    ):
+        from devpi_server.normalized import normalize_name
+
+        pypi_has_project_perstage = mock.Mock(wraps=pypistage.has_project_perstage)
+        monkeypatch.setattr(
+            pypistage, "has_project_perstage", pypi_has_project_perstage
+        )
         pypistage.mock_simple("pkg", """
             <a href='pkg-2.0.zip' /a>
             <a href='pkg-2.0.tar.gz' /a>
@@ -305,23 +312,44 @@ class TestStage:
         extagg_index2 = extagg_user.create_stage(index='index2', bases=['aggregator/index', 'extagg/index1'])
         content = b"123"
         register_and_store(prov_a, "pkg-1.0.zip", content)
-        assert pypi.list_versions_perstage('pkg') == set(['2.0'])
+        assert pypistage.list_versions_perstage("pkg") == {"2.0"}
+        assert pypi_has_project_perstage.call_args_list == [
+            mock.call(normalize_name("pkg"))
+        ]
+        pypi_has_project_perstage.reset_mock()
         assert prov_a.list_versions_perstage('pkg') == set(['1.0'])
+        assert not pypi_has_project_perstage.called
         assert prov_b.list_versions_perstage('pkg') == set([])
+        assert not pypi_has_project_perstage.called
         assert aggr_index.list_versions_perstage('pkg') == set([])
+        assert not pypi_has_project_perstage.called
         assert cons_index.list_versions_perstage('pkg') == set([])
+        assert not pypi_has_project_perstage.called
         assert extagg_index1.list_versions_perstage('pkg') == set([])
+        assert not pypi_has_project_perstage.called
         assert extagg_index2.list_versions_perstage('pkg') == set([])
-        assert pypi.list_versions('pkg') == set(['2.0'])
+        assert not pypi_has_project_perstage.called
+        assert pypistage.list_versions("pkg") == {"2.0"}
+        assert pypi_has_project_perstage.call_args_list == [
+            mock.call(normalize_name("pkg"))
+        ]
+        pypi_has_project_perstage.reset_mock()
         assert prov_a.list_versions('pkg') == set(['1.0'])
+        assert not pypi_has_project_perstage.called
         assert prov_b.list_versions('pkg') == set(['1.0'])
+        assert not pypi_has_project_perstage.called
         assert aggr_index.list_versions('pkg') == set(['1.0'])
+        assert not pypi_has_project_perstage.called
         assert cons_index.list_versions('pkg') == set(['1.0'])
+        assert not pypi_has_project_perstage.called
         assert extagg_index1.list_versions('pkg') == set(['2.0'])
+        assert not pypi_has_project_perstage.called
         assert extagg_index2.list_versions('pkg') == set(['1.0'])
+        assert not pypi_has_project_perstage.called
         # reverse order of bases
         extagg_index2.modify(bases=["extagg/index1", "aggregator/index"])
         assert extagg_index2.list_versions("pkg") == {"1.0"}
+        assert not pypi_has_project_perstage.called
 
     def test_inheritance_normalize_multipackage(self, pypistage, stage):
         stage.modify(bases=("root/pypi",), mirror_whitelist=['some-project'])
