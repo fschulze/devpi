@@ -1739,7 +1739,7 @@ def test_setdefault_indexes(xom):
     with xom.keyfs.write_transaction():
         set_default_indexes(xom.model)
     with xom.keyfs.read_transaction():
-        assert xom.model.getstage("root/pypi").ixconfig["type"] == "mirror"
+        assert xom.model.getstage("root/pypi").index_type == "mirror"
     with xom.keyfs.read_transaction():
         ixconfig = xom.model.getstage("root/pypi").ixconfig
         for key in ixconfig:
