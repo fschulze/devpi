@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from attrs import define
 from defusedxml.xmlrpc import DefusedExpatParser
 from devpi_common.metadata import Version
@@ -8,8 +10,10 @@ from devpi_common.validation import normalize_name
 from devpi_common.viewhelp import iter_toxresults
 from devpi_server.log import threadlog as log
 from devpi_server.readonly import SeqViewReadonly
-from devpi_server.views import StatusView, url_for_entrypath
 from devpi_server.views import PyPIView
+from devpi_server.views import StatusView
+from devpi_server.views import is_simple_json_or_requested_by_installer
+from devpi_server.views import url_for_entrypath
 from devpi_web.description import get_description
 from devpi_web.doczip import Docs
 from devpi_web.doczip import docs_exist
@@ -19,23 +23,31 @@ from devpi_web.doczip import docs_file_path
 from devpi_web.indexing import is_project_cached
 from devpi_web.main import navigation_version
 from email.utils import parsedate
-from io import TextIOWrapper
 from html import escape
-from operator import attrgetter, itemgetter
+from io import TextIOWrapper
+from operator import attrgetter
+from operator import itemgetter
 from pyramid.decorator import reify
-from pyramid.httpexceptions import HTTPBadGateway, HTTPError
-from pyramid.httpexceptions import HTTPFound, HTTPNotFound
+from pyramid.httpexceptions import HTTPBadGateway
+from pyramid.httpexceptions import HTTPError
+from pyramid.httpexceptions import HTTPFound
+from pyramid.httpexceptions import HTTPNotFound
 from pyramid.httpexceptions import HTTPNotModified
 from pyramid.httpexceptions import default_exceptionresponse_view
 from pyramid.interfaces import IRoutesMapper
-from pyramid.response import FileResponse, Response
-from pyramid.view import notfound_view_config, view_config
+from pyramid.response import FileResponse
+from pyramid.response import Response
+from pyramid.view import notfound_view_config
+from pyramid.view import view_config
 from time import gmtime
 from typing import Any
-from xmlrpc.client import Fault, Unmarshaller, dumps
+from xmlrpc.client import Fault
+from xmlrpc.client import Unmarshaller
+from xmlrpc.client import dumps
 import functools
 import json
 import mimetypes
+
 
 seq_types = (list, tuple, SeqViewReadonly)
 
@@ -106,6 +118,8 @@ def ServerViews(context, request):
 
 def tween_trailing_slash_redirect(handler, registry):
     def request_trailing_slash_redirect_handler(request):
+        if is_simple_json_or_requested_by_installer(request):
+            return handler(request)
         if request.path == "/":
             return handler(request)
         if request.method != "GET":
