@@ -60,8 +60,10 @@ if TYPE_CHECKING:
     from .readonly import DictViewReadonly
     from collections.abc import Callable
     from typing import Any
+    from typing import Optional
     from typing_extensions import NotRequired
 
+    ProjectsResult = tuple[dict[NormalizedName, str], Optional[str]]
     ReleaseLinks = list["Link"]
 
     class CacheLinks(TypedDict):
@@ -610,7 +612,7 @@ class MirrorStage(BaseStage):
             self.name, "projects_update_lock", factory=threading.Lock)
 
     @property
-    def cache_projectnames(self):
+    def cache_projectnames(self) -> ProjectNamesCache:
         """ cache for full list of projectnames. """
         # we could keep this info inside keyfs but pypi.org
         # produces a several MB list of names and it changes often which
@@ -626,7 +628,9 @@ class MirrorStage(BaseStage):
         return self.xom.setdefault_singleton(
             self.name, "project_retrieve_times", factory=ProjectUpdateCache)
 
-    async def _get_remote_projects(self, projects_future: asyncio.Future) -> None:
+    async def _get_remote_projects(
+        self, projects_future: asyncio.Future[ProjectsResult]
+    ) -> None:
         headers = {"Accept": SIMPLE_API_ACCEPT}
         etag = self.cache_projectnames.get_etag()
         if etag is not None:
@@ -665,30 +669,35 @@ class MirrorStage(BaseStage):
             )
         )
 
-    def _stale_list_projects_perstage(self):
+    def _stale_list_projects_perstage(self) -> dict[NormalizedName, str]:
         return {normalize_name(x): x for x in self.key_projects.get()}
 
-    def _update_projects(self):
-        projects_future = self.xom.create_future()
+    def _update_projects(
+        self, timeout: float | None = None
+    ) -> tuple[dict[NormalizedName, str], bool]:
+        projects_timeout = self.projects_timeout if timeout is None else timeout
+        projects_future = cast(
+            "asyncio.Future[ProjectsResult]", self.xom.create_future()
+        )
         try:
             self.xom.run_coroutine_threadsafe(
                 self._get_remote_projects(projects_future),
-                timeout=self.projects_timeout,
+                timeout=projects_timeout,
             )
         except asyncio.TimeoutError:
             threadlog.warn(
                 "serving stale projects for %r, getting data timed out after %s seconds",
                 self.index,
-                self.projects_timeout,
+                projects_timeout,
             )
-            return self._stale_list_projects_perstage()
+            return (self._stale_list_projects_perstage(), True)
         except self.UpstreamNotModified as e:
             # the etag might have changed
             self.cache_projectnames.mark_current(e.etag)
-            return self._stale_list_projects_perstage()
+            return (self._stale_list_projects_perstage(), False)
         except self.UpstreamError as e:
             threadlog.warn("upstream error (%s): using stale projects list", e)
-            return self._stale_list_projects_perstage()
+            return (self._stale_list_projects_perstage(), True)
         (projects, etag) = projects_future.result()
         old = self.cache_projectnames.get()
         if self.cache_projectnames.exists() and old == projects:
@@ -712,38 +721,38 @@ class MirrorStage(BaseStage):
                 if k.get() in (0, 1):
                     with self.keyfs.write_transaction(allow_restart=True):
                         k.set(2)
-        return projects
+        return (projects, False)
 
-    def _list_projects_perstage(self):
+    def _list_projects_perstage(
+        self, *, timeout: float | None = None
+    ) -> tuple[dict[NormalizedName, str], bool]:
         """ Return the cached project names.
 
             Only for internal use which makes sure the data isn't modified.
         """
         if self.offline:
             threadlog.warn("offline mode: using stale projects list")
-            return self._stale_list_projects_perstage()
+            return (self._stale_list_projects_perstage(), True)
         if self.no_project_list:
             # upstream of mirror configured as not having a project list
             # return only locally known projects
-            return self._stale_list_projects_perstage()
+            return (self._stale_list_projects_perstage(), True)
         # try without lock first
         if not self.cache_projectnames.is_expired(self.cache_expiry):
-            projects = self.cache_projectnames.get()
-        else:
-            with self._list_projects_perstage_lock:
-                # retry in case it was updated in another thread
-                if not self.cache_projectnames.is_expired(self.cache_expiry):
-                    projects = self.cache_projectnames.get()
-                else:
-                    # no fresh projects or None at all, let's go remote
-                    projects = self._update_projects()
-        return projects
+            return (self.cache_projectnames.get(), False)
+        with self._list_projects_perstage_lock:
+            # retry in case it was updated in another thread
+            if not self.cache_projectnames.is_expired(self.cache_expiry):
+                return (self.cache_projectnames.get(), False)
+            # no fresh projects or None at all, let's go remote
+            return self._update_projects(timeout=timeout)
 
     def list_projects_perstage(self) -> dict[str, NormalizedName | str]:
         """ Return the project names. """
         # return a read-only version of the cached data,
         # so it can't be modified accidentally and we avoid a copy
-        return ensure_deeply_readonly(self._list_projects_perstage())
+        (projects, _stale) = self._list_projects_perstage()
+        return ensure_deeply_readonly(projects)
 
     def is_project_cached(self, project):
         """ return True if we have some cached simpelinks information. """
@@ -1116,7 +1125,12 @@ class MirrorStage(BaseStage):
             return unknown
         # recheck full project list while abiding to expiration etc
         # use the internal method to avoid a copy
-        return project in self._list_projects_perstage()
+        (projects, stale) = self._list_projects_perstage(timeout=self.timeout)
+        if project in projects:
+            return True
+        if stale:
+            return unknown
+        return False
 
     def list_versions_perstage(self, project):
         try:
@@ -1229,7 +1243,7 @@ class ProjectNamesCache:
         with self._lock:
             del self._data[normalize_name(project)]
 
-    def set(self, data: dict[NormalizedName, str], etag: str) -> None:
+    def set(self, data: dict[NormalizedName, str], etag: str | None) -> None:
         """ Set data and update timestamp. """
         with self._lock:
             if data != self._data:
@@ -1237,7 +1251,7 @@ class ProjectNamesCache:
                 self._data = data
             self.mark_current(etag)
 
-    def mark_current(self, etag: str) -> None:
+    def mark_current(self, etag: str | None) -> None:
         with self._lock:
             self._timestamp = time.time()
             self._etag = etag
