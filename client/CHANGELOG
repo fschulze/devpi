@@ -2,6 +2,18 @@
 
 .. towncrier release notes start
 
+7.2.1 (2026-03-17)
+==================
+
+Bug Fixes
+---------
+
+- Work around missing support for metadata 2.4 in pkginfo with Python 3.7.
+
+- The stored basic authentication credentials are now correctly applied to
+  HTTP API URLs containing a query string.
+
+
 7.2.0 (2024-10-16)
 ==================
 

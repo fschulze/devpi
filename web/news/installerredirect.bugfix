@@ -1,1 +1,0 @@
-Skip redirect if an installer is detected which is configured without ``+simple`` in the URL.

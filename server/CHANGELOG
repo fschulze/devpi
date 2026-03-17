@@ -2,6 +2,26 @@
 
 .. towncrier release notes start
 
+6.19.2 (2026-03-17)
+===================
+
+Bug Fixes
+---------
+
+- Preserve log for documentation uploads in export.
+
+- Any missing file on mirrors will be ignored during event processing as is already the case in other places.
+
+- Use short timeout when project list is requested for ``has_project`` call on mirrors instead of the long one used for ``list_projects``. This prevents installers from timing out and retrying several times.
+
+- Fix error handling for proxy requests from replica to primary.
+
+Other Changes
+-------------
+
+- Removed limit of reported missing files for devpi-fsck.
+
+
 6.19.1 (2026-02-09)
 ===================
 
@@ -11,6 +31,7 @@ Bug Fixes
 - Pin setuptools as pyramid still requires pkg_resources.
 
 - Always allow replicas to access deleted releases to get the proper ``410 Gone`` instead of ``403 Forbidden`` when ``devpi-lockdown`` is in use.
+
 
 6.19.0 (2026-02-06)
 ===================
