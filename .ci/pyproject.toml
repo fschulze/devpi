@@ -4,9 +4,6 @@ target-version = "py310"
 
 
 [tool.ruff.lint.extend-per-file-ignores]
-"ci_helpers/ruff.py" = [
-    "ASYNC240", # maybe cleanup later
-]
 "ruff-format-diff.py" = [
     "ASYNC240", # maybe cleanup later
 ]
