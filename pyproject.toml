@@ -16,9 +16,8 @@ docs = [
 ]
 lint = [
     "flake8",
-    "match-diff-lines",
+    "lint-roller",
     "ruff",
-    "wcmatch",
 ]
 mypy = [
     "mypy",
@@ -55,6 +54,19 @@ release = [
     "towncrier>=21.9.0",
     "wheel",
 ]
+
+
+[tool.lint-roller]
+projects = [
+    ".ci",
+    "client",
+    "common",
+    "debugging",
+    "postgresql",
+    "server",
+    "web",
+]
+start-rev = "origin/main"
 
 
 [tool.ruff]
