@@ -11,11 +11,12 @@ def main(hub, args):
     password = args.password
     if password is None:
         password = hub.hook.devpiclient_get_password(
-            url=hub.current.root_url.url, username=user)
+            url=hub.current.root_url.url, username=user
+        )
     input = dict(user=user, password=password)
     r = hub.http_api("post", hub.current.login, input, quiet=False)
     hub.current.set_auth(user, r.result["password"])
-    hours = r.result["expiration"] / (60*60.0)
+    hours = r.result["expiration"] / (60 * 60.0)
     msg = "logged in %r" % user
     if hub.current.index:
         msg = "%s at %r" % (msg, hub.current.index)
