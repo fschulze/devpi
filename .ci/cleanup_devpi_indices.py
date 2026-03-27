@@ -52,7 +52,8 @@ def run() -> None:
             if not dates:
                 print(
                     "%s has no releases" % (baseurl + username + "/" + indexname),
-                    file=sys.stderr)
+                    file=sys.stderr,
+                )
             else:
                 all_dates = all_dates.union(dates)
         now = datetime.datetime.now(tz=datetime.timezone.utc)
@@ -67,5 +68,5 @@ def run() -> None:
             subprocess.check_call(["devpi", "index", "-y", "--delete", url])
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     run()
