@@ -104,10 +104,9 @@ NewLinksFuture = Future[NewLinks]
 SIMPLE_API_V1_JSON = "application/vnd.pypi.simple.v1+json"
 SIMPLE_API_V1_VERSION = parse_version("1.0")
 SIMPLE_API_V2_VERSION = parse_version("2.0")
-SIMPLE_API_ACCEPT = ", ".join((
-    "application/vnd.pypi.simple.v1+html;q=0.2",
-    SIMPLE_API_V1_JSON,
-    "text/html;q=0.01"))
+SIMPLE_API_ACCEPT = (
+    f"application/vnd.pypi.simple.v1+html;q=0.2, {SIMPLE_API_V1_JSON}, text/html;q=0.01"
+)
 
 
 def _headers_from_response(r):
@@ -1491,15 +1490,14 @@ class MirrorStage(BaseStage):
             if not is_retrieval_expired:
                 raise self.UpstreamNotFoundError(
                     "cached not found for project %s" % project)
-            else:
-                exists = self.has_project_perstage(project)
-                if exists is unknown and self.no_project_list:
-                    pass
-                elif not exists:
-                    # immediately cache the not found with no ETag
-                    self.cache_retrieve_times.refresh(project, None)
-                    raise self.UpstreamNotFoundError(
-                        "project %s not found" % project)
+            exists = self.has_project_perstage(project)
+            if exists is unknown and self.no_project_list:
+                pass
+            elif not exists:
+                # immediately cache the not found with no ETag
+                self.cache_retrieve_times.refresh(project, None)
+                msg = f"project {project} not found"
+                raise self.UpstreamNotFoundError(msg)
 
         newlinks_future = cast("NewLinksFuture", self.xom.create_future())
         try:
