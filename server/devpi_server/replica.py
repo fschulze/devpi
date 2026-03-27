@@ -395,7 +395,7 @@ class PrimaryChangelogRequest:
         next_serial = keyfs.get_next_serial()
         if serial > next_serial:
             raise HTTPNotFound("can only wait for next serial")
-        elif serial == next_serial:
+        if serial == next_serial:
             if 'initial_fetch' in self.request.params:
                 timeout = 1.0
             else:
@@ -915,10 +915,8 @@ class FileReplicationSharedData:
             for name, config in val.get("indexes", {}).items()}
         val = {}
         if back_serial >= 0:
-            try:
+            with contextlib.suppress(KeyError):
                 val = keyfs.tx.get_value_at(key, back_serial)
-            except KeyError:
-                pass
         old_index_types = {
             name: config["type"]
             for name, config in val.get("indexes", {}).items()}

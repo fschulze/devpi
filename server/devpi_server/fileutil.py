@@ -391,7 +391,7 @@ def read_int_from_file(path, default=0):
     try:
         with open(path, "rb") as f:
             return int(f.read())
-    except IOError:
+    except OSError:
         return default
 
 
@@ -405,12 +405,12 @@ def write_int_to_file(val, path):
 def get_write_file_ensure_dir(path):
     try:
         return open(path, "w+b")
-    except IOError:
+    except OSError:
         dirname = os.path.dirname(path)
         if not os.path.exists(dirname):
             try:
                 os.makedirs(dirname)
-            except IOError as e:
+            except OSError as e:
                 # ignore file exists errors
                 # one reason for that error is a race condition where
                 # another thread tries to create the same folder
