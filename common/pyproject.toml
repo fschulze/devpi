@@ -50,15 +50,11 @@ exclude = [
     "devpi_common/archive.py",
     "devpi_common/metadata.py",
     "devpi_common/terminal.py",
-    "devpi_common/types.py",
     "devpi_common/url.py",
     "devpi_common/validation.py",
     "devpi_common/viewhelp.py",
-    "testing/test_archive.py",
-    "testing/test_lazydecorator.py",
     "testing/test_metadata.py",
     "testing/test_request.py",
-    "testing/test_types.py",
     "testing/test_url.py",
 ]
 
@@ -67,42 +63,15 @@ exclude = [
 extend-ignore = [
     "A001", # cleanup later - variable name shadows builtin
     "A002", # cleanup later - argument name shadows builtin
-    "ARG001", # maybe cleanup later - unused function argument
-    "ARG002", # maybe cleanup later - unused method argument
     "B007", # maybe cleanup later
     "B904", # maybe cleanup later
     "FBT002", # cleanup soon - boolean positional argument
-    "FIX003", # cleanup later - xxx
-    "PERF401", # maybe cleanup later - list comprehension
-    "PLR0912", # maybe cleanup later
     "PLW2901", # maybe cleanup later
     "PT006", # maybe cleanup later - wrong type for pytest.mark.parametrize
     "PT011", # cleanup soon - pytest.raises match
     "RET503", # maybe cleanup later - missing return
     "RUF005", # cleanup later
     "RUF059", # cleanup later - unpacked variable unused
-    "SIM108", # cleanup later
-]
-
-
-[tool.ruff.lint.extend-per-file-ignores]
-"devpi_common/validation.py" = [
-    "I001", # maybe cleanup later - import block unsorted
-]
-"testing/test_archive.py" = [
-    "I001", # maybe cleanup later - import block unsorted
-]
-"testing/test_metadata.py" = [
-    "I001", # maybe cleanup later - import block unsorted
-]
-"testing/test_request.py" = [
-    "I001", # maybe cleanup later - import block unsorted
-]
-"testing/test_url.py" = [
-    "I001", # maybe cleanup later - import block unsorted
-]
-"testing/test_validation.py" = [
-    "I001", # maybe cleanup later - import block unsorted
 ]
 
 

@@ -118,8 +118,7 @@ class ZipArchive(BaseArchive):
         except KeyError:
             raise self.FileNotExist(name)
 
-    def extract(self, to_path='', safe=False):
-        # XXX unify with TarFile.extract
+    def extract(self, to_path=""):
         basedir = Path(to_path)
         unzipfile = self._archive
         members = unzipfile.namelist()

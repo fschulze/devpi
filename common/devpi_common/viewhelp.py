@@ -25,10 +25,10 @@ class ViewLinkStore:
         return links[0]
 
     def shadowed(self):
-        l = []
-        for verdata in self.versiondata.get("+shadowing", []):
-            l.append(ViewLinkStore(self.url.url, verdata))
-        return l
+        return [
+            ViewLinkStore(self.url.url, verdata)
+            for verdata in self.versiondata.get("+shadowing", [])
+        ]
 
 
 class ViewLink:

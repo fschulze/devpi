@@ -1,7 +1,7 @@
+from devpi_common.url import URL
 import hashlib
 import posixpath
 import pytest
-from devpi_common.url import URL
 
 
 class TestURL:

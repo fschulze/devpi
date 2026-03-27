@@ -19,6 +19,7 @@ def test_simpler():
         def wrapped(func):
             l2.append((func, arg, kw))
             return func
+
         return wrapped
 
     dec.discover_and_call(a, anotherdec)
@@ -37,6 +38,7 @@ def test_simpler_dict():
     @dec(x=1)
     def g():
         pass
+
     d = {"f": f, "g": g, "something": lambda: None}
     l = dec.discover(d)
     assert len(l) == 2
@@ -64,10 +66,11 @@ def test_multi():
 
     l2 = []
 
-    def anotherdec(arg, kw=None):
+    def anotherdec(arg, _kw=None):
         def wrapped(func):
             l2.append((func, arg))
             return func
+
         return wrapped
 
     dec.discover_and_call(a, anotherdec)
@@ -79,7 +82,8 @@ def test_multi():
 
 def test_simpler_mod(tmpdir):
     p = tmpdir.join("mod.py")
-    p.write(dedent("""
+    p.write(
+        dedent("""
         from devpi_common.types import lazydecorator
 
         dec = lazydecorator()
@@ -87,7 +91,8 @@ def test_simpler_mod(tmpdir):
         @dec("hello")
         def f():
             pass
-    """))
+    """)
+    )
     mod = p.pyimport()
 
     l = []
@@ -96,6 +101,7 @@ def test_simpler_mod(tmpdir):
         def wrapped(func):
             l.append((arg, func))
             return func
+
         return wrapped
 
     mod.dec.discover_and_call(mod, anotherdec)

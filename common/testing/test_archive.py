@@ -3,7 +3,8 @@ from devpi_common.archive import UnsupportedArchive
 from devpi_common.archive import zip_dict
 from devpi_common.archive import zip_dir
 from io import BytesIO
-from subprocess import Popen, PIPE
+from subprocess import PIPE
+from subprocess import Popen
 import pytest
 import shutil
 import sys
@@ -30,7 +31,7 @@ def create_tarfile_fromdict(tmpdir, contentdict):
     tar = shutil.which("tar")
     if not tar:
         pytest.skip("tar command not found")
-    if sys.platform.startswith('win'):
+    if sys.platform.startswith("win"):
         pytest.skip("tar command not working properly on Windows")
     tardir = tmpdir.join("create")
     _writedir(tardir, contentdict)
@@ -101,6 +102,7 @@ class TestArchive:
 
 def test_tarfile_outofbound(tmpdir):
     from pathlib import Path
+
     path = Path(__file__).parent / "data" / "slash.tar.gz"
     with Archive(path) as archive, pytest.raises(
         ValueError, match=r"archive name '.*' out of bound"

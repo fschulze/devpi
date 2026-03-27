@@ -1,5 +1,6 @@
-import re
 from .types import ensure_unicode
+import re
+
 
 # below code mostly taken from pypi's mini_pkg_resources.py and webui.py
 # on 13th Sep 2013 from http://bitbucket.org/pypa/pypi
