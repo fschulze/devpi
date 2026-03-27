@@ -4,7 +4,8 @@ import pytest
 def test_gen_path_suffix_raises(gen_path):
     t = gen_path("source")
     assert not list(t.iterdir())
-    pytest.raises(FileExistsError, lambda: gen_path("source"))
+    with pytest.raises(FileExistsError):
+        gen_path("source")()
 
 
 def test_gen_path_suffix(gen_path):

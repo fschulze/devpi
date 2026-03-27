@@ -54,7 +54,8 @@ def pool():
 class TestKeyFS:
     def test_get_non_existent(self, keyfs):
         key = keyfs.schema.located_key("NAME", "", "somekey", dict, DictViewReadonly)
-        pytest.raises(KeyError, lambda: keyfs.tx.get_value_at(key, 0))
+        with pytest.raises(KeyError):
+            keyfs.tx.get_value_at(key, 0)()
 
     @notransaction
     def test_delete_non_existent(self, keyfs, key):
@@ -318,11 +319,13 @@ class Test_addkey_combinations:
 class TestKey:
     def test_addkey_type_mismatch(self, keyfs):
         dictkey = keyfs.schema.located_key("NAME1", "", "some", dict, DictViewReadonly)
-        pytest.raises(TypeError, lambda: dictkey.set("hello"))
+        with pytest.raises(TypeError):
+            dictkey.set("hello")()
         dictkey = keyfs.schema.patterned_key(
             "NAME2", "{that}/some", None, dict, DictViewReadonly
         )
-        pytest.raises(TypeError, lambda: dictkey(that="t").set("hello"))
+        with pytest.raises(TypeError):
+            dictkey(that="t").set("hello")()
 
     def test_addkey_registered(self, keyfs):
         key1 = keyfs.schema.located_key("SOME1", "", "some1", dict, DictViewReadonly)

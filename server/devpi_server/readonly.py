@@ -3,6 +3,7 @@
 basic mechanics for turning a mutable dict/list/seq/tuple
 into a readonly view.
 """
+
 from __future__ import annotations
 
 from .normalized import NormalizedName
@@ -32,7 +33,7 @@ _immutable = (NormalizedName, bool, bytes, float, frozenset, int, str, type(None
 
 
 class ReadonlyView(ABC):
-    __slots__ = ('_data',)
+    __slots__ = ("_data",)
     _data: Any
 
     @abstractmethod
@@ -258,7 +259,7 @@ def _(val: tuple) -> TupleViewReadonly:
 
 @singledispatch
 def get_mutable_deepcopy(val: Any) -> Any:
-    """ return a deep copy of ``val`` so that there is no sharing
+    """return a deep copy of ``val`` so that there is no sharing
     of mutable data between val and the returned copy."""
     raise ValueError("don't know how to handle type %r" % type(val))
 
@@ -330,11 +331,11 @@ def _(val: tuple) -> tuple:
 
 
 def is_deeply_readonly(val: Any) -> bool:
-    """ Return True if the value is either immutable or a readonly proxy
-    (which ensures only reading of data is possible). """
+    """Return True if the value is either immutable or a readonly proxy
+    (which ensures only reading of data is possible)."""
     return isinstance(val, (ReadonlyView, _immutable))
 
 
 def is_sequence(val: Any) -> bool:
-    """ Return True if the value is a readonly or normal sequence (list, tuple)"""
+    """Return True if the value is a readonly or normal sequence (list, tuple)"""
     return isinstance(val, (SeqViewReadonly, list, tuple))
