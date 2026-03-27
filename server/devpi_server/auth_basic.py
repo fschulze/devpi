@@ -15,7 +15,7 @@ def devpiserver_get_credentials(request):
     authorization = request.authorization
     if not authorization:
         return None
-    if request.authorization.authtype.lower() != 'basic':
+    if request.authorization.authtype.lower() != "basic":
         return None
 
     try:
@@ -26,12 +26,12 @@ def devpiserver_get_credentials(request):
     # try utf-8 first, then latin-1; see discussion in
     # https://github.com/Pylons/pyramid/issues/898
     try:
-        auth = authbytes.decode('utf-8')
+        auth = authbytes.decode("utf-8")
     except UnicodeDecodeError:
-        auth = authbytes.decode('latin-1')
+        auth = authbytes.decode("latin-1")
 
     try:
-        username, password = auth.split(':', 1)
+        username, password = auth.split(":", 1)
     except ValueError:  # not enough values to unpack
         return None
     return username, password

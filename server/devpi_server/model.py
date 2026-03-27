@@ -638,14 +638,14 @@ class BaseStageCustomizer:
 
             Returns None for no filtering, or an iterator returning
             True for items to keep and False for items to remove."""
-        return None
+        return
 
     def get_versions_filter_iter(self, project, versions):
         """ Called when a list of versions is returned.
 
             Returns None for no filtering, or an iterator returning
             True for items to keep and False for items to remove."""
-        return None
+        return
 
     def get_simple_links_filter_iter(self, project, links):
         """ Called when a list of simple links is returned.
@@ -653,7 +653,7 @@ class BaseStageCustomizer:
             Returns None for no filtering, or an iterator returning
             True for items to keep and False for items to remove.
             The size of the tuples in links might grow, develop defensively."""
-        return None
+        return
 
 
 class UnknownCustomizer(BaseStageCustomizer):
