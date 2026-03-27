@@ -61,7 +61,7 @@ class Link:
     def __init__(self, url, comes_from=None, *, requires_python, yanked):
         self.url = url
         self.comes_from = comes_from
-        self.requires_python = requires_python if requires_python else None
+        self.requires_python = requires_python or None
         self.yanked = yanked
 
     def __repr__(self) -> str:

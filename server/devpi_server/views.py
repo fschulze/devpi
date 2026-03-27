@@ -1387,7 +1387,7 @@ class PyPIView:
         for key in stage.metadata_keys:
             if skip_missing and key not in form:
                 continue
-            elif key in stage.metadata_list_fields:
+            if key in stage.metadata_list_fields:
                 val = [
                     ensure_unicode(item)
                     for item in form.getall(key) if item]

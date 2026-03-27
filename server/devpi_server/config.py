@@ -650,7 +650,7 @@ class MyArgumentParser(argparse.ArgumentParser):
     def __init__(self, *args, pluginmanager=None, **kwargs):
         self.addoption = self.add_argument
         self.pluginmanager = pluginmanager
-        super(MyArgumentParser, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def post_process_actions(self, defaultget=None):
         """ update default values for actions

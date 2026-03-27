@@ -98,8 +98,6 @@ target-version = "py311"
 [tool.ruff.format]
 exclude = [
     "devpi_server/auth.py",
-    "devpi_server/auth_basic.py",
-    "devpi_server/auth_devpi.py",
     "devpi_server/config.py",
     "devpi_server/exceptions.py",
     "devpi_server/filestore.py",
@@ -108,17 +106,14 @@ exclude = [
     "devpi_server/genconfig.py",
     "devpi_server/hookspecs.py",
     "devpi_server/importexport.py",
-    "devpi_server/init.py",
     "devpi_server/keyfs.py",
     "devpi_server/log.py",
     "devpi_server/main.py",
     "devpi_server/markers.py",
-    "devpi_server/middleware.py",
     "devpi_server/mirror.py",
     "devpi_server/model.py",
     "devpi_server/mythread.py",
     "devpi_server/passwd.py",
-    "devpi_server/readonly.py",
     "devpi_server/replica.py",
     "devpi_server/view_auth.py",
     "devpi_server/views.py",
@@ -146,9 +141,6 @@ exclude = [
     "test_devpi_server/test_replica_functional.py",
     "test_devpi_server/test_stage_customizer.py",
     "test_devpi_server/test_streaming.py",
-    "test_devpi_server/test_streaming_nginx.py",
-    "test_devpi_server/test_streaming_replica.py",
-    "test_devpi_server/test_streaming_replica_nginx.py",
     "test_devpi_server/test_view_auth.py",
     "test_devpi_server/test_views.py",
     "test_devpi_server/test_views_patch.py",
@@ -174,48 +166,31 @@ extend-ignore = [
     "DTZ001", # cleanup soon
     "FBT002", # cleanup soon - boolean positional argument
     "FIX003", # cleanup later - xxx
-    "FLY002", # maybe cleanup later - f-string instead of join
-    "FURB110", # maybe cleanup later - or instead of ternary
     "PERF401", # maybe cleanup later - list comprehension
     "PLR0911", # cleanup later
     "PLR0912", # maybe cleanup later
     "PLW2901", # maybe cleanup later
     "PT006", # maybe cleanup later - wrong type for pytest.mark.parametrize
-    "PT007", # maybe cleanup later - wrong type for pytest.mark.parametrize
     "PT011", # cleanup soon - pytest.raises match
     "PT018", # maybe cleanup later - composite assert
-    "RET501", # maybe cleanup later - no explicit return None
     "RET502", # maybe cleanup later - implicit return None
     "RET503", # maybe cleanup later - missing return
     "RET504", # maybe cleanup later - unnecessary assignment before return
     "RET505", # maybe cleanup later - unnecessary elif after return
-    "RET506", # maybe cleanup later - unnecessary elif after raise
-    "RET507", # maybe cleanup later - unnecessary elif after continue
     "RUF005", # cleanup later
     "RUF012", # cleanup later
-    "RUF043", # cleanup later - pytest.raises match regexp
     "RUF059", # cleanup later - unpacked variable unused
-    "RSE102", # maybe cleanup later
     "SIM102", # maybe cleanup later
-    "SIM105", # cleanup soon
     "SIM108", # cleanup later
     "SIM117", # cleanup later
     "UP004", # cleanup later - inherit from 'object'
-    "UP008", # cleanup later - super
     "UP012", # false positives (bug in ruff?) - unnecessary utf-8 encode
-    "UP024", # maybe cleanup later - aliased errors
     "UP025", # maybe cleanup later - unicode literals
     "UP032", # cleanup later - f-string instead of format
 ]
 
 
 [tool.ruff.lint.extend-per-file-ignores]
-"test_devpi_server/test_conftest.py" = [
-    "RUF061", # cleanup later - context manager form of pytest.raises
-]
-"test_devpi_server/test_keyfs.py" = [
-    "RUF061", # cleanup later - context manager form of pytest.raises
-]
 "test_devpi_server/test_replica.py" = [
     "PLW0108", # maybe cleanup later - lamba unnecessary
 ]
