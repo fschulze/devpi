@@ -1,7 +1,7 @@
-import sys
-import requests
-import pytest
 from devpi_common.request import new_requests_session
+import pytest
+import requests
+import sys
 
 
 @pytest.mark.parametrize('max_retries', [

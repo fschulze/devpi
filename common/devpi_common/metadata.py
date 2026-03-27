@@ -114,10 +114,7 @@ def splitbasename(path, checkarch=True):
     m = _releasefile_suffix_rx.search(path)
     if m:
         ext = m.group(1)
-    if len(ext):
-        nameversion = path[:-len(ext)]
-    else:
-        nameversion = path
+        nameversion = path[: -len(ext)] if len(ext) else path
     if '-' not in nameversion:  # no version
         return nameversion, "", ext
     m = _pep404_nameversion_re.match(nameversion)
