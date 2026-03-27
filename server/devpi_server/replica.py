@@ -394,7 +394,7 @@ class PrimaryChangelogRequest:
         next_serial = keyfs.get_next_serial()
         if serial > next_serial:
             raise HTTPNotFound("can only wait for next serial")
-        elif serial == next_serial:
+        if serial == next_serial:
             if 'initial_fetch' in self.request.params:
                 timeout = 1.0
             else:
