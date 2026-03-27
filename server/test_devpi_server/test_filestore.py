@@ -223,7 +223,9 @@ class TestFileStore:
         http.url2response[link.url] = dict(
             status_code=200, headers=headers, raw=BytesIO(b"1")
         )
-        with pytest.raises(ValueError, match="got 1 bytes of.*from remote, expected 3"):
+        with pytest.raises(
+            ValueError, match=r"got 1 bytes of.*from remote, expected 3"
+        ):
             list(iter_cache_remote_file(stage, entry, entry.url))
 
     def test_iterfile_remote_nosize(self, filestore, http, gen, xom):
