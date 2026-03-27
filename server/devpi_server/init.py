@@ -8,7 +8,7 @@ import sys
 
 
 def init(pluginmanager=None, argv=None):
-    """ devpi-init command line entry point. """
+    """devpi-init command line entry point."""
     if argv is None:
         argv = sys.argv
     else:
@@ -16,8 +16,8 @@ def init(pluginmanager=None, argv=None):
         argv = [str(x) for x in argv]
     with CommandRunner(pluginmanager=pluginmanager) as runner:
         parser = runner.create_parser(
-            description="Initialize new devpi-server instance.",
-            add_help=False)
+            description="Initialize new devpi-server instance.", add_help=False
+        )
         parser.add_help_option()
         parser.add_configfile_option()
         parser.add_logging_options()

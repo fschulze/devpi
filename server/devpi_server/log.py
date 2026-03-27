@@ -150,10 +150,8 @@ def thread_change_log_prefix(prefix: str, old_prefix: str) -> None:
 
 
 def thread_clear_log() -> None:
-    try:
+    with contextlib.suppress(AttributeError):
         del threadlocal.taglogger
-    except AttributeError:
-        pass
 
 
 def _thread_current_log() -> TagLogger:
