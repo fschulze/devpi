@@ -70,7 +70,7 @@ def with_user(request, user):
 class TestStage:
     # test both pypi_submit and upload for BBB
     @pytest.mark.usefixtures("plugin")
-    @pytest.mark.parametrize("permission", ('pypi_submit', 'upload'))
+    @pytest.mark.parametrize("permission", ["pypi_submit", "upload"])
     def test_set_and_get_acl_upload(self, model, stage, permission, permissionrequest):
         indexconfig = stage.ixconfig
         # check that "hello" was included in acl_upload by default
