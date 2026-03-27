@@ -1,5 +1,6 @@
 from pluggy import HookspecMarker
 
+
 hookspec = HookspecMarker("devpiweb")
 
 
@@ -14,7 +15,7 @@ def devpiweb_get_status_info(request):
 
 @hookspec
 def devpiweb_indexer_backend():
-    """ return dict containing indexer backend info.
+    """return dict containing indexer backend info.
 
     The following keys are defined:
 
@@ -26,5 +27,4 @@ def devpiweb_indexer_backend():
 
 @hookspec
 def devpiweb_modify_preprocess_project_result(project, result):
-    """ allows to modify the ``result`` dictionary used for indexing.
-    """
+    """allows to modify the ``result`` dictionary used for indexing."""
