@@ -7,6 +7,7 @@ def test_CompareMixin():
     class A(CompareMixin):
         def __init__(self, count):
             self.cmpval = count
+
     l = list(map(A, range(10)))
     assert max(reversed(l)).cmpval == 9
 
@@ -21,8 +22,8 @@ def test_parsehashspec():
 
     digest = hashlib.md5(b"123").hexdigest()  # noqa: S324 - testing
     hash_algo, hash_value = parse_hash_spec("md5=" + digest)
-    assert hash_algo(b'123').hexdigest() == digest
+    assert hash_algo(b"123").hexdigest() == digest
 
-    digest = hashlib.sha256(b'123').hexdigest()
+    digest = hashlib.sha256(b"123").hexdigest()
     hash_algo, hash_value = parse_hash_spec("sha256=" + digest)
-    assert hash_algo(b'123').hexdigest() == digest
+    assert hash_algo(b"123").hexdigest() == digest

@@ -105,7 +105,7 @@ class URL:
     def hash_value(self):
         return parse_hash_spec(self.fragment)[1]
 
-    def replace(self, **kwargs):
+    def replace(self, **kwargs):  # noqa: PLR0912
         _parsed = self._parsed
         url = []
         if set(kwargs).intersection(('username', 'password', 'hostname', 'port')):

@@ -14,14 +14,17 @@ if TYPE_CHECKING:
 # re-introduced for 2.0 series but not used anymore
 def propmapping(name, convert=None):
     if convert is None:
+
         def fget(self):
             return self._mapping.get(name)
     else:
+
         def fget(self):
             x = self._mapping.get(name)
             if x is not None:
                 x = convert(x)
             return x
+
     fget.__name__ = name
     return property(fget)
 
@@ -30,6 +33,7 @@ def canraise(Error):
     def wrap(func):
         func.Error = Error
         return func
+
     return wrap
 
 
@@ -98,6 +102,7 @@ class lazydecorator:
 
     (c) holger krekel, 2013, License: MIT
     """
+
     def __init__(self):
         self.attrname = "_" + hex(id(self))
         self.num = 0
@@ -112,18 +117,22 @@ class lazydecorator:
                 self.num += 1
             siglist.append((args, kwargs))
             return func
+
         return decorate
 
     def discover(self, obj):
         decitems = []
         if isinstance(obj, dict):
+
             def iter():
                 for name in obj:
                     yield name, obj[name]
         else:
+
             def iter():
                 for name in dir(obj):
                     yield name, getattr(obj, name)
+
         for name, func in iter():
             func_orig = func
             if not isinstance(func, FunctionType):
@@ -156,7 +165,7 @@ def ensure_unicode(x: bytes | str) -> str:
 
 
 def parse_hash_spec(fragment):
-    """ Return (hashtype, hash_value) from parsing a given X=Y fragment.
+    """Return (hashtype, hash_value) from parsing a given X=Y fragment.
     X must be a supported algorithm by the python hashlib module."""
     parts = fragment.split("=", 1)
     if len(parts) == 2:

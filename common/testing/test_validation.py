@@ -1,4 +1,5 @@
-from devpi_common.validation import normalize_name, validate_metadata
+from devpi_common.validation import normalize_name
+from devpi_common.validation import validate_metadata
 import pytest
 
 
@@ -18,5 +19,5 @@ class TestValidateMetadata:
 
     @names("hello_", "hello-", "-hello", "_hello1", "hel%lo", "hello#", "hello<")
     def test_invalid(self, name):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Invalid package name"):
             validate_metadata(data=dict(name=name, version="1.0"))
