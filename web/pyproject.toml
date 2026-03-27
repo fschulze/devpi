@@ -78,10 +78,8 @@ target-version = "py39"
 [tool.ruff.format]
 exclude = [
     "devpi_web/clear_index.py",
-    "devpi_web/config.py",
     "devpi_web/description.py",
     "devpi_web/doczip.py",
-    "devpi_web/hookspecs.py",
     "devpi_web/indexing.py",
     "devpi_web/main.py",
     "devpi_web/null_index.py",
@@ -90,7 +88,6 @@ exclude = [
     "tests/conftest.py",
     "tests/test_indexing.py",
     "tests/test_main.py",
-    "tests/test_theme.py",
     "tests/test_views.py",
     "tests/test_views_docs.py",
     "tests/test_views_misc.py",
@@ -133,9 +130,6 @@ extend-ignore = [
 
 
 [tool.ruff.lint.extend-per-file-ignores]
-"devpi_web/hookspecs.py" = [
-    "I001", # maybe cleanup later - import block unsorted
-]
 "devpi_web/whoosh_index.py" = [
     "I001", # maybe cleanup later - import block unsorted
 ]
