@@ -4,7 +4,8 @@ from textwrap import dedent
 
 def test_pypirc(tmpdir):
     p = tmpdir.join("pypirc")
-    p.write(dedent("""\n
+    p.write(
+        dedent("""\n
         [distutils]
         index-servers = local
             testindex
@@ -22,7 +23,8 @@ def test_pypirc(tmpdir):
         [nopassword]
         repository: http://localhost:3141/
         username: test3
-    """))
+    """)
+    )
     rc = pypirc.Auth(p)
 
     url, (user, p) = rc.get_url_auth("local")
