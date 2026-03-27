@@ -967,10 +967,14 @@ class TestSubmitValidation:
                     metadata["version"] = splitbasename(filename,
                                                         checkarch=False)[1]
                 return mapp.upload_file_pypi(
-                        filename, content,
-                        metadata.get("name"), metadata.get("version"),
-                        indexname=self.stagename, register=False,
-                        code=code)
+                    filename,
+                    content,
+                    metadata.get("name"),
+                    metadata.get("version"),
+                    indexname=self.stagename,
+                    register=False,
+                    code=code,
+                )
         return Submit()
 
     def test_404(self, testapp, mapp):
@@ -1302,10 +1306,14 @@ class TestSubmitValidation:
     def test_upload_with_metadata(self, submit, mapp, pypistage):
         pypistage.mock_simple("package", '<a href="/package-1.0.zip" />')
         mapp.upload_file_pypi(
-                        "package-1.0.tar.gz", b'123',
-                        "package", "1.0",
-                        indexname=submit.stagename, register=False,
-                        code=200)
+            "package-1.0.tar.gz",
+            b"123",
+            "package",
+            "1.0",
+            indexname=submit.stagename,
+            register=False,
+            code=200,
+        )
 
     def test_get_project_redirected(self, submit, mapp):
         metadata = {"name": "Pkg1", "version": "1.0", ":action": "submit",
@@ -2534,11 +2542,11 @@ def test_upload_docs_metadata(mapp, testapp, proj):
 
 def get_view_version_links(testapp, index, name, version, proj=False):
     if proj:
-        url = "/".join([index, name])
+        url = f"{index}/{name}"
         r = testapp.get_json(url, expect_errors=False)
         return ViewLinkStore(url, r.json["result"][version])
     else:
-        url = "/".join([index, name, version])
+        url = f"{index}/{name}/{version}"
         r = testapp.get_json(url, expect_errors=False)
         return ViewLinkStore(url, r.json["result"])
 
