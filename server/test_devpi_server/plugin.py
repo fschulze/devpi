@@ -4,6 +4,7 @@ from .functional import MappMixin
 from _pytest import capture
 from bs4 import BeautifulSoup
 from contextlib import closing
+from contextlib import suppress
 from devpi_common.terminal import TerminalWriter
 from devpi_common.url import URL
 from devpi_server import mirror
@@ -199,10 +200,8 @@ def auto_transact(request):
     write = bool(request.node.get_closest_marker("writetransaction"))
     keyfs.begin_transaction_in_thread(write=write)
     yield
-    try:
+    with suppress(AttributeError):  # already finished within the test
         keyfs.rollback_transaction_in_thread()
-    except AttributeError:  # already finished within the test
-        pass
 
 
 @pytest.fixture
@@ -1109,7 +1108,7 @@ class MyTestApp(TApp):
     xom: XOM
 
     def __init__(self, *args, **kwargs):
-        super(MyTestApp, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.headers = {}
 
     def set_auth(self, user, password):
@@ -1132,7 +1131,7 @@ class MyTestApp(TApp):
         kw["headers"] = headers
         if params is not None:
             kw["params"] = params
-        return super(MyTestApp, self)._gen_request(method, url, **kw)
+        return super()._gen_request(method, url, **kw)
 
     def post(self, *args, **kwargs):
         code = kwargs.pop("code", None)
