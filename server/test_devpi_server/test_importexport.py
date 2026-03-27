@@ -422,7 +422,7 @@ class TestImportExport:
         indexlist = mapp2.getindexlist(api.user)
         assert indexlist[api.stagename]["mirror_whitelist"] == ["*"]
 
-    @pytest.mark.parametrize('acltype', ('upload', 'toxresult_upload'))
+    @pytest.mark.parametrize("acltype", ["upload", "toxresult_upload"])
     def test_indexes_acl(self, impexp, acltype):
         mapp1 = impexp.mapp1
         api = mapp1.create_and_use()

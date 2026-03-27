@@ -1277,7 +1277,7 @@ def test_auth_status_primary_down(maketestapp, replica_xom, mock):
 def test_primary_url_auth(makexom):
     from devpi_server.main import Fatal
 
-    with pytest.raises(Fatal, match="basic auth.* not supported"):
+    with pytest.raises(Fatal, match=r"basic auth.* not supported"):
         makexom(opts=["--primary-url=http://foo:pass@localhost"])
 
 

@@ -925,11 +925,11 @@ class TestStage:
 
     @pytest.mark.usefixtures("bases")
     def test_delete_not_existing(self, stage):
-        with pytest.raises(stage.NotFound, match="^project.*not found"):
+        with pytest.raises(stage.NotFound, match=r"^project.*not found"):
             stage.del_versiondata("hello", "1.0")
         register_and_store(stage, "hello-1.0.zip")
         stage.del_versiondata("hello", "1.0", cleanup=False)
-        with pytest.raises(stage.NotFound, match="^version.*not found"):
+        with pytest.raises(stage.NotFound, match=r"^version.*not found"):
             stage.del_versiondata("hello", "1.0")
 
     @pytest.mark.usefixtures("bases")
@@ -1730,9 +1730,12 @@ def test_setdefault_indexes(xom):
             assert isinstance(key, str)
 
 
-@pytest.mark.parametrize("key", ("acl_upload", "acl_toxresult_upload", "mirror_whitelist"))
-@pytest.mark.parametrize("value, result", (
-    ("", []), ("x,y", ["x", "y"]), ("x,,y", ["x", "y"])))
+@pytest.mark.parametrize(
+    "key", ["acl_upload", "acl_toxresult_upload", "mirror_whitelist"]
+)
+@pytest.mark.parametrize(
+    ("value", "result"), [("", []), ("x,y", ["x", "y"]), ("x,,y", ["x", "y"])]
+)
 def test_get_indexconfig_lists(xom, key, value, result):
     stage = PrivateStage(
         xom, "user", "index", ensure_deeply_readonly({"type": "stage"}), StageCustomizer

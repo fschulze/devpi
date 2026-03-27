@@ -453,7 +453,7 @@ def metaprop(name):
 
 class BadGateway(Exception):
     def __init__(self, msg, code=None, url=None):
-        super(BadGateway, self).__init__(msg)
+        super().__init__(msg)
         self.code = code
         self.url = url
 
