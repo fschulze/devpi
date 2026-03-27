@@ -99,7 +99,7 @@ def test_macro_overwrite(testapp):
     }
 )
 def test_macro_overwrite_reuse(testapp):
-    r = testapp.get('/')
+    r = testapp.get("/")
     assert "<style></style>" in r.text
     assert "/style.css" in r.text
 
@@ -143,7 +143,7 @@ def test_new_macro(testapp):
     }
 )
 def test_template_overwrite(testapp):
-    r = testapp.get('/')
+    r = testapp.get("/")
     assert "Foo Template!" in r.text
 
 
@@ -156,7 +156,7 @@ def test_theme_style(dummyrequest, pyramidconfig, testapp, theme_path):
     from devpi_web.main import theme_static_url
 
     r = testapp.get(f"/+theme-static-{__version__}/style.css")
-    assert r.text == 'Foo Style!'
+    assert r.text == "Foo Style!"
     pyramidconfig.add_static_view("+static", "devpi_web:static")
     pyramidconfig.add_static_view("+theme-static", str(theme_path))
     dummyrequest.registry["theme_path"] = str(theme_path)
