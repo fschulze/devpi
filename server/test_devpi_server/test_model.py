@@ -232,6 +232,25 @@ class TestStage:
         assert not stage.has_project("someproject")
         assert not stage.list_projects_perstage()
 
+    def test_inheritance_cycle(self, model, pypistage):
+        pypistage.mock_simple("someproject", "<a href='someproject-1.0.zip' /a>")
+        user = model.create_user("user", password="123")
+        index_a = user.create_stage(index="A", bases=[])
+        index_b = user.create_stage(index="B", bases=["user/A"])
+        index_a.modify(bases=["user/B", pypistage.name])
+        rootpypi = model.getstage(pypistage.name)
+        assert rootpypi.list_projects() == [(rootpypi, {"someproject": "someproject"})]
+        assert index_a.list_projects() == [
+            (index_a, set()),
+            (index_b, set()),
+            (rootpypi, {"someproject": "someproject"}),
+        ]
+        assert index_b.list_projects() == [
+            (index_b, set()),
+            (index_a, set()),
+            (rootpypi, {"someproject": "someproject"}),
+        ]
+
     def test_inheritance_simple(self, pypistage, stage):
         stage.modify(bases=("root/pypi",), mirror_whitelist=['someproject'])
         pypistage.mock_simple("someproject", "<a href='someproject-1.0.zip' /a>")
