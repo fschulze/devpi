@@ -898,6 +898,26 @@ class IndexBases:
                 todo.append((next_stage, list(reversed(next_stage.index_bases))))
         return info
 
+    @cached_property
+    def whitelist_merger(self) -> Callable[[set[str], set[str]], set[str]]:
+        def whitelist_intersection_merger(
+            whitelist: set[str], stage_whitelist: set[str]
+        ) -> set[str]:
+            return whitelist.intersection(stage_whitelist)
+
+        def whitelist_union_merger(
+            whitelist: set[str], stage_whitelist: set[str]
+        ) -> set[str]:
+            return whitelist.union(stage_whitelist)
+
+        whitelist_inheritance = self.stage.get_whitelist_inheritance()
+        if whitelist_inheritance == "intersection":
+            return whitelist_intersection_merger
+        if whitelist_inheritance == "union":
+            return whitelist_union_merger
+        msg = f"Unknown whitelist_inheritance setting {whitelist_inheritance!r}"
+        raise RuntimeError(msg)
+
 
 class BaseStage:
     keyfs: KeyFS[Schema]
@@ -1341,12 +1361,13 @@ class BaseStage:
     def get_mirror_whitelist_info(
         self, project: NormalizedName | str
     ) -> dict[str, Any]:
+        bases = self.index_bases
         project = ensure_unicode(project)
         private_hit: bool | Unknown = False
         whitelisted = False
-        whitelist_inheritance = self.get_whitelist_inheritance()
+        whitelist_merger = bases.whitelist_merger
         whitelist = None
-        for stage in self.sro():
+        for stage in bases.iter_stages():
             if stage.index_type == "mirror":
                 if private_hit and not whitelisted:
                     # don't check the mirror for private packages
@@ -1368,16 +1389,11 @@ class BaseStage:
             private_hit = private_hit or in_index
             stage_whitelist = set(
                 stage.ixconfig.get("mirror_whitelist", set()))
-            if whitelist is None:
-                whitelist = stage_whitelist
-            elif whitelist_inheritance == "union":
-                whitelist = whitelist.union(stage_whitelist)
-            elif whitelist_inheritance == "intersection":
-                whitelist = whitelist.intersection(stage_whitelist)
-            else:
-                raise RuntimeError(
-                    "Unknown whitelist_inheritance setting '%s'"
-                    % whitelist_inheritance)
+            whitelist = (
+                stage_whitelist
+                if whitelist is None
+                else whitelist_merger(whitelist, stage_whitelist)
+            )
             if whitelisted or whitelist.intersection(('*', project)):
                 whitelisted = True
         return dict(
@@ -1455,16 +1471,17 @@ class BaseStage:
             model=self.model,
         )
 
-    def get_mergeable_stages(  # noqa: PLR0912
+    def get_mergeable_stages(
         self, project: NormalizedName, opname: str
     ) -> Iterable[BaseStage]:
         if not self.filter_projects([project]):
             return
+        bases = self.index_bases
         whitelisted: BaseStage | Literal[False] = False
         private_hit = False
-        whitelist_inheritance = self.get_whitelist_inheritance()
+        whitelist_merger = bases.whitelist_merger
         whitelist = None
-        for stage in self.sro():
+        for stage in bases.iter_stages():
             if stage.index_type == "mirror":
                 if private_hit:
                     if not whitelisted:
@@ -1476,16 +1493,11 @@ class BaseStage:
             else:
                 stage_whitelist = set(
                     stage.ixconfig.get("mirror_whitelist", set()))
-                if whitelist is None:
-                    whitelist = stage_whitelist
-                elif whitelist_inheritance == "union":
-                    whitelist = whitelist.union(stage_whitelist)
-                elif whitelist_inheritance == "intersection":
-                    whitelist = whitelist.intersection(stage_whitelist)
-                else:
-                    raise RuntimeError(
-                        "Unknown whitelist_inheritance setting '%s'"
-                        % whitelist_inheritance)
+                whitelist = (
+                    stage_whitelist
+                    if whitelist is None
+                    else whitelist_merger(whitelist, stage_whitelist)
+                )
                 if whitelist.intersection(('*', project)):
                     whitelisted = stage
                 elif stage.has_project_perstage(project):
