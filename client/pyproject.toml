@@ -150,9 +150,6 @@ extend-ignore = [
 "devpi/use.py" = [
     "I001", # maybe cleanup later - import block unsorted
 ]
-"testing/conftest.py" = [
-    "I001", # maybe cleanup later - import block unsorted
-]
 "testing/test_functional.py" = [
     "I001", # maybe cleanup later - import block unsorted
 ]
