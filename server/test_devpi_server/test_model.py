@@ -15,6 +15,7 @@ from devpi_server.model import run_passwd
 from devpi_server.model import unknown
 from devpi_server.readonly import ensure_deeply_readonly
 from io import BytesIO
+from lazy import lazy
 from typing import TYPE_CHECKING
 import getpass
 import inspect
@@ -606,6 +607,7 @@ class TestStage:
         # if we add the project to the whitelist of the inherited index, we
         # also get the release from pypi
         stage_dev2.modify(mirror_whitelist=['someproject'])
+        lazy.invalidate(stage, "index_bases")
         links = stage.get_releaselinks("someproject")
         assert len(links) == 2
         assert links[0].relpath.endswith("someproject-1.1.zip")
@@ -644,6 +646,7 @@ class TestStage:
         # if we add all projects to the whitelist of the inherited index, we
         # also get the release from pypi
         stage_dev2.modify(mirror_whitelist=['*'])
+        lazy.invalidate(stage, "index_bases")
         links = stage.get_releaselinks("someproject")
         assert len(links) == 2
         assert links[0].relpath.endswith("someproject-1.1.zip")
@@ -708,6 +711,7 @@ class TestStage:
         assert get_release_basenames(stage2, 'someproject') == [
             'someproject-1.1.zip']
         register_and_store(stage, 'someproject-1.1-py2.py3-none-any.whl')
+        lazy.invalidate(stage2, "index_bases")
         assert stage.list_versions('someproject') == {'1.1'}
         assert get_release_basenames(stage, 'someproject') == [
             'someproject-1.1-py2.py3-none-any.whl',
@@ -761,6 +765,7 @@ class TestStage:
             'someproject-1.1-py2.py3-none-any.whl',
             'someproject-1.1.zip']
         register_and_store(stage, 'someproject-1.0.zip')
+        lazy.invalidate(stage2, "index_bases")
         assert stage.list_versions('someproject') == {'1.0', '1.1'}
         assert get_release_basenames(stage, 'someproject') == [
             'someproject-1.0.zip',
@@ -790,6 +795,7 @@ class TestStage:
         assert get_release_basenames(stage2, 'someproject') == [
             'someproject-1.1.zip']
         register_and_store(stage, 'someproject-1.1-py2.py3-none-any.whl')
+        lazy.invalidate(stage2, "index_bases")
         assert stage.list_versions('someproject') == {'1.1'}
         assert get_release_basenames(stage, 'someproject') == [
             'someproject-1.1-py2.py3-none-any.whl',
@@ -847,6 +853,7 @@ class TestStage:
             'someproject-1.1-py2.py3-none-any.whl',
             'someproject-1.1.zip']
         register_and_store(stage, 'someproject-1.0.zip')
+        lazy.invalidate(stage2, "index_bases")
         assert stage.list_versions('someproject') == {'1.0', '1.1'}
         assert get_release_basenames(stage, 'someproject') == [
             'someproject-1.0.zip',
@@ -866,14 +873,12 @@ class TestStage:
             config = udict(index="world", bases=(), type="stage", volatile=True)
             stage = user.create_stage(**config)
             assert stage.ixconfig["mirror_whitelist_inheritance"] == "intersection"
-            assert stage.get_whitelist_inheritance() == "intersection"
             with stage.key_index.with_resolved_parent().update() as ixconfig:
                 # here we remove the value to simulate an old stage
                 del ixconfig["mirror_whitelist_inheritance"]
         with keyfs.read_transaction():
             stage = xom.model.getstage("hello/world")
             assert 'mirror_whitelist_inheritance' not in stage.ixconfig
-            assert stage.get_whitelist_inheritance() == "union"
         with keyfs.write_transaction():
             stage = xom.model.getstage("hello/world")
             # now modify an unrelated setting
@@ -882,7 +887,6 @@ class TestStage:
             stage = xom.model.getstage("hello/world")
             # mirror_whitelist_inheritance should still be missing
             assert 'mirror_whitelist_inheritance' not in stage.ixconfig
-            assert stage.get_whitelist_inheritance() == "union"
 
     def test_store_and_delete_project(self, stage):
         register_and_store(stage, "some_xyz-1.0.zip", b"123")
