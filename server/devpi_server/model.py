@@ -13,6 +13,7 @@ from .log import threadlog
 from .markers import Absent
 from .markers import Deleted
 from .markers import NotSet
+from .markers import Unknown
 from .markers import absent
 from .markers import deleted
 from .markers import notset
@@ -25,6 +26,7 @@ from .readonly import get_mutable_deepcopy
 from abc import ABC
 from abc import abstractmethod
 from attrs import define
+from attrs import field
 from contextlib import suppress
 from devpi_common.metadata import get_latest_version
 from devpi_common.metadata import parse_version
@@ -40,6 +42,7 @@ from pathlib import Path
 from pyramid.authorization import Allow
 from pyramid.authorization import Authenticated
 from pyramid.authorization import Everyone
+from repoze.lru import LRUCache
 from time import gmtime
 from time import strftime
 from typing import TYPE_CHECKING
@@ -64,7 +67,6 @@ if TYPE_CHECKING:
     from .keyfs_types import SearchKey
     from .keyfs_types import ULIDKey
     from .main import XOM
-    from .markers import Unknown
     from .normalized import NormalizedName
     from collections.abc import Callable
     from collections.abc import Iterable
@@ -744,6 +746,106 @@ class check_upstream_error:
         return True
 
 
+@define(slots=False)
+class InheritanceInfo:
+    traversal_infos: list[tuple[TraversalInfo, bool | NotSet | Unknown]]
+
+    @cached_property
+    def blocked_mirror_name(self) -> str | None:
+        for traversal_info, has_project in self._iter_mirrors():
+            if isinstance(traversal_info, BlockedTraversal):
+                return traversal_info.stage.name
+            if isinstance(has_project, Unknown):
+                return None
+            if not isinstance(traversal_info, (AllowedTraversal, UntrustedTraversal)):
+                return traversal_info.stage.name
+            return None
+        return None
+
+    @cached_property
+    def has_project_from_mirror(self) -> bool | Unknown:
+        for traversal_info, has_project in self._iter_mirrors():
+            if isinstance(traversal_info, BlockedTraversal):
+                return unknown
+            if isinstance(has_project, NotSet):
+                raise TypeError
+            return has_project
+        return False
+
+    def _iter_mirrors(self) -> Iterator[tuple[TraversedStage, bool | NotSet | Unknown]]:
+        for traversal_info, has_project in self._unique_traversed_stages:
+            if traversal_info.stage.index_type != "mirror":
+                continue
+            yield (traversal_info, has_project)
+
+    def iter_stages(self, opname: str) -> Iterator[BaseStage]:
+        for traversal_info, has_project in self._unique_traversed_stages:
+            if isinstance(traversal_info, BlockedTraversal):
+                threadlog.debug("%s: %s", opname, traversal_info.reason)
+                continue
+            if isinstance(traversal_info, AllowedTraversal) and isinstance(
+                traversal_info.reason, WhitelistAllowed
+            ):
+                threadlog.debug("%s: %s", opname, traversal_info.reason)
+            if has_project is True or (
+                has_project is unknown
+                and not isinstance(traversal_info, UntrustedTraversal)
+            ):
+                yield traversal_info.stage
+
+    @cached_property
+    def _unique_traversed_stages(
+        self,
+    ) -> list[tuple[TraversedStage, bool | NotSet | Unknown]]:
+        return [
+            (traversal_info, has_project)
+            for traversal_info, has_project in self.traversal_infos
+            if isinstance(traversal_info, TraversedStage) and not traversal_info.seen
+        ]
+
+
+@define(frozen=True, kw_only=True)
+class PermissionReason(ABC):
+    name: str
+    project: NormalizedName
+
+    @abstractmethod
+    def __str__(self) -> str:
+        raise NotImplementedError
+
+
+@define(frozen=True, kw_only=True)
+class PermissionAllowed(PermissionReason):
+    pass
+
+
+@define(frozen=True, kw_only=True)
+class PermissionDenied(PermissionReason):
+    pass
+
+
+@define(frozen=True, kw_only=True)
+class DirectAccess(PermissionAllowed):
+    def __str__(self) -> str:
+        return f"Direct access to package {str(self.project)!r}, allowing {self.name}"
+
+
+@define(frozen=True, kw_only=True)
+class WhitelistAllowed(PermissionAllowed):
+    src_name: str
+
+    def __str__(self) -> str:
+        return f"private package {str(self.project)!r} whitelisted at stage {self.src_name}, allowing {self.name}"
+
+
+@define(frozen=True, kw_only=True)
+class WhitelistBlocked(PermissionDenied):
+    src_name: str
+
+    def __str__(self) -> str:
+        return f"private package {str(self.project)!r} from {self.src_name} not whitelisted, blocking {self.name}"
+
+
 class SkipReason(enum.StrEnum):
     InheritanceCycle = enum.auto()
     Missing = enum.auto()
@@ -765,6 +867,32 @@ class TraversedStage(TraversalInfo):
     seen: bool
     stage: BaseStage
 
+    def allow(self, *, reason: PermissionAllowed) -> AllowedTraversal:
+        return AllowedTraversal(
+            name=self.name,
+            reason=reason,
+            seen=self.seen,
+            stage=self.stage,
+        )
+
+    def block(self, *, reason: PermissionDenied) -> BlockedTraversal:
+        return BlockedTraversal(
+            name=self.name,
+            reason=reason,
+            seen=self.seen,
+            stage=self.stage,
+        )
+
+
+@define(frozen=True, kw_only=True)
+class AllowedTraversal(TraversedStage):
+    reason: PermissionAllowed
+
+
+@define(frozen=True, kw_only=True)
+class BlockedTraversal(TraversedStage):
+    reason: PermissionDenied
+
 
 @define(frozen=True, kw_only=True)
 class UntrustedTraversal(TraversedStage):
@@ -777,10 +905,71 @@ class SkippedTraversal(TraversalInfo):
     src: str
 
 
+@define(kw_only=True)
+class InheritancePolicy:
+    private_hit: BaseStage | Literal[False] = field(default=False, init=False)
+    project: NormalizedName
+    stage: BaseStage
+    whitelist: set[str] = field(init=False)
+    whitelist_merger: Callable[[set[str]], set[str]] = field(init=False)
+    whitelisted: BaseStage | Literal[False] = field(default=False, init=False)
+
+    def __attrs_post_init__(self) -> None:
+        self.whitelist = set(self.stage.ixconfig.get("mirror_whitelist", set()))
+        match self.stage.ixconfig.get("mirror_whitelist_inheritance", "union"):
+            case "intersection":
+                self.whitelist_merger = self.whitelist.intersection
+            case "union":
+                self.whitelist_merger = self.whitelist.union
+            case whitelist_inheritance:
+                msg = f"Unknown whitelist_inheritance setting {whitelist_inheritance!r}"
+                raise RuntimeError(msg)
+
+    def _get_whitelist(self, stage: BaseStage) -> set[str]:
+        return set(stage.ixconfig.get("mirror_whitelist", set()))
+
+    def update(
+        self, traversed_stage: TraversedStage
+    ) -> tuple[PermissionReason | None, bool | NotSet | Unknown]:
+        stage = traversed_stage.stage
+        untrusted = isinstance(traversed_stage, UntrustedTraversal)
+        if untrusted and self.private_hit is not False and self.whitelisted is False:
+            return (
+                WhitelistBlocked(
+                    name=stage.name,
+                    project=self.project,
+                    src_name=self.private_hit.name,
+                ),
+                notset,
+            )
+        with check_upstream_error(self.stage, stage) as checker:
+            exists = stage.has_project_perstage(self.project)
+        if checker.failed:
+            return (None, unknown)
+        if isinstance(stage, PrivateStage):
+            self.whitelist = self.whitelist_merger(self._get_whitelist(stage))
+            if self.whitelist.intersection({"*", self.project}):
+                self.whitelisted = stage
+            elif exists:
+                self.private_hit = stage
+        if self.private_hit is False and exists is unknown and stage.no_project_list:
+            # direct fetching is allowed
+            return (DirectAccess(name=stage.name, project=self.project), exists)
+        if not exists or not untrusted or self.whitelisted is False:
+            return (None, exists)
+        return (
+            WhitelistAllowed(
+                name=stage.name, project=self.project, src_name=self.whitelisted.name
+            ),
+            exists,
+        )
+
+
 class IndexBases:
     def __init__(
         self, stage: BaseStage, *, devpiserver_sro_skip: Callable, model: RootModel
     ) -> None:
+        self._per_project_mergability_cache = LRUCache(8)
         self.devpiserver_sro_skip = devpiserver_sro_skip
         self.model = model
         self.stage = stage
@@ -795,6 +984,40 @@ class IndexBases:
     def bases(self) -> tuple[str]:
         """Returns bases as tuple of strings."""
         return tuple(self.stage.ixconfig.get("bases", ()))
+
+    def _get_inheritance_infos(self, project: NormalizedName) -> InheritanceInfo:
+        filtered_project = not self.stage.filter_projects([project])
+        policy = InheritancePolicy(project=project, stage=self.stage)
+        traversal_infos: list[tuple[TraversalInfo, bool | NotSet | Unknown]] = []
+        for traversal_info in self.traversal_infos:
+            if filtered_project or not isinstance(traversal_info, TraversedStage):
+                traversal_infos.append((traversal_info, notset))
+                continue
+            (reason, exists) = policy.update(traversal_info)
+            match reason:
+                case PermissionDenied():
+                    traversal_infos.append(
+                        (traversal_info.block(reason=reason), exists)
+                    )
+                case PermissionAllowed():
+                    traversal_infos.append(
+                        (traversal_info.allow(reason=reason), exists)
+                    )
+                case _:
+                    traversal_infos.append((traversal_info, exists))
+        return InheritanceInfo(traversal_infos)
+
+    def get_inheritance_infos(self, project: NormalizedName) -> InheritanceInfo:
+        result = self._per_project_mergability_cache.get(project)
+        if result is None:
+            result = self._get_inheritance_infos(project)
+            self._per_project_mergability_cache.put(project, result)
+        return result
+
+    def get_mergeable_stages(
+        self, project: NormalizedName, opname: str
+    ) -> Iterable[BaseStage]:
+        return self.get_inheritance_infos(project).iter_stages(opname)
 
     def iter_stages(self) -> Iterator[BaseStage]:
         """Iterates stages in defined order without loops."""
@@ -896,26 +1119,6 @@ class IndexBases:
             else:
                 todo.append((next_stage, list(reversed(next_stage.index_bases))))
         return info
-
-    @cached_property
-    def whitelist_merger(self) -> Callable[[set[str], set[str]], set[str]]:
-        def whitelist_intersection_merger(
-            whitelist: set[str], stage_whitelist: set[str]
-        ) -> set[str]:
-            return whitelist.intersection(stage_whitelist)
-
-        def whitelist_union_merger(
-            whitelist: set[str], stage_whitelist: set[str]
-        ) -> set[str]:
-            return whitelist.union(stage_whitelist)
-
-        whitelist_inheritance = self.stage.get_whitelist_inheritance()
-        if whitelist_inheritance == "intersection":
-            return whitelist_intersection_merger
-        if whitelist_inheritance == "union":
-            return whitelist_union_merger
-        msg = f"Unknown whitelist_inheritance setting {whitelist_inheritance!r}"
-        raise RuntimeError(msg)
 
 
 class BaseStage:
@@ -1271,7 +1474,7 @@ class BaseStage:
     def list_versions(self, project: NormalizedName | str) -> set[str]:
         project = normalize_name(project)
         versions = set()
-        for stage in self.get_mergeable_stages(project, "list_versions"):
+        for stage in self.index_bases.get_mergeable_stages(project, "list_versions"):
             with check_upstream_error(self, stage) as checker:
                 res = stage.list_versions_perstage(project)
             if checker.failed:
@@ -1301,7 +1504,7 @@ class BaseStage:
         result: dict[str, Any] = {}
         if not self.filter_versions(project, {version}):
             return result
-        for stage in self.get_mergeable_stages(
+        for stage in self.index_bases.get_mergeable_stages(
             normalize_name(project), "get_versiondata"
         ):
             with check_upstream_error(self, stage) as checker:
@@ -1329,7 +1532,9 @@ class BaseStage:
         seen = set()
 
         try:
-            for stage in self.get_mergeable_stages(project, "get_simplelinks"):
+            for stage in self.index_bases.get_mergeable_stages(
+                project, "get_simplelinks"
+            ):
                 with check_upstream_error(self, stage) as checker:
                     res = stage.get_simplelinks_perstage(project)
                 if checker.failed:
@@ -1352,52 +1557,21 @@ class BaseStage:
             all_links.sort(reverse=True)
         return all_links
 
-    def get_whitelist_inheritance(self) -> str:
-        # the default value, if the setting is missing, is the old behavior,
-        # so existing indexes work as before
-        return self.ixconfig.get("mirror_whitelist_inheritance", "union")
-
     def get_mirror_whitelist_info(
         self, project: NormalizedName | str
-    ) -> dict[str, Any]:
-        bases = self.index_bases
-        project = ensure_unicode(project)
-        private_hit: bool | Unknown = False
-        whitelisted = False
-        whitelist_merger = bases.whitelist_merger
-        whitelist = None
-        for stage in bases.iter_stages():
-            if stage.index_type == "mirror":
-                if private_hit and not whitelisted:
-                    # don't check the mirror for private packages
-                    return dict(
-                        has_mirror_base=unknown, blocked_by_mirror_whitelist=stage.name
-                    )
-                in_index = stage.has_project_perstage(project)
-                if in_index is unknown:
-                    return dict(
-                        has_mirror_base=unknown, blocked_by_mirror_whitelist=None
-                    )
-                has_mirror_base = in_index and (not private_hit or whitelisted)
-                blocked_by_mirror_whitelist = in_index and private_hit and not whitelisted
-                return dict(
-                    has_mirror_base=has_mirror_base,
-                    blocked_by_mirror_whitelist=stage.name if blocked_by_mirror_whitelist else None)
-            else:
-                in_index = stage.has_project_perstage(project)
-            private_hit = private_hit or in_index
-            stage_whitelist = set(
-                stage.ixconfig.get("mirror_whitelist", set()))
-            whitelist = (
-                stage_whitelist
-                if whitelist is None
-                else whitelist_merger(whitelist, stage_whitelist)
-            )
-            if whitelisted or whitelist.intersection(('*', project)):
-                whitelisted = True
+    ) -> dict[str, bool | Unknown | str | None]:
+        warnings.warn(
+            "The 'get_mirror_whitelist_info' method is deprecated, "
+            "use 'index_bases.get_inheritance_infos()' instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        project = normalize_name(project)
+        inheritance_infos = self.index_bases.get_inheritance_infos(project)
         return dict(
-            has_mirror_base=False,
-            blocked_by_mirror_whitelist=None)
+            has_mirror_base=inheritance_infos.has_project_from_mirror,
+            blocked_by_mirror_whitelist=inheritance_infos.blocked_mirror_name,
+        )
 
     def filter_projects(self, projects):
         iterator = self.customizer.get_projects_filter_iter(projects)
@@ -1467,50 +1641,10 @@ class BaseStage:
             model=self.model,
         )
 
-    def get_mergeable_stages(
-        self, project: NormalizedName, opname: str
-    ) -> Iterable[BaseStage]:
-        if not self.filter_projects([project]):
-            return
-        bases = self.index_bases
-        whitelisted: BaseStage | Literal[False] = False
-        private_hit = False
-        whitelist_merger = bases.whitelist_merger
-        whitelist = None
-        for stage in bases.iter_stages():
-            if stage.index_type == "mirror":
-                if private_hit:
-                    if not whitelisted:
-                        threadlog.debug("%s: private package %r not whitelisted, "
-                                        "ignoring %s", opname, project, stage.name)
-                        continue
-                    threadlog.debug("private package %r whitelisted at stage %s",
-                                    project, whitelisted.name)
-            else:
-                stage_whitelist = set(
-                    stage.ixconfig.get("mirror_whitelist", set()))
-                whitelist = (
-                    stage_whitelist
-                    if whitelist is None
-                    else whitelist_merger(whitelist, stage_whitelist)
-                )
-                if whitelist.intersection(('*', project)):
-                    whitelisted = stage
-                elif stage.has_project_perstage(project):
-                    private_hit = True
-
-            with check_upstream_error(self, stage):
-                exists = stage.has_project_perstage(project)
-                if not private_hit and exists is unknown and stage.no_project_list:
-                    # direct fetching is allowed
-                    pass
-                elif not exists:
-                    continue
-                yield stage
-
     def op_sro(self, opname, **kw):
         warnings.warn(
-            "The 'op_sro' method is deprecated, use 'index_bases.iter_stages()' instead.",
+            "The 'op_sro' method is deprecated, "
+            "use 'index_bases.iter_stages()' instead.",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -1524,14 +1658,14 @@ class BaseStage:
     def op_sro_check_mirror_whitelist(self, opname, **kw):
         warnings.warn(
             "The 'op_sro_check_mirror_whitelist' method is deprecated, "
-            "use 'get_mergeable_stages' instead.",
+            "use 'index_bases.get_mergeable_stages' instead.",
             DeprecationWarning,
             stacklevel=2,
         )
         project = normalize_name(kw["project"])
         if not self.filter_projects([project]):
             return
-        for stage in self.get_mergeable_stages(project, opname):
+        for stage in self.index_bases.get_mergeable_stages(project, opname):
             with check_upstream_error(self, stage) as checker:
                 res = getattr(stage, opname)(**kw)
             if checker.failed:
@@ -1851,6 +1985,7 @@ class PrivateStage(BaseStage):
             raise ReadonlyIndex("index is marked read only")
         with key_project.update() as projectdata:
             projectdata["name"] = project.original
+        lazy.invalidate(self, "index_bases")
 
     def del_project(self, project: NormalizedName | str) -> None:
         project = normalize_name(project)
@@ -1860,6 +1995,7 @@ class PrivateStage(BaseStage):
             self.del_versiondata(project, version, cleanup=False)
         threadlog.info("deleting project %s", project)
         self.key_project(project).with_resolved_parent().delete()
+        lazy.invalidate(self, "index_bases")
 
     def del_versiondata(
         self, project: NormalizedName | str, version: str, *, cleanup: bool = True
