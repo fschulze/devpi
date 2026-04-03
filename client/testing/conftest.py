@@ -509,7 +509,7 @@ def out_devpi(devpi):
             out=capture.FDCapture(1),
             err=capture.FDCapture(2))
         cap.start_capturing()
-        now = time.time()
+        now = time.monotonic()
         ret = 0
         try:
             try:
@@ -526,7 +526,7 @@ def out_devpi(devpi):
             raise
         print(out)
         print(err, file=sys.stderr)
-        return RunResult(ret, out.split("\n"), None, time.time()-now)
+        return RunResult(ret, out.split("\n"), None, time.monotonic() - now)
     return out_devpi_func
 
 
@@ -589,13 +589,13 @@ def runprocess(tmpdir, cmdargs):
     p1 = Path(tmpdir) / "stdout"
     print_info("running", cmdargs, "curdir=", Path())
     with open(p1, "w", encoding="utf8") as f1:
-        now = time.time()
+        now = time.monotonic()
         popen = subprocess.Popen(
             cmdargs, stdout=f1, stderr=subprocess.STDOUT,
             close_fds=(sys.platform != "win32"))
         ret = popen.wait()
     outerr = p1.read_text().splitlines()
-    return RunResult(ret, outerr, None, time.time()-now)
+    return RunResult(ret, outerr, None, time.monotonic() - now)
 
 
 @pytest.fixture
