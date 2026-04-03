@@ -772,8 +772,6 @@ def test_simple_with_removed_base(caplog, mapp, testapp):
     testapp.xget(200, "/user1/dev/+simple/pkg/")
     records = caplog.getrecords('refers to non-existing')
     assert [x.args for x in records] == [
-        ('user1/dev', 'user1/prod'),
-        ('user1/dev', 'user1/prod'),
         ('user1/dev', 'user1/prod')]
 
 

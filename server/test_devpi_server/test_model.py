@@ -16,6 +16,7 @@ from devpi_server.model import unknown
 from devpi_server.readonly import ensure_deeply_readonly
 from devpi_server.readonly import get_mutable_deepcopy
 from io import BytesIO
+from lazy import lazy
 from operator import itemgetter
 from typing import TYPE_CHECKING
 import getpass
@@ -72,47 +73,55 @@ def user(model):
 
 def test_get_mirror_whitelist_info(model, pypistage):
     pypistage.mock_simple("pytest", "<a href='pytest-1.0.zip' /a>")
-    assert pypistage.get_mirror_whitelist_info("pytest") == dict(
-        has_mirror_base=True,
-        blocked_by_mirror_whitelist=None)
+    with pytest.deprecated_call():
+        assert pypistage.get_mirror_whitelist_info("pytest") == dict(
+            has_mirror_base=True, blocked_by_mirror_whitelist=None
+        )
     user = model.create_user("user1", "pass")
     stage1 = user.create_stage("stage1", bases=())
-    assert stage1.get_mirror_whitelist_info("pytest") == dict(
-        has_mirror_base=False,
-        blocked_by_mirror_whitelist=None)
+    with pytest.deprecated_call():
+        assert stage1.get_mirror_whitelist_info("pytest") == dict(
+            has_mirror_base=False, blocked_by_mirror_whitelist=None
+        )
     register_and_store(stage1, "pytest-1.1.tar.gz")
-    assert stage1.get_mirror_whitelist_info("pytest") == dict(
-        has_mirror_base=False,
-        blocked_by_mirror_whitelist=None)
+    with pytest.deprecated_call():
+        assert stage1.get_mirror_whitelist_info("pytest") == dict(
+            has_mirror_base=False, blocked_by_mirror_whitelist=None
+        )
     stage2 = user.create_stage("stage2", bases=("root/pypi",))
-    assert stage2.get_mirror_whitelist_info("pytest") == dict(
-        has_mirror_base=True,
-        blocked_by_mirror_whitelist=None)
+    with pytest.deprecated_call():
+        assert stage2.get_mirror_whitelist_info("pytest") == dict(
+            has_mirror_base=True, blocked_by_mirror_whitelist=None
+        )
     register_and_store(stage2, "pytest-1.1.tar.gz")
-    assert stage2.get_mirror_whitelist_info("pytest") == dict(
-        has_mirror_base=unknown, blocked_by_mirror_whitelist="root/pypi"
-    )
+    with pytest.deprecated_call():
+        assert stage2.get_mirror_whitelist_info("pytest") == dict(
+            has_mirror_base=unknown, blocked_by_mirror_whitelist="root/pypi"
+        )
     # now add to whitelist
     ixconfig = stage2.ixconfig_mutable.copy()
     ixconfig["mirror_whitelist"] = ["pytest"]
     stage2.modify(**ixconfig)
-    assert stage2.get_mirror_whitelist_info("pytest") == dict(
-        has_mirror_base=True,
-        blocked_by_mirror_whitelist=None)
+    with pytest.deprecated_call():
+        assert stage2.get_mirror_whitelist_info("pytest") == dict(
+            has_mirror_base=True, blocked_by_mirror_whitelist=None
+        )
     # now remove from whitelist
     ixconfig = stage2.ixconfig_mutable.copy()
     ixconfig["mirror_whitelist"] = []
     stage2.modify(**ixconfig)
-    assert stage2.get_mirror_whitelist_info("pytest") == dict(
-        has_mirror_base=unknown, blocked_by_mirror_whitelist="root/pypi"
-    )
+    with pytest.deprecated_call():
+        assert stage2.get_mirror_whitelist_info("pytest") == dict(
+            has_mirror_base=unknown, blocked_by_mirror_whitelist="root/pypi"
+        )
     # and try "*"
     ixconfig = stage2.ixconfig_mutable.copy()
     ixconfig["mirror_whitelist"] = ["*"]
     stage2.modify(**ixconfig)
-    assert stage2.get_mirror_whitelist_info("pytest") == dict(
-        has_mirror_base=True,
-        blocked_by_mirror_whitelist=None)
+    with pytest.deprecated_call():
+        assert stage2.get_mirror_whitelist_info("pytest") == dict(
+            has_mirror_base=True, blocked_by_mirror_whitelist=None
+        )
 
 
 @pytest.mark.notransaction
@@ -127,7 +136,8 @@ def test_get_mirror_whitelist_info_private_package(mapp, monkeypatch, testapp):
             # make sure we get an error if data is fetched
             m.setattr(mapp.xom.http, "get", None)
             stage = mapp.xom.model.getstage(api.stagename)
-            info = stage.get_mirror_whitelist_info("pkg1")
+            with pytest.deprecated_call():
+                info = stage.get_mirror_whitelist_info("pkg1")
             assert info["has_mirror_base"] is unknown
             assert info['blocked_by_mirror_whitelist'] == "root/pypi"
     mapp.use("root/pypi")
@@ -144,14 +154,16 @@ def test_get_mirror_whitelist_info_private_package(mapp, monkeypatch, testapp):
             pypistage.cache_retrieve_times.expire("pkg1")
             # now we check that we get correct info without fetching data
             stage = mapp.xom.model.getstage(api.stagename)
-            info = stage.get_mirror_whitelist_info("pkg1")
+            with pytest.deprecated_call():
+                info = stage.get_mirror_whitelist_info("pkg1")
             assert info["has_mirror_base"] is unknown
             assert info['blocked_by_mirror_whitelist'] == "root/pypi"
     # now we whitelist the package
     testapp.patch_json("/" + api.stagename, ["mirror_whitelist+=pkg1"])
     with mapp.xom.keyfs.read_transaction():
         stage = mapp.xom.model.getstage(api.stagename)
-        info = stage.get_mirror_whitelist_info("pkg1")
+        with pytest.deprecated_call():
+            info = stage.get_mirror_whitelist_info("pkg1")
         assert info['has_mirror_base'] is True
         assert info['blocked_by_mirror_whitelist'] is None
 
@@ -612,6 +624,7 @@ class TestStage:
         # if we add the project to the whitelist of the inherited index, we
         # also get the release from pypi
         stage_dev2.modify(mirror_whitelist=['someproject'])
+        lazy.invalidate(stage, "index_bases")
         links = stage.get_releaselinks("someproject")
         assert len(links) == 2
         assert links[0].relpath.endswith("someproject-1.1.zip")
@@ -650,6 +663,7 @@ class TestStage:
         # if we add all projects to the whitelist of the inherited index, we
         # also get the release from pypi
         stage_dev2.modify(mirror_whitelist=['*'])
+        lazy.invalidate(stage, "index_bases")
         links = stage.get_releaselinks("someproject")
         assert len(links) == 2
         assert links[0].relpath.endswith("someproject-1.1.zip")
@@ -669,6 +683,7 @@ class TestStage:
         # if we add all projects to the whitelist of the inheriting index, we
         # also get the release from pypi
         stage.modify(mirror_whitelist=['*'])
+        lazy.invalidate(stage, "index_bases")
         links = stage.get_releaselinks("someproject")
         assert len(links) == 2
         assert links[0].relpath.endswith("someproject-1.1.zip")
@@ -711,6 +726,7 @@ class TestStage:
         assert get_release_basenames(stage2, 'someproject') == [
             'someproject-1.1.zip']
         register_and_store(stage, 'someproject-1.1-py2.py3-none-any.whl')
+        lazy.invalidate(stage2, "index_bases")
         assert stage.list_versions('someproject') == {'1.1'}
         assert get_release_basenames(stage, 'someproject') == [
             'someproject-1.1-py2.py3-none-any.whl',
@@ -764,6 +780,7 @@ class TestStage:
             'someproject-1.1-py2.py3-none-any.whl',
             'someproject-1.1.zip']
         register_and_store(stage, 'someproject-1.0.zip')
+        lazy.invalidate(stage2, "index_bases")
         assert stage.list_versions('someproject') == {'1.0', '1.1'}
         assert get_release_basenames(stage, 'someproject') == [
             'someproject-1.0.zip',
@@ -793,6 +810,7 @@ class TestStage:
         assert get_release_basenames(stage2, 'someproject') == [
             'someproject-1.1.zip']
         register_and_store(stage, 'someproject-1.1-py2.py3-none-any.whl')
+        lazy.invalidate(stage2, "index_bases")
         assert stage.list_versions('someproject') == {'1.1'}
         assert get_release_basenames(stage, 'someproject') == [
             'someproject-1.1-py2.py3-none-any.whl',
@@ -850,6 +868,7 @@ class TestStage:
             'someproject-1.1-py2.py3-none-any.whl',
             'someproject-1.1.zip']
         register_and_store(stage, 'someproject-1.0.zip')
+        lazy.invalidate(stage2, "index_bases")
         assert stage.list_versions('someproject') == {'1.0', '1.1'}
         assert get_release_basenames(stage, 'someproject') == [
             'someproject-1.0.zip',
@@ -869,14 +888,12 @@ class TestStage:
             config = udict(index="world", bases=(), type="stage", volatile=True)
             stage = user.create_stage(**config)
             assert stage.ixconfig["mirror_whitelist_inheritance"] == "intersection"
-            assert stage.get_whitelist_inheritance() == "intersection"
             with stage.key_index.with_resolved_parent().update() as ixconfig:
                 # here we remove the value to simulate an old stage
                 del ixconfig["mirror_whitelist_inheritance"]
         with keyfs.read_transaction():
             stage = xom.model.getstage("hello/world")
             assert 'mirror_whitelist_inheritance' not in stage.ixconfig
-            assert stage.get_whitelist_inheritance() == "union"
         with keyfs.write_transaction():
             stage = xom.model.getstage("hello/world")
             # now modify an unrelated setting
@@ -885,7 +902,6 @@ class TestStage:
             stage = xom.model.getstage("hello/world")
             # mirror_whitelist_inheritance should still be missing
             assert 'mirror_whitelist_inheritance' not in stage.ixconfig
-            assert stage.get_whitelist_inheritance() == "union"
 
     def test_store_and_delete_project(self, stage):
         register_and_store(stage, "some_xyz-1.0.zip", b"123")
