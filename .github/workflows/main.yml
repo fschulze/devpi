@@ -12,15 +12,18 @@ jobs:
   packages:
     if: ${{ true && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'actions')) }}
     name: "Create packages"
+    permissions:
+      contents: read
+      actions: read
     runs-on: "ubuntu-latest"
     env:
       PY_COLORS: 1
 
     steps:
-      - uses: "actions/checkout@v4"
+      - uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
         with:
           persist-credentials: false
-      - uses: "actions/setup-python@v5"
+      - uses: "actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405" # v6.2.0
         with:
           python-version: "3.10"
       - name: "Install dependencies"
@@ -42,14 +45,17 @@ jobs:
     if: ${{ true && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'actions')) }}
     name: "Create documentation"
     needs: "packages"
+    permissions:
+      contents: read
+      actions: read
     runs-on: "ubuntu-latest"
     strategy:
       fail-fast: false
     steps:
-      - uses: "actions/checkout@v4"
+      - uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
         with:
           persist-credentials: false
-      - uses: "actions/setup-python@v5"
+      - uses: "actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405" # v6.2.0
         with:
           python-version: "3.10"
       - name: "Install dependencies"
@@ -107,13 +113,17 @@ jobs:
       PY_COLORS: 1
       PROJECT: "${{ matrix.project }}"
 
+    permissions:
+      contents: read
+      actions: read
+
     runs-on: "${{ matrix.os }}"
 
     steps:
-      - uses: "actions/checkout@v4"
+      - uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
         with:
           persist-credentials: false
-      - uses: "actions/setup-python@v5"
+      - uses: "actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405" # v6.2.0
         with:
           python-version: "${{ matrix.python-version }}"
       - name: "Install dependencies"
@@ -153,13 +163,17 @@ jobs:
       PY_COLORS: 1
       PROJECT: "${{ matrix.project }}"
 
+    permissions:
+      contents: read
+      actions: read
+
     runs-on: "${{ matrix.os }}"
 
     steps:
-      - uses: "actions/checkout@v4"
+      - uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
         with:
           persist-credentials: false
-      - uses: "actions/setup-python@v5"
+      - uses: "actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405" # v6.2.0
         with:
           python-version: "${{ matrix.python-version }}"
       - name: "Install dependencies"
@@ -196,13 +210,17 @@ jobs:
       PY_COLORS: 1
       PROJECT: "${{ matrix.project }}"
 
+    permissions:
+      contents: read
+      actions: read
+
     runs-on: "${{ matrix.os }}"
 
     steps:
-      - uses: "actions/checkout@v4"
+      - uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
         with:
           persist-credentials: false
-      - uses: "actions/setup-python@v5"
+      - uses: "actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405" # v6.2.0
         with:
           python-version: "${{ matrix.python-version }}"
       - name: "Install dependencies"
@@ -247,13 +265,17 @@ jobs:
       PY_COLORS: 1
       PROJECT: "${{ matrix.project }}"
 
+    permissions:
+      contents: read
+      actions: read
+
     runs-on: "${{ matrix.os }}"
 
     steps:
-      - uses: "actions/checkout@v4"
+      - uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
         with:
           persist-credentials: false
-      - uses: "actions/setup-python@v5"
+      - uses: "actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405" # v6.2.0
         with:
           python-version: "${{ matrix.python-version }}"
       - name: "Install dependencies"
@@ -294,13 +316,17 @@ jobs:
       PY_COLORS: 1
       PROJECT: "${{ matrix.project }}"
 
+    permissions:
+      contents: read
+      actions: read
+
     runs-on: "${{ matrix.os }}"
 
     steps:
-      - uses: "actions/checkout@v4"
+      - uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
         with:
           persist-credentials: false
-      - uses: "actions/setup-python@v5"
+      - uses: "actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405" # v6.2.0
         with:
           python-version: "${{ matrix.python-version }}"
       - name: "Install dependencies"
@@ -346,13 +372,17 @@ jobs:
       PY_COLORS: 1
       PROJECT: "${{ matrix.project }}"
 
+    permissions:
+      contents: read
+      actions: read
+
     runs-on: "${{ matrix.os }}"
 
     steps:
-      - uses: "actions/checkout@v4"
+      - uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
         with:
           persist-credentials: false
-      - uses: "actions/setup-python@v5"
+      - uses: "actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405" # v6.2.0
         with:
           python-version: "${{ matrix.python-version }}"
       - name: "Install dependencies"
@@ -398,13 +428,17 @@ jobs:
       PY_COLORS: 1
       PROJECT: "${{ matrix.project }}"
 
+    permissions:
+      contents: read
+      actions: read
+
     runs-on: "${{ matrix.os }}"
 
     steps:
-      - uses: "actions/checkout@v4"
+      - uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
         with:
           persist-credentials: false
-      - uses: "actions/setup-python@v5"
+      - uses: "actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405" # v6.2.0
         with:
           python-version: "${{ matrix.python-version }}"
       - name: "Install dependencies"
@@ -437,13 +471,17 @@ jobs:
       PY_COLORS: 1
       PROJECT: "${{ matrix.project }}"
 
+    permissions:
+      contents: read
+      actions: read
+
     runs-on: "${{ matrix.os }}"
 
     steps:
-      - uses: "actions/checkout@v4"
+      - uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
         with:
           persist-credentials: false
-      - uses: "actions/setup-python@v5"
+      - uses: "actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405" # v6.2.0
         with:
           python-version: "${{ matrix.python-version }}"
       - name: "Install dependencies"
@@ -483,13 +521,17 @@ jobs:
       PY_COLORS: 1
       PROJECT: "${{ matrix.project }}"
 
+    permissions:
+      contents: read
+      actions: read
+
     runs-on: "${{ matrix.os }}"
 
     steps:
-      - uses: "actions/checkout@v4"
+      - uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
         with:
           persist-credentials: false
-      - uses: "actions/setup-python@v5"
+      - uses: "actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405" # v6.2.0
         with:
           python-version: "${{ matrix.python-version }}"
       - name: "Install dependencies"
@@ -565,13 +607,17 @@ jobs:
       PY_COLORS: 1
       PROJECT: "${{ matrix.project }}"
 
+    permissions:
+      contents: read
+      actions: read
+
     runs-on: "${{ matrix.os }}"
 
     steps:
-      - uses: "actions/checkout@v4"
+      - uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
         with:
           persist-credentials: false
-      - uses: "actions/setup-python@v5"
+      - uses: "actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405" # v6.2.0
         with:
           python-version: "${{ matrix.python-version }}"
       - name: "Install dependencies"
@@ -619,13 +665,17 @@ jobs:
       PY_COLORS: 1
       PROJECT: "${{ matrix.project }}"
 
+    permissions:
+      contents: read
+      actions: read
+
     runs-on: "${{ matrix.os }}"
 
     steps:
-      - uses: "actions/checkout@v4"
+      - uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
         with:
           persist-credentials: false
-      - uses: "actions/setup-python@v5"
+      - uses: "actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405" # v6.2.0
         with:
           python-version: "${{ matrix.python-version }}"
       - name: "Install dependencies"
@@ -669,13 +719,17 @@ jobs:
       PY_COLORS: 1
       PROJECT: "${{ matrix.project }}"
 
+    permissions:
+      contents: read
+      actions: read
+
     runs-on: "${{ matrix.os }}"
 
     steps:
-      - uses: "actions/checkout@v4"
+      - uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
         with:
           persist-credentials: false
-      - uses: "actions/setup-python@v5"
+      - uses: "actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405" # v6.2.0
         with:
           python-version: "${{ matrix.python-version }}"
       - name: "Install dependencies"
@@ -721,13 +775,17 @@ jobs:
       PY_COLORS: 1
       PROJECT: "${{ matrix.project }}"
 
+    permissions:
+      contents: read
+      actions: read
+
     runs-on: "${{ matrix.os }}"
 
     steps:
-      - uses: "actions/checkout@v4"
+      - uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
         with:
           persist-credentials: false
-      - uses: "actions/setup-python@v5"
+      - uses: "actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405" # v6.2.0
         with:
           python-version: "${{ matrix.python-version }}"
       - name: "Install dependencies"
@@ -779,13 +837,17 @@ jobs:
       PY_COLORS: 1
       PROJECT: "${{ matrix.project }}"
 
+    permissions:
+      contents: read
+      actions: read
+
     runs-on: "${{ matrix.os }}"
 
     steps:
-      - uses: "actions/checkout@v4"
+      - uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
         with:
           persist-credentials: false
-      - uses: "actions/setup-python@v5"
+      - uses: "actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405" # v6.2.0
         with:
           python-version: "${{ matrix.python-version }}"
       - name: "Install dependencies"
@@ -840,13 +902,17 @@ jobs:
       PY_COLORS: 1
       PROJECT: "${{ matrix.project }}"
 
+    permissions:
+      contents: read
+      actions: read
+
     runs-on: "${{ matrix.os }}"
 
     steps:
-      - uses: "actions/checkout@v4"
+      - uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
         with:
           persist-credentials: false
-      - uses: "actions/setup-python@v5"
+      - uses: "actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405" # v6.2.0
         with:
           python-version: "${{ matrix.python-version }}"
       - name: "Install dependencies"
@@ -899,13 +965,17 @@ jobs:
       PY_COLORS: 1
       PROJECT: "${{ matrix.project }}"
 
+    permissions:
+      contents: read
+      actions: read
+
     runs-on: "${{ matrix.os }}"
 
     steps:
-      - uses: "actions/checkout@v4"
+      - uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
         with:
           persist-credentials: false
-      - uses: "actions/setup-python@v5"
+      - uses: "actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405" # v6.2.0
         with:
           python-version: "${{ matrix.python-version }}"
       - name: "Install dependencies"
@@ -934,14 +1004,18 @@ jobs:
     env:
       PY_COLORS: 1
 
+    permissions:
+      contents: read
+      actions: read
+
     runs-on: "ubuntu-latest"
 
     steps:
-      - uses: "actions/checkout@v4"
+      - uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
         with:
           persist-credentials: false
           fetch-depth: 0
-      - uses: "actions/setup-python@v5"
+      - uses: "actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405" # v6.2.0
         with:
           python-version: "3.x"
       - name: "Install dependencies"
@@ -975,6 +1049,10 @@ jobs:
       PY_COLORS: 1
       PLUGIN: "${{ matrix.plugin }}"
 
+    permissions:
+      contents: read
+      actions: read
+
     runs-on: "ubuntu-latest"
     strategy:
       fail-fast: false
@@ -1018,15 +1096,15 @@ jobs:
             tox-envs: "py311"
 
     steps:
-      - uses: "actions/checkout@v4"
+      - uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
         with:
           persist-credentials: false
-      - uses: "actions/checkout@v4"
+      - uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
         with:
           persist-credentials: false
           repository: "${{ matrix.repository }}"
           path: "${{ matrix.plugin }}"
-      - uses: "actions/setup-python@v5"
+      - uses: "actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405" # v6.2.0
         with:
           python-version: "${{ matrix.python-version }}"
       - name: "Install dependencies"
@@ -1054,6 +1132,10 @@ jobs:
       PY_COLORS: 1
       PLUGIN: "${{ matrix.plugin }}"
 
+    permissions:
+      contents: read
+      actions: read
+
     runs-on: "ubuntu-latest"
     strategy:
       fail-fast: false
@@ -1097,15 +1179,15 @@ jobs:
             tox-envs: "py311"
 
     steps:
-      - uses: "actions/checkout@v4"
+      - uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
         with:
           persist-credentials: false
-      - uses: "actions/checkout@v4"
+      - uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
         with:
           persist-credentials: false
           repository: "${{ matrix.repository }}"
           path: "${{ matrix.plugin }}"
-      - uses: "actions/setup-python@v5"
+      - uses: "actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405" # v6.2.0
         with:
           python-version: "${{ matrix.python-version }}"
       - name: "Install dependencies"
