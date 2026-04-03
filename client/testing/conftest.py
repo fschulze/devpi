@@ -1,25 +1,25 @@
 from _pytest import capture
 from contextlib import closing
+from devpi.main import Hub
+from devpi.main import get_pluginmanager
+from devpi.main import initmain
+from devpi.main import parse_args
 from devpi_common.contextlib import chdir
 from devpi_common.metadata import parse_version
+from devpi_common.url import URL
 from io import StringIO
 from pathlib import Path
-import codecs
 import gc
+import json
 import os
 import platform
 import pytest
-import socket
-import textwrap
 import shutil
-import sys
-import json
-import time
-
-from devpi.main import Hub, get_pluginmanager, initmain, parse_args
-from devpi_common.url import URL
-
+import socket
 import subprocess
+import sys
+import textwrap
+import time
 
 
 pytest_plugins = ["testing.reqmock"]
@@ -72,7 +72,8 @@ def print_info(*args, **kwargs):
 
 @pytest.fixture(scope="session")
 def simpypiserver():
-    from .simpypi import httpserver, SimPyPIRequestHandler
+    from .simpypi import SimPyPIRequestHandler
+    from .simpypi import httpserver
     import threading
     host = 'localhost'
     port = get_open_port(host)
@@ -587,14 +588,13 @@ def runprocess(tmpdir, cmdargs):
     cmdargs = [str(x) for x in cmdargs]
     p1 = Path(tmpdir) / "stdout"
     print_info("running", cmdargs, "curdir=", Path())
-    with codecs.open(str(p1), "w", encoding="utf8") as f1:
+    with open(p1, "w", encoding="utf8") as f1:
         now = time.time()
         popen = subprocess.Popen(
             cmdargs, stdout=f1, stderr=subprocess.STDOUT,
             close_fds=(sys.platform != "win32"))
         ret = popen.wait()
-    with codecs.open(str(p1), "r", encoding="utf8") as f1:
-        outerr = f1.read().splitlines()
+    outerr = p1.read_text().splitlines()
     return RunResult(ret, outerr, None, time.time()-now)
 
 
