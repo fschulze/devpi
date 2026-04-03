@@ -707,9 +707,11 @@ class PyPIView:
             blocked_index = None
         else:
             # only mere humans need to know and do more
-            whitelist_info = stage.get_mirror_whitelist_info(project)
-            embed_form = whitelist_info['has_mirror_base']
-            blocked_index = whitelist_info['blocked_by_mirror_whitelist']
+            project_inheritance_info = stage.index_bases.get_project_inheritance_info(
+                project
+            )
+            embed_form = project_inheritance_info.has_project_from_mirror
+            blocked_index = project_inheritance_info.blocked_mirror_name
         content_type = _select_simple_content_type(self.request)
         if content_type == SIMPLE_API_V1_JSON:
             app_iter = self._simple_list_project_json_v1(
