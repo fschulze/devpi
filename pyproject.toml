@@ -1,18 +1,41 @@
 [dependency-groups]
 dev = [
     "PdbEditorSupport",
+    { include-group = "docs" },
+    { include-group = "mypy" },
+    { include-group = "pytest" },
+    { include-group = "release" },
+]
+docs = [
     "Sphinx",
+    "furo",
+    "mr.laforge",
+    "regendoc",
+    "supervisor",
+    "virtualenv",
+]
+lint = [
+    "flake8",
+    "match-diff-lines",
+    "ruff",
+    "wcmatch",
+]
+mypy = [
+    "mypy",
+    "mypy-zope>=1.0.5",
+    "types-WebOb",
+    "types-beautifulsoup4",
+    "types-defusedxml",
+    "types-passlib",
+    "types-requests",
+    "types-urllib3",
+    "types-waitress",
+]
+pytest = [
     "beautifulsoup4 != 4.12.1",
     "certauth",
     "execnet",
-    "flake8",
-    "furo",
-    "keyring",
-    "match-diff-lines",
     "mock",
-    "mr.laforge",
-    "mypy",
-    "mypy-zope>=1.0.5",
     "pip",
     "pypitoken; python_version < '3.15'",
     "pytest",
@@ -23,20 +46,13 @@ dev = [
     "pytest-pdb",
     "pytest-sugar",
     "pytest-timeout",
-    "regendoc",
-    "setuptools_changelog_shortener",
-    "supervisor",
-    "towncrier>=21.9.0",
     "tox",
-    "types-WebOb",
-    "types-beautifulsoup4",
-    "types-defusedxml",
-    "types-passlib",
-    "types-requests",
-    "types-urllib3",
-    "types-waitress",
-    "wcmatch",
     "webtest",
+]
+release = [
+    "keyring",
+    "setuptools_changelog_shortener",
+    "towncrier>=21.9.0",
     "wheel",
 ]
 
