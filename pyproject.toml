@@ -19,6 +19,7 @@ lint = [
     "flake8",
     "lint-roller",
     "ruff",
+    "zizmor",
 ]
 mypy = [
     "mypy",
