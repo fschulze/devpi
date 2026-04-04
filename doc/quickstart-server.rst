@@ -427,7 +427,7 @@ Alice can now create her new ``dev`` index::
       volatile=True
       acl_upload=alice
       acl_toxresult_upload=:ANONYMOUS:
-      mirror_whitelist=
+      project_inheritance_rules=block type:remote if local_exists
 
 and use it ::
 

@@ -7,6 +7,7 @@ from devpi_server.config import hookimpl
 from devpi_server.filestore import get_hashes
 from devpi_server.markers import unknown
 from devpi_server.model.base import run_passwd
+from devpi_server.model.config import RemoveValue
 from devpi_server.model.config import ensure_acl_list
 from devpi_server.model.config import ensure_boolean
 from devpi_server.model.config import ensure_list
@@ -96,26 +97,20 @@ def test_get_mirror_whitelist_info(model, pypistage):
         assert stage2.get_mirror_whitelist_info("pytest") == dict(
             has_mirror_base=unknown, blocked_by_mirror_whitelist="root/pypi"
         )
-    # now add to whitelist
-    ixconfig = stage2.ixconfig_mutable.copy()
-    ixconfig["mirror_whitelist"] = ["pytest"]
-    stage2.modify(**ixconfig)
+    # now allow merging with inherited remotes
+    stage2.modify_project("pytest", inheritance_rules=["allow all"])
     with pytest.deprecated_call():
         assert stage2.get_mirror_whitelist_info("pytest") == dict(
             has_mirror_base=True, blocked_by_mirror_whitelist=None
         )
-    # now remove from whitelist
-    ixconfig = stage2.ixconfig_mutable.copy()
-    ixconfig["mirror_whitelist"] = []
-    stage2.modify(**ixconfig)
+    # now block merging with inherited remotes
+    stage2.modify_project("pytest", inheritance_rules=RemoveValue)
     with pytest.deprecated_call():
         assert stage2.get_mirror_whitelist_info("pytest") == dict(
             has_mirror_base=unknown, blocked_by_mirror_whitelist="root/pypi"
         )
-    # and try "*"
-    ixconfig = stage2.ixconfig_mutable.copy()
-    ixconfig["mirror_whitelist"] = ["*"]
-    stage2.modify(**ixconfig)
+    # and try default setting in index config
+    stage2.modify(project_inheritance_rules=["allow all"])
     with pytest.deprecated_call():
         assert stage2.get_mirror_whitelist_info("pytest") == dict(
             has_mirror_base=True, blocked_by_mirror_whitelist=None
@@ -157,7 +152,7 @@ def test_get_mirror_whitelist_info_private_package(mapp, monkeypatch, testapp):
             assert info["has_mirror_base"] is unknown
             assert info['blocked_by_mirror_whitelist'] == "root/pypi"
     # now we whitelist the package
-    testapp.patch_json("/" + api.stagename, ["mirror_whitelist+=pkg1"])
+    testapp.patch_json(f"/{api.stagename}/pkg1", ["inheritance_rules=allow all"])
     with mapp.xom.keyfs.read_transaction():
         stage = mapp.xom.model.getstage(api.stagename)
         with pytest.deprecated_call():
@@ -325,7 +320,7 @@ class TestIndex:
         )
 
     def test_inheritance_simple(self, pypistage, stage):
-        stage.modify(bases=("root/pypi",), mirror_whitelist=['someproject'])
+        stage.modify(bases=("root/pypi",), project_inheritance_rules=["allow all"])
         pypistage.mock_simple("someproject", "<a href='someproject-1.0.zip' /a>")
         assert stage.list_projects_perstage() == {}
         links = stage.get_releaselinks("someproject")
@@ -336,7 +331,7 @@ class TestIndex:
     def test_inheritance_twice(self, pypistage, stage, user):
         user.create_stage(index="dev2", bases=("root/pypi",))
         stage_dev2 = user.getstage("dev2")
-        stage.modify(bases=(stage_dev2.name,), mirror_whitelist=['someproject'])
+        stage.modify(bases=(stage_dev2.name,), project_inheritance_rules=["allow all"])
         pypistage.mock_simple("someproject",
                               "<a href='someproject-1.0.zip' /a>")
         register_and_store(stage_dev2, "someproject-1.1.tar.gz")
@@ -444,7 +439,8 @@ class TestIndex:
         assert not pypi_has_project_perstage.called
 
     def test_inheritance_normalize_multipackage(self, pypistage, stage):
-        stage.modify(bases=("root/pypi",), mirror_whitelist=['some-project'])
+        stage.modify(bases=("root/pypi",))
+        stage.modify_project("some-project", inheritance_rules=["allow all"])
         pypistage.mock_simple("some-project", """
             <a href='some_project-1.0.zip' /a>
             <a href='some_project-1.0.tar.gz' /a>
@@ -475,7 +471,8 @@ class TestIndex:
         assert len(links) == 1
 
     def test_get_releaselinks_inheritance_shadow(self, pypistage, stage):
-        stage.modify(bases=("root/pypi",), mirror_whitelist=['someproject'])
+        stage.modify(bases=("root/pypi",))
+        stage.modify_project("someproject", inheritance_rules=["allow all"])
         pypistage.mock_simple("someproject",
             "<a href='someproject-1.0.zip' /a>")
         register_and_store(stage, "someproject-1.0.zip", b"123")
@@ -484,13 +481,15 @@ class TestIndex:
         assert links[0].relpath.endswith("someproject-1.0.zip")
 
     def test_inheritance_error_are_nop(self, pypistage, stage):
-        stage.modify(bases=("root/pypi",), mirror_whitelist=['someproject'])
+        stage.modify(bases=("root/pypi",))
+        stage.modify_project("someproject", inheritance_rules=["allow all"])
         pypistage.mock_simple("someproject", status_code = -1)
         assert stage.get_releaselinks("someproject") == []
         assert stage.list_versions("someproject") == set([])
 
     def test_get_versiondata_inherited(self, pypistage, stage):
-        stage.modify(bases=("root/pypi",), mirror_whitelist=['someproject'])
+        stage.modify(bases=("root/pypi",))
+        stage.modify_project("someproject", inheritance_rules=["allow all"])
         pypistage.mock_simple("someproject",
             "<a href='someproject-1.0.zip' /a>")
         verdata = stage.get_versiondata("someproject", "1.0")
@@ -498,7 +497,8 @@ class TestIndex:
         assert "someproject-1.0.zip" in str(verdata)
 
     def test_get_versiondata_inherit_not_exist_version(self, pypistage, stage):
-        stage.modify(bases=("root/pypi",), mirror_whitelist=['someproject'])
+        stage.modify(bases=("root/pypi",))
+        stage.modify_project("someproject", inheritance_rules=["allow all"])
         pypistage.mock_simple("someproject",
             "<a href='someproject-1.0.zip' /a>")
         assert not stage.get_versiondata("someproject", "2.0")
@@ -562,7 +562,8 @@ class TestIndex:
         assert len(ls.get_links()) == 2
 
     def test_project_versiondata_shadowed(self, pypistage, stage):
-        stage.modify(bases=("root/pypi",), mirror_whitelist=['someproject'])
+        stage.modify(bases=("root/pypi",))
+        stage.modify_project("someproject", inheritance_rules=["allow all"])
         pypistage.mock_simple("someproject", '<a href="someproject-1.0.zip" />')
         content = b"123"
         register_and_store(stage, "someproject-1.0.zip", content)
@@ -582,7 +583,7 @@ class TestIndex:
         assert links[0].relpath.endswith("someproject-1.0.zip")
         # if we add the project to the whitelist, we also get the release
         # from pypi
-        stage.modify(mirror_whitelist=['someproject'])
+        stage.modify_project("someproject", inheritance_rules=["allow all"])
         links = stage.get_releaselinks("someproject")
         assert len(links) == 2
         assert links[0].relpath.endswith("someproject-1.1.zip")
@@ -621,7 +622,7 @@ class TestIndex:
         assert links[0].relpath.endswith("someproject-1.0.zip")
         # if we add the project to the whitelist of the inherited index, we
         # also get the release from pypi
-        stage_dev2.modify(mirror_whitelist=['someproject'])
+        stage_dev2.modify_project("someproject", inheritance_rules=["allow all"])
         lazy.invalidate(stage, "index_bases")
         links = stage.get_releaselinks("someproject")
         assert len(links) == 2
@@ -639,7 +640,7 @@ class TestIndex:
         assert links[0].relpath.endswith("someproject-1.0.zip")
         # if we allow all projects in the whitelist, we also get the release
         # from pypi
-        stage.modify(mirror_whitelist=['*'])
+        stage.modify(project_inheritance_rules=["allow all"])
         links = stage.get_releaselinks("someproject")
         assert len(links) == 2
         assert links[0].relpath.endswith("someproject-1.1.zip")
@@ -658,9 +659,9 @@ class TestIndex:
         # our upload
         assert len(links) == 1
         assert links[0].relpath.endswith("someproject-1.0.zip")
-        # if we add all projects to the whitelist of the inherited index, we
-        # also get the release from pypi
-        stage_dev2.modify(mirror_whitelist=['*'])
+        # if we allow all projects to the whitelist of the inherited index,
+        # we also get the release from pypi
+        stage_dev2.modify(project_inheritance_rules=["allow all"])
         lazy.invalidate(stage, "index_bases")
         links = stage.get_releaselinks("someproject")
         assert len(links) == 2
@@ -678,27 +679,17 @@ class TestIndex:
         # our upload
         assert len(links) == 1
         assert links[0].relpath.endswith("someproject-1.0.zip")
-        # if we add all projects to the whitelist of the inheriting index, we
-        # also get the release from pypi
-        stage.modify(mirror_whitelist=['*'])
+        # if we allow all projects to the whitelist of the inheriting index,
+        # we also get the release from pypi
+        stage.modify(project_inheritance_rules=["allow all"])
         lazy.invalidate(stage, "index_bases")
         links = stage.get_releaselinks("someproject")
         assert len(links) == 2
         assert links[0].relpath.endswith("someproject-1.1.zip")
         assert links[1].relpath.endswith("someproject-1.0.zip")
 
-    @pytest.mark.parametrize("setting, expected", [
-        ('someproject', ['someproject']),
-        ('he_llo', ['he-llo']),
-        ('he_llo,Django', ['he-llo', 'django']),
-        ('foo,bar', ['foo', 'bar']),
-        ('*', ['*'])])
-    def test_whitelist_setting(self, stage, setting, expected):
-        stage.modify(mirror_whitelist=setting)
-        assert stage.ixconfig["mirror_whitelist"] == expected
-
     def test_package_not_in_mirror_whitelist_all(self, monkeypatch, pypistage, stage):
-        stage.modify(mirror_whitelist="*", bases=(pypistage.name,))
+        stage.modify(project_inheritance_rules=["allow all"], bases=(pypistage.name,))
         register_and_store(stage, "some_xyz-1.0.zip", b"123")
         # provoke error if called
         monkeypatch.setattr(
@@ -710,11 +701,13 @@ class TestIndex:
     def test_notrust_inheritance(self, pypistage, stage, user):
         pypistage.mock_simple(
             "someproject", "<a href='someproject-1.1.zip' /a>")
-        stage.modify(mirror_whitelist="*", bases=(pypistage.name,))
+        stage.modify(project_inheritance_rules=["allow all"], bases=(pypistage.name,))
         stage2 = user.create_stage(index='inheriting', bases=(stage.name,))
         assert "trust_inheritance_rules_from" not in stage.ixconfig
         assert "trust_inheritance_rules_from" not in stage2.ixconfig
-        assert stage2.ixconfig['mirror_whitelist'] == []
+        assert stage2.ixconfig["project_inheritance_rules"] == [
+            "block type:remote if local_exists"
+        ]
         assert pypistage.list_versions('someproject') == {'1.1'}
         assert get_release_basenames(pypistage, 'someproject') == [
             'someproject-1.1.zip']
@@ -760,7 +753,9 @@ class TestIndex:
             "<a href='someproject-1.1-py2.py3-none-any.whl' /a>",
             remoteurl=remote2.remote_url,
         )
-        stage.modify(bases=(remote1.name, remote2.name), mirror_whitelist="*")
+        stage.modify(
+            bases=(remote1.name, remote2.name), project_inheritance_rules=["allow all"]
+        )
         stage2 = user.create_stage(index='inheriting', bases=(stage.name,))
         assert "trust_inheritance_rules_from" not in stage.ixconfig
         assert "trust_inheritance_rules_from" not in stage2.ixconfig
@@ -792,7 +787,7 @@ class TestIndex:
     def test_trust_inheritance(self, pypistage, stage, user):
         pypistage.mock_simple(
             "someproject", "<a href='someproject-1.1.zip' /a>")
-        stage.modify(mirror_whitelist="*", bases=(pypistage.name,))
+        stage.modify(project_inheritance_rules=["allow all"], bases=(pypistage.name,))
         stage2 = user.create_stage(
             index="inheriting",
             bases=(stage.name,),
@@ -800,7 +795,9 @@ class TestIndex:
         )
         assert "trust_inheritance_rules_from" not in stage.ixconfig
         assert stage2.ixconfig["trust_inheritance_rules_from"] == "type:not remote"
-        assert stage2.ixconfig['mirror_whitelist'] == []
+        assert stage2.ixconfig["project_inheritance_rules"] == [
+            "block type:remote if local_exists"
+        ]
         assert pypistage.list_versions('someproject') == {'1.1'}
         assert get_release_basenames(pypistage, 'someproject') == [
             'someproject-1.1.zip']
@@ -848,7 +845,9 @@ class TestIndex:
             "<a href='someproject-1.1-py2.py3-none-any.whl' /a>",
             remoteurl=remote2.remote_url,
         )
-        stage.modify(bases=(remote1.name, remote2.name), mirror_whitelist="*")
+        stage.modify(
+            bases=(remote1.name, remote2.name), project_inheritance_rules=["allow all"]
+        )
         stage2 = user.create_stage(
             index="inheriting",
             bases=(stage.name,),
@@ -1713,9 +1712,7 @@ def test_setdefault_indexes(xom):
             assert isinstance(key, str)
 
 
-@pytest.mark.parametrize(
-    "key", ["acl_upload", "acl_toxresult_upload", "mirror_whitelist"]
-)
+@pytest.mark.parametrize("key", ["acl_upload", "acl_toxresult_upload"])
 @pytest.mark.parametrize(
     ("value", "result"), [("", []), ("x,y", ["x", "y"]), ("x,,y", ["x", "y"])]
 )

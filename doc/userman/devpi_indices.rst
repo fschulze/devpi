@@ -109,7 +109,7 @@ example below, we create the **emilie/prod** production index::
      volatile=False
      acl_upload=emilie
      acl_toxresult_upload=:ANONYMOUS:
-     mirror_whitelist=
+     project_inheritance_rules=block type:remote if local_exists
 
 which leads to the following::
 
@@ -128,7 +128,9 @@ which leads to the following::
                        "emilie"
                    ],
                    "bases": [],
-                   "mirror_whitelist": [],
+                   "project_inheritance_rules": [
+                       "block type:remote if local_exists"
+                   ],
                    "type": "local",
                    "volatile": false
                }
@@ -157,7 +159,7 @@ specifying her ``prod`` index as follow::
      volatile=True
      acl_upload=emilie
      acl_toxresult_upload=:ANONYMOUS:
-     mirror_whitelist=
+     project_inheritance_rules=block type:remote if local_exists
 
 which has the following definition on the server side::
 
@@ -173,7 +175,9 @@ which has the following definition on the server side::
            "bases": [
                "emilie/prod"
            ],
-           "mirror_whitelist": [],
+           "project_inheritance_rules": [
+               "block type:remote if local_exists"
+           ],
            "projects": [],
            "type": "local",
            "volatile": true
@@ -284,7 +288,7 @@ Assuming that Sophie has both index types as well::
      volatile=False
      acl_upload=sophie
      acl_toxresult_upload=:ANONYMOUS:
-     mirror_whitelist=
+     project_inheritance_rules=block type:remote if local_exists
 
 ::
 
@@ -295,7 +299,7 @@ Assuming that Sophie has both index types as well::
      volatile=True
      acl_upload=sophie
      acl_toxresult_upload=:ANONYMOUS:
-     mirror_whitelist=
+     project_inheritance_rules=block type:remote if local_exists
 
 Lets now assume that Sophie uploads her ``pysober`` package in her **dev** 
 index and Emilie wants to test the integration of this package with the 
@@ -320,7 +324,7 @@ bases::
      volatile=True
      acl_upload=emilie
      acl_toxresult_upload=:ANONYMOUS:
-     mirror_whitelist=
+     project_inheritance_rules=block type:remote if local_exists
 
 .. note:: It is important to specify all bases for that index, that is repeating
           **/emilie/prod** which can be obtained by doing::
@@ -338,7 +342,7 @@ When the work is done, this relationship can be revoked by doing::
      volatile=True
      acl_upload=emilie
      acl_toxresult_upload=:ANONYMOUS:
-     mirror_whitelist=
+     project_inheritance_rules=block type:remote if local_exists
 
 .. Adding a comment to work around a bug in regendoc where all lines are removed.     
      
@@ -351,7 +355,7 @@ which now has the ``/emilie/dev`` as a base only::
      volatile=True
      acl_upload=emilie
      acl_toxresult_upload=:ANONYMOUS:
-     mirror_whitelist=
+     project_inheritance_rules=block type:remote if local_exists
 
 Modifying the Access Control Lists
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -369,7 +373,7 @@ Emilie may allow sophie to upload to her dev index:
      volatile=True
      acl_upload=emilie,sophie
      acl_toxresult_upload=:ANONYMOUS:
-     mirror_whitelist=
+     project_inheritance_rules=block type:remote if local_exists
 
 If you have a plugin implementing an authentication method with group support,
 then you can use them in acls by prefixing the group name with a colon.
@@ -385,7 +389,7 @@ Suppose you want to allow all users in the "developers" group to upload packages
      volatile=True
      acl_upload=emilie,:developers
      acl_toxresult_upload=:ANONYMOUS:
-     mirror_whitelist=
+     project_inheritance_rules=block type:remote if local_exists
 
 It is also possible to allow anonymous uploads if you have a controlled environment.
 
@@ -399,7 +403,7 @@ It is also possible to allow anonymous uploads if you have a controlled environm
      volatile=True
      acl_upload=:ANONYMOUS:
      acl_toxresult_upload=:ANONYMOUS:
-     mirror_whitelist=
+     project_inheritance_rules=block type:remote if local_exists
 
 The ``acl_toxresult_upload`` option determines who can upload test results via ``devpi test``.
 By default anyone is allowed to do that.
@@ -419,14 +423,28 @@ whitelist. This should only be done for packages that you own or trust on all mi
 
 .. code-block:: console
 
-   $ devpi index -c someindex mirror_whitelist=mypkg
+   $ devpi index -c someindex
    http://localhost:3141/emilie/someindex?no_projects=:
      type=local
      bases=
      volatile=True
      acl_upload=emilie
      acl_toxresult_upload=:ANONYMOUS:
-     mirror_whitelist=mypkg
+     project_inheritance_rules=block type:remote if local_exists
+
+.. code-block:: console
+
+   $ echo '["inheritance_rules=allow all"]' | devpi patchjson /emilie/someindex/mypkg -
+   PATCH REQUEST sent to http://localhost:3141/emilie/someindex/mypkg
+   {
+       "result": {
+           "inheritance_rules": [
+               "allow all"
+           ],
+           "name": "mypkg"
+       },
+       "type": "projectconfig"
+   }
 
 You can also whitelist all packages on an index by setting mirror_whitelist to an asterisk.
 
@@ -435,14 +453,14 @@ whitelist itself.
 
 .. code-block:: console
 
-   $ devpi index -c wheelindex mirror_whitelist="*"
+   $ devpi index -c wheelindex project_inheritance_rules="allow all"
    http://localhost:3141/emilie/wheelindex?no_projects=:
      type=local
      bases=
      volatile=True
      acl_upload=emilie
      acl_toxresult_upload=:ANONYMOUS:
-     mirror_whitelist=*
+     project_inheritance_rules=allow all
 
 If you've modifyied the mirror whitelist to add a package you might need to run 
 `devpi refresh mypkg` to make the package versions from pypi visible. Multiple 
@@ -469,7 +487,7 @@ An index can have a title and description which is used in ``devpi-web``.
      acl_upload=emilie
      acl_toxresult_upload=:ANONYMOUS:
      description=Used for pip wheels
-     mirror_whitelist=*
+     project_inheritance_rules=allow all
      title=Wheel Index
 
 The description is included as is on the index overview page. You can't use any
@@ -537,7 +555,7 @@ In the example below, we create a "bad" index and delete it::
      volatile=True
      acl_upload=emilie
      acl_toxresult_upload=:ANONYMOUS:
-     mirror_whitelist=
+     project_inheritance_rules=block type:remote if local_exists
 
 here is the bad index::
 
@@ -553,7 +571,9 @@ here is the bad index::
            "bases": [
                "emilie/prod"
            ],
-           "mirror_whitelist": [],
+           "project_inheritance_rules": [
+               "block type:remote if local_exists"
+           ],
            "projects": [],
            "type": "local",
            "volatile": true

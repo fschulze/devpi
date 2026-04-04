@@ -10,6 +10,7 @@ from .config import ensure_list
 from .config import get_principals
 from .exceptions import InvalidIndex
 from .exceptions import InvalidIndexconfig
+from .exceptions import InvalidProjectConfig
 from .exceptions import InvalidUser
 from .exceptions import MissesRegistration
 from .exceptions import MissesVersion
@@ -39,6 +40,7 @@ from devpi_server.markers import Deleted
 from devpi_server.markers import unknown
 from devpi_server.normalized import normalize_name
 from devpi_server.readonly import ensure_deeply_readonly
+from devpi_server.readonly import get_mutable_deepcopy
 from lazy import lazy
 from pyramid.authorization import Allow
 from typing import TYPE_CHECKING
@@ -270,6 +272,38 @@ class BaseIndex:
         raise NotImplementedError
 
     @abstractmethod
+    def get_projectconfig_fields(self) -> Sequence[ConfigField]:
+        raise NotImplementedError
+
+    def get_projectconfig_from_kwargs(
+        self, project: NormalizedName, **kwargs: Any
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        index_type = self.index_type
+        config: dict[str, Any] = {}
+        fields = ConfigFields(self.get_projectconfig_fields())
+        fields.extend(
+            self.customizer.get_projectconfig_fields(),
+            f"The index customizer for {index_type!r} defines fields which "
+            "conflict with existing project configuration fields: {conflicting}",
+        )
+        for new_fields, plugin_name in zip(
+            *traced_pluggy_call(
+                self.xom.config.hook.devpiserver_projectconfig_fields,
+                index_type=self.index_type,
+            ),
+            strict=True,
+        ):
+            fields.extend(
+                new_fields,
+                f"The {plugin_name!r} plugin returned the following fields which "
+                f"conflict with existing project configuration fields for {index_type!r}: "
+                "{conflicting}",
+            )
+        fields.fill_config_from_kwargs(config, kwargs)
+        config["name"] = project
+        return (config, kwargs)
+
+    @abstractmethod
     def get_versiondata_perstage(
         self,
         project: NormalizedName | str,
@@ -409,6 +443,12 @@ class BaseIndex:
         links = linkstore.get_links(entrypath=relpath)
         assert len(links) < 2
         return links[0] if links else None
+
+    def get_projectconfig(self, project: NormalizedName) -> DictViewReadonly:
+        return self.key_project(project).with_resolved_parent().get()
+
+    def get_projectconfig_mutable(self, project: NormalizedName) -> dict:
+        return self.key_project(project).with_resolved_parent().get_mutable()
 
     @abstractmethod
     def get_simplelinks_perstage(self, project: NormalizedName | str) -> SimpleLinks:
@@ -613,6 +653,43 @@ class BaseIndex:
         lazy.invalidate(self, "index_bases")
         newconfig = self._modify(**kw)
         threadlog.info("modified index %s: %s", self.name, newconfig)
+        return newconfig
+
+    def _modify_project(self, project: NormalizedName, **kw: Any) -> dict[str, Any]:
+        if "name" in kw and project.original != kw["name"]:
+            raise InvalidIndexconfig(["the 'name' of a project can't be changed"])
+        kw.pop("name", None)
+        keep_unknown = kw.pop("_keep_unknown", False)
+        (config, unknown) = self.get_projectconfig_from_kwargs(project, **kw)
+        if unknown:
+            if keep_unknown:
+                # used to import data when plugins aren't installed anymore
+                config.update(unknown)
+            else:
+                raise InvalidProjectConfig(
+                    [
+                        "project config got unexpected keyword arguments: %s"
+                        % ", ".join("%s=%s" % x for x in unknown.items())
+                    ]
+                )
+        # modify project config
+        key_project = self.key_project(project).with_resolved_parent()
+        with key_project.update() as newconfig:
+            oldconfig = get_mutable_deepcopy(newconfig)
+            for key, value in list(config.items()):
+                if value is RemoveValue:
+                    newconfig.pop(key, None)
+                    config.pop(key)
+            newconfig.update(config)
+            self.customizer.validate_project_config(oldconfig, newconfig)
+            return newconfig
+
+    def modify_project(self, project: NormalizedName, **kw: Any) -> dict[str, Any]:
+        lazy.invalidate(self, "index_bases")
+        newconfig = self._modify_project(project, **kw)
+        threadlog.info(
+            "modified project %r on index %r: %r", project, self.name, newconfig
+        )
         return newconfig
 
     def get_index_bases(self) -> IndexBases:
