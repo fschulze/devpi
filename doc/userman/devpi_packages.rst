@@ -85,7 +85,7 @@ For this we first add ``root/pypi`` to the bases of ``emilie/prod``::
      volatile=False
      acl_upload=emilie
      acl_toxresult_upload=:ANONYMOUS:
-     mirror_whitelist=
+     project_inheritance_rules=block type:remote if local_exists
 
 Then we install a package from PyPI::
 
@@ -330,7 +330,7 @@ can modify her ``dev`` index to use ``/emilie/prod`` index as a base::
      volatile=True
      acl_upload=sophie
      acl_toxresult_upload=:ANONYMOUS:
-     mirror_whitelist=
+     project_inheritance_rules=block type:remote if local_exists
 
 The list command now gives her a different picture::
 

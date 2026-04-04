@@ -258,6 +258,11 @@ class TestImportExport:
                     assert import_(argv=argv) == 0
                 return makemapp(options=["--serverdir", serverdir])
 
+            def load_dataindex_json(self):
+                path = self.exportdir.joinpath("dataindex.json")
+                with path.open() as f:
+                    return json.load(f)
+
             def new_import(self, options=(), plugin=None):
                 from devpi_server.config import get_pluginmanager
                 from devpi_server.importexport import import_
@@ -416,8 +421,16 @@ class TestImportExport:
     def test_indexes_mirror_whitelist(self, impexp):
         mapp = impexp.import_testdata("mirrorwhitelist")
         indexlist = mapp.getindexlist("root")
-        assert indexlist["root/dev"]["mirror_whitelist"] == ["*"]
-        assert indexlist["root/prod"]["mirror_whitelist"] == ["bar", "foo"]
+        assert indexlist["root/dev"]["project_inheritance_rules"] == ["allow all"]
+        assert indexlist["root/prod"]["project_inheritance_rules"] == [
+            "block type:remote if local_exists"
+        ]
+        projectinfo = mapp.getjson("/root/prod/bar?v=2")
+        assert projectinfo["type"] == "projectconfig_v2"
+        assert projectinfo["result"]["config"]["inheritance_rules"] == ["allow all"]
+        projectinfo = mapp.getjson("/root/prod/foo?v=2")
+        assert projectinfo["type"] == "projectconfig_v2"
+        assert projectinfo["result"]["config"]["inheritance_rules"] == ["allow all"]
 
     def test_indexes_mirror_whitelist_inheritance(self, impexp):
         mapp1 = impexp.mapp1
@@ -461,10 +474,12 @@ class TestImportExport:
         mapp2 = impexp.new_import()
         assert api1.user in mapp2.getuserlist()
         indexlist1 = mapp2.getindexlist(api1.user)
-        assert indexlist1[api1.stagename]["mirror_whitelist"] == []
+        assert indexlist1[api1.stagename]["project_inheritance_rules"] == [
+            "block type:remote if local_exists"
+        ]
         assert api2.user in mapp2.getuserlist()
         indexlist2 = mapp2.getindexlist(api2.user)
-        assert indexlist2[api2.stagename]["mirror_whitelist"] == ["*"]
+        assert indexlist2[api2.stagename]["project_inheritance_rules"] == ["allow all"]
 
     @pytest.mark.parametrize("acltype", ["upload", "toxresult_upload"])
     def test_indexes_acl(self, impexp, acltype):

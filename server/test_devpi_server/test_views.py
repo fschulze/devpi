@@ -34,6 +34,8 @@ def remote_index_info(server_version):
     if server_version < parse_version("7.0.0.dev2"):
 
         class MirrorInfo:
+            merge_all_option = "mirror_whitelist"
+            merge_all_value = "*"
             refresh_option = "mirror_cache_expiry"
             type = "mirror"
             url_fmt_option = "mirror_web_url_fmt"
@@ -42,6 +44,8 @@ def remote_index_info(server_version):
         return MirrorInfo()
 
     class RemoteInfo:
+        merge_all_option = "project_inheritance_rules"
+        merge_all_value = ("allow all",)
         refresh_option = "remote_refresh_delay"
         type = "remote"
         url_fmt_option = "remote_web_url_fmt"

@@ -138,13 +138,31 @@ class BaseIndexCustomizer:
             for key in keys
         ]
 
+    def get_projectconfig_fields(self) -> Sequence[ConfigField]:
+        return ()
+
     def validate_config(self, oldconfig, newconfig):
         """Validates the index config.
 
         Can raise InvalidIndexconfig."""
 
+    def validate_project_config(self, oldconfig, newconfig):
+        """Validates the project config.
+
+        Can raise InvalidProjectConfig."""
+
     def on_modified(self, request, oldconfig):
         """Called after index was created or modified via a request.
+
+        Can do further changes in the current transaction.
+
+        Must use request.apifatal method to indicate errors instead
+        of raising HTTPException responses.
+
+        Other exceptions will be handled."""
+
+    def on_modified_project(self, request, project, oldconfig):
+        """Called after project was modified via a request.
 
         Can do further changes in the current transaction.
 

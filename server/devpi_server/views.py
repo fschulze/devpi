@@ -1487,7 +1487,7 @@ class PyPIView:
 
     @view_config(route_name="/{user}/{index}/{project}",
                  accept="application/json", request_method="GET")
-    def project_get(self) -> None:
+    def project_get(self) -> Response:
         if not json_preferred(self.request):
             apireturn(415, "unsupported media type %s" %
                       self.request.headers.items())
@@ -1499,7 +1499,68 @@ class PyPIView:
             versiondata = context.get_versiondata(
                 version=version, perstage=perstage)
             view_metadata[version] = self._make_view_verdata(versiondata)
-        apireturn(200, type="projectconfig", result=view_metadata)
+        result_version_str = self.request.GET.get("v", "1")
+        try:
+            result_version = int(result_version_str)
+        except (TypeError, ValueError):
+            return apiresult(
+                400,
+                message=f"The requested result version must be an integer, got {result_version_str!r}",
+            )
+        if result_version == 1:
+            return apiresult(200, type="projectconfig", result=view_metadata)
+        if result_version == 2:
+            config = context.stage.get_projectconfig_mutable(context.project)
+            return apiresult(
+                200,
+                type="projectconfig_v2",
+                result=dict(config=config, versions=view_metadata),
+            )
+        return apiresult(
+            400,
+            message=f"The requested result version must be 1 to 2, got {result_version!r}",
+        )
+
+    @view_config(
+        route_name="/{user}/{index}/{project}",
+        accept="application/json",
+        permission="index_modify",
+        request_method="PATCH",
+    )
+    def project_modify(self) -> HTTPResponse:
+        json = getjson(self.request)
+        project = normalize_name(self.context.project)
+        stage = cast("BaseIndex", self.context.stage)
+        if isinstance(json, list):
+            (json, keep_unknown) = apply_actions(
+                stage.get_projectconfig_mutable(project), json
+            )
+        else:
+            keep_unknown = False
+        if json.get("type") == "projectconfig" and "result" in json:
+            json = json["result"]
+        oldconfig = dict(stage.get_projectconfig(project))
+        if "error_on_noop" in self.request.params and oldconfig == json:
+            apireturn(400, message="The requested modifications resulted in no changes")
+        try:
+            ixconfig = stage.modify_project(project, **json, _keep_unknown=keep_unknown)
+        except InvalidIndexconfig as e:
+            apireturn(400, message=", ".join(e.messages))
+        try:
+            stage.customizer.on_modified_project(self.request, project, oldconfig)
+        except InvalidIndexconfig as e:
+            self.request.apifatal(400, message=", ".join(e.messages))
+        except HTTPException:
+            if not self.request.registry["xom"].keyfs.tx.doomed:
+                self.request.apifatal(
+                    500,
+                    "An HTTPException was raised. In on_modified_project this is not "
+                    "allowed, as it breaks transaction handling. Use "
+                    "request.apifatal instead.",
+                )
+            else:
+                raise
+        return apiresult(200, type="projectconfig", result=ixconfig)
 
     @view_config(
         route_name="/{user}/{index}/{project}", request_method="DELETE",
