@@ -423,6 +423,28 @@ class TestImportExport:
         indexlist = mapp2.getindexlist(api.user)
         assert indexlist[api.stagename]["mirror_whitelist"] == ["*"]
 
+    def test_indexes_pypi_whitelist(self, impexp):
+        mapp1 = impexp.mapp1
+        api1 = mapp1.create_and_use()
+        api2 = mapp1.create_and_use()
+        impexp.export()
+        with impexp.update_dataindex_json() as data:
+            for k in list(data["indexes"][api1.stagename]["indexconfig"]):
+                if k.startswith("mirror_"):
+                    data["indexes"][api1.stagename]["indexconfig"].pop(k)
+            data["indexes"][api1.stagename]["indexconfig"]["pypi_whitelist"] = []
+            for k in list(data["indexes"][api2.stagename]["indexconfig"]):
+                if k.startswith("mirror_"):
+                    data["indexes"][api2.stagename]["indexconfig"].pop(k)
+            data["indexes"][api2.stagename]["indexconfig"]["pypi_whitelist"] = ["*"]
+        mapp2 = impexp.new_import()
+        assert api1.user in mapp2.getuserlist()
+        indexlist1 = mapp2.getindexlist(api1.user)
+        assert indexlist1[api1.stagename]["mirror_whitelist"] == []
+        assert api2.user in mapp2.getuserlist()
+        indexlist2 = mapp2.getindexlist(api2.user)
+        assert indexlist2[api2.stagename]["mirror_whitelist"] == ["*"]
+
     @pytest.mark.parametrize('acltype', ('upload', 'toxresult_upload'))
     def test_indexes_acl(self, impexp, acltype):
         mapp1 = impexp.mapp1
