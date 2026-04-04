@@ -282,28 +282,6 @@ class TestIndexThings:
         assert res["result"]["title"] == "foo"
         assert res["result"]["description"] == "bar"
 
-    def test_whitelist_setting(self, mapp):
-        mapp.create_and_login_user("cuser7")
-        mapp.create_index("dev")
-        mapp.use("cuser7/dev")
-        res = mapp.getjson("/cuser7/dev")['result']
-        assert res['mirror_whitelist'] == []
-        mapp.set_mirror_whitelist("foo")
-        res = mapp.getjson("/cuser7/dev")['result']
-        assert res['mirror_whitelist'] == ['foo']
-        mapp.set_mirror_whitelist("foo,bar")
-        res = mapp.getjson("/cuser7/dev")['result']
-        assert res['mirror_whitelist'] == ['foo', 'bar']
-        mapp.set_mirror_whitelist("he_llo")
-        res = mapp.getjson("/cuser7/dev")['result']
-        assert res['mirror_whitelist'] == ['he-llo']
-        mapp.set_mirror_whitelist("he_llo,Django")
-        res = mapp.getjson("/cuser7/dev")['result']
-        assert res['mirror_whitelist'] == ['he-llo', 'django']
-        mapp.set_mirror_whitelist("*")
-        res = mapp.getjson("/cuser7/dev")['result']
-        assert res['mirror_whitelist'] == ['*']
-
 
 @pytest.mark.nomocking
 class TestIndexPushThings:
@@ -549,7 +527,10 @@ class TestRemoteIndexThings:
             remote_index_info.refresh_option: 0,
         }
         mapp.create_index("remote", indexconfig=indexconfig)
-        indexconfig = dict(mirror_whitelist="*", bases="remote8/remote")
+        indexconfig = {
+            remote_index_info.merge_all_option: remote_index_info.merge_all_value,
+            "bases": "remote8/remote",
+        }
         mapp.create_index("regular", indexconfig=indexconfig)
         mapp.use("remote8/regular")
         content = mapp.makepkg("pkg-1.0.tar.gz", b"content", "pkg", "1.0")

@@ -27,7 +27,7 @@ def test_index_patch(testapp):
         "acl_toxresult_upload": [":ANONYMOUS:"],
         "acl_upload": ["foo"],
         "bases": [],
-        "mirror_whitelist": [],
+        "project_inheritance_rules": ["block type:remote if local_exists"],
         "projects": [],
         "type": "local",
         "volatile": True,
@@ -56,18 +56,37 @@ def test_index_patch(testapp):
     testapp.patch_json("/foo/dev", ["bases-=root/pypi"])
     r = testapp.get("/foo/dev")
     assert r.json['result']['bases'] == []
-    # add to mirror_whitelist
-    testapp.patch_json("/foo/dev", ["mirror_whitelist+=foo", "mirror_whitelist+=bar"])
-    r = testapp.get("/foo/dev")
-    assert r.json['result']['mirror_whitelist'] == ['foo', 'bar']
-    # remove from mirror_whitelist
-    testapp.patch_json("/foo/dev", ["mirror_whitelist-=foo"])
-    r = testapp.get("/foo/dev")
-    assert r.json['result']['mirror_whitelist'] == ['bar']
-    # remove unknown from mirror_whitelist
-    r = testapp.patch_json("/foo/dev", ["mirror_whitelist-=foo"], expect_errors=True)
+    # remove from project_inheritance_rules
+    r = testapp.patch_json(
+        "/foo/dev",
+        ["project_inheritance_rules-=block type:remote if local_exists"],
+        expect_errors=True,
+    )
     assert r.status_code == 400
-    assert r.json['message'] == "The 'mirror_whitelist' setting doesn't have value 'foo'"
+    assert r.json["message"] == (
+        "Unknown value [] for project_inheritance_rules, "
+        "must be ['allow all'] or ['block type:remote if local_exists']."
+    )
+    # add to project_inheritance_rules
+    r = testapp.patch_json(
+        "/foo/dev",
+        ["project_inheritance_rules+=allow all"],
+        expect_errors=True,
+    )
+    assert r.status_code == 400
+    assert r.json["message"] == (
+        "Unknown value ['block type:remote if local_exists', 'allow all'] for project_inheritance_rules, "
+        "must be ['allow all'] or ['block type:remote if local_exists']."
+    )
+    # remove unknown from project_inheritance_rules
+    r = testapp.patch_json(
+        "/foo/dev", ["project_inheritance_rules-=foo"], expect_errors=True
+    )
+    assert r.status_code == 400
+    assert (
+        r.json["message"]
+        == "The 'project_inheritance_rules' setting doesn't have value 'foo'"
+    )
 
 
 def test_index_patch_trailing_slash(testapp):
@@ -76,10 +95,15 @@ def test_index_patch_trailing_slash(testapp):
     testapp.set_auth('foo', '123')
     # add index
     testapp.put_json("/foo/dev/", dict())
-    # remove unknown from mirror_whitelist
-    r = testapp.patch_json("/foo/dev/", ["mirror_whitelist-=foo"], expect_errors=True)
+    # remove unknown from project_inheritance_rules
+    r = testapp.patch_json(
+        "/foo/dev/", ["project_inheritance_rules-=foo"], expect_errors=True
+    )
     assert r.status_code == 400
-    assert r.json['message'] == "The 'mirror_whitelist' setting doesn't have value 'foo'"
+    assert (
+        r.json["message"]
+        == "The 'project_inheritance_rules' setting doesn't have value 'foo'"
+    )
 
 
 def test_remote_index_patch(testapp):

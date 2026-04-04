@@ -34,6 +34,8 @@ def remote_index_info(server_version):
     if server_version < parse_version("7.0.0.dev2"):
 
         class MirrorInfo:
+            merge_all_option = "mirror_whitelist"
+            merge_all_value = "*"
             refresh_option = "mirror_cache_expiry"
             type = "mirror"
             url_fmt_option = "mirror_web_url_fmt"
@@ -42,6 +44,8 @@ def remote_index_info(server_version):
         return MirrorInfo()
 
     class RemoteInfo:
+        merge_all_option = "project_inheritance_rules"
+        merge_all_value = ("allow all",)
         refresh_option = "remote_refresh_delay"
         type = "remote"
         url_fmt_option = "remote_web_url_fmt"
@@ -776,11 +780,22 @@ def test_simple_blocked_warning(mapp, pypistage, testapp):
     api = mapp.create_and_use(indexconfig=dict(bases=["root/pypi"]))
     mapp.set_versiondata(dict(name="pkg", version="1.0"), set_whitelist=False)
     r = testapp.xget(200, "/%s/+simple/pkg/" % api.stagename)
-    (paragraph,) = r.html.select('p')
-    assert paragraph.text == "INFO: Because this project isn't in the mirror_whitelist, no releases from root/pypi are included."
+    (ti,) = r.html.select("traversal-infos")
+    assert ti.text == (
+        "Traversal infos:\n"
+        "Traversed user1/dev\n"
+        "Postponed root/pypi\n"
+        "package 'pkg' located in user1/dev blocks releases from index root/pypi\n"
+    )
     mapp.set_versiondata(dict(name="pkg", version="1.1"), set_whitelist=True)
     r = testapp.xget(200, "/%s/+simple/pkg/" % api.stagename)
-    assert r.html.select('p') == []
+    (ti,) = r.html.select("traversal-infos")
+    assert ti.text == (
+        "Traversal infos:\n"
+        "Traversed user1/dev\n"
+        "Postponed root/pypi\n"
+        "package 'pkg' project rule 'allow all' from user1/dev allows merging releases from index root/pypi\n"
+    )
 
 
 def test_simple_with_removed_base(caplog, mapp, testapp):
