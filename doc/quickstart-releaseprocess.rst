@@ -105,13 +105,13 @@ so that all of pypi.org packages will appear on that index::
       volatile=True
       acl_upload=testuser
       acl_toxresult_upload=:ANONYMOUS:
-      mirror_whitelist=
+      project_inheritance_rules=block type:remote if local_exists
 
 Finally we use the new index::
 
     $ devpi use testuser/dev
     current devpi index: http://localhost:3141/testuser/dev (logged in as testuser)
-    supported features: push-no-docs, push-only-docs, push-register-project, server-keyvalue-parsing
+    supported features: projectconfig-v2, push-no-docs, push-only-docs, push-register-project, server-keyvalue-parsing
     venv for install/set commands: /tmp/docenv
     only setting venv pip/uv config, no global configuration changed
     /tmp/docenv/pip.conf: no config file exists
@@ -179,7 +179,7 @@ Let's verify we are logged in to the correct index::
 
     $ devpi use
     current devpi index: http://localhost:3141/testuser/dev (logged in as testuser)
-    supported features: push-no-docs, push-only-docs, push-register-project, server-keyvalue-parsing
+    supported features: projectconfig-v2, push-no-docs, push-only-docs, push-register-project, server-keyvalue-parsing
     venv for install/set commands: /tmp/docenv
     only setting venv pip/uv config, no global configuration changed
     /tmp/docenv/pip.conf: no config file exists
@@ -307,7 +307,7 @@ Let's create another ``staging`` index::
       volatile=False
       acl_upload=testuser
       acl_toxresult_upload=:ANONYMOUS:
-      mirror_whitelist=
+      project_inheritance_rules=block type:remote if local_exists
 
 We created a non-volatile index which means that one can not 
 overwrite or delete release files. See :ref:`non_volatile_indexes` for more info
@@ -333,7 +333,7 @@ Let's check again our current index::
 
     $ devpi use
     current devpi index: http://localhost:3141/testuser/dev (logged in as testuser)
-    supported features: push-no-docs, push-only-docs, push-register-project, server-keyvalue-parsing
+    supported features: projectconfig-v2, push-no-docs, push-only-docs, push-register-project, server-keyvalue-parsing
     venv for install/set commands: /tmp/docenv
     only setting venv pip/uv config, no global configuration changed
     /tmp/docenv/pip.conf: no config file exists
@@ -344,7 +344,7 @@ Let's now use our ``testuser/staging`` index::
 
     $ devpi use testuser/staging
     current devpi index: http://localhost:3141/testuser/staging (logged in as testuser)
-    supported features: push-no-docs, push-only-docs, push-register-project, server-keyvalue-parsing
+    supported features: projectconfig-v2, push-no-docs, push-only-docs, push-register-project, server-keyvalue-parsing
     venv for install/set commands: /tmp/docenv
     only setting venv pip/uv config, no global configuration changed
     /tmp/docenv/pip.conf: no config file exists
@@ -388,13 +388,13 @@ index, we can reconfigure the inheritance
       volatile=True
       acl_upload=testuser
       acl_toxresult_upload=:ANONYMOUS:
-      mirror_whitelist=
+      project_inheritance_rules=block type:remote if local_exists
 
 If we now switch back to using ``testuser/dev``::
 
     $ devpi use testuser/dev
     current devpi index: http://localhost:3141/testuser/dev (logged in as testuser)
-    supported features: push-no-docs, push-only-docs, push-register-project, server-keyvalue-parsing
+    supported features: projectconfig-v2, push-no-docs, push-only-docs, push-register-project, server-keyvalue-parsing
     venv for install/set commands: /tmp/docenv
     only setting venv pip/uv config, no global configuration changed
     /tmp/docenv/pip.conf: no config file exists

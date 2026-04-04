@@ -389,10 +389,11 @@ class XOM:
     @cached_property
     def supported_features(self):
         results = {
-            'push-no-docs',
-            'push-only-docs',
-            'push-register-project',
-            'server-keyvalue-parsing',
+            "projectconfig-v2",
+            "push-no-docs",
+            "push-only-docs",
+            "push-register-project",
+            "server-keyvalue-parsing",
         }
         for features in self.config.hook.devpiserver_get_features():
             results.update(features)

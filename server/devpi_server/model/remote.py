@@ -868,6 +868,9 @@ class RemoteIndex(BaseIndex):
             ),
         ]
 
+    def _get_projectconfig_fields(self) -> Sequence[ConfigField]:
+        return []
+
     def normalize_remote_url(self, value):
         if not value.startswith(("http://", "https://")):
             raise self.InvalidIndexconfig("'remote_url' option must be a URL.")

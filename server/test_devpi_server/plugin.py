@@ -14,6 +14,7 @@ from devpi_server.main import XOM
 from devpi_server.main import parseoptions
 from devpi_server.markers import notset
 from devpi_server.model import remote
+from devpi_server.model.config import ensure_list
 from devpi_server.normalized import normalize_name
 from io import BytesIO
 from pathlib import Path
@@ -960,10 +961,28 @@ class Mapp(MappMixin):
     def set_mirror_whitelist(self, whitelist, indexname=None):
         indexname = self._getindexname(indexname)
         r = self.testapp.get_json("/%s" % indexname)
-        result = r.json["result"]
-        result["mirror_whitelist"] = whitelist
-        r = self.testapp.patch_json("/%s" % (indexname,), result)
-        assert r.status_code == 200
+        config = []
+        if "mirror_whitelist" in r.json["result"]:
+            config.append(f"mirror_whitelist={whitelist}")
+        else:
+            whitelist = ensure_list(whitelist)
+            if whitelist in ("", []):
+                config.append("project_inheritance_rules=")
+            elif "*" in whitelist:
+                config.append("project_inheritance_rules=allow all")
+            else:
+                for project in whitelist:
+                    if project == "*":
+                        continue
+                    assert (
+                        self.testapp.patch_json(
+                            f"/{indexname}/{project}", ["inheritance_rules=allow all"]
+                        ).status_code
+                        == 200
+                    )
+        if config:
+            r = self.testapp.patch_json("/%s" % (indexname,), config)
+            assert r.status_code == 200
 
     def set_acl(self, users, acltype="upload", indexname=None):
         indexname = self._getindexname(indexname)
@@ -983,8 +1002,16 @@ class Mapp(MappMixin):
 
     def get_mirror_whitelist(self, indexname=None):
         indexname = self._getindexname(indexname)
-        r = self.testapp.get_json("/%s" % indexname)
-        return r.json["result"]["mirror_whitelist"]
+        result = self.testapp.get_json("/%s" % indexname).json["result"]
+        if "mirror_whitelist" in result:
+            return result["mirror_whitelist"]
+        value = result["project_inheritance_rules"]
+        if value == ["allow all"]:
+            return ["*"]
+        if value == ["block type:remote if local_exists"]:
+            return []
+        msg = f"Unknown value {value!r} for project_inheritance_rules"
+        raise ValueError(msg)
 
     def delete_project(
         self, project, *,

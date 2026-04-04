@@ -208,7 +208,7 @@ def test_get_mirror_whitelist_info_with_fetched_upstream(remoteindex, simpypi, s
 @pytest.mark.writetransaction
 @pytest.mark.usefixtures("remoteindex")
 def test_whitelisted_with_unfetched_upstream(simpypi, stage):
-    stage.ixconfig._data["mirror_whitelist"] = ["pkg"]
+    stage.ixconfig._data["project_inheritance_rules"] = ["allow all"]
     simpypi.add_release("pkg", pkgver="pkg-1.0.zip")
     assert stage.has_project("pkg") is unknown
     with pytest.deprecated_call():
@@ -234,7 +234,7 @@ def test_whitelisted_with_unfetched_upstream(simpypi, stage):
 @pytest.mark.nomocking
 @pytest.mark.writetransaction
 def test_whitelisted_with_fetched_upstream(remoteindex, simpypi, stage):
-    stage.ixconfig._data["mirror_whitelist"] = ["pkg"]
+    stage.ixconfig._data["project_inheritance_rules"] = ["allow all"]
     simpypi.add_release("pkg", pkgver="pkg-1.0.zip")
     (link,) = remoteindex.get_releaselinks_perstage("pkg")
     assert link.basename == "pkg-1.0.zip"
