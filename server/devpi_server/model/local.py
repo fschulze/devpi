@@ -3,12 +3,12 @@ from __future__ import annotations
 from .base import BaseIndex
 from .config import ACLList
 from .config import ConfigField
+from .config import InvalidIndexconfig
 from .config import ensure_acl_list
 from .config import ensure_boolean
 from .config import ensure_list
 from .config import normalize_bases
 from .config import normalize_trust_inheritance
-from .config import normalize_whitelist_name
 from .customizer import BaseIndexCustomizer
 from .exceptions import MissesRegistration
 from .exceptions import MissesVersion
@@ -162,11 +162,9 @@ class LocalIndex(BaseIndex):
             ConfigField(name="custom_data", type=None),
             ConfigField(name="description", normalize=str, type=str),
             ConfigField(
-                name="mirror_whitelist",
-                default=[],
-                normalize=lambda v: [
-                    normalize_whitelist_name(x) for x in ensure_list(v)
-                ],
+                name="project_inheritance_rules",
+                default=["block type:remote if local_exists"],
+                normalize=self.normalize_inheritance_rules,
                 type=list,
             ),
             ConfigField(name="title", normalize=str, type=str),
@@ -179,6 +177,43 @@ class LocalIndex(BaseIndex):
                 name="volatile", default=True, normalize=ensure_boolean, type=bool
             ),
         ]
+
+    def normalize_inheritance_rules(self, rules: Any) -> list[str]:
+        result = ensure_list(rules)
+        choices = {
+            ("allow all",),
+            ("block type:remote if local_exists",),
+        }
+        if tuple(result) not in choices:
+            raise InvalidIndexconfig.for_invalid_choice(
+                "project_inheritance_rules",
+                result,
+                [list(c) for c in choices],
+            )
+        return result
+
+    def _get_projectconfig_fields(self) -> Sequence[ConfigField]:
+        return [
+            ConfigField(
+                name="inheritance_rules",
+                normalize=self.normalize_project_inheritance_rules,
+                type=str,
+            ),
+        ]
+
+    def normalize_project_inheritance_rules(self, rules: Any) -> list[str]:
+        result = ensure_list(rules)
+        choices = {
+            ("allow all",),
+        }
+        if tuple(result) not in choices:
+            raise InvalidIndexconfig.for_invalid_choice(
+                "inheritance_rules",
+                result,
+                [list(c) for c in choices],
+                allow_empty=True,
+            )
+        return result
 
     def delete(self) -> None:
         # delete all projects on this index

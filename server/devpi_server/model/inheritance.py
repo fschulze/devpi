@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from collections.abc import Iterable
     from collections.abc import Iterator
+    from collections.abc import Sequence
     from devpi_server.normalized import NormalizedName
     from types import TracebackType
     from typing import Literal
@@ -49,14 +50,66 @@ class check_upstream_error:
             # If we are currently checking ourself raise the error, it is fatal
             return False
         threadlog.warn(
-            "Failed to check remote whitelist. Assume it does not exist (%s)", val
+            "Failed to check remote project existence to apply inheritance rules. Assume it does not exist (%s)",
+            val,
         )
         self.failed = True
         return True
 
 
-@define(slots=False)
+@define(kw_only=True, slots=False)
+class IndexInheritanceInfo:
+    index_bases_map: dict[str, tuple[str, ...] | None]
+    traversal_infos: list[TraversalInfo]
+
+    def iter_indexes(self) -> Iterator[BaseIndex]:
+        """Iterates indexes in defined order without loops."""
+        for traversal_info in self.traversal_infos:
+            match traversal_info:
+                case (
+                    PostponedTraversal()
+                    | SkippedTraversal(reason=InheritanceCycle())
+                    | TraversedIndex(seen=True)
+                ):
+                    continue
+                case SkippedTraversal(name=name, reason=MissingIndex(), src=src):
+                    threadlog.warn(
+                        "Index %s refers to non-existing base %s.", src, name
+                    )
+                    continue
+                case SkippedTraversal(name=name, reason=SROSkipHook(), src=src):
+                    threadlog.warn(
+                        "Index %s base %s excluded via devpiserver_sro_skip.",
+                        src,
+                        name,
+                    )
+                    continue
+                case TraversedIndex(index=index, seen=False):
+                    yield index
+                case _:
+                    raise RuntimeError(traversal_info)
+
+    def jsonable(self) -> dict:
+        return dict(
+            index_bases=self.index_bases_map,
+            traversal_infos=self.jsonable_traversal_infos(),
+        )
+
+    def jsonable_traversal_infos(self) -> list:
+        return [ti.jsonable() for ti in self.traversal_infos]
+
+
+has_project_str_map = {
+    False: "false",
+    True: "true",
+    notset: "notset",
+    unknown: "unknown",
+}
+
+
+@define(kw_only=True, slots=False)
 class ProjectInheritanceInfo:
+    index_bases_map: dict[str, tuple[str, ...] | None]
     traversal_infos: list[tuple[TraversalInfo, bool | NotSet | Unknown]]
 
     @cached_property
@@ -93,7 +146,7 @@ class ProjectInheritanceInfo:
                 threadlog.debug("%s: %s", opname, traversal_info.reason)
                 continue
             if isinstance(traversal_info, AllowedTraversal) and isinstance(
-                traversal_info.reason, WhitelistAllowed
+                traversal_info.reason, RulesAllow
             ):
                 threadlog.debug("%s: %s", opname, traversal_info.reason)
             if has_project is True or (
@@ -101,6 +154,19 @@ class ProjectInheritanceInfo:
                 and not isinstance(traversal_info, UntrustedTraversal)
             ):
                 yield traversal_info.index
+
+    def jsonable(self) -> dict:
+        return dict(
+            has_project_from_remote=has_project_str_map[self.has_project_from_remote],
+            index_bases=self.index_bases_map,
+            traversal_infos=self.jsonable_traversal_infos(),
+        )
+
+    def jsonable_traversal_infos(self) -> list:
+        return [
+            ti.jsonable() | dict(has_project=has_project_str_map[has_project])
+            for ti, has_project in self.traversal_infos
+        ]
 
     @cached_property
     def _unique_traversed_indexes(
@@ -140,19 +206,20 @@ class DirectAccess(PermissionAllowed):
 
 
 @define(frozen=True, kw_only=True)
-class WhitelistAllowed(PermissionAllowed):
+class RulesAllow(PermissionAllowed):
+    rule: str
     src_name: str
 
     def __str__(self) -> str:
-        return f"private package {str(self.project)!r} whitelisted at index {self.src_name}, allowing {self.name}"
+        return f"package {str(self.project)!r} {self.rule} from {self.src_name} allows merging releases from index {self.name}"
 
 
 @define(frozen=True, kw_only=True)
-class WhitelistBlocked(PermissionDenied):
+class LocalHitBlock(PermissionDenied):
     src_name: str
 
     def __str__(self) -> str:
-        return f"private package {str(self.project)!r} from {self.src_name} not whitelisted, blocking {self.name}"
+        return f"package {str(self.project)!r} located in {self.src_name} blocks releases from index {self.name}"
 
 
 @define(frozen=True, kw_only=True)
@@ -182,10 +249,14 @@ class SROSkipHook(SkipReason):
 class TraversalInfo(ABC):
     name: str
 
+    @abstractmethod
+    def jsonable(self) -> dict: ...
+
 
 @define(frozen=True, kw_only=True)
 class PostponedTraversal(TraversalInfo):
-    pass
+    def jsonable(self) -> dict:
+        return dict(action="postponed", name=self.name)
 
 
 @define(frozen=True, kw_only=True)
@@ -209,20 +280,30 @@ class TraversedIndex(TraversalInfo):
             seen=self.seen,
         )
 
+    def jsonable(self) -> dict:
+        return dict(action="traversed", name=self.name)
+
 
 @define(frozen=True, kw_only=True)
 class AllowedTraversal(TraversedIndex):
     reason: PermissionAllowed
+
+    def jsonable(self) -> dict:
+        return dict(action="allowed", name=self.name, reason=str(self.reason))
 
 
 @define(frozen=True, kw_only=True)
 class BlockedTraversal(TraversedIndex):
     reason: PermissionDenied
 
+    def jsonable(self) -> dict:
+        return dict(action="blocked", name=self.name, reason=str(self.reason))
+
 
 @define(frozen=True, kw_only=True)
 class UntrustedTraversal(TraversedIndex):
-    pass
+    def jsonable(self) -> dict:
+        return dict(action="untrusted", name=self.name)
 
 
 @define(frozen=True, kw_only=True)
@@ -230,45 +311,130 @@ class SkippedTraversal(TraversalInfo):
     reason: SkipReason
     src: str
 
+    def jsonable(self) -> dict:
+        return dict(action="skipped", name=self.name, reason=str(self.reason))
+
+
+@define
+class Rule(ABC):
+    rule: str
+
+
+class InheritRule(Rule, ABC):
+    def allow(
+        self, index: BaseIndex, local_exists_at: BaseIndex | Literal[False]
+    ) -> bool | None:
+        match self.rule:
+            case "allow all":
+                return True
+            case "block type:remote if local_exists":
+                if index.index_type == "remote":
+                    return local_exists_at is not False
+            case _:
+                msg = f"Unknown rule setting {self.rule!r}"
+                raise RuntimeError(msg)
+        return None
+
+    @abstractmethod
+    def __str__(self) -> str:
+        raise NotImplementedError
+
+
+class IndexRule(InheritRule):
+    def __str__(self) -> str:
+        return f"index rule {self.rule!r}"
+
+
+class ProjectRule(InheritRule):
+    def __str__(self) -> str:
+        return f"project rule {self.rule!r}"
+
+
+class TrustFromRule(Rule):
+    pass
+
+
+def _convert_rules(rules: Sequence[InheritRule]) -> list[InheritRule]:
+    return list(rules)
+
+
+@define
+class InheritRules:
+    rules: list[InheritRule] = field(converter=_convert_rules)
+
+    def allow(
+        self, index: BaseIndex, local_exists_at: BaseIndex | Literal[False]
+    ) -> InheritRule | None:
+        for rule in self.rules:
+            match rule.allow(index=index, local_exists_at=local_exists_at):
+                case None:
+                    continue
+                case False:
+                    raise NotImplementedError
+                case True:
+                    return rule
+        return None
+
+    def merge(
+        self,
+        rules: Sequence[InheritRule],
+        *,
+        index: BaseIndex,
+        trust_from: TrustFromRule,
+    ) -> None:
+        match trust_from.rule:
+            case "none":
+                pass
+            case "type:not remote":
+                if index != "remote":
+                    self.rules = _convert_rules(rules)
+            case _:
+                msg = (
+                    f"Unknown trust_inheritance_rules_from setting {trust_from.rule!r}"
+                )
+                raise RuntimeError(msg)
+
 
 @define(kw_only=True)
 class InheritancePolicy:
-    LocalIndex: LocalIndexType = field(init=False)
+    LocalIndex: LocalIndexType = field(init=False, repr=False)
+    allowed_by: tuple[BaseIndex, InheritRule] | Literal[False] = field(
+        default=False, init=False
+    )
     index: BaseIndex
-    private_hit: BaseIndex | Literal[False] = field(default=False, init=False)
+    local_exists_at: BaseIndex | Literal[False] = field(default=False, init=False)
     project: NormalizedName
-    whitelist: set[str] = field(init=False)
-    whitelist_merger: Callable[[set[str]], set[str]] = field(init=False)
-    whitelisted: BaseIndex | Literal[False] = field(default=False, init=False)
+    rules: InheritRules = field(init=False)
+    trust_from: TrustFromRule = field(init=False)
 
     def __attrs_post_init__(self) -> None:
         from .local import LocalIndex
 
         self.LocalIndex = LocalIndex
-        self.whitelist = self._get_whitelist(self.index)
-        match self.index.ixconfig.get("trust_inheritance_rules_from", "none"):
-            case "none":
-                self.whitelist_merger = lambda _o: self.whitelist
-            case "type:not remote":
-                self.whitelist_merger = self.whitelist.union
-            case trust_inheritance_rules_from:
-                msg = f"Unknown trust_inheritance_rules_from setting {trust_inheritance_rules_from!r}"
-                raise RuntimeError(msg)
+        self.rules = InheritRules(self._get_rules(self.index))
+        self.trust_from = TrustFromRule(
+            self.index.ixconfig.get("trust_inheritance_rules_from", "none")
+        )
 
-    def _get_whitelist(self, index: BaseIndex) -> set[str]:
-        return set(index.ixconfig.get("mirror_whitelist", set()))
+    def _get_rules(self, index: BaseIndex) -> Sequence[InheritRule]:
+        rules = index.get_projectconfig(self.project).get("inheritance_rules")
+        if rules is not None:
+            return [ProjectRule(r) for r in rules]
+        return [
+            IndexRule(r) for r in index.ixconfig.get("project_inheritance_rules", ())
+        ]
 
     def update(
         self, traversed_index: TraversedIndex
     ) -> tuple[PermissionReason | None, bool | NotSet | Unknown]:
         index = traversed_index.index
         untrusted = isinstance(traversed_index, UntrustedTraversal)
-        if untrusted and self.private_hit is not False and self.whitelisted is False:
+        if untrusted and self.local_exists_at is not False and self.allowed_by is False:
             return (
-                WhitelistBlocked(
+                LocalHitBlock(
                     name=index.name,
                     project=self.project,
-                    src_name=self.private_hit.name,
+                    src_name=self.local_exists_at.name,
                 ),
                 notset,
             )
@@ -277,19 +443,32 @@ class InheritancePolicy:
         if checker.failed:
             return (None, unknown)
         if isinstance(index, self.LocalIndex):
-            self.whitelist = self.whitelist_merger(self._get_whitelist(index))
-            if self.whitelist.intersection({"*", self.project}):
-                self.whitelisted = index
+            self.rules.merge(
+                self._get_rules(index), index=index, trust_from=self.trust_from
+            )
+            if (
+                rule := self.rules.allow(
+                    index=index, local_exists_at=self.local_exists_at
+                )
+            ) is not None:
+                self.allowed_by = (index, rule)
             elif exists:
-                self.private_hit = index
-        if self.private_hit is False and exists is unknown and index.no_project_list:
+                self.local_exists_at = index
+        if (
+            self.local_exists_at is False
+            and exists is unknown
+            and index.no_project_list
+        ):
             # direct fetching is allowed
             return (DirectAccess(name=index.name, project=self.project), exists)
-        if not exists or not untrusted or self.whitelisted is False:
+        if not exists or not untrusted or self.allowed_by is False:
             return (None, exists)
         return (
-            WhitelistAllowed(
-                name=index.name, project=self.project, src_name=self.whitelisted.name
+            RulesAllow(
+                name=index.name,
+                project=self.project,
+                rule=str(self.allowed_by[1]),
+                src_name=self.allowed_by[0].name,
             ),
             exists,
         )
@@ -309,6 +488,24 @@ class IndexBases:
 
     def __reversed__(self) -> Iterator[str]:
         return iter(reversed(self.bases))
+
+    @cached_property
+    def _index_bases_map(self) -> dict[str, tuple[str, ...] | None]:
+        getindex = self.model.getstage
+        result: dict[str, tuple[str, ...] | None] = {self.index.name: tuple(self)}
+        todo = list(reversed(self))
+        while todo:
+            current_name = todo.pop()
+            if current_name in result:
+                continue
+            current_index = getindex(current_name)
+            if current_index is None:
+                result[current_name] = None
+                continue
+            bases = current_index.index_bases
+            todo.extend(reversed(bases))
+            result[current_name] = tuple(bases)
+        return result
 
     @cached_property
     def bases(self) -> tuple[str]:
@@ -337,7 +534,9 @@ class IndexBases:
                     )
                 case _:
                     traversal_infos.append((traversal_info, exists))
-        return ProjectInheritanceInfo(traversal_infos)
+        return ProjectInheritanceInfo(
+            index_bases_map=self._index_bases_map, traversal_infos=traversal_infos
+        )
 
     def get_project_inheritance_info(
         self, project: NormalizedName
@@ -353,32 +552,14 @@ class IndexBases:
     ) -> Iterable[BaseIndex]:
         return self.get_project_inheritance_info(project).iter_indexes(opname)
 
+    @cached_property
+    def inheritance_info(self) -> IndexInheritanceInfo:
+        return IndexInheritanceInfo(
+            index_bases_map=self._index_bases_map, traversal_infos=self.traversal_infos
+        )
+
     def iter_indexes(self) -> Iterator[BaseIndex]:
-        """Iterates indexes in defined order without loops."""
-        for traversal_info in self.traversal_infos:
-            match traversal_info:
-                case (
-                    PostponedTraversal()
-                    | SkippedTraversal(reason=InheritanceCycle())
-                    | TraversedIndex(seen=True)
-                ):
-                    continue
-                case SkippedTraversal(name=name, reason=MissingIndex(), src=src):
-                    threadlog.warn(
-                        "Index %s refers to non-existing base %s.", src, name
-                    )
-                    continue
-                case SkippedTraversal(name=name, reason=SROSkipHook(), src=src):
-                    threadlog.warn(
-                        "Index %s base %s excluded via devpiserver_sro_skip.",
-                        src,
-                        name,
-                    )
-                    continue
-                case TraversedIndex(index=index, seen=False):
-                    yield index
-                case _:
-                    raise RuntimeError(traversal_info)
+        return self.inheritance_info.iter_indexes()
 
     def is_untrusted(self, index: BaseIndex) -> bool:
         # we have to postpone remotes, as there

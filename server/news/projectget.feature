@@ -1,0 +1,1 @@
+The project REST API includes the project configuration and information about inheritance from base indexes when the ``v=2`` query is added to the ``GET`` request. The inheritance information also includes warnings about inheritance cycles, missing bases and other problems.
