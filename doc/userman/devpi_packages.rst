@@ -85,7 +85,7 @@ For this we first add ``root/pypi`` to the bases of ``emilie/prod``::
      volatile=False
      acl_upload=emilie
      acl_toxresult_upload=:ANONYMOUS:
-     mirror_whitelist=
+     project_inheritance_rules=block type:remote if local_exists
 
 Then we install a package from PyPI::
 
@@ -306,7 +306,7 @@ Let's also make sure we now switch (use) the appropriate index::
 
    $ devpi use /sophie/dev    
    current devpi index: http://localhost:3141/sophie/dev (logged in as sophie)
-   supported features: push-no-docs, push-only-docs, push-register-project, server-keyvalue-parsing
+   supported features: projectconfig-v2, push-no-docs, push-only-docs, push-register-project, server-keyvalue-parsing
    venv for install/set commands: /tmp/docenv
    only setting venv pip/uv config, no global configuration changed
    /tmp/docenv/pip.conf: no config file exists
@@ -330,7 +330,7 @@ can modify her ``dev`` index to use ``/emilie/prod`` index as a base::
      volatile=True
      acl_upload=sophie
      acl_toxresult_upload=:ANONYMOUS:
-     mirror_whitelist=
+     project_inheritance_rules=block type:remote if local_exists
 
 The list command now gives her a different picture::
 
@@ -382,7 +382,7 @@ version to her ``/sophie/dev`` index by first using the index::
 
    $ devpi use /emilie/prod   
    current devpi index: http://localhost:3141/emilie/prod (logged in as sophie)
-   supported features: push-no-docs, push-only-docs, push-register-project, server-keyvalue-parsing
+   supported features: projectconfig-v2, push-no-docs, push-only-docs, push-register-project, server-keyvalue-parsing
    venv for install/set commands: /tmp/docenv
    only setting venv pip/uv config, no global configuration changed
    /tmp/docenv/pip.conf: no config file exists
@@ -400,7 +400,7 @@ Then switching back to her index::
 
    $ devpi use /sophie/dev
    current devpi index: http://localhost:3141/sophie/dev (logged in as sophie)
-   supported features: push-no-docs, push-only-docs, push-register-project, server-keyvalue-parsing
+   supported features: projectconfig-v2, push-no-docs, push-only-docs, push-register-project, server-keyvalue-parsing
    venv for install/set commands: /tmp/docenv
    only setting venv pip/uv config, no global configuration changed
    /tmp/docenv/pip.conf: no config file exists
