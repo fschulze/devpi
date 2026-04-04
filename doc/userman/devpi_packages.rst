@@ -86,7 +86,6 @@ For this we first add ``root/pypi`` to the bases of ``emilie/prod``::
      acl_upload=emilie
      acl_toxresult_upload=:ANONYMOUS:
      mirror_whitelist=
-     mirror_whitelist_inheritance=intersection
 
 Then we install a package from PyPI::
 
@@ -332,8 +331,7 @@ can modify her ``dev`` index to use ``/emilie/prod`` index as a base::
      acl_upload=sophie
      acl_toxresult_upload=:ANONYMOUS:
      mirror_whitelist=
-     mirror_whitelist_inheritance=intersection
-   
+
 The list command now gives her a different picture::
 
    $ devpi list pysober
