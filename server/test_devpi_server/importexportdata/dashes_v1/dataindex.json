@@ -1,0 +1,69 @@
+{
+  "dumpversion": "1",
+  "secret": "qREGpVy0mj2auDp/z/7JpQe/as9XJQl3GZGW75SSH9U=",
+  "pythonversion": [
+    3,
+    11,
+    13,
+    "final",
+    0
+  ],
+  "devpi_server": "1.2",
+  "indexes": {
+    "user1/dev": {
+      "projects": {
+        "hello": {
+          "1.2-3": {
+            "author": "",
+            "home_page": "",
+            "version": "1.2-3",
+            "keywords": "",
+            "name": "hello",
+            "classifiers": [],
+            "download_url": "",
+            "author_email": "",
+            "license": "",
+            "platform": [],
+            "summary": "",
+            "description": ""
+          }
+        }
+      },
+      "files": [
+        {
+          "entrymapping": {
+            "last_modified": "Fri, 04 Jul 2014 14:40:13 GMT",
+            "md5": "9a0364b9e99bb480dd25e1f0284c8555",
+            "size": "7"
+          },
+          "projectname": "hello",
+          "type": "releasefile",
+          "relpath": "user1/dev/hello/hello-1.2_3.tar.gz"
+        }
+      ],
+      "indexconfig": {
+        "uploadtrigger_jenkins": null,
+        "volatile": true,
+        "bases": [
+          "root/pypi"
+        ],
+        "acl_upload": [
+          "user1"
+        ],
+        "type": "stage"
+      }
+    }
+  },
+  "users": {
+    "root": {
+      "pwhash": "265ed9fb83bef361764838b7099e9627570016629db4e8e1b930817b1a4793af",
+      "username": "root",
+      "pwsalt": "A/4FsRp5oTkovbtTfhlx1g=="
+    },
+    "user1": {
+      "username": "user1",
+      "pwsalt": "RMAM7ycp8aqw4vytBOBEKA==",
+      "pwhash": "d9f98f41f8cbdeb6a30a7b6c376d0ccdd76e862ad1fa508b79d4c2098cc9d69a"
+    }
+  }
+}
