@@ -411,7 +411,7 @@ class Migrator:
             ).strftime("%Y-%m-%dT%H:%M:%SZ")
         return data
 
-    def migrate_index(self, data: dict) -> dict:
+    def migrate_index(self, data: dict) -> dict:  # noqa: PLR0912
         if "files" in data:
             data["files"] = [self.migrate_file(v) for v in data.pop("files")]
         indexconfig = data["indexconfig"]
@@ -433,7 +433,25 @@ class Migrator:
             )
         if indexconfig["type"] == "remote":
             indexconfig = self.migrate_remote_index(indexconfig)
+        else:
+            indexconfig = self.migrate_local_index(indexconfig)
         return data
+
+    def migrate_local_index(self, indexconfig: dict) -> dict:
+        if "mirror_whitelist_inheritance" in indexconfig:
+            # this was changed in 7.0.0
+            whitelist_inheritance = indexconfig.pop("mirror_whitelist_inheritance")
+            assert "trust_inheritance_rules_from" not in indexconfig
+            match whitelist_inheritance:
+                case "intersection":
+                    # the default
+                    pass
+                case "union":
+                    indexconfig["trust_inheritance_rules_from"] = "type:not remote"
+                case value:
+                    msg = f"Unknown value {value!r} for mirror_whitelist_inheritance"
+                    raise RuntimeError(msg)
+        return indexconfig
 
     def migrate_remote_index(self, indexconfig: dict) -> dict:
         if "mirror_cache_expiry" in indexconfig:

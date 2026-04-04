@@ -428,7 +428,6 @@ Alice can now create her new ``dev`` index::
       acl_upload=alice
       acl_toxresult_upload=:ANONYMOUS:
       mirror_whitelist=
-      mirror_whitelist_inheritance=intersection
 
 and use it ::
 
