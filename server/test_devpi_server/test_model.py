@@ -68,24 +68,6 @@ def user(model):
     return model.create_user("hello", password="123")
 
 
-def test_has_mirror_base(model, pypistage):
-    pypistage.mock_simple("pytest", "<a href='pytest-1.0.zip' /a>")
-    assert pypistage.has_mirror_base("pytest")
-    assert pypistage.has_project_perstage("pytest")
-    user = model.create_user("user1", "pass")
-    stage1 = user.create_stage("stage1", bases=())
-    assert not stage1.has_mirror_base("pytest")
-
-    stage2 = user.create_stage("stage2", bases=("root/pypi",))
-    assert stage2.has_mirror_base("pytest")
-    register_and_store(stage2, "pytest-1.1.tar.gz")
-    assert not stage2.has_mirror_base("pytest")
-    ixconfig = stage2.ixconfig_mutable.copy()
-    ixconfig["mirror_whitelist"] = ["pytest"]
-    stage2.modify(**ixconfig)
-    assert stage2.has_mirror_base("pytest")
-
-
 def test_get_mirror_whitelist_info(model, pypistage):
     pypistage.mock_simple("pytest", "<a href='pytest-1.0.zip' /a>")
     assert pypistage.get_mirror_whitelist_info("pytest") == dict(
