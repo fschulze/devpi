@@ -49,6 +49,10 @@ class InvalidIndexconfig(InvalidConfig):
     pass
 
 
+class InvalidProjectConfig(InvalidConfig):
+    pass
+
+
 class InvalidUser(ModelException):
     """If a username is invalid or already in use."""
 
