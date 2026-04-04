@@ -318,7 +318,8 @@ class TestImportExport:
         from time import strftime
         import datetime
         gmtime_mock = mock.Mock()
-        monkeypatch.setattr("devpi_server.model.gmtime", gmtime_mock)
+        monkeypatch.setattr("devpi_server.model.root.gmtime", gmtime_mock)
+        monkeypatch.setattr("devpi_server.model.user.gmtime", gmtime_mock)
         import_time = datetime.datetime(2021, 2, 22, 10, 51, 51).timetuple()
         gmtime_mock.return_value = import_time
         mapp = impexp.import_testdata('nocreatedmodified')

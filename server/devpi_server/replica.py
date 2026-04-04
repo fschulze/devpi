@@ -23,8 +23,8 @@ from .markers import Absent
 from .markers import Deleted
 from .markers import absent
 from .markers import deleted
-from .mirror import FileStreamer
-from .model import UpstreamError
+from .model.exceptions import UpstreamError
+from .model.remote import FileStreamer
 from .normalized import normalize_name
 from .readonly import DictViewReadonly
 from .views import H_PRIMARY_UUID
@@ -62,7 +62,7 @@ if TYPE_CHECKING:
     from .keyfs_types import ULIDKey
     from .log import TagLogger
     from .main import XOM
-    from .mirror import MirrorStage
+    from .model.remote import MirrorStage
     from collections.abc import Iterable
     from collections.abc import Iterator
     from collections.abc import Sequence

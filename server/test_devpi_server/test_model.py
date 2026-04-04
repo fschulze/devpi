@@ -5,14 +5,14 @@ from devpi_common.archive import zip_dict
 from devpi_common.metadata import splitbasename
 from devpi_server.config import hookimpl
 from devpi_server.filestore import get_hashes
-from devpi_server.model import InvalidIndexconfig
-from devpi_server.model import PrivateStage
-from devpi_server.model import StageCustomizer
-from devpi_server.model import ensure_acl_list
-from devpi_server.model import ensure_boolean
-from devpi_server.model import ensure_list
-from devpi_server.model import run_passwd
-from devpi_server.model import unknown
+from devpi_server.markers import unknown
+from devpi_server.model.base import run_passwd
+from devpi_server.model.config import ensure_acl_list
+from devpi_server.model.config import ensure_boolean
+from devpi_server.model.config import ensure_list
+from devpi_server.model.exceptions import InvalidIndexconfig
+from devpi_server.model.local import PrivateStage
+from devpi_server.model.local import StageCustomizer
 from devpi_server.readonly import ensure_deeply_readonly
 from io import BytesIO
 from lazy import lazy
@@ -276,8 +276,8 @@ class TestStage:
             assert orig == name.original
 
     def test_inheritance_cycle(self, model, pypistage):
-        from devpi_server.model import SkipReason
-        from devpi_server.model import SkippedTraversal
+        from devpi_server.model.inheritance import SkipReason
+        from devpi_server.model.inheritance import SkippedTraversal
 
         pypistage.mock_simple("someproject", "<a href='someproject-1.0.zip' /a>")
         user = model.create_user("user", password="123")
@@ -489,7 +489,7 @@ class TestStage:
         assert not stage.get_versiondata("someproject", "2.0")
 
     def test_long_description(self, stage):
-        from devpi_server.model import VERSIONDATA_DESCRIPTION_SIZE_THRESHOLD
+        from devpi_server.model.local import VERSIONDATA_DESCRIPTION_SIZE_THRESHOLD
 
         snippet = "this is some description repeated many times"
         count = (VERSIONDATA_DESCRIPTION_SIZE_THRESHOLD // len(snippet)) + 1
@@ -689,8 +689,9 @@ class TestStage:
         register_and_store(stage, "some_xyz-1.0.zip", b"123")
         # provoke error if called
         monkeypatch.setattr(
-            "devpi_server.mirror.MirrorStage.list_versions_perstage",
-            lambda self, project: 0 / 0)
+            "devpi_server.model.remote.MirrorStage.list_versions_perstage",
+            lambda _self, _project: 0 / 0,
+        )
         assert stage.list_versions('some_xyz') == {'1.0'}
 
     def test_whitelist_intersection(self, pypistage, stage, user):
@@ -1606,7 +1607,8 @@ class TestUsers:
         from time import strftime
         import datetime
         gmtime_mock = mock.Mock()
-        monkeypatch.setattr("devpi_server.model.gmtime", gmtime_mock)
+        monkeypatch.setattr("devpi_server.model.root.gmtime", gmtime_mock)
+        monkeypatch.setattr("devpi_server.model.user.gmtime", gmtime_mock)
         creation_time = datetime.datetime(2021, 2, 22, 10, 51, 51).timetuple()
         gmtime_mock.return_value = creation_time
         user = model.create_user("user", "password")

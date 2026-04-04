@@ -40,7 +40,7 @@ if TYPE_CHECKING:
     from .interfaces import ContentOrFile
     from .keyfs import KeyFS
     from .keyfs_types import LocatedKey
-    from .model import Schema
+    from .model.schema import Schema
     from .readonly import SetViewReadonly
     from devpi_common.url import URL
     from typing import Any

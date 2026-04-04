@@ -37,7 +37,7 @@ from .markers import Absent
 from .markers import Deleted
 from .markers import absent
 from .markers import deleted
-from .model import RootModel
+from .model.root import RootModel
 from .readonly import DictViewReadonly
 from .readonly import ensure_deeply_readonly
 from .readonly import get_mutable_deepcopy
@@ -62,9 +62,9 @@ if TYPE_CHECKING:
     from .keyfs_types import StorageInfo
     from .log import TagLogger
     from .main import XOM
-    from .model import BaseStage
-    from .model import Schema as ModelSchema
-    from .model import User
+    from .model.base import BaseStage
+    from .model.schema import Schema as ModelSchema
+    from .model.user import User
     from .mythread import MyThread
     from collections.abc import Callable
     from collections.abc import Iterable
