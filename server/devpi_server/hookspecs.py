@@ -244,6 +244,14 @@ def devpiserver_indexconfig_fields(index_type: str) -> Sequence[ConfigField]:
     to avoid clashes between key names in different plugins."""
 
 
+@hookspec
+def devpiserver_projectconfig_fields(index_type: str) -> Sequence[ConfigField]:
+    """Returns a sequence of ConfigField for the project configuration dictionary.
+
+    It's a good idea to use the plugin name as prefix for the key names
+    to avoid clashes between key names in different plugins."""
+
+
 @hookspec(firstresult=True)
 def devpiserver_sro_skip(stage, base_stage):
     """For internal use only!"""

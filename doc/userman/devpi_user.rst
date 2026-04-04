@@ -41,7 +41,7 @@ For instance, to use the ``pypi`` index, once could issue::
 
    $ devpi use /root/pypi
    current devpi index: http://localhost:3141/root/pypi (not logged in)
-   supported features: push-no-docs, push-only-docs, push-register-project, server-keyvalue-parsing
+   supported features: projectconfig-v2, push-no-docs, push-only-docs, push-register-project, server-keyvalue-parsing
    venv for install/set commands: /tmp/docenv
    only setting venv pip/uv config, no global configuration changed
    /tmp/docenv/pip.conf: no config file exists
