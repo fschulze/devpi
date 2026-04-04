@@ -1399,9 +1399,6 @@ class BaseStage:
             has_mirror_base=False,
             blocked_by_mirror_whitelist=None)
 
-    def has_mirror_base(self, project):
-        return self.get_mirror_whitelist_info(project)['has_mirror_base']
-
     def filter_projects(self, projects):
         iterator = self.customizer.get_projects_filter_iter(projects)
         if iterator is None:
