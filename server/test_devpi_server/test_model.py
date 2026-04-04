@@ -591,12 +591,12 @@ class TestStage:
         assert len(links) == 1
         assert links[0].entrypath.endswith("someproject-1.1.zip")
 
-    def test_project_whitelist_inheritance(self, pypistage, stage, user):
+    def test_project_trust_inheritance_none(self, pypistage, stage, user):
         user.create_stage(index="dev2", bases=("root/pypi",))
         stage_dev2 = user.getstage("dev2")
         stage.modify(
-            mirror_whitelist_inheritance="union",
-            bases=(stage_dev2.name,))
+            trust_inheritance_rules_from="type:stage", bases=(stage_dev2.name,)
+        )
         pypistage.mock_simple("someproject", '<a href="someproject-1.1.zip" />')
         register_and_store(stage, "someproject-1.0.zip", b"123")
         links = stage.get_releaselinks("someproject")
@@ -630,12 +630,12 @@ class TestStage:
         assert links[0].relpath.endswith("someproject-1.1.zip")
         assert links[1].relpath.endswith("someproject-1.0.zip")
 
-    def test_project_whitelist_all_inheritance(self, pypistage, stage, user):
+    def test_project_trust_inheritance_all(self, pypistage, stage, user):
         user.create_stage(index="dev2", bases=("root/pypi",))
         stage_dev2 = user.getstage("dev2")
         stage.modify(
-            mirror_whitelist_inheritance="union",
-            bases=(stage_dev2.name,))
+            trust_inheritance_rules_from="type:stage", bases=(stage_dev2.name,)
+        )
         pypistage.mock_simple("someproject", '<a href="someproject-1.1.zip" />')
         register_and_store(stage, "someproject-1.0.zip", b"123")
         links = stage.get_releaselinks("someproject")
@@ -693,13 +693,13 @@ class TestStage:
             lambda self, project: 0 / 0)
         assert stage.list_versions('some_xyz') == {'1.0'}
 
-    def test_whitelist_intersection(self, pypistage, stage, user):
+    def test_notrust_inheritance(self, pypistage, stage, user):
         pypistage.mock_simple(
             "someproject", "<a href='someproject-1.1.zip' /a>")
         stage.modify(mirror_whitelist="*", bases=(pypistage.name,))
         stage2 = user.create_stage(index='inheriting', bases=(stage.name,))
-        assert stage.ixconfig['mirror_whitelist_inheritance'] == 'intersection'
-        assert stage2.ixconfig['mirror_whitelist_inheritance'] == 'intersection'
+        assert "trust_inheritance_rules_from" not in stage.ixconfig
+        assert "trust_inheritance_rules_from" not in stage2.ixconfig
         assert stage2.ixconfig['mirror_whitelist'] == []
         assert pypistage.list_versions('someproject') == {'1.1'}
         assert get_release_basenames(pypistage, 'someproject') == [
@@ -725,7 +725,7 @@ class TestStage:
             'someproject-1.0.zip',
             'someproject-1.1-py2.py3-none-any.whl']
 
-    def test_whitelist_intersection_two_mirrors(self, http, stage, user):
+    def test_notrust_inheritance_two_mirrors(self, http, stage, user):
         mirror1 = user.create_stage("mirror1", **udict(
             mirror_url="http://pypi.org/simple", type="mirror"))
         mirror2 = user.create_stage("mirror2", **udict(
@@ -748,8 +748,8 @@ class TestStage:
             bases=(mirror1.name, mirror2.name),
             mirror_whitelist='*')
         stage2 = user.create_stage(index='inheriting', bases=(stage.name,))
-        assert stage.ixconfig['mirror_whitelist_inheritance'] == 'intersection'
-        assert stage2.ixconfig['mirror_whitelist_inheritance'] == 'intersection'
+        assert "trust_inheritance_rules_from" not in stage.ixconfig
+        assert "trust_inheritance_rules_from" not in stage2.ixconfig
         assert mirror1.list_versions('someproject') == {'1.1'}
         assert get_release_basenames(mirror1, 'someproject') == [
             'someproject-1.1.zip']
@@ -775,15 +775,17 @@ class TestStage:
         assert get_release_basenames(stage2, 'someproject') == [
             'someproject-1.0.zip']
 
-    def test_whitelist_union(self, pypistage, stage, user):
+    def test_trust_inheritance(self, pypistage, stage, user):
         pypistage.mock_simple(
             "someproject", "<a href='someproject-1.1.zip' /a>")
         stage.modify(mirror_whitelist="*", bases=(pypistage.name,))
         stage2 = user.create_stage(
-            index='inheriting', bases=(stage.name,),
-            mirror_whitelist_inheritance='union')
-        assert stage.ixconfig['mirror_whitelist_inheritance'] == 'intersection'
-        assert stage2.ixconfig['mirror_whitelist_inheritance'] == 'union'
+            index="inheriting",
+            bases=(stage.name,),
+            trust_inheritance_rules_from="type:stage",
+        )
+        assert "trust_inheritance_rules_from" not in stage.ixconfig
+        assert stage2.ixconfig["trust_inheritance_rules_from"] == "type:stage"
         assert stage2.ixconfig['mirror_whitelist'] == []
         assert pypistage.list_versions('someproject') == {'1.1'}
         assert get_release_basenames(pypistage, 'someproject') == [
@@ -811,7 +813,7 @@ class TestStage:
             'someproject-1.1-py2.py3-none-any.whl',
             'someproject-1.1.zip']
 
-    def test_whitelist_union_two_mirrors(self, http, stage, user):
+    def test_trust_inheritance_two_mirrors(self, http, stage, user):
         mirror1 = user.create_stage("mirror1", **udict(
             mirror_url="http://pypi.org/simple", type="mirror"))
         mirror2 = user.create_stage("mirror2", **udict(
@@ -834,10 +836,12 @@ class TestStage:
             bases=(mirror1.name, mirror2.name),
             mirror_whitelist='*')
         stage2 = user.create_stage(
-            index='inheriting', bases=(stage.name,),
-            mirror_whitelist_inheritance='union')
-        assert stage.ixconfig['mirror_whitelist_inheritance'] == 'intersection'
-        assert stage2.ixconfig['mirror_whitelist_inheritance'] == 'union'
+            index="inheriting",
+            bases=(stage.name,),
+            trust_inheritance_rules_from="type:stage",
+        )
+        assert "trust_inheritance_rules_from" not in stage.ixconfig
+        assert stage2.ixconfig["trust_inheritance_rules_from"] == "type:stage"
         assert mirror1.list_versions('someproject') == {'1.1'}
         assert get_release_basenames(mirror1, 'someproject') == [
             'someproject-1.1.zip']
@@ -864,29 +868,6 @@ class TestStage:
             'someproject-1.0.zip',
             'someproject-1.1-py2.py3-none-any.whl',
             'someproject-1.1.zip']
-
-    @pytest.mark.notransaction
-    def test_mirror_whitelist_inheritance_bbb(self, xom):
-        keyfs = xom.keyfs
-        with keyfs.write_transaction():
-            user = xom.model.create_user("hello", password="123")
-            config = udict(index="world", bases=(), type="stage", volatile=True)
-            stage = user.create_stage(**config)
-            assert stage.ixconfig["mirror_whitelist_inheritance"] == "intersection"
-            with stage.key_index.with_resolved_parent().update() as ixconfig:
-                # here we remove the value to simulate an old stage
-                del ixconfig["mirror_whitelist_inheritance"]
-        with keyfs.read_transaction():
-            stage = xom.model.getstage("hello/world")
-            assert 'mirror_whitelist_inheritance' not in stage.ixconfig
-        with keyfs.write_transaction():
-            stage = xom.model.getstage("hello/world")
-            # now modify an unrelated setting
-            stage.modify(bases=("root/pypi",))
-        with keyfs.read_transaction():
-            stage = xom.model.getstage("hello/world")
-            # mirror_whitelist_inheritance should still be missing
-            assert 'mirror_whitelist_inheritance' not in stage.ixconfig
 
     def test_store_and_delete_project(self, stage):
         register_and_store(stage, "some_xyz-1.0.zip", b"123")

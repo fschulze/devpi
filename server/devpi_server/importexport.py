@@ -541,6 +541,23 @@ class Importer:
                     whitelist = indexconfig.pop('pypi_whitelist')
                     if 'mirror_whitelist' not in indexconfig:
                         indexconfig['mirror_whitelist'] = whitelist
+                if "mirror_whitelist_inheritance" in indexconfig:
+                    # this was changed in 7.0.0
+                    whitelist_inheritance = indexconfig.pop(
+                        "mirror_whitelist_inheritance"
+                    )
+                    assert "trust_inheritance_rules_from" not in indexconfig
+                    match whitelist_inheritance:
+                        case "intersection":
+                            # the default
+                            pass
+                        case "union":
+                            indexconfig["trust_inheritance_rules_from"] = "type:stage"
+                        case value:
+                            msg = f"Unknown value {value!r} for mirror_whitelist_inheritance"
+                            raise RuntimeError(msg)
+                    if "mirror_whitelist" not in indexconfig:
+                        indexconfig["mirror_whitelist"] = whitelist
                 username, index = stagename.split("/")
                 user = self.xom.model.get_user(username)
                 assert user is not None

@@ -1,0 +1,1 @@
+Renamed ``mirror_whitelist_inheritance`` to ``trust_inheritance_rules_from`` and the values ``intersection`` to ``none``, and ``union`` to ``type:stage`` to make the intention more obvious.

@@ -430,6 +430,28 @@ class TestImportExport:
         indexlist = mapp2.getindexlist(api.user)
         assert indexlist[api.stagename]["mirror_whitelist"] == ["*"]
 
+    def test_indexes_mirror_whitelist_inheritance(self, impexp):
+        mapp1 = impexp.mapp1
+        api1 = mapp1.create_and_use()
+        api2 = mapp1.create_and_use()
+        impexp.export()
+        with impexp.update_dataindex_json() as data:
+            data["indexes"][api1.stagename]["indexconfig"][
+                "mirror_whitelist_inheritance"
+            ] = "intersection"
+            data["indexes"][api2.stagename]["indexconfig"][
+                "mirror_whitelist_inheritance"
+            ] = "union"
+        mapp2 = impexp.new_import()
+        assert api1.user in mapp2.getuserlist()
+        indexlist1 = mapp2.getindexlist(api1.user)
+        assert "mirror_whitelist_inheritance" not in indexlist1[api1.stagename]
+        assert "trust_inheritance_rules_from" not in indexlist1[api1.stagename]
+        assert api2.user in mapp2.getuserlist()
+        indexlist2 = mapp2.getindexlist(api2.user)
+        assert "mirror_whitelist_inheritance" not in indexlist2[api2.stagename]
+        assert indexlist2[api2.stagename]["trust_inheritance_rules_from"] == "type:stage"
+
     @pytest.mark.parametrize("acltype", ["upload", "toxresult_upload"])
     def test_indexes_acl(self, impexp, acltype):
         mapp1 = impexp.mapp1

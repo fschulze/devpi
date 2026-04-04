@@ -917,10 +917,10 @@ class InheritancePolicy:
 
     def __attrs_post_init__(self) -> None:
         self.whitelist = set(self.stage.ixconfig.get("mirror_whitelist", set()))
-        match self.stage.ixconfig.get("mirror_whitelist_inheritance", "union"):
-            case "intersection":
-                self.whitelist_merger = self.whitelist.intersection
-            case "union":
+        match self.stage.ixconfig.get("trust_inheritance_rules_from", "none"):
+            case "none":
+                self.whitelist_merger = lambda _o: self.whitelist
+            case "type:stage":
                 self.whitelist_merger = self.whitelist.union
             case whitelist_inheritance:
                 msg = f"Unknown whitelist_inheritance setting {whitelist_inheritance!r}"
@@ -1795,8 +1795,13 @@ class PrivateStage(BaseStage):
         return False
 
     def get_possible_indexconfig_keys(self):
-        return tuple(dict(self.get_default_config_items())) + (
-            "custom_data", "description", "title")
+        return (
+            *tuple(dict(self.get_default_config_items())),
+            "custom_data",
+            "description",
+            "title",
+            "trust_inheritance_rules_from",
+        )
 
     def get_default_config_items(self):
         return [
@@ -1805,31 +1810,33 @@ class PrivateStage(BaseStage):
             ("acl_toxresult_upload", [":ANONYMOUS:"]),
             ("bases", ()),
             ("mirror_whitelist", []),
-            ("mirror_whitelist_inheritance", "intersection")]
+        ]
 
     def normalize_indexconfig_value(self, key, value):
-        if key == "volatile":
-            return ensure_boolean(value)
-        if key == "bases":
-            return normalize_bases(
-                self.xom.model, ensure_list(value))
-        if key == "acl_upload":
-            return ensure_acl_list(value)
-        if key == "acl_toxresult_upload":
-            return ensure_acl_list(value)
-        if key == "mirror_whitelist":
-            return [
-                normalize_whitelist_name(x)
-                for x in ensure_list(value)]
-        if key == "mirror_whitelist_inheritance":
-            value = value.lower()
-            if value not in ("intersection", "union"):
-                raise InvalidIndexconfig(
-                    "Unknown value '%s' for mirror_whitelist_inheritance, "
-                    "must be 'intersection' or 'union'." % value)
-            return value
-        if key in ("custom_data", "description", "title"):
-            return value
+        match key:
+            case "volatile":
+                value = ensure_boolean(value)
+            case "bases":
+                value = normalize_bases(self.xom.model, ensure_list(value))
+            case "acl_upload":
+                value = ensure_acl_list(value)
+            case "acl_toxresult_upload":
+                value = ensure_acl_list(value)
+            case "mirror_whitelist":
+                value = [normalize_whitelist_name(x) for x in ensure_list(value)]
+            case "trust_inheritance_rules_from":
+                value = value.lower()
+                if value not in {"none", "type:stage"}:
+                    msg = (
+                        f"Unknown value {value!r} for trust_inheritance_rules_from, "
+                        "must be 'none' or 'type:stage'."
+                    )
+                    raise InvalidIndexconfig(msg)
+            case "custom_data" | "description" | "title":
+                pass
+            case _:
+                value = None
+        return value
 
     def delete(self) -> None:
         # delete all projects on this index
