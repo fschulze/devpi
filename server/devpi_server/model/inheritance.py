@@ -246,13 +246,13 @@ class InheritancePolicy:
 
         self.LocalIndex = LocalIndex
         self.whitelist = self._get_whitelist(self.index)
-        match self.index.ixconfig.get("mirror_whitelist_inheritance", "union"):
-            case "intersection":
-                self.whitelist_merger = self.whitelist.intersection
-            case "union":
+        match self.index.ixconfig.get("trust_inheritance_rules_from", "none"):
+            case "none":
+                self.whitelist_merger = lambda _o: self.whitelist
+            case "type:not remote":
                 self.whitelist_merger = self.whitelist.union
-            case whitelist_inheritance:
-                msg = f"Unknown whitelist_inheritance setting {whitelist_inheritance!r}"
+            case trust_inheritance_rules_from:
+                msg = f"Unknown trust_inheritance_rules_from setting {trust_inheritance_rules_from!r}"
                 raise RuntimeError(msg)
 
     def _get_whitelist(self, index: BaseIndex) -> set[str]:
