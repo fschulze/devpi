@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from devpi_common.archive import Archive
 from devpi_common.archive import zip_dict
 from devpi_common.metadata import Version
@@ -276,6 +277,19 @@ class TestImportExport:
                 if plugin is not None:
                     mapp2.xom.config.pluginmanager.register(plugin)
                 return mapp2
+
+            @contextmanager
+            def update_dataindex_json(self):
+                path = self.exportdir.joinpath("dataindex.json")
+                if path.exists():
+                    with path.open() as f:
+                        data = json.load(f)
+                else:
+                    data = {}
+                yield data
+                with path.open("w") as f:
+                    json.dump(data, f)
+
         return ImpExp
 
     @pytest.fixture
@@ -289,12 +303,13 @@ class TestImportExport:
         hashes = get_hashes(content)
         mapp1.upload_file_pypi("hello-1.0.tar.gz", content, "hello", "1.0")
         impexp.export()
-        data = json.loads(impexp.exportdir.joinpath('dataindex.json').read_bytes())
-        (filedata,) = data['indexes'][api1.stagename]['files']
-        assert filedata["entrymapping"].pop("hash_spec") == hashes.get_default_spec()
-        filedata["entrymapping"].pop("hashes")
-        filedata['entrymapping']['md5'] = 'foo'
-        impexp.exportdir.joinpath('dataindex.json').write_text(json.dumps(data))
+        with impexp.update_dataindex_json() as data:
+            (filedata,) = data["indexes"][api1.stagename]["files"]
+            assert (
+                filedata["entrymapping"].pop("hash_spec") == hashes.get_default_spec()
+            )
+            filedata["entrymapping"].pop("hashes")
+            filedata["entrymapping"]["md5"] = "foo"
         with pytest.raises(
             Fatal,
             match=re.escape(
