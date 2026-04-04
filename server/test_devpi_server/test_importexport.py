@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from devpi_common.archive import Archive
 from devpi_common.archive import zip_dict
 from devpi_common.metadata import Version
@@ -227,7 +228,9 @@ class TestImportExport:
 
             def copy_testdata(self, name):
                 files = importlib.resources.files("test_devpi_server")
-                with importlib.resources.as_file(files / "importexportdata" / name) as path:
+                with importlib.resources.as_file(
+                    files / "importexportdata" / name
+                ) as path:
                     shutil.copytree(path, self.exportdir, dirs_exist_ok=True)
 
             def export(self):
@@ -274,6 +277,19 @@ class TestImportExport:
                 if plugin is not None:
                     mapp2.xom.config.pluginmanager.register(plugin)
                 return mapp2
+
+            @contextmanager
+            def update_dataindex_json(self):
+                path = self.exportdir.joinpath("dataindex.json")
+                if path.exists():
+                    with path.open() as f:
+                        data = json.load(f)
+                else:
+                    data = {}
+                yield data
+                with path.open("w") as f:
+                    json.dump(data, f)
+
         return ImpExp
 
     @pytest.fixture
@@ -287,12 +303,13 @@ class TestImportExport:
         hashes = get_hashes(content)
         mapp1.upload_file_pypi("hello-1.0.tar.gz", content, "hello", "1.0")
         impexp.export()
-        data = json.loads(impexp.exportdir.joinpath('dataindex.json').read_bytes())
-        (filedata,) = data['indexes'][api1.stagename]['files']
-        assert filedata["entrymapping"].pop("hash_spec") == hashes.get_default_spec()
-        filedata["entrymapping"].pop("hashes")
-        filedata['entrymapping']['md5'] = 'foo'
-        impexp.exportdir.joinpath('dataindex.json').write_text(json.dumps(data))
+        with impexp.update_dataindex_json() as data:
+            (filedata,) = data["indexes"][api1.stagename]["files"]
+            assert (
+                filedata["entrymapping"].pop("hash_spec") == hashes.get_default_spec()
+            )
+            filedata["entrymapping"].pop("hashes")
+            filedata["entrymapping"]["md5"] = "foo"
         with pytest.raises(
             Fatal,
             match=re.escape(
@@ -669,7 +686,13 @@ class TestImportExport:
 
     def test_import_without_history_log(self, impexp, tox_result_data):
         impexp.copy_testdata("no_history_log")
-        filedir = impexp.exportdir / "user1" / "dev" / "hello" / '9a0364b9e99bb480dd25e1f0284c8555'
+        filedir = (
+            impexp.exportdir
+            / "user1"
+            / "dev"
+            / "hello"
+            / "9a0364b9e99bb480dd25e1f0284c8555"
+        )
         filedir.mkdir()
         filedir.joinpath('hello-1.0.tar.gz.toxresult0').write_text(json.dumps(tox_result_data))
 
@@ -778,7 +801,7 @@ class TestImportExport:
             In this case the Registration entry won't match the inferred version
             data for the file.
         """
-        mapp2 = impexp.import_testdata('dashes_v1')
+        mapp2 = impexp.import_testdata("dashes_v1")
         with mapp2.xom.keyfs.read_transaction():
             stage = mapp2.xom.model.getstage("user1/dev")
             verdata = stage.get_versiondata_perstage("hello", "1.2-3")
