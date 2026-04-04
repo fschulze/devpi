@@ -106,7 +106,6 @@ so that all of pypi.org packages will appear on that index::
       acl_upload=testuser
       acl_toxresult_upload=:ANONYMOUS:
       mirror_whitelist=
-      mirror_whitelist_inheritance=intersection
 
 Finally we use the new index::
 
@@ -309,7 +308,6 @@ Let's create another ``staging`` index::
       acl_upload=testuser
       acl_toxresult_upload=:ANONYMOUS:
       mirror_whitelist=
-      mirror_whitelist_inheritance=intersection
 
 We created a non-volatile index which means that one can not 
 overwrite or delete release files. See :ref:`non_volatile_indexes` for more info
@@ -391,7 +389,6 @@ index, we can reconfigure the inheritance
       acl_upload=testuser
       acl_toxresult_upload=:ANONYMOUS:
       mirror_whitelist=
-      mirror_whitelist_inheritance=intersection
 
 If we now switch back to using ``testuser/dev``::
 

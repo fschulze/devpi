@@ -4,6 +4,11 @@ from .exceptions import InvalidIndexconfig
 from devpi_server.normalized import normalize_name
 from pyramid.authorization import Authenticated
 from pyramid.authorization import Everyone
+from typing import TYPE_CHECKING
+
+
+if TYPE_CHECKING:
+    from typing import Any
 
 
 class RemoveValue:
@@ -15,7 +20,7 @@ class ACLList(list):
     pass
 
 
-def ensure_acl_list(data):
+def ensure_acl_list(data: Any) -> list[str]:
     data = ensure_list(data)
     for index, name in enumerate(data):
         if name.upper() in (":ANONYMOUS:", ":AUTHENTICATED:"):
@@ -35,7 +40,7 @@ def ensure_boolean(value):
     raise InvalidIndexconfig("Unknown boolean value '%s'." % value)
 
 
-def ensure_list(data):
+def ensure_list(data: Any) -> list[str]:
     if isinstance(data, (list, tuple, set)):
         return list(data)
     if not hasattr(data, "split"):
@@ -72,6 +77,16 @@ def normalize_bases(model, bases):
     if messages:
         raise InvalidIndexconfig(messages)
     return tuple(newbases)
+
+
+def normalize_trust_inheritance(value: Any) -> str:
+    value = value.lower()
+    choices = {"none", "type:not remote"}
+    if value not in choices:
+        raise InvalidIndexconfig.for_invalid_choice(
+            "trust_inheritance_rules_from", value, choices, allow_empty=True
+        )
+    return value
 
 
 def normalize_whitelist_name(name):
