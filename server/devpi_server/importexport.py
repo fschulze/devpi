@@ -259,20 +259,22 @@ class IndexDump:
             self.indexmeta["files"] = []
             projects = self.stage.list_projects_perstage()
         for name in projects:
-            data = {}
-            versions = self.stage.list_versions_perstage(name)
-            for version in versions:
+            versions = {}
+            for version in self.stage.list_versions_perstage(name):
                 v = self.stage.get_versiondata_perstage(
                     name, version, with_elinks=False
                 )
                 assert "+elinks" not in v
-                data[version] = get_mutable_deepcopy(v)
+                versions[version] = get_mutable_deepcopy(v)
             norm_name = normalize_name(name)
             assert norm_name not in self.indexmeta["projects"]
-            self.indexmeta["projects"][norm_name] = data
+            self.indexmeta["projects"][norm_name] = dict(
+                config=self.stage.get_projectconfig_mutable(name),
+                versions=versions,
+            )
 
-            for version in data:
-                vername = data[version]["name"]
+            for version in versions:
+                vername = versions[version]["name"]
                 linkstore = self.stage.get_linkstore_perstage(vername, version)
                 self.basedir.mkdir(parents=True, exist_ok=True)
                 self.dump_releasefiles(linkstore)
@@ -431,6 +433,8 @@ class Migrator:
             indexconfig["type"] = self.v3_index_type_map.get(
                 indexconfig["type"], indexconfig["type"]
             )
+        if "projects" in data:
+            self.migrate_projects(data["projects"], indexconfig)
         if indexconfig["type"] == "remote":
             indexconfig = self.migrate_remote_index(indexconfig)
         else:
@@ -438,6 +442,14 @@ class Migrator:
         return data
 
     def migrate_local_index(self, indexconfig: dict) -> dict:
+        if "mirror_whitelist" in indexconfig:
+            whitelist = indexconfig.pop("mirror_whitelist")
+            if "*" in whitelist:
+                indexconfig["project_inheritance_rules"] = "allow all"
+            else:
+                indexconfig["project_inheritance_rules"] = (
+                    "block type:remote if local_exists"
+                )
         if "mirror_whitelist_inheritance" in indexconfig:
             # this was changed in 7.0.0
             whitelist_inheritance = indexconfig.pop("mirror_whitelist_inheritance")
@@ -452,6 +464,20 @@ class Migrator:
                     msg = f"Unknown value {value!r} for mirror_whitelist_inheritance"
                     raise RuntimeError(msg)
         return indexconfig
+
+    def migrate_projects(self, projects: dict, indexconfig: dict) -> dict:
+        if self.dumpversion < 3:
+            whitelist = set(indexconfig.get("mirror_whitelist", ())) - {"*"}
+            for name in sorted({*projects, *whitelist}):
+                config = {}
+                if name in whitelist:
+                    config["inheritance_rules"] = "allow all"
+                versions = projects.pop(name, [])
+                projects[name] = dict(
+                    config=config,
+                    versions=versions,
+                )
+        return projects
 
     def migrate_remote_index(self, indexconfig: dict) -> dict:
         if "mirror_cache_expiry" in indexconfig:
@@ -582,10 +608,12 @@ class Importer:
         for project in projects:
             project_name_map[normalize_name(project)].add(project)
         for project, names in project_name_map.items():
+            config = {}
             versions = {}
             for name in names:
-                versions.update(projects[name])
-            yield (project, versions)
+                config.update(projects[name]["config"])
+                versions.update(projects[name]["versions"])
+            yield (project, config, versions)
 
     def import_all(self, path: Path) -> None:  # noqa: PLR0912
         self.import_rootdir = path
@@ -683,7 +711,7 @@ class Importer:
                 rel = filedesc["relpath"]
                 assert rel not in project_files
                 project_files[rel] = filedesc
-            for project, versions in self.iter_projects_normalized(projects):
+            for project, config, versions in self.iter_projects_normalized(projects):
                 norm_project = normalize_name(project)
                 project_files = files.pop(norm_project, {})
                 with self.xom.keyfs.write_transaction():
@@ -703,7 +731,7 @@ class Importer:
                             stage.set_versiondata(versiondata)
                         else:
                             stage.add_project_name(versiondata["name"])
-
+                    stage.modify_project(norm_project, **config)
                     # import release files
                     for rel in list(project_files):
                         filedesc = project_files[rel]

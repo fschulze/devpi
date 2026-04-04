@@ -1,0 +1,1 @@
+The project REST API allows setting configuration via ``POST``.
