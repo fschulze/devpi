@@ -5,9 +5,9 @@ from .config import ensure_acl_list
 from .config import ensure_boolean
 from .config import ensure_list
 from .config import normalize_bases
+from .config import normalize_trust_inheritance
 from .config import normalize_whitelist_name
 from .customizer import BaseIndexCustomizer
-from .exceptions import InvalidIndexconfig
 from .exceptions import MissesRegistration
 from .exceptions import MissesVersion
 from .exceptions import ReadonlyIndex
@@ -140,6 +140,7 @@ class LocalIndex(BaseIndex):
             "custom_data",
             "description",
             "title",
+            "trust_inheritance_rules_from",
         )
 
     def get_default_config_items(self):
@@ -149,7 +150,6 @@ class LocalIndex(BaseIndex):
             ("acl_toxresult_upload", [":ANONYMOUS:"]),
             ("bases", ()),
             ("mirror_whitelist", []),
-            ("mirror_whitelist_inheritance", "intersection"),
         ]
 
     def normalize_indexconfig_value(self, key, value):
@@ -164,13 +164,8 @@ class LocalIndex(BaseIndex):
                 value = ensure_acl_list(value)
             case "mirror_whitelist":
                 value = [normalize_whitelist_name(x) for x in ensure_list(value)]
-            case "mirror_whitelist_inheritance":
-                value = value.lower()
-                if value not in ("intersection", "union"):
-                    raise InvalidIndexconfig(
-                        "Unknown value '%s' for mirror_whitelist_inheritance, "
-                        "must be 'intersection' or 'union'." % value
-                    )
+            case "trust_inheritance_rules_from":
+                value = normalize_trust_inheritance(value)
             case "custom_data" | "description" | "title":
                 pass
             case _:
