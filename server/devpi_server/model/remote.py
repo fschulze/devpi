@@ -551,7 +551,7 @@ class MirrorHTTPClient:
 
 
 class MirrorData:
-    def __init__(self, stage: MirrorStage, project: NormalizedName) -> None:
+    def __init__(self, stage: RemoteIndex, project: NormalizedName) -> None:
         self._stage = weakref.ref(stage)
         self.project = project
         self.key_project = stage.key_project(self.project)
@@ -617,7 +617,7 @@ class MirrorData:
         # we might implement caching in get_links
         return self.get_fresh_links()
 
-    def get_stage(self) -> MirrorStage:
+    def get_stage(self) -> RemoteIndex:
         stage = self._stage()
         assert stage is not None
         return stage
@@ -797,7 +797,7 @@ class MirrorData:
             simpledata.update(data)
 
 
-class MirrorStage(BaseIndex):
+class RemoteIndex(BaseIndex):
     _mirrordata: dict[NormalizedName, MirrorData]
     _offline_logging: set[str]
 
@@ -1619,15 +1619,14 @@ class MirrorStage(BaseIndex):
         return ensure_deeply_readonly(verdata)
 
 
-class MirrorCustomizer(BaseIndexCustomizer):
+class RemoteIndexCustomizer(BaseIndexCustomizer):
     pass
 
 
 @hookimpl
 def devpiserver_get_stage_customizer_classes():
     # prevent plugins from installing their own under the reserved names
-    return [
-        ("mirror", MirrorCustomizer)]
+    return [("mirror", RemoteIndexCustomizer)]
 
 
 class ProjectNamesCache:

@@ -18,7 +18,7 @@ import enum
 
 if TYPE_CHECKING:
     from .base import BaseIndex
-    from .local import PrivateStageType
+    from .local import LocalIndexType
     from .root import RootModel
     from collections.abc import Callable
     from collections.abc import Iterable
@@ -82,7 +82,7 @@ class InheritanceInfo:
             return has_project
         return False
 
-    def _iter_mirrors(self) -> Iterator[tuple[TraversedStage, bool | NotSet | Unknown]]:
+    def _iter_mirrors(self) -> Iterator[tuple[TraversedIndex, bool | NotSet | Unknown]]:
         for traversal_info, has_project in self._unique_traversed_stages:
             if traversal_info.stage.index_type != "mirror":
                 continue
@@ -106,11 +106,11 @@ class InheritanceInfo:
     @cached_property
     def _unique_traversed_stages(
         self,
-    ) -> list[tuple[TraversedStage, bool | NotSet | Unknown]]:
+    ) -> list[tuple[TraversedIndex, bool | NotSet | Unknown]]:
         return [
             (traversal_info, has_project)
             for traversal_info, has_project in self.traversal_infos
-            if isinstance(traversal_info, TraversedStage) and not traversal_info.seen
+            if isinstance(traversal_info, TraversedIndex) and not traversal_info.seen
         ]
 
 
@@ -173,7 +173,7 @@ class PostponedTraversal(TraversalInfo):
 
 
 @define(frozen=True, kw_only=True)
-class TraversedStage(TraversalInfo):
+class TraversedIndex(TraversalInfo):
     seen: bool
     stage: BaseIndex
 
@@ -195,17 +195,17 @@ class TraversedStage(TraversalInfo):
 
 
 @define(frozen=True, kw_only=True)
-class AllowedTraversal(TraversedStage):
+class AllowedTraversal(TraversedIndex):
     reason: PermissionAllowed
 
 
 @define(frozen=True, kw_only=True)
-class BlockedTraversal(TraversedStage):
+class BlockedTraversal(TraversedIndex):
     reason: PermissionDenied
 
 
 @define(frozen=True, kw_only=True)
-class UntrustedTraversal(TraversedStage):
+class UntrustedTraversal(TraversedIndex):
     pass
 
 
@@ -217,7 +217,7 @@ class SkippedTraversal(TraversalInfo):
 
 @define(kw_only=True)
 class InheritancePolicy:
-    PrivateStage: PrivateStageType = field(init=False)
+    LocalIndex: LocalIndexType = field(init=False)
     private_hit: BaseIndex | Literal[False] = field(default=False, init=False)
     project: NormalizedName
     stage: BaseIndex
@@ -226,9 +226,9 @@ class InheritancePolicy:
     whitelisted: BaseIndex | Literal[False] = field(default=False, init=False)
 
     def __attrs_post_init__(self) -> None:
-        from .local import PrivateStage
+        from .local import LocalIndex
 
-        self.PrivateStage = PrivateStage
+        self.LocalIndex = LocalIndex
         self.whitelist = set(self.stage.ixconfig.get("mirror_whitelist", set()))
         match self.stage.ixconfig.get("mirror_whitelist_inheritance", "union"):
             case "intersection":
@@ -243,7 +243,7 @@ class InheritancePolicy:
         return set(stage.ixconfig.get("mirror_whitelist", set()))
 
     def update(
-        self, traversed_stage: TraversedStage
+        self, traversed_stage: TraversedIndex
     ) -> tuple[PermissionReason | None, bool | NotSet | Unknown]:
         stage = traversed_stage.stage
         untrusted = isinstance(traversed_stage, UntrustedTraversal)
@@ -260,7 +260,7 @@ class InheritancePolicy:
             exists = stage.has_project_perstage(self.project)
         if checker.failed:
             return (None, unknown)
-        if isinstance(stage, self.PrivateStage):
+        if isinstance(stage, self.LocalIndex):
             self.whitelist = self.whitelist_merger(self._get_whitelist(stage))
             if self.whitelist.intersection({"*", self.project}):
                 self.whitelisted = stage
@@ -304,7 +304,7 @@ class IndexBases:
         policy = InheritancePolicy(project=project, stage=self.stage)
         traversal_infos: list[tuple[TraversalInfo, bool | NotSet | Unknown]] = []
         for traversal_info in self.traversal_infos:
-            if filtered_project or not isinstance(traversal_info, TraversedStage):
+            if filtered_project or not isinstance(traversal_info, TraversedIndex):
                 traversal_infos.append((traversal_info, notset))
                 continue
             (reason, exists) = policy.update(traversal_info)
@@ -340,7 +340,7 @@ class IndexBases:
                 case (
                     PostponedTraversal()
                     | SkippedTraversal(reason=SkipReason.InheritanceCycle)
-                    | TraversedStage(seen=True)
+                    | TraversedIndex(seen=True)
                 ):
                     continue
                 case SkippedTraversal(name=name, reason=SkipReason.Missing, src=src):
@@ -357,7 +357,7 @@ class IndexBases:
                         name,
                     )
                     continue
-                case TraversedStage(seen=False, stage=stage):
+                case TraversedIndex(seen=False, stage=stage):
                     yield stage
                 case _:
                     raise RuntimeError(traversal_info)
@@ -386,7 +386,7 @@ class IndexBases:
                     (
                         UntrustedTraversal
                         if is_untrusted(current_stage)
-                        else TraversedStage
+                        else TraversedIndex
                     )(
                         name=current_name,
                         seen=current_name in seen,

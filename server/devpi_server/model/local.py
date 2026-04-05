@@ -49,13 +49,13 @@ if TYPE_CHECKING:
     from typing import Any
     from typing import Literal
 
-    PrivateStageType = type["PrivateStage"]
+    LocalIndexType = type["LocalIndex"]
 
 
 VERSIONDATA_DESCRIPTION_SIZE_THRESHOLD = 8192
 
 
-class PrivateStage(BaseIndex):
+class LocalIndex(BaseIndex):
     metadata_keys = (
         "name",
         "version",
@@ -741,11 +741,11 @@ class PrivateStage(BaseIndex):
         return index_serial
 
 
-class StageCustomizer(BaseIndexCustomizer):
+class LocalIndexCustomizer(BaseIndexCustomizer):
     pass
 
 
 @hookimpl
 def devpiserver_get_stage_customizer_classes():
     # prevent plugins from installing their own under the reserved names
-    return [("stage", StageCustomizer)]
+    return [("stage", LocalIndexCustomizer)]

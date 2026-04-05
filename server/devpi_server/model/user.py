@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from .customizer import get_stage_customizer_class
 from .exceptions import InvalidUserconfig
-from .local import PrivateStage
-from .remote import MirrorStage
+from .local import LocalIndex
+from .remote import RemoteIndex
 from devpi_common.types import ensure_unicode
 from devpi_server.auth import hash_password
 from devpi_server.auth import verify_and_update_password_hash
@@ -159,7 +159,7 @@ class User:
         return self.parent.create_stage(self, index, type=type, **kwargs)
 
     def _getstage(self, indexname, index_type, ixconfig):
-        cls = MirrorStage if index_type == "mirror" else PrivateStage
+        cls = RemoteIndex if index_type == "mirror" else LocalIndex
         customizer_cls = get_stage_customizer_class(self.xom, index_type)
         return cls(
             self.xom,

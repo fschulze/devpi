@@ -68,7 +68,7 @@ if TYPE_CHECKING:
     from .main import XOM
     from .model.base import BaseIndex
     from .model.links import ELink
-    from .model.local import PrivateStage
+    from .model.local import LocalIndex
     from collections.abc import Iterator
     from typing import NoReturn
 
@@ -1224,11 +1224,11 @@ class PyPIView:
     def _push_links(
         self,
         links: dict[str, list[ELink]],
-        target_stage: PrivateStage,
+        target_stage: LocalIndex,
         name: str,
         version: str,
     ) -> Iterator[tuple]:
-        stage = cast("PrivateStage", self.context.stage)
+        stage = cast("LocalIndex", self.context.stage)
         stage = self.context.stage
         for link in links.get("releasefile", ()):
             entry = link.entry
@@ -1295,7 +1295,7 @@ class PyPIView:
         stage = self.context.stage
         if not hasattr(stage, "store_releasefile"):
             abort_submit(request, 404, "cannot submit to mirror index")
-        stage = cast("PrivateStage", stage)
+        stage = cast("LocalIndex", stage)
         if not request.has_permission("upload"):
             # if there is no authenticated user, then issue a basic auth challenge
             if not request.authenticated_userid:

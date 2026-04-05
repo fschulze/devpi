@@ -636,18 +636,18 @@ def model(xom):
 def devpiserver_makepypistage():
     def makepypistage(xom):
         from devpi_server.main import _pypi_ixconfig_default
-        from devpi_server.model.remote import MirrorCustomizer
-        from devpi_server.model.remote import MirrorStage
+        from devpi_server.model.remote import RemoteIndex
+        from devpi_server.model.remote import RemoteIndexCustomizer
         from devpi_server.readonly import ensure_deeply_readonly
 
         # we copy _pypi_ixconfig_default, otherwise the defaults will
         # be modified during config updates later on
-        return MirrorStage(
+        return RemoteIndex(
             xom,
             username="root",
             index="pypi",
             ixconfig=ensure_deeply_readonly(dict(_pypi_ixconfig_default)),
-            customizer_cls=MirrorCustomizer,
+            customizer_cls=RemoteIndexCustomizer,
         )
     return makepypistage
 
@@ -661,7 +661,7 @@ def add_pypistage_mocks(monkeypatch, http):
     _projects: set = set()
 
     # add some mocking helpers
-    remote.MirrorStage.url2response = http.url2response  # type: ignore[attr-defined]
+    remote.RemoteIndex.url2response = http.url2response  # type: ignore[attr-defined]
 
     def mock_simple(self, name, text=None, pypiserial=10000, **kw):
         cache_expire = kw.pop("cache_expire", True)
@@ -674,7 +674,7 @@ def add_pypistage_mocks(monkeypatch, http):
                 _projects.union([name]), cache_expire=cache_expire)
         return self.xom.http.mock_simple(name, text=text, pypiserial=pypiserial, **kw)
 
-    monkeypatch.setattr(remote.MirrorStage, "mock_simple", mock_simple, raising=False)
+    monkeypatch.setattr(remote.RemoteIndex, "mock_simple", mock_simple, raising=False)
 
     def mock_simple_projects(self, projectlist, cache_expire=True):
         if cache_expire:
@@ -688,7 +688,7 @@ def add_pypistage_mocks(monkeypatch, http):
         self.xom.http.mockresponse(self.mirror_url, code=200, text=t)
 
     monkeypatch.setattr(
-        remote.MirrorStage, "mock_simple_projects", mock_simple_projects, raising=False
+        remote.RemoteIndex, "mock_simple_projects", mock_simple_projects, raising=False
     )
 
     def mock_extfile(self, path, content, **kw):
@@ -702,7 +702,7 @@ def add_pypistage_mocks(monkeypatch, http):
             url.url, content=content, headers=headers, **kw
         )
 
-    monkeypatch.setattr(remote.MirrorStage, "mock_extfile", mock_extfile, raising=False)
+    monkeypatch.setattr(remote.RemoteIndex, "mock_extfile", mock_extfile, raising=False)
 
 
 @pytest.fixture

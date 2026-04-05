@@ -62,7 +62,7 @@ if TYPE_CHECKING:
     from .keyfs_types import ULIDKey
     from .log import TagLogger
     from .main import XOM
-    from .model.remote import MirrorStage
+    from .model.remote import RemoteIndex
     from collections.abc import Iterable
     from collections.abc import Iterator
     from collections.abc import Sequence
@@ -1504,7 +1504,7 @@ class ProjectChanged:
             mirror_stage = self.xom.model.getstage(username, index)
             if mirror_stage and mirror_stage.index_type == "mirror":
                 if TYPE_CHECKING:
-                    assert isinstance(mirror_stage, MirrorStage)
+                    assert isinstance(mirror_stage, RemoteIndex)
                 cache_projectnames = mirror_stage.cache_projectnames
                 if isinstance(cache, Deleted):  # deleted
                     cache_projectnames.discard(project)
