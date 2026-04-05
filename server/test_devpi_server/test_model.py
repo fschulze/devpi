@@ -11,8 +11,8 @@ from devpi_server.model.config import ensure_acl_list
 from devpi_server.model.config import ensure_boolean
 from devpi_server.model.config import ensure_list
 from devpi_server.model.exceptions import InvalidIndexconfig
-from devpi_server.model.local import PrivateStage
-from devpi_server.model.local import StageCustomizer
+from devpi_server.model.local import LocalIndex
+from devpi_server.model.local import LocalIndexCustomizer
 from devpi_server.readonly import ensure_deeply_readonly
 from io import BytesIO
 from lazy import lazy
@@ -171,7 +171,7 @@ def queue(TimeoutQueue):
     return TimeoutQueue()
 
 
-class TestStage:
+class TestIndex:
     def test_create_and_delete(self, model):
         user = model.create_user("hello", password="123")
         user.create_stage("world", bases=(), type="stage", volatile=False)
@@ -702,7 +702,7 @@ class TestStage:
         register_and_store(stage, "some_xyz-1.0.zip", b"123")
         # provoke error if called
         monkeypatch.setattr(
-            "devpi_server.model.remote.MirrorStage.list_versions_perstage",
+            "devpi_server.model.remote.RemoteIndex.list_versions_perstage",
             lambda _self, _project: 0 / 0,
         )
         assert stage.list_versions('some_xyz') == {'1.0'}
@@ -1741,8 +1741,12 @@ def test_setdefault_indexes(xom):
     ("value", "result"), [("", []), ("x,y", ["x", "y"]), ("x,,y", ["x", "y"])]
 )
 def test_get_indexconfig_lists(xom, key, value, result):
-    stage = PrivateStage(
-        xom, "user", "index", ensure_deeply_readonly({"type": "stage"}), StageCustomizer
+    stage = LocalIndex(
+        xom,
+        "user",
+        "index",
+        ensure_deeply_readonly({"type": "stage"}),
+        LocalIndexCustomizer,
     )
     (kvdict, unknown) = stage.get_indexconfig_from_kwargs(**{key: value})
     assert kvdict[key] == result
@@ -1845,8 +1849,12 @@ def test_ensure_acl_list():
           acl_toxresult_upload=["hello"])),
 ])
 def test_get_indexconfig_values(xom, input, expected):
-    stage = PrivateStage(
-        xom, "user", "index", ensure_deeply_readonly({"type": "stage"}), StageCustomizer
+    stage = LocalIndex(
+        xom,
+        "user",
+        "index",
+        ensure_deeply_readonly({"type": "stage"}),
+        LocalIndexCustomizer,
     )
     if inspect.isclass(expected) and issubclass(expected, Exception):
         with pytest.raises(expected):
