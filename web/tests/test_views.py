@@ -2,7 +2,7 @@ from devpi_common.archive import zip_dict
 from devpi_common.metadata import parse_version
 from devpi_server import __version__ as _devpi_server_version
 from test_devpi_server.plugin import make_file_url
-from time import struct_time
+import datetime as dt
 import pytest
 import re
 
@@ -343,15 +343,7 @@ def test_project_view_inherited_no_versions_on_stage(mapp, testapp):
 
 
 @pytest.mark.with_notifier
-def test_version_view(mapp, testapp, monkeypatch):
-    import devpi_server.model
-
-    # use fixed time
-    def gmtime(*x):
-        return struct_time((2014, 9, 15, 11, 11, 11, 0, 258, 0))
-
-    monkeypatch.setattr('time.gmtime', gmtime)
-    monkeypatch.setattr(devpi_server.model, 'gmtime', gmtime)
+def test_version_view(mapp, testapp):
     api = mapp.create_and_use()
     mapp.upload_file_pypi(
         "pkg1-2.6.tar.gz", b"contentveryold", "pkg1", "2.6")
@@ -365,6 +357,7 @@ def test_version_view(mapp, testapp, monkeypatch):
     mapp.upload_doc("pkg1-2.6.doc.zip", content, "pkg1", "2.6", code=200)
     doc_zip_url = make_file_url("pkg1-2.6.doc.zip", content, stagename=api.stagename)
     doc_zip_url = doc_zip_url.rsplit("#", 1)[0]
+    today = dt.datetime.now(tz=dt.timezone.utc).strftime("%Y-%m-%d")
     classifiers = ["Intended Audience :: Developers",
                    "License :: OSI Approved :: MIT License"]
     mapp.set_versiondata({
@@ -396,10 +389,20 @@ def test_version_view(mapp, testapp, monkeypatch):
         (['pkg1-2.6.zip', 'Size', '10', 'bytes', 'Type', 'Source'], [])
     ]
 
-    assert [x[-1] for x in filesinfo] == [
-        [u'Replaced', u'2', u'time(s)',
-         u'Uploaded', u'to', u'user1/dev', u'by', u'user1', u'2014-09-15', u'11:11:11'],
-        [u'Uploaded', u'to', u'user1/dev', u'by', u'user1', u'2014-09-15', u'11:11:11']]
+    assert [x[-1][:-1] for x in filesinfo] == [
+        [
+            "Replaced",
+            "2",
+            "time(s)",
+            "Uploaded",
+            "to",
+            "user1/dev",
+            "by",
+            "user1",
+            today,
+        ],
+        ["Uploaded", "to", "user1/dev", "by", "user1", today],
+    ]
     links = r.html.select('#content a')
     assert [(compareable_text(l.text), l.attrs['href']) for l in links] == [
         ("Documentation", "http://localhost/%s/pkg1/2.6/+d/index.html" % api.stagename),
