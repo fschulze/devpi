@@ -551,10 +551,12 @@ class PyPIView:
             "features": self.xom.supported_features,
         }
         if stage is not None:
-            api.update({
-                "index": request.stage_url(stage),
-                "simpleindex": request.simpleindex_url(stage)
-            })
+            api.update(
+                {
+                    "index": request.index_url(stage),
+                    "simpleindex": request.simpleindex_url(stage),
+                }
+            )
             if stage.index_type != "mirror":
                 api["pypisubmit"] = request.route_url(
                     "/{user}/{index}/", user=stage.username, index=stage.index)
