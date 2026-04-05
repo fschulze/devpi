@@ -6,9 +6,9 @@ toxresult storage.
 """
 from __future__ import annotations
 
-from .base import BaseStage
+from .base import BaseIndex
 from .config import ensure_boolean
-from .customizer import BaseStageCustomizer
+from .customizer import BaseIndexCustomizer
 from .links import ELink
 from .links import Rel
 from asyncio import Future
@@ -814,7 +814,7 @@ class MirrorData:
             simpledata.update(data)
 
 
-class MirrorStage(BaseStage):
+class MirrorStage(BaseIndex):
     _mirrordata: dict[NormalizedName, MirrorData]
     _offline_logging: set[str]
 
@@ -1022,7 +1022,7 @@ class MirrorStage(BaseStage):
         for key in list(key_project.iter_ulidkeys()):
             self.del_project(key.name)
             key.delete()
-        BaseStage.delete(self)
+        BaseIndex.delete(self)
 
     def add_project_name(self, project: NormalizedName | str) -> None:
         project = normalize_name(project)
@@ -1669,7 +1669,7 @@ class MirrorStage(BaseStage):
         return ensure_deeply_readonly(verdata)
 
 
-class MirrorCustomizer(BaseStageCustomizer):
+class MirrorCustomizer(BaseIndexCustomizer):
     pass
 
 

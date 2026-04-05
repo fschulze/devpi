@@ -522,16 +522,15 @@ def test_project_redirect(pypistage, testapp):
 
 @pytest.mark.parametrize(*user_agent_parameter_args, ids=user_agent_parameter_ids)
 def test_simple_project_plain_info_for_installers(monkeypatch, pypistage, testapp, user_agent):
-    from devpi_server.model.base import BaseStage
+    from devpi_server.model.base import BaseIndex
     import os.path
     pypistage.mock_simple(
         "py",
         """<a href="/py-2.0.zip" /><a href="/py-3.0.zip" /><a href="/py-1.0.zip" />""")
     headers = {'User-Agent': str(user_agent), "Accept": "text/html"}
     # fail if called
-    monkeypatch.setattr(
-        BaseStage, "get_mirror_whitelist_info", lambda s, p: 0 / 0)
-    orig_get_simplelinks = BaseStage.get_simplelinks
+    monkeypatch.setattr(BaseIndex, "get_mirror_whitelist_info", lambda _s, _p: 0 / 0)
+    orig_get_simplelinks = BaseIndex.get_simplelinks
     calls = []
 
     def get_simplelinks(self, project, sorted_links=True):
@@ -539,7 +538,7 @@ def test_simple_project_plain_info_for_installers(monkeypatch, pypistage, testap
         return orig_get_simplelinks(self, project, sorted_links=sorted_links)
 
     # let original be called, but we can inspect the call now
-    monkeypatch.setattr(BaseStage, "get_simplelinks", get_simplelinks)
+    monkeypatch.setattr(BaseIndex, "get_simplelinks", get_simplelinks)
 
     r = testapp.get("/root/pypi/+simple/py/", headers=headers)
     ((stage, name, sorted_links),) = calls
