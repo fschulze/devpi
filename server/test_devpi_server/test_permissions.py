@@ -9,8 +9,7 @@ pytestmark = [pytest.mark.writetransaction]
 
 @pytest.fixture
 def stage(request, model):
-    config = {"index": "world", "bases": (),
-              "type": "stage", "volatile": True}
+    config = {"index": "world", "bases": (), "type": "local", "volatile": True}
     if "bases" in request.fixturenames:
         config["bases"] = request.getfixturevalue("bases")
     user = model.create_user("hello", password="123")
