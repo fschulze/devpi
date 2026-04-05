@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 
 
 if TYPE_CHECKING:
-    from .local import BaseStage
+    from .local import BaseIndex
     from .root import RootModel
     from .schema import Schema
     from devpi_server.keyfs import KeyFS
@@ -158,7 +158,7 @@ class User:
     ):
         return self.parent.create_stage(self, index, type=type, **kwargs)
 
-    def get_index(self, indexname: str) -> BaseStage | None:
+    def get_index(self, indexname: str) -> BaseIndex | None:
         return self.getstage(indexname)
 
     def _getstage(self, indexname, index_type, ixconfig):
@@ -172,10 +172,10 @@ class User:
             customizer_cls=customizer_cls,
         )
 
-    def getstage(self, indexname: str) -> BaseStage | None:
+    def getstage(self, indexname: str) -> BaseIndex | None:
         return self.parent.getstage(self.name, indexname)
 
-    def getstages(self) -> list[BaseStage]:
+    def getstages(self) -> list[BaseIndex]:
         stages = []
         for index in self.get()["indexes"]:
             stage = self.getstage(index)
