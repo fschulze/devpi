@@ -6,7 +6,7 @@ from devpi_common.types import ensure_unicode
 from devpi_server.auth import Auth
 from devpi_server.config import hookimpl
 from devpi_server.config import traced_pluggy_call
-from devpi_server.model.base import BaseStage
+from devpi_server.model.base import BaseIndex
 from devpi_server.model.exceptions import UpstreamError
 from devpi_server.replica import REPLICA_USER_NAME
 from devpi_server.views import abort
@@ -28,9 +28,8 @@ if TYPE_CHECKING:
 class RootFactory:
     def __init__(self, request, context=None):
         self.request = request
-        if context is not None:
-            if not isinstance(context, BaseStage):
-                raise TypeError("context must be a stage")
+        if context is not None and not isinstance(context, BaseIndex):
+            raise TypeError("context must be a stage")
         self.context = context
         self.xom = request.registry['xom']
         self.restrict_modify = self.xom.config.restrict_modify
