@@ -88,7 +88,7 @@ def run_passwd(root, username):
     return None
 
 
-class BaseStage:
+class BaseIndex:
     keyfs: KeyFS[Schema]
     offline: bool
 
@@ -559,7 +559,7 @@ class BaseStage:
                 return True
         return False
 
-    def list_projects(self) -> list[tuple[BaseStage, dict[str, NormalizedName | str]]]:
+    def list_projects(self) -> list[tuple[BaseIndex, dict[str, NormalizedName | str]]]:
         result = []
         for stage in self.sro():
             projects = stage.list_projects_perstage()
@@ -641,7 +641,7 @@ class BaseStage:
                 continue
             yield stage, res
 
-    def sro(self) -> Iterator[BaseStage]:
+    def sro(self) -> Iterator[BaseIndex]:
         """return stage resolution order."""
         return self.index_bases.iter_stages()
 

@@ -15,7 +15,7 @@ import re
 
 
 if TYPE_CHECKING:
-    from .local import BaseStage
+    from .local import BaseIndex
     from devpi_server.main import XOM
 
 
@@ -97,7 +97,7 @@ class RootModel:
         stage.key_index.with_resolved_parent().delete()
         self.xom.del_singletons(f"{username}/{index}")
 
-    def get_index(self, user: str, index: str | None = None) -> BaseStage | None:
+    def get_index(self, user: str, index: str | None = None) -> BaseIndex | None:
         return self.getstage(user, index)
 
     def get_user(self, name: str) -> User | None:
@@ -128,7 +128,7 @@ class RootModel:
             assert isinstance(index, str)
         return user, index
 
-    def getstage(self, user: str, index: str | None = None) -> BaseStage | None:
+    def getstage(self, user: str, index: str | None = None) -> BaseIndex | None:
         (username, indexname) = self._get_user_and_index(user, index)
         _user = self.get_user(username)
         if _user is None:
@@ -144,7 +144,7 @@ class RootModel:
 class CachingRootModel(RootModel):
     def __init__(self, xom: XOM) -> None:
         super().__init__(xom)
-        self.model_cache: dict[str | tuple[str, str], BaseStage | User | None] = {}
+        self.model_cache: dict[str | tuple[str, str], BaseIndex | User | None] = {}
 
     def create_user(self, username, password, **kwargs):
         if username in self.model_cache:
@@ -178,7 +178,7 @@ class CachingRootModel(RootModel):
             assert self.model_cache[key] is not None
             del self.model_cache[key]
 
-    def get_index(self, user: str, index: str | None = None) -> BaseStage | None:
+    def get_index(self, user: str, index: str | None = None) -> BaseIndex | None:
         return self.getstage(user, index)
 
     def get_user(self, name):
