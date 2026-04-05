@@ -867,11 +867,12 @@ class Mapp(MappMixin):
                                   expect_errors=True)
         assert r.status_code == code
         if code in (200,201):
-            assert r.json["result"]["type"] == indexconfig.get("type", "stage")
+            assert r.json["result"]["type"] == indexconfig.get("type", "local")
             if use:
                 return self.use("%s/%s" % (user, index))
         if code == 400:
             return r.json["message"]
+        return None
 
     def modify_index(self, indexname, indexconfig, code=200):
         if "/" in indexname:
@@ -884,10 +885,11 @@ class Mapp(MappMixin):
         assert r.status_code == code
         if code in (200,201):
             if isinstance(indexconfig, dict):
-                assert r.json["result"]["type"] == indexconfig.get("type", "stage")
+                assert r.json["result"]["type"] == indexconfig.get("type", "local")
             return r.json["result"]
         if code == 400:
             return r.json["message"]
+        return None
 
     def delete_index(self, indexname, code=201, waithooks=False):
         if "/" in indexname:

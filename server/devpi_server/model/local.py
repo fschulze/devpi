@@ -748,4 +748,4 @@ class LocalIndexCustomizer(BaseIndexCustomizer):
 @hookimpl
 def devpiserver_get_stage_customizer_classes():
     # prevent plugins from installing their own under the reserved names
-    return [("stage", LocalIndexCustomizer)]
+    return [("local", LocalIndexCustomizer)]

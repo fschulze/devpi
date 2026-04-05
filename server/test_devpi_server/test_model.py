@@ -58,7 +58,7 @@ def register_and_store(stage, basename, content=b"123", name=None):
 
 @pytest.fixture
 def stage(request, user):
-    config = udict(index="world", bases=(), type="stage", volatile=True)
+    config = udict(index="world", bases=(), type="local", volatile=True)
     if "bases" in request.fixturenames:
         config["bases"] = request.getfixturevalue("bases")
     return user.create_stage(**config)
@@ -163,8 +163,8 @@ def queue(TimeoutQueue):
 class TestIndex:
     def test_create_and_delete(self, model):
         user = model.create_user("hello", password="123")
-        user.create_stage("world", bases=(), type="stage", volatile=False)
-        user.create_stage("world2", bases=(), type="stage", volatile=False)
+        user.create_stage("world", bases=(), volatile=False)
+        user.create_stage("world2", bases=(), volatile=False)
         stage = model.getstage("hello", "world2")
         stage.delete()
         assert model.getstage("hello", "world2") is None
@@ -181,7 +181,7 @@ class TestIndex:
         keyfs.commit_transaction_in_thread()
         with keyfs.write_transaction():
             user = model.create_user("hello", password="123")
-            user.create_stage("world", bases=(), type="stage", volatile=False)
+            user.create_stage("world", bases=(), volatile=False)
             stage = model.getstage("hello", "world")
             register_and_store(stage, "someproject-1.0.zip", b"123")
         with keyfs.write_transaction():
@@ -871,7 +871,7 @@ class TestIndex:
         keyfs = xom.keyfs
         with keyfs.write_transaction():
             user = xom.model.create_user("hello", password="123")
-            config = udict(index="world", bases=(), type="stage", volatile=True)
+            config = udict(index="world", bases=(), volatile=True)
             stage = user.create_stage(**config)
             assert stage.ixconfig["mirror_whitelist_inheritance"] == "intersection"
             with stage.key_index.with_resolved_parent().update() as ixconfig:
@@ -1263,8 +1263,7 @@ class TestIndex:
         assert current_serial == xom.keyfs.get_current_serial() - 1
         current_serial = xom.keyfs.get_current_serial()
         with xom.keyfs.write_transaction():
-            stage = user.create_stage(**udict(
-                index="world", bases=(), type="stage", volatile=True))
+            stage = user.create_stage(**udict(index="world", bases=(), volatile=True))
             with pytest.raises(KeyError, match=r"Key.*INDEX.*world.*hello"):
                 stage.get_last_change_serial_perstage()
         assert current_serial == xom.keyfs.get_current_serial() - 1
@@ -1313,8 +1312,7 @@ class TestIndex:
         # create another stage and run the same actions
         serial_before_new_stage = xom.keyfs.get_current_serial()
         with xom.keyfs.write_transaction():
-            stage2 = user.create_stage(**udict(
-                index="world2", bases=(), type="stage", volatile=True))
+            stage2 = user.create_stage(**udict(index="world2", bases=(), volatile=True))
         assert current_serial == xom.keyfs.get_current_serial() - 1
         current_serial = xom.keyfs.get_current_serial()
         for action, args, kwargs in actions:
@@ -1369,7 +1367,7 @@ class TestIndex:
     def test_get_last_project_change_serial_perstage(self, xom):
         with xom.keyfs.write_transaction() as tx:
             user = xom.model.create_user("hello", password="123")
-            stage = user.create_stage(index="world", type="stage")
+            stage = user.create_stage(index="world")
         # get_last_project_change_serial_perstage only works with
         # committed transactions
         with xom.keyfs.read_transaction() as tx:
@@ -1728,14 +1726,14 @@ def test_setdefault_indexes(xom):
     ("value", "result"), [("", []), ("x,y", ["x", "y"]), ("x,,y", ["x", "y"])]
 )
 def test_get_indexconfig_lists(xom, key, value, result):
-    stage = LocalIndex(
+    index = LocalIndex(
         xom,
         "user",
         "index",
-        ensure_deeply_readonly({"type": "stage"}),
+        ensure_deeply_readonly({"type": "local"}),
         LocalIndexCustomizer,
     )
-    (kvdict, unknown) = stage.get_indexconfig_from_kwargs(**{key: value})
+    (kvdict, _unknown) = index.get_indexconfig_from_kwargs(**{key: value})
     assert kvdict[key] == result
 
 
@@ -1796,56 +1794,57 @@ def test_ensure_acl_list():
         assert isinstance(ensure_acl_list(dict()), list)
 
 
-@pytest.mark.parametrize(["input", "expected"], [
-    ({},
-     dict(type="stage")),
-
-    ({"volatile": "foo"},
-     InvalidIndexconfig),
-
-    ({"volatile": True},
-     dict(type="stage", volatile=True)),
-
-    ({"volatile": "true"},
-     dict(type="stage", volatile=True)),
-
-    ({"volatile": "Yes"},
-     dict(type="stage", volatile=True)),
-
-    ({"volatile": False},
-     dict(type="stage", volatile=False)),
-
-    ({"volatile": "False"},
-     dict(type="stage", volatile=False)),
-
-    ({"volatile": "no"},
-     dict(type="stage", volatile=False)),
-
-    ({"volatile": "False", "bases": "root/pypi"},
-     dict(type="stage", volatile=False, bases=("root/pypi",))),
-
-    ({"volatile": "False", "bases": ["root/pypi"]},
-     dict(type="stage", volatile=False, bases=("root/pypi",))),
-
-    ({"volatile": "False", "bases": ["root/pypi"], "acl_upload": ["hello"]},
-     dict(type="stage", volatile=False, bases=("root/pypi",),
-          acl_upload=["hello"])),
-
-    ({"volatile": "False", "bases": ["root/pypi"], "acl_toxresult_upload": ["hello"]},
-     dict(type="stage", volatile=False, bases=("root/pypi",),
-          acl_toxresult_upload=["hello"])),
-])
+@pytest.mark.parametrize(
+    ("input", "expected"),
+    [
+        ({}, dict(type="index")),
+        ({"volatile": "foo"}, InvalidIndexconfig),
+        ({"volatile": True}, dict(type="index", volatile=True)),
+        ({"volatile": "true"}, dict(type="index", volatile=True)),
+        ({"volatile": "Yes"}, dict(type="index", volatile=True)),
+        ({"volatile": False}, dict(type="index", volatile=False)),
+        ({"volatile": "False"}, dict(type="index", volatile=False)),
+        ({"volatile": "no"}, dict(type="index", volatile=False)),
+        (
+            {"volatile": "False", "bases": "root/pypi"},
+            dict(type="index", volatile=False, bases=("root/pypi",)),
+        ),
+        (
+            {"volatile": "False", "bases": ["root/pypi"]},
+            dict(type="index", volatile=False, bases=("root/pypi",)),
+        ),
+        (
+            {"volatile": "False", "bases": ["root/pypi"], "acl_upload": ["hello"]},
+            dict(
+                type="index", volatile=False, bases=("root/pypi",), acl_upload=["hello"]
+            ),
+        ),
+        (
+            {
+                "volatile": "False",
+                "bases": ["root/pypi"],
+                "acl_toxresult_upload": ["hello"],
+            },
+            dict(
+                type="index",
+                volatile=False,
+                bases=("root/pypi",),
+                acl_toxresult_upload=["hello"],
+            ),
+        ),
+    ],
+)
 def test_get_indexconfig_values(xom, input, expected):
-    stage = LocalIndex(
+    index = LocalIndex(
         xom,
         "user",
         "index",
-        ensure_deeply_readonly({"type": "stage"}),
+        ensure_deeply_readonly({"type": "index"}),
         LocalIndexCustomizer,
     )
     if inspect.isclass(expected) and issubclass(expected, Exception):
         with pytest.raises(expected):
-            stage.get_indexconfig_from_kwargs(**input)
+            index.get_indexconfig_from_kwargs(**input)
     else:
-        (result, unknown) = stage.get_indexconfig_from_kwargs(**input)
+        (result, _unknown) = index.get_indexconfig_from_kwargs(**input)
         assert result == expected
