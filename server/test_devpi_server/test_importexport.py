@@ -39,7 +39,7 @@ def test_has_users_or_stages(xom):
         assert has_users_or_stages(xom)
         stage = xom.model.getstage("user", "dev")
         assert stage is None
-        user.create_stage("dev", bases=(), type="stage", volatile=False)
+        user.create_stage("dev", bases=(), volatile=False)
         assert has_users_or_stages(xom)
         stage = xom.model.getstage("user/dev")
         stage.delete()
@@ -1116,7 +1116,7 @@ class TestImportExport:
         api = mapp1.create_and_use()
         with mapp1.xom.keyfs.read_transaction():
             stage = mapp1.xom.model.getstage(api.stagename)
-            assert stage.ixconfig["foo_plugin"] == "stage"
+            assert stage.ixconfig["foo_plugin"] == "local"
 
         mapp1.set_indexconfig_option("foo_plugin", "foo")
         with mapp1.xom.keyfs.read_transaction():
@@ -1143,7 +1143,7 @@ class TestImportExport:
         api1 = mapp1.create_and_use()
         with mapp1.xom.keyfs.read_transaction():
             stage1 = mapp1.xom.model.getstage(api1.stagename)
-            assert stage1.ixconfig["foo_plugin"] == "stage"
+            assert stage1.ixconfig["foo_plugin"] == "local"
 
         mapp1.set_indexconfig_option("foo_plugin", "foo")
         with mapp1.xom.keyfs.read_transaction():

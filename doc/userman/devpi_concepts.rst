@@ -100,12 +100,12 @@ Indexes
                       "bases": [
                           "/emilie/prod"
                       ], 
-                      "type": "stage", 
+                      "type": "local",
                       "volatile": true
                   }, 
                   "prod": {
                       "bases": [],
-                      "type": "stage", 
+                      "type": "local",
                       "volatile": false
                   }
               }, 
@@ -145,7 +145,7 @@ Indexes
                       "bases": [
                           "/sophie/prod"
                       ], 
-                      "type": "stage", 
+                      "type": "local",
                       "volatile": true
                   }, 
                   "fiddle": {
@@ -153,12 +153,12 @@ Indexes
                           "/sophie/dev", 
                           "/emilie/dev"
                       ], 
-                      "type": "stage", 
+                      "type": "local",
                       "volatile": true
                   }, 
                   "prod": {
                       "bases": [], 
-                      "type": "stage", 
+                      "type": "local",
                       "volatile": false
                   }
               }, 

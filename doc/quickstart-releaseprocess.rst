@@ -100,7 +100,7 @@ so that all of pypi.org packages will appear on that index::
 
     $ devpi index -c dev bases=root/pypi
     http://localhost:3141/testuser/dev?no_projects=:
-      type=stage
+      type=local
       bases=root/pypi
       volatile=True
       acl_upload=testuser
@@ -303,7 +303,7 @@ Let's create another ``staging`` index::
 
     $ devpi index -c staging volatile=False
     http://localhost:3141/testuser/staging?no_projects=:
-      type=stage
+      type=local
       bases=
       volatile=False
       acl_upload=testuser
@@ -385,7 +385,7 @@ index, we can reconfigure the inheritance
     $ devpi index testuser/dev bases=testuser/staging
     /testuser/dev bases=testuser/staging
     http://localhost:3141/testuser/dev?no_projects=:
-      type=stage
+      type=local
       bases=testuser/staging
       volatile=True
       acl_upload=testuser
