@@ -21,7 +21,7 @@ import time
 
 if TYPE_CHECKING:
     from devpi_server.main import XOM
-    from devpi_server.model.remote import MirrorStage
+    from devpi_server.model.remote import RemoteIndex
 
 
 def getlinks(text):
@@ -901,7 +901,7 @@ class TestExtPYPIDB:
             assert pypistage.is_project_cached("foo")
 
 
-class TestMirrorStageprojects:
+class TestRemoteIndexProjects:
     @pytest.mark.asyncio
     async def test_get_remote_projects(self, pypistage):
         pypistage.xom.http.mockresponse(
@@ -1698,7 +1698,7 @@ def test_get_last_project_change_serial_perstage(xom, pypistage):
 
 
 @pytest.mark.notransaction
-def test_elinks(xom: XOM, pypistage: MirrorStage) -> None:
+def test_elinks(xom: XOM, pypistage: RemoteIndex) -> None:
     pypistage.mock_simple(  # type: ignore[attr-defined]
         "pack-age",
         '<a href="/pack.age-0.9.tar.gz" />\n'
