@@ -1,0 +1,1 @@
+Renamed the ``stage`` index to ``local``. This affects the ``type`` field of the HTTP API.
