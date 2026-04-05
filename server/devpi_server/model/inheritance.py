@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .base import BaseIndex
-    from .local import PrivateStageType
+    from .local import LocalIndexType
     from .root import RootModel
     from collections.abc import Callable
     from collections.abc import Iterable
@@ -63,11 +63,11 @@ class InheritanceInfo:
     def blocked_mirror_name(self) -> str | None:
         for traversal_info, has_project in self._iter_mirrors():
             if isinstance(traversal_info, BlockedTraversal):
-                return traversal_info.stage.name
+                return traversal_info.index.name
             if isinstance(has_project, Unknown):
                 return None
             if not isinstance(traversal_info, (AllowedTraversal, UntrustedTraversal)):
-                return traversal_info.stage.name
+                return traversal_info.index.name
             return None
         return None
 
@@ -81,14 +81,14 @@ class InheritanceInfo:
             return has_project
         return False
 
-    def _iter_mirrors(self) -> Iterator[tuple[TraversedStage, bool | NotSet | Unknown]]:
-        for traversal_info, has_project in self._unique_traversed_stages:
-            if traversal_info.stage.index_type != "mirror":
+    def _iter_mirrors(self) -> Iterator[tuple[TraversedIndex, bool | NotSet | Unknown]]:
+        for traversal_info, has_project in self._unique_traversed_indexes:
+            if traversal_info.index.index_type != "mirror":
                 continue
             yield (traversal_info, has_project)
 
-    def iter_stages(self, opname: str) -> Iterator[BaseIndex]:
-        for traversal_info, has_project in self._unique_traversed_stages:
+    def iter_indexes(self, opname: str) -> Iterator[BaseIndex]:
+        for traversal_info, has_project in self._unique_traversed_indexes:
             if isinstance(traversal_info, BlockedTraversal):
                 threadlog.debug("%s: %s", opname, traversal_info.reason)
                 continue
@@ -100,16 +100,16 @@ class InheritanceInfo:
                 has_project is unknown
                 and not isinstance(traversal_info, UntrustedTraversal)
             ):
-                yield traversal_info.stage
+                yield traversal_info.index
 
     @cached_property
-    def _unique_traversed_stages(
+    def _unique_traversed_indexes(
         self,
-    ) -> list[tuple[TraversedStage, bool | NotSet | Unknown]]:
+    ) -> list[tuple[TraversedIndex, bool | NotSet | Unknown]]:
         return [
             (traversal_info, has_project)
             for traversal_info, has_project in self.traversal_infos
-            if isinstance(traversal_info, TraversedStage) and not traversal_info.seen
+            if isinstance(traversal_info, TraversedIndex) and not traversal_info.seen
         ]
 
 
@@ -144,7 +144,7 @@ class WhitelistAllowed(PermissionAllowed):
     src_name: str
 
     def __str__(self) -> str:
-        return f"private package {str(self.project)!r} whitelisted at stage {self.src_name}, allowing {self.name}"
+        return f"private package {str(self.project)!r} whitelisted at index {self.src_name}, allowing {self.name}"
 
 
 @define(frozen=True, kw_only=True)
@@ -189,39 +189,39 @@ class PostponedTraversal(TraversalInfo):
 
 
 @define(frozen=True, kw_only=True)
-class TraversedStage(TraversalInfo):
+class TraversedIndex(TraversalInfo):
+    index: BaseIndex
     seen: bool
-    stage: BaseIndex
 
     def allow(self, *, reason: PermissionAllowed) -> AllowedTraversal:
         return AllowedTraversal(
+            index=self.index,
             name=self.name,
             reason=reason,
             seen=self.seen,
-            stage=self.stage,
         )
 
     def block(self, *, reason: PermissionDenied) -> BlockedTraversal:
         return BlockedTraversal(
+            index=self.index,
             name=self.name,
             reason=reason,
             seen=self.seen,
-            stage=self.stage,
         )
 
 
 @define(frozen=True, kw_only=True)
-class AllowedTraversal(TraversedStage):
+class AllowedTraversal(TraversedIndex):
     reason: PermissionAllowed
 
 
 @define(frozen=True, kw_only=True)
-class BlockedTraversal(TraversedStage):
+class BlockedTraversal(TraversedIndex):
     reason: PermissionDenied
 
 
 @define(frozen=True, kw_only=True)
-class UntrustedTraversal(TraversedStage):
+class UntrustedTraversal(TraversedIndex):
     pass
 
 
@@ -233,20 +233,20 @@ class SkippedTraversal(TraversalInfo):
 
 @define(kw_only=True)
 class InheritancePolicy:
-    PrivateStage: PrivateStageType = field(init=False)
+    LocalIndex: LocalIndexType = field(init=False)
+    index: BaseIndex
     private_hit: BaseIndex | Literal[False] = field(default=False, init=False)
     project: NormalizedName
-    stage: BaseIndex
     whitelist: set[str] = field(init=False)
     whitelist_merger: Callable[[set[str]], set[str]] = field(init=False)
     whitelisted: BaseIndex | Literal[False] = field(default=False, init=False)
 
     def __attrs_post_init__(self) -> None:
-        from .local import PrivateStage
+        from .local import LocalIndex
 
-        self.PrivateStage = PrivateStage
-        self.whitelist = self._get_whitelist(self.stage)
-        match self.stage.ixconfig.get("mirror_whitelist_inheritance", "union"):
+        self.LocalIndex = LocalIndex
+        self.whitelist = self._get_whitelist(self.index)
+        match self.index.ixconfig.get("mirror_whitelist_inheritance", "union"):
             case "intersection":
                 self.whitelist_merger = self.whitelist.intersection
             case "union":
@@ -255,41 +255,41 @@ class InheritancePolicy:
                 msg = f"Unknown whitelist_inheritance setting {whitelist_inheritance!r}"
                 raise RuntimeError(msg)
 
-    def _get_whitelist(self, stage: BaseIndex) -> set[str]:
-        return set(stage.ixconfig.get("mirror_whitelist", set()))
+    def _get_whitelist(self, index: BaseIndex) -> set[str]:
+        return set(index.ixconfig.get("mirror_whitelist", set()))
 
     def update(
-        self, traversed_stage: TraversedStage
+        self, traversed_index: TraversedIndex
     ) -> tuple[PermissionReason | None, bool | NotSet | Unknown]:
-        stage = traversed_stage.stage
-        untrusted = isinstance(traversed_stage, UntrustedTraversal)
+        index = traversed_index.index
+        untrusted = isinstance(traversed_index, UntrustedTraversal)
         if untrusted and self.private_hit is not False and self.whitelisted is False:
             return (
                 WhitelistBlocked(
-                    name=stage.name,
+                    name=index.name,
                     project=self.project,
                     src_name=self.private_hit.name,
                 ),
                 notset,
             )
-        with check_upstream_error(self.stage, stage) as checker:
-            exists = stage.has_project_perstage(self.project)
+        with check_upstream_error(self.index, index) as checker:
+            exists = index.has_project_perstage(self.project)
         if checker.failed:
             return (None, unknown)
-        if isinstance(stage, self.PrivateStage):
-            self.whitelist = self.whitelist_merger(self._get_whitelist(stage))
+        if isinstance(index, self.LocalIndex):
+            self.whitelist = self.whitelist_merger(self._get_whitelist(index))
             if self.whitelist.intersection({"*", self.project}):
-                self.whitelisted = stage
+                self.whitelisted = index
             elif exists:
-                self.private_hit = stage
-        if self.private_hit is False and exists is unknown and stage.no_project_list:
+                self.private_hit = index
+        if self.private_hit is False and exists is unknown and index.no_project_list:
             # direct fetching is allowed
-            return (DirectAccess(name=stage.name, project=self.project), exists)
+            return (DirectAccess(name=index.name, project=self.project), exists)
         if not exists or not untrusted or self.whitelisted is False:
             return (None, exists)
         return (
             WhitelistAllowed(
-                name=stage.name, project=self.project, src_name=self.whitelisted.name
+                name=index.name, project=self.project, src_name=self.whitelisted.name
             ),
             exists,
         )
@@ -297,12 +297,12 @@ class InheritancePolicy:
 
 class IndexBases:
     def __init__(
-        self, stage: BaseIndex, *, devpiserver_sro_skip: Callable, model: RootModel
+        self, index: BaseIndex, *, devpiserver_sro_skip: Callable, model: RootModel
     ) -> None:
         self._per_project_mergability_cache = LRUCache(8)
         self.devpiserver_sro_skip = devpiserver_sro_skip
+        self.index = index
         self.model = model
-        self.stage = stage
 
     def __iter__(self) -> Iterator[str]:
         return iter(self.bases)
@@ -313,14 +313,14 @@ class IndexBases:
     @cached_property
     def bases(self) -> tuple[str]:
         """Returns bases as tuple of strings."""
-        return tuple(self.stage.ixconfig.get("bases", ()))
+        return tuple(self.index.ixconfig.get("bases", ()))
 
     def _get_inheritance_infos(self, project: NormalizedName) -> InheritanceInfo:
-        filtered_project = not self.stage.filter_projects([project])
-        policy = InheritancePolicy(project=project, stage=self.stage)
+        filtered_project = not self.index.filter_projects([project])
+        policy = InheritancePolicy(index=self.index, project=project)
         traversal_infos: list[tuple[TraversalInfo, bool | NotSet | Unknown]] = []
         for traversal_info in self.traversal_infos:
-            if filtered_project or not isinstance(traversal_info, TraversedStage):
+            if filtered_project or not isinstance(traversal_info, TraversedIndex):
                 traversal_infos.append((traversal_info, notset))
                 continue
             (reason, exists) = policy.update(traversal_info)
@@ -344,19 +344,19 @@ class IndexBases:
             self._per_project_mergability_cache.put(project, result)
         return result
 
-    def get_mergeable_stages(
+    def get_mergeable_indexes(
         self, project: NormalizedName, opname: str
     ) -> Iterable[BaseIndex]:
-        return self.get_inheritance_infos(project).iter_stages(opname)
+        return self.get_inheritance_infos(project).iter_indexes(opname)
 
-    def iter_stages(self) -> Iterator[BaseIndex]:
-        """Iterates stages in defined order without loops."""
+    def iter_indexes(self) -> Iterator[BaseIndex]:
+        """Iterates indexes in defined order without loops."""
         for traversal_info in self.traversal_infos:
             match traversal_info:
                 case (
                     PostponedTraversal()
                     | SkippedTraversal(reason=InheritanceCycle())
-                    | TraversedStage(seen=True)
+                    | TraversedIndex(seen=True)
                 ):
                     continue
                 case SkippedTraversal(name=name, reason=MissingIndex(), src=src):
@@ -371,40 +371,40 @@ class IndexBases:
                         name,
                     )
                     continue
-                case TraversedStage(seen=False, stage=stage):
-                    yield stage
+                case TraversedIndex(index=index, seen=False):
+                    yield index
                 case _:
                     raise RuntimeError(traversal_info)
 
-    def is_untrusted(self, stage: BaseIndex) -> bool:
+    def is_untrusted(self, index: BaseIndex) -> bool:
         # we have to postpone mirrors, as there
         # may be private releases in other paths
-        return stage.index_type == "mirror"
+        return index.index_type == "mirror"
 
     @cached_property
     def traversal_infos(self) -> list[TraversalInfo]:
         """Returns traversal information."""
         devpiserver_sro_skip = self.devpiserver_sro_skip
-        getstage = self.model.getstage
+        getindex = self.model.getstage
         info: list[TraversalInfo] = []
         postponed: list[tuple[BaseIndex, list[str]]] = []
         seen = set()
         is_untrusted = self.is_untrusted
-        stage = self.stage
-        todo = [(stage, list(reversed(stage.index_bases)))]
+        index = self.index
+        todo = [(index, list(reversed(index.index_bases)))]
         while todo:
-            (current_stage, bases) = todo[-1]
-            current_name = current_stage.name
+            (current_index, bases) = todo[-1]
+            current_name = current_index.name
             if bases or current_name not in seen:
                 info.append(
                     (
                         UntrustedTraversal
-                        if is_untrusted(current_stage)
-                        else TraversedStage
+                        if is_untrusted(current_index)
+                        else TraversedIndex
                     )(
+                        index=current_index,
                         name=current_name,
                         seen=current_name in seen,
-                        stage=current_stage,
                     )
                 )
             seen.add(current_name)
@@ -424,8 +424,8 @@ class IndexBases:
                     )
                 )
                 continue
-            next_stage = getstage(next_name)
-            if next_stage is None:
+            next_index = getindex(next_name)
+            if next_index is None:
                 info.append(
                     SkippedTraversal(
                         name=next_name,
@@ -435,7 +435,7 @@ class IndexBases:
                 )
                 seen.add(next_name)
                 continue
-            if devpiserver_sro_skip(stage=stage, base_stage=next_stage):
+            if devpiserver_sro_skip(stage=index, base_stage=next_index):
                 info.append(
                     SkippedTraversal(
                         name=next_name,
@@ -445,9 +445,9 @@ class IndexBases:
                 )
                 seen.add(next_name)
                 continue
-            if is_untrusted(next_stage):
+            if is_untrusted(next_index):
                 info.append(PostponedTraversal(name=next_name))
-                postponed.append((next_stage, list(reversed(next_stage.index_bases))))
+                postponed.append((next_index, list(reversed(next_index.index_bases))))
             else:
-                todo.append((next_stage, list(reversed(next_stage.index_bases))))
+                todo.append((next_index, list(reversed(next_index.index_bases))))
         return info

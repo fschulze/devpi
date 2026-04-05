@@ -891,7 +891,7 @@ class TestExtPYPIDB:
             assert pypistage.is_project_cached("foo")
 
 
-class TestMirrorStageprojects:
+class TestRemoteIndexProjects:
     @pytest.mark.asyncio
     async def test_get_remote_projects(self, pypistage):
         pypistage.xom.http.mockresponse(
