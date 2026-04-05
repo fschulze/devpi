@@ -80,7 +80,7 @@ For this we first add ``root/pypi`` to the bases of ``emilie/prod``::
    $ devpi index emilie/prod bases+=root/pypi
    /emilie/prod bases+=root/pypi
    http://localhost:3141/emilie/prod?no_projects=:
-     type=stage
+     type=local
      bases=root/pypi
      volatile=False
      acl_upload=emilie
@@ -326,7 +326,7 @@ can modify her ``dev`` index to use ``/emilie/prod`` index as a base::
    $ devpi index /sophie/dev bases=/emilie/prod,/sophie/prod  
    /sophie/dev bases=/emilie/prod,/sophie/prod
    http://localhost:3141/sophie/dev?no_projects=:
-     type=stage
+     type=local
      bases=emilie/prod,sophie/prod
      volatile=True
      acl_upload=sophie

@@ -200,7 +200,7 @@ class BaseIndex:
         conflicting = stage_keys.intersection(customizer_keys)
         if conflicting:
             raise ValueError(
-                "The stage customizer for '%s' defines keys which conflict "
+                "The index customizer for '%s' defines keys which conflict "
                 "with existing index configuration keys: %s"
                 % (index_type, ", ".join(sorted(conflicting)))
             )
@@ -208,7 +208,7 @@ class BaseIndex:
         for key, _value in self.get_default_config_items():
             if kwargs.get(key) is RemoveValue:
                 raise InvalidIndexconfig("Default values can't be removed.")
-        # now process any key known by the stage class
+        # now process any key known by the index class
         for key in stage_keys:
             if key not in kwargs:
                 continue

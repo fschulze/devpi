@@ -153,7 +153,7 @@ class User:
     def create_stage(
         self,
         index,
-        type="stage",  # noqa: A002
+        type="local",  # noqa: A002
         **kwargs,
     ):
         return self.parent.create_stage(self, index, type=type, **kwargs)
