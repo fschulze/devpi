@@ -28,6 +28,7 @@ from devpi_common.types import cached_property
 from operator import iconcat
 from typing import NoReturn
 from typing import TYPE_CHECKING
+from typing import overload
 import asyncio
 import functools
 import os
@@ -35,12 +36,14 @@ import os.path
 import sys
 import threading
 import time
+import warnings
 
 
 if TYPE_CHECKING:
     from .config import Config
     from collections.abc import Coroutine
     from pluggy import PluginManager
+    from pyramid.request import Request
     from typing import Any
     from typing import TypedDict
     import argparse
@@ -619,6 +622,7 @@ class XOM:
         if self.config.args.profile_requests:
             pyramid_config.add_tween("devpi_server.main.tween_request_profiling")
         pyramid_config.add_request_method(get_remote_ip)
+        pyramid_config.add_request_method(index_url)
         pyramid_config.add_request_method(stage_url)
         pyramid_config.add_request_method(simpleindex_url)
         pyramid_config.add_request_method(apifatal)
@@ -642,28 +646,95 @@ def get_remote_ip(request):
     return request.headers.get("X-REAL-IP", request.client_addr)
 
 
-def stage_from_args(model, *args):
-    if len(args) not in (1, 2):
-        raise TypeError("stage_url() takes 1 or 2 arguments (%s given)" % len(args))
-    if len(args) == 1 and isinstance(args[0], BaseIndex):
-        return args[0]
-    return model.getstage(*args)
+@overload
+def index_from_args(
+    model: RootModel, user_or_index: BaseIndex, index: None
+) -> BaseIndex: ...
 
 
-def stage_url(request, *args):
+@overload
+def index_from_args(
+    model: RootModel, user_or_index: BaseIndex, index: str
+) -> NoReturn: ...
+
+
+@overload
+def index_from_args(
+    model: RootModel, user_or_index: str, index: str | None = None
+) -> BaseIndex | None: ...
+
+
+def index_from_args(
+    model: RootModel, user_or_index: str | BaseIndex, index: str | None = None
+) -> BaseIndex | None:
+    if isinstance(user_or_index, BaseIndex):
+        if index is not None:
+            raise TypeError(
+                "index_from_args index argument must be None if BaseIndex is given"
+            )
+        return user_or_index
+    return model.getstage(user_or_index, index)
+
+
+@overload
+def index_url(request: Request, user_or_index: BaseIndex, index: None) -> str: ...
+
+
+@overload
+def index_url(request: Request, user_or_index: BaseIndex, index: str) -> NoReturn: ...
+
+
+@overload
+def index_url(
+    request: Request, user_or_index: str, index: str | None = None
+) -> str | None: ...
+
+
+def index_url(
+    request: Request, user_or_index: str | BaseIndex, index: str | None = None
+) -> str | None:
     model = request.registry['xom'].model
-    stage = stage_from_args(model, *args)
+    stage = index_from_args(model, user_or_index, index)
     if stage is not None:
         return request.route_url(
             "/{user}/{index}", user=stage.username, index=stage.index)
+    return None
 
 
-def simpleindex_url(request, *args):
+@overload
+def simpleindex_url(request: Request, user_or_index: BaseIndex, index: None) -> str: ...
+
+
+@overload
+def simpleindex_url(
+    request: Request, user_or_index: BaseIndex, index: str
+) -> NoReturn: ...
+
+
+@overload
+def simpleindex_url(
+    request: Request, user_or_index: str, index: str | None = None
+) -> str | None: ...
+
+
+def simpleindex_url(
+    request: Request, user_or_index: str | BaseIndex, index: str | None = None
+) -> str | None:
     model = request.registry['xom'].model
-    stage = stage_from_args(model, *args)
+    stage = index_from_args(model, user_or_index, index)
     if stage is not None:
         return request.route_url(
             "/{user}/{index}/+simple/", user=stage.username, index=stage.index)
+    return None
+
+
+def stage_url(request, user_or_index, index=None):
+    warnings.warn(
+        "The 'stage_url' method is deprecated, use 'index_url' instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return index_url(request, user_or_index, index)
 
 
 def apifatal(request, *args, **kwargs):
