@@ -851,7 +851,7 @@ class TestExtPYPIDB:
         assert r.body == b"metadata"
 
 
-class TestMirrorStageprojects:
+class TestRemoteIndexProjects:
     @pytest.mark.asyncio
     async def test_get_remote_projects(self, pypistage):
         pypistage.xom.http.mockresponse(
