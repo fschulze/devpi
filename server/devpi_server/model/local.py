@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from .base import BaseStage
+from .base import BaseIndex
 from .config import ensure_acl_list
 from .config import ensure_boolean
 from .config import ensure_list
 from .config import normalize_bases
 from .config import normalize_whitelist_name
-from .customizer import BaseStageCustomizer
+from .customizer import BaseIndexCustomizer
 from .exceptions import InvalidIndexconfig
 from .exceptions import MissesRegistration
 from .exceptions import MissesVersion
@@ -55,7 +55,7 @@ if TYPE_CHECKING:
 VERSIONDATA_DESCRIPTION_SIZE_THRESHOLD = 8192
 
 
-class PrivateStage(BaseStage):
+class PrivateStage(BaseIndex):
     metadata_keys = (
         "name",
         "version",
@@ -181,7 +181,7 @@ class PrivateStage(BaseStage):
         # delete all projects on this index
         for name in self.list_projects_perstage():
             self.del_project(name)
-        BaseStage.delete(self)
+        BaseIndex.delete(self)
 
     #
     # registering project and version metadata
@@ -741,7 +741,7 @@ class PrivateStage(BaseStage):
         return index_serial
 
 
-class StageCustomizer(BaseStageCustomizer):
+class StageCustomizer(BaseIndexCustomizer):
     pass
 
 

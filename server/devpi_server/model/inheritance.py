@@ -17,7 +17,7 @@ import enum
 
 
 if TYPE_CHECKING:
-    from .base import BaseStage
+    from .base import BaseIndex
     from .local import PrivateStageType
     from .root import RootModel
     from collections.abc import Callable
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
 
 class check_upstream_error:
-    def __init__(self, current: BaseStage, other: BaseStage) -> None:
+    def __init__(self, current: BaseIndex, other: BaseIndex) -> None:
         self.current = current
         self.other = other
         self.failed = False
@@ -88,7 +88,7 @@ class InheritanceInfo:
                 continue
             yield (traversal_info, has_project)
 
-    def iter_stages(self, opname: str) -> Iterator[BaseStage]:
+    def iter_stages(self, opname: str) -> Iterator[BaseIndex]:
         for traversal_info, has_project in self._unique_traversed_stages:
             if isinstance(traversal_info, BlockedTraversal):
                 threadlog.debug("%s: %s", opname, traversal_info.reason)
@@ -175,7 +175,7 @@ class PostponedTraversal(TraversalInfo):
 @define(frozen=True, kw_only=True)
 class TraversedStage(TraversalInfo):
     seen: bool
-    stage: BaseStage
+    stage: BaseIndex
 
     def allow(self, *, reason: PermissionAllowed) -> AllowedTraversal:
         return AllowedTraversal(
@@ -218,12 +218,12 @@ class SkippedTraversal(TraversalInfo):
 @define(kw_only=True)
 class InheritancePolicy:
     PrivateStage: PrivateStageType = field(init=False)
-    private_hit: BaseStage | Literal[False] = field(default=False, init=False)
+    private_hit: BaseIndex | Literal[False] = field(default=False, init=False)
     project: NormalizedName
-    stage: BaseStage
+    stage: BaseIndex
     whitelist: set[str] = field(init=False)
     whitelist_merger: Callable[[set[str]], set[str]] = field(init=False)
-    whitelisted: BaseStage | Literal[False] = field(default=False, init=False)
+    whitelisted: BaseIndex | Literal[False] = field(default=False, init=False)
 
     def __attrs_post_init__(self) -> None:
         from .local import PrivateStage
@@ -239,7 +239,7 @@ class InheritancePolicy:
                 msg = f"Unknown whitelist_inheritance setting {whitelist_inheritance!r}"
                 raise RuntimeError(msg)
 
-    def _get_whitelist(self, stage: BaseStage) -> set[str]:
+    def _get_whitelist(self, stage: BaseIndex) -> set[str]:
         return set(stage.ixconfig.get("mirror_whitelist", set()))
 
     def update(
@@ -281,7 +281,7 @@ class InheritancePolicy:
 
 class IndexBases:
     def __init__(
-        self, stage: BaseStage, *, devpiserver_sro_skip: Callable, model: RootModel
+        self, stage: BaseIndex, *, devpiserver_sro_skip: Callable, model: RootModel
     ) -> None:
         self._per_project_mergability_cache = LRUCache(8)
         self.devpiserver_sro_skip = devpiserver_sro_skip
@@ -330,10 +330,10 @@ class IndexBases:
 
     def get_mergeable_stages(
         self, project: NormalizedName, opname: str
-    ) -> Iterable[BaseStage]:
+    ) -> Iterable[BaseIndex]:
         return self.get_inheritance_infos(project).iter_stages(opname)
 
-    def iter_stages(self) -> Iterator[BaseStage]:
+    def iter_stages(self) -> Iterator[BaseIndex]:
         """Iterates stages in defined order without loops."""
         for traversal_info in self.traversal_infos:
             match traversal_info:
@@ -362,7 +362,7 @@ class IndexBases:
                 case _:
                     raise RuntimeError(traversal_info)
 
-    def is_untrusted(self, stage: BaseStage) -> bool:
+    def is_untrusted(self, stage: BaseIndex) -> bool:
         # we have to postpone mirrors, as there
         # may be private releases in other paths
         return stage.index_type == "mirror"
@@ -373,7 +373,7 @@ class IndexBases:
         devpiserver_sro_skip = self.devpiserver_sro_skip
         getstage = self.model.getstage
         info: list[TraversalInfo] = []
-        postponed: list[tuple[BaseStage, list[str]]] = []
+        postponed: list[tuple[BaseIndex, list[str]]] = []
         seen = set()
         is_untrusted = self.is_untrusted
         stage = self.stage

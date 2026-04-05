@@ -66,7 +66,7 @@ import re
 
 if TYPE_CHECKING:
     from .main import XOM
-    from .model.base import BaseStage
+    from .model.base import BaseIndex
     from .model.links import ELink
     from .model.local import PrivateStage
     from collections.abc import Iterator
@@ -622,7 +622,7 @@ class PyPIView:
             tox_result_handling = self.xom.config.hook.devpiserver_on_toxresult_upload_forbidden(
                 request=self.request, tox_result_handling=default_tox_result_handling)
         else:
-            stage = cast("BaseStage", self.context.stage)
+            stage = cast("BaseIndex", self.context.stage)
             relpath = self.request.path_info.strip("/")
             link = stage.get_link_from_entrypath(relpath)
             if link is None or link.rel != "releasefile":

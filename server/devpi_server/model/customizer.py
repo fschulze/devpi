@@ -10,7 +10,7 @@ import functools
 
 
 if TYPE_CHECKING:
-    from .local import BaseStage
+    from .local import BaseIndex
 
 
 def get_stage_customizer_classes(xom):
@@ -26,26 +26,26 @@ def get_stage_customizer_class(xom, index_type):
     if cls is None:
         threadlog.warn("unknown index type %r" % index_type)
         cls = UnknownCustomizer
-    if not issubclass(cls, BaseStageCustomizer):
-        # we add the BaseStageCustomizer here to keep plugins simpler
-        cls = type(cls.__name__, (cls, BaseStageCustomizer), dict(cls.__dict__))
+    if not issubclass(cls, BaseIndexCustomizer):
+        # we add the BaseIndexCustomizer here to keep plugins simpler
+        cls = type(cls.__name__, (cls, BaseIndexCustomizer), dict(cls.__dict__))
     cls.InvalidIndex = InvalidIndex
     cls.InvalidIndexconfig = InvalidIndexconfig
     cls.ReadonlyIndex = ReadonlyIndex
     return cls
 
 
-class BaseStageCustomizer:
+class BaseIndexCustomizer:
     readonly = False
 
-    def __init__(self, stage: BaseStage) -> None:
+    def __init__(self, stage: BaseIndex) -> None:
         self.stage = stage
         self.hooks = self.stage.xom.config.hook
 
     # get_principals_for_* methods for each of the following permissions:
     # upload, toxresult_upload, index_delete, index_modify,
     # del_entry, del_project, del_verdata
-    # also see __acl__ method of BaseStage
+    # also see __acl__ method of BaseIndex
 
     def get_principals_for_pkg_read(self, restrict_modify=None):
         principals = self.hooks.devpiserver_stage_get_principals_for_pkg_read(
@@ -163,7 +163,7 @@ class BaseStageCustomizer:
         return
 
 
-class UnknownCustomizer(BaseStageCustomizer):
+class UnknownCustomizer(BaseIndexCustomizer):
     readonly = True
 
     # prevent uploads and deletions besides complete index removal

@@ -18,7 +18,7 @@ from .log import configure_cli_logging
 from .log import configure_logging
 from .log import thread_push_log
 from .log import threadlog
-from .model.base import BaseStage
+from .model.base import BaseIndex
 from .model.root import RootModel
 from .model.schema import Schema
 from .views import apireturn
@@ -645,9 +645,8 @@ def get_remote_ip(request):
 def stage_from_args(model, *args):
     if len(args) not in (1, 2):
         raise TypeError("stage_url() takes 1 or 2 arguments (%s given)" % len(args))
-    if len(args) == 1:
-        if isinstance(args[0], BaseStage):
-            return args[0]
+    if len(args) == 1 and isinstance(args[0], BaseIndex):
+        return args[0]
     return model.getstage(*args)
 
 

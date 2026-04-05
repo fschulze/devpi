@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from .filestore import FileEntry
     from .filestore import MutableFileEntry
     from .main import XOM
-    from .model.local import BaseStage
+    from .model.local import BaseIndex
     from .model.local import PrivateStage
     from .model.remote import MirrorStage
     from .readonly import SetViewReadonly
@@ -238,7 +238,7 @@ class Exporter:
 
 
 class IndexDump:
-    def __init__(self, exporter: Exporter, stage: BaseStage, basedir: Path) -> None:
+    def __init__(self, exporter: Exporter, stage: BaseIndex, basedir: Path) -> None:
         self.exporter = exporter
         self.stage = stage
         self.basedir = basedir
@@ -653,7 +653,7 @@ class Importer:
             keyfs.notifier.wait_event_serial(wait_serial)
         self.tw.line(f"wait_for_events: importing finished; {latest_serial=}")
 
-    def import_filedesc(self, stage: BaseStage, filedesc: dict, versions: dict) -> None:  # noqa: PLR0912
+    def import_filedesc(self, stage: BaseIndex, filedesc: dict, versions: dict) -> None:  # noqa: PLR0912
         rel = filedesc["relpath"]
         project = normalize_name(filedesc["projectname"])
         p = self.import_rootdir / rel
