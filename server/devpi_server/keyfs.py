@@ -38,7 +38,7 @@ from .markers import Absent
 from .markers import Deleted
 from .markers import absent
 from .markers import deleted
-from .model.root import RootModel
+from .model.root import CachingRootModel
 from .readonly import DictViewReadonly
 from .readonly import ensure_deeply_readonly
 from .readonly import get_mutable_deepcopy
@@ -63,9 +63,7 @@ if TYPE_CHECKING:
     from .keyfs_types import StorageInfo
     from .log import TagLogger
     from .main import XOM
-    from .model.base import BaseStage
     from .model.schema import Schema as ModelSchema
-    from .model.user import User
     from .mythread import MyThread
     from collections.abc import Callable
     from collections.abc import Iterable
@@ -796,57 +794,6 @@ class KeyChangeEvent(Generic[KeyType, KeyTypeRO]):
     at_serial: int
 
 
-class TransactionRootModel(RootModel):
-    def __init__(self, xom: XOM) -> None:
-        super().__init__(xom)
-        self.model_cache: dict[str | tuple[str, str], BaseStage | User | None] = {}
-
-    def create_user(self, username, password, **kwargs):
-        if username in self.model_cache:
-            assert self.model_cache[username] is None
-        self.model_cache[username] = super().create_user(
-            username, password, **kwargs)
-        return self.model_cache[username]
-
-    def create_stage(self, user, index, type="stage", **kwargs):
-        key = (user.name, index)
-        if key in self.model_cache:
-            assert self.model_cache[key] is None
-        self.model_cache[key] = super().create_stage(
-            user, index, type=type, **kwargs)
-        return self.model_cache[key]
-
-    def delete_user(self, username: str) -> None:
-        if username in self.model_cache:
-            assert self.model_cache[username] is not None
-            del self.model_cache[username]
-        super().delete_user(username)
-
-    def delete_stage(self, username: str, index: str) -> None:
-        super().delete_stage(username, index)
-        key = (username, index)
-        if key in self.model_cache:
-            assert self.model_cache[key] is not None
-            del self.model_cache[key]
-
-    def get_index(self, user: str, index: str | None = None) -> BaseStage | None:
-        return self.getstage(user, index)
-
-    def get_user(self, name):
-        if name not in self.model_cache:
-            self.model_cache[name] = super().get_user(name)
-        return self.model_cache[name]
-
-    def getstage(self, user, index=None):
-        if index is None:
-            user = user.strip('/')
-            (user, index) = user.split('/')
-        key = (user, index)
-        if key not in self.model_cache:
-            self.model_cache[key] = super().getstage(user, index)
-        return self.model_cache[key]
-
-
 class FileStoreTransaction:
     def __init__(self, keyfs: KeyFS) -> None:
         self.keyfs = keyfs
@@ -1004,7 +951,7 @@ class Transaction:
     _dirty: dict[ULIDKey, KeyFSTypes | Deleted]
     _finished_listeners: list[Callable]
     _got_all: set[LocatedKey | PatternedKey | SearchKey]
-    _model: TransactionRootModel | Absent
+    _model: CachingRootModel | Absent
     _original: dict[
         ULIDKey,
         tuple[int, ULIDKey, KeyFSTypesRO]
@@ -1050,9 +997,9 @@ class Transaction:
         assert self.keyfs.io_file_factory is not None
         return self.keyfs.io_file_factory(self.conn)
 
-    def get_model(self, xom: XOM) -> TransactionRootModel:
+    def get_model(self, xom: XOM) -> CachingRootModel:
         if isinstance(self._model, Absent):
-            self._model = TransactionRootModel(xom)
+            self._model = CachingRootModel(xom)
         return self._model
 
     def iter_serial_and_value_backwards(
