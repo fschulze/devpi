@@ -13,6 +13,8 @@ from .model import Rel
 from .normalized import normalize_name
 from .readonly import ReadonlyView
 from .readonly import get_mutable_deepcopy
+from attrs import define
+from attrs import field
 from collections import defaultdict
 from devpi_common.metadata import BasenameMeta
 from devpi_common.url import URL
@@ -350,6 +352,61 @@ class IndexDump:
         self.exporter.completed(f"{type}: {relpath} ")
 
 
+@define(kw_only=True)
+class Migrator:
+    dumpversion: int = field(converter=int)
+
+    @dumpversion.validator
+    def _validate_dumpversion(self, _attribute, value):
+        if value not in {1, 2}:
+            msg = f"incompatible dumpversion: {self.dumpversion}"
+            raise Fatal(msg)
+
+    def migrate(self, data: dict) -> dict:
+        data["indexes"] = {
+            k: self.migrate_index(v) for k, v in data.pop("indexes").items()
+        }
+        data["users"] = {k: self.migrate_user(v) for k, v in data.pop("users").items()}
+        return data
+
+    def migrate_file(self, data: dict) -> dict:
+        if self.dumpversion < 2:
+            # previous versions would not add a version attribute
+            data["version"] = BasenameMeta(Path(data["relpath"]).name).version
+        if "entrymapping" in data:
+            mapping = data["entrymapping"]
+            hashes = Digests(mapping.pop("hashes", {}))
+            # devpi-server-2.1 exported with md5 checksums
+            if "md5" in mapping:
+                hashes["md5"] = mapping.pop("md5")
+            # docs and toxresults didn't always have hashes stored in export dump
+            if "hash_spec" in mapping:
+                hashes.add_spec(mapping.pop("hash_spec"))
+            mapping["hashes"] = dict(hashes)
+        return data
+
+    def migrate_index(self, data: dict) -> dict:
+        if "files" in data:
+            data["files"] = [self.migrate_file(v) for v in data.pop("files")]
+        indexconfig = data["indexconfig"]
+        if (
+            "uploadtrigger_jenkins" in indexconfig
+            and not indexconfig["uploadtrigger_jenkins"]
+        ):
+            # remove if not set, so if the trigger was never
+            # used, you don't need to install the plugin
+            del indexconfig["uploadtrigger_jenkins"]
+        if "pypi_whitelist" in indexconfig:
+            # this was renamed in 3.0.0
+            whitelist = indexconfig.pop("pypi_whitelist")
+            if "mirror_whitelist" not in indexconfig:
+                indexconfig["mirror_whitelist"] = whitelist
+        return data
+
+    def migrate_user(self, data: dict) -> dict:
+        return data
+
+
 class Importer:
     import_indexes: dict[str, Any]
 
@@ -440,11 +497,10 @@ class Importer:
     def import_all(self, path: Path) -> None:  # noqa: PLR0912
         self.import_rootdir = path
         json_path = path / "dataindex.json"
-        self.import_data = self.read_json(json_path)
-        self.dumpversion = self.import_data["dumpversion"]
-        if self.dumpversion not in ("1", "2"):
-            msg = f"incompatible dumpversion: {self.dumpversion!r}"
-            raise Fatal(msg)
+        import_data = self.read_json(json_path)
+        self.import_data = Migrator(dumpversion=import_data["dumpversion"]).migrate(
+            import_data
+        )
         self.import_users = self.import_data["users"]
         self.import_indexes = self.import_data["indexes"]
         self.display_import_header(path)
@@ -495,16 +551,6 @@ class Importer:
                 indexconfig = dict(import_index["indexconfig"])
                 if indexconfig['type'] in self.types_to_skip:
                     continue
-                if 'uploadtrigger_jenkins' in indexconfig:
-                    if not indexconfig['uploadtrigger_jenkins']:
-                        # remove if not set, so if the trigger was never
-                        # used, you don't need to install the plugin
-                        del indexconfig['uploadtrigger_jenkins']
-                if 'pypi_whitelist' in indexconfig:
-                    # this was renamed in 3.0.0
-                    whitelist = indexconfig.pop('pypi_whitelist')
-                    if 'mirror_whitelist' not in indexconfig:
-                        indexconfig['mirror_whitelist'] = whitelist
                 username, index = stagename.split("/")
                 user = self.xom.model.get_user(username)
                 assert user is not None
@@ -605,22 +651,12 @@ class Importer:
         # docs and toxresults didn't always have entrymapping in export dump
         mapping = filedesc.get("entrymapping", {})
         hashes = Digests(mapping.get("hashes", {}))
-        # devpi-server-2.1 exported with md5 checksums
-        if "md5" in mapping:
-            hashes["md5"] = mapping["md5"]
-        # docs and toxresults didn't always have hashes stored in export dump
-        if "hash_spec" in mapping:
-            hashes.add_spec(mapping['hash_spec'])
         # note that the actual hash_type used within devpi-server is not
         # determined here but in store_releasefile/store_doczip/store_toxresult etc
         hashes.update(get_hashes(f, hash_types=hashes.get_missing_hash_types()))
 
         if filedesc["type"] == Rel.ReleaseFile:
-            if self.dumpversion == "1":
-                # previous versions would not add a version attribute
-                version = BasenameMeta(p.name).version
-            else:
-                version = filedesc["version"]
+            version = filedesc["version"]
 
             if hasattr(stage, 'store_releasefile'):
                 stage = cast("PrivateStage", stage)
