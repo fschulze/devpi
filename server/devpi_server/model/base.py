@@ -447,7 +447,7 @@ class BaseIndex:
     def list_versions(self, project: NormalizedName | str) -> set[str]:
         project = normalize_name(project)
         versions = set()
-        for stage in self.index_bases.get_mergeable_stages(project, "list_versions"):
+        for stage in self.index_bases.get_mergeable_indexes(project, "list_versions"):
             with check_upstream_error(self, stage) as checker:
                 res = stage.list_versions_perstage(project)
             if checker.failed:
@@ -475,7 +475,7 @@ class BaseIndex:
         result: dict[str, Any] = {}
         if not self.filter_versions(project, {version}):
             return result
-        for stage in self.index_bases.get_mergeable_stages(
+        for stage in self.index_bases.get_mergeable_indexes(
             normalize_name(project), "get_versiondata"
         ):
             with check_upstream_error(self, stage) as checker:
@@ -503,7 +503,7 @@ class BaseIndex:
         seen = set()
 
         try:
-            for stage in self.index_bases.get_mergeable_stages(
+            for stage in self.index_bases.get_mergeable_indexes(
                 project, "get_simplelinks"
             ):
                 with check_upstream_error(self, stage) as checker:
@@ -615,7 +615,7 @@ class BaseIndex:
     def op_sro(self, opname, **kw):
         warnings.warn(
             "The 'op_sro' method is deprecated, "
-            "use 'index_bases.iter_stages()' instead.",
+            "use 'index_bases.iter_indexes()' instead.",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -629,14 +629,14 @@ class BaseIndex:
     def op_sro_check_mirror_whitelist(self, opname, **kw):
         warnings.warn(
             "The 'op_sro_check_mirror_whitelist' method is deprecated, "
-            "use 'index_bases.get_mergeable_stages' instead.",
+            "use 'index_bases.get_mergeable_indexes' instead.",
             DeprecationWarning,
             stacklevel=2,
         )
         project = normalize_name(kw["project"])
         if not self.filter_projects([project]):
             return
-        for stage in self.index_bases.get_mergeable_stages(project, opname):
+        for stage in self.index_bases.get_mergeable_indexes(project, opname):
             with check_upstream_error(self, stage) as checker:
                 res = getattr(stage, opname)(**kw)
             if checker.failed:
@@ -645,7 +645,7 @@ class BaseIndex:
 
     def sro(self) -> Iterator[BaseIndex]:
         """return stage resolution order."""
-        return self.index_bases.iter_stages()
+        return self.index_bases.iter_indexes()
 
     def __acl__(self):
         permissions = (
