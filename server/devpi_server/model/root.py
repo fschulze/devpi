@@ -129,3 +129,55 @@ class RootModel:
         if not ixconfig:
             return None
         return _user._getstage(indexname, ixconfig["type"], ixconfig)
+
+
+class CachingRootModel(RootModel):
+    def __init__(self, xom: XOM) -> None:
+        super().__init__(xom)
+        self.model_cache: dict[str | tuple[str, str], BaseStage | User | None] = {}
+
+    def create_user(self, username, password, **kwargs):
+        if username in self.model_cache:
+            assert self.model_cache[username] is None
+        self.model_cache[username] = super().create_user(username, password, **kwargs)
+        return self.model_cache[username]
+
+    def create_stage(
+        self,
+        user,
+        index,
+        type="stage",  # noqa: A002
+        **kwargs,
+    ):
+        key = (user.name, index)
+        if key in self.model_cache:
+            assert self.model_cache[key] is None
+        self.model_cache[key] = super().create_stage(user, index, type=type, **kwargs)
+        return self.model_cache[key]
+
+    def delete_user(self, username: str) -> None:
+        if username in self.model_cache:
+            assert self.model_cache[username] is not None
+            del self.model_cache[username]
+        super().delete_user(username)
+
+    def delete_stage(self, username: str, index: str) -> None:
+        super().delete_stage(username, index)
+        key = (username, index)
+        if key in self.model_cache:
+            assert self.model_cache[key] is not None
+            del self.model_cache[key]
+
+    def get_user(self, name):
+        if name not in self.model_cache:
+            self.model_cache[name] = super().get_user(name)
+        return self.model_cache[name]
+
+    def getstage(self, user, index=None):
+        if index is None:
+            user = user.strip("/")
+            (user, index) = user.split("/")
+        key = (user, index)
+        if key not in self.model_cache:
+            self.model_cache[key] = super().getstage(user, index)
+        return self.model_cache[key]
