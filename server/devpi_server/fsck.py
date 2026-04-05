@@ -12,7 +12,7 @@ import sys
 if TYPE_CHECKING:
     from .config import MyArgumentParser
     from .main import XOM
-    from .model.base import BaseStage
+    from .model.base import BaseIndex
     from pluggy import PluginManager
 
 
@@ -30,10 +30,10 @@ def add_fsck_options(
 
 class IndexCache:
     def __init__(self, xom: XOM) -> None:
-        self.cache: dict[tuple[str, str], BaseStage | None] = {}
+        self.cache: dict[tuple[str, str], BaseIndex | None] = {}
         self.xom = xom
 
-    def get(self, user: str, index: str) -> BaseStage | None:
+    def get(self, user: str, index: str) -> BaseIndex | None:
         key = (user, index)
         if key not in self.cache:
             self.cache[key] = self.xom.model.getstage(user, index)
