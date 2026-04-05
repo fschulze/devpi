@@ -67,7 +67,7 @@ def with_user(request, user):
     return request
 
 
-class TestStage:
+class TestIndex:
     # test both pypi_submit and upload for BBB
     @pytest.mark.usefixtures("plugin")
     @pytest.mark.parametrize("permission", ["pypi_submit", "upload"])

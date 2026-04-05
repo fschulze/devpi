@@ -40,8 +40,8 @@ if TYPE_CHECKING:
     from .filestore import MutableFileEntry
     from .main import XOM
     from .model.local import BaseIndex
-    from .model.local import PrivateStage
-    from .model.remote import MirrorStage
+    from .model.local import LocalIndex
+    from .model.remote import RemoteIndex
     from .readonly import SetViewReadonly
     from collections.abc import Iterable
     from devpi_common.terminal import TerminalWriter
@@ -699,7 +699,7 @@ class Importer:
 
             entry: FileEntry | MutableFileEntry
             if hasattr(stage, 'store_releasefile'):
-                stage = cast("PrivateStage", stage)
+                stage = cast("LocalIndex", stage)
                 link = stage.store_releasefile(
                     project,
                     version,
@@ -710,7 +710,7 @@ class Importer:
                 )
                 entry = link.entry
             else:  # mirrors
-                stage = cast("MirrorStage", stage)
+                stage = cast("RemoteIndex", stage)
                 link = None
                 url = URL(mapping['url']).replace(fragment=hashes.best_available_spec)
                 entry = self.xom.filestore.maplink(
@@ -730,7 +730,7 @@ class Importer:
                         linkdata["yanked"] = yanked
                 threadlog.info("added mirror file %s", entry.relpath)
         elif filedesc["type"] == Rel.DocZip:
-            stage = cast("PrivateStage", stage)
+            stage = cast("LocalIndex", stage)
             version = filedesc["version"]
             # docs didn't always have entrymapping in export dump
             last_modified = mapping.get("last_modified")
@@ -738,7 +738,7 @@ class Importer:
                 project, version, f, hashes=hashes, last_modified=last_modified)
             entry = link.entry
         elif filedesc["type"] == Rel.ToxResult:
-            stage = cast("PrivateStage", stage)
+            stage = cast("LocalIndex", stage)
             linkstore = stage.get_linkstore_perstage(project, filedesc["version"])
             # we can not search for the full relative path because
             # it might use a different checksum
