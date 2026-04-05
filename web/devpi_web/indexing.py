@@ -93,7 +93,7 @@ def iter_indexes(xom):
     mirrors = []
     for user in xom.model.get_userlist():
         username = ensure_unicode(user.name)
-        user_info = user.get(user)
+        user_info = user.get()
         for index, index_info in user_info.get('indexes', {}).items():
             index = ensure_unicode(index)
             if index_info['type'] == 'mirror':
