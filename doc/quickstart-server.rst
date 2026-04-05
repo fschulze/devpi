@@ -422,7 +422,7 @@ Alice can now create her new ``dev`` index::
 
     $ devpi index -c dev bases=root/pypi
     http://localhost:4040/alice/dev?no_projects=:
-      type=stage
+      type=local
       bases=root/pypi
       volatile=True
       acl_upload=alice
