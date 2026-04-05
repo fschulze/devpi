@@ -646,14 +646,14 @@ class TestSkipIndexes:
         content1 = mapp.makepkg("hello-1.0.zip", b"content1", "hello", "1.0")
         mapp.upload_file_pypi("hello-1.0.zip", content1, "hello", "1.0")
         replica_xom = make_replica_xom(
-            options=["--file-replication-skip-indexes", "stage"]
+            options=["--file-replication-skip-indexes", "local"]
         )
-        assert replica_xom.config.file_replication_skip_indexes == {"stage"}
+        assert replica_xom.config.file_replication_skip_indexes == {"local"}
         caplog.clear()
         replay(xom, replica_xom, events=False)
         replica_xom.replica_thread.wait()
         (record,) = caplog.getrecords("Skipping")
-        assert "because <IndexType 'stage'> in" in record.message
+        assert "because <IndexType 'local'> in" in record.message
 
 
 class TestUseExistingFiles:
@@ -1436,27 +1436,48 @@ class TestFileReplicationSharedData:
         result = []
 
         mirror_file = 'root/pypi/+f/3f8/3058ac9076112/pytest-2.0.0.zip'
-        stage_file = 'root/dev/+f/274/e88b0b3d028fe/pytest-2.1.0.zip'
+        local_file = "root/dev/+f/274/e88b0b3d028fe/pytest-2.1.0.zip"
         deleted_file = 'root/dev1/+f/274/e88b0b3d028fe/pytest-2.2.0.zip'
         # set the index_types cache to prevent db access
         shared_data.set_index_type_for('root/pypi', 'mirror')
-        shared_data.set_index_type_for('root/dev', 'stage')
+        shared_data.set_index_type_for("root/dev", "local")
         shared_data.set_index_type_for('root/dev1', None)
 
         def handler(index_type, serial, key, keyname, value, back_serial):
             result.append(key)
-        # Regardless of the serial or add order, the stage should come first
+
+        # Regardless of the serial or add order, the local index should come first
         cases: list = []
-        cases.extend(permutations(((mirror_file, 0), (stage_file, 0), (deleted_file, 0))))
-        cases.extend(permutations(((mirror_file, 1), (stage_file, 0), (deleted_file, 0))))
-        cases.extend(permutations(((mirror_file, 0), (stage_file, 1), (deleted_file, 0))))
-        cases.extend(permutations(((mirror_file, 0), (stage_file, 0), (deleted_file, 1))))
-        cases.extend(permutations(((mirror_file, 0), (stage_file, 1), (deleted_file, 2))))
-        cases.extend(permutations(((mirror_file, 0), (stage_file, 2), (deleted_file, 1))))
-        cases.extend(permutations(((mirror_file, 1), (stage_file, 0), (deleted_file, 2))))
-        cases.extend(permutations(((mirror_file, 1), (stage_file, 2), (deleted_file, 0))))
-        cases.extend(permutations(((mirror_file, 2), (stage_file, 0), (deleted_file, 1))))
-        cases.extend(permutations(((mirror_file, 2), (stage_file, 1), (deleted_file, 0))))
+        cases.extend(
+            permutations(((mirror_file, 0), (local_file, 0), (deleted_file, 0)))
+        )
+        cases.extend(
+            permutations(((mirror_file, 1), (local_file, 0), (deleted_file, 0)))
+        )
+        cases.extend(
+            permutations(((mirror_file, 0), (local_file, 1), (deleted_file, 0)))
+        )
+        cases.extend(
+            permutations(((mirror_file, 0), (local_file, 0), (deleted_file, 1)))
+        )
+        cases.extend(
+            permutations(((mirror_file, 0), (local_file, 1), (deleted_file, 2)))
+        )
+        cases.extend(
+            permutations(((mirror_file, 0), (local_file, 2), (deleted_file, 1)))
+        )
+        cases.extend(
+            permutations(((mirror_file, 1), (local_file, 0), (deleted_file, 2)))
+        )
+        cases.extend(
+            permutations(((mirror_file, 1), (local_file, 2), (deleted_file, 0)))
+        )
+        cases.extend(
+            permutations(((mirror_file, 2), (local_file, 0), (deleted_file, 1)))
+        )
+        cases.extend(
+            permutations(((mirror_file, 2), (local_file, 1), (deleted_file, 0)))
+        )
         for (relpath1, serial1), (relpath2, serial2), (relpath3, serial3) in cases:
             key1 = shared_data.xom.keyfs.get_key_instance("FILE", relpath1)
             key2 = shared_data.xom.keyfs.get_key_instance("FILE", relpath2)
@@ -1469,14 +1490,14 @@ class TestFileReplicationSharedData:
             shared_data.process_next(handler)
             shared_data.process_next(handler)
             assert shared_data.queue.qsize() == 0
-            assert result == [stage_file, mirror_file, deleted_file]
+            assert result == [local_file, mirror_file, deleted_file]
             result.clear()
 
     def test_serial_priority(self, shared_data):
         relpath = 'root/dev/+f/274/e88b0b3d028fe/pytest-2.1.0.zip'
         key = shared_data.xom.keyfs.get_key_instance("FILE", relpath)
         # set the index_types cache to prevent db access
-        shared_data.set_index_type_for('root/dev', 'stage')
+        shared_data.set_index_type_for("root/dev", "local")
         result = []
 
         def handler(index_type, serial, key, keyname, value, back_serial):
@@ -1498,7 +1519,7 @@ class TestFileReplicationSharedData:
         relpath = 'root/dev/+f/274/e88b0b3d028fe/pytest-2.1.0.zip'
         key = shared_data.xom.keyfs.get_key_instance("FILE", relpath)
         # set the index_types cache to prevent db access
-        shared_data.set_index_type_for('root/dev', 'stage')
+        shared_data.set_index_type_for("root/dev", "local")
 
         next_ts_result = []
         handler_result = []
@@ -1605,7 +1626,7 @@ class TestFileReplicationSharedData:
             result.append(index_type)
 
         changes: dict[int, dict] = {
-            0: {userkey: ({"indexes": {"dev": {"type": "stage"}}}, -1)},
+            0: {userkey: ({"indexes": {"dev": {"type": "local"}}}, -1)},
             1: {key: (None, -1)},
             2: {userkey: ({}, 0)},
             3: {key: (None, -1)},
@@ -1628,7 +1649,7 @@ class TestFileReplicationSharedData:
         assert shared_data.queue.qsize() == 1
         shared_data.process_next(handler)
         (index_type,) = result
-        assert index_type == IndexType("stage")
+        assert index_type == IndexType("local")
         result.clear()
         # simulate index deletion
         shared_data.on_import(2, changes[2])
