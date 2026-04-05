@@ -12,8 +12,8 @@ if TYPE_CHECKING:
 
 deprecated_names = dict(
     ACLList=".config.ACLList",
-    BaseStage=".base.BaseStage",
-    BaseStageCustomizer=".customizer.BaseStageCustomizer",
+    BaseStage=".base.BaseIndex",
+    BaseStageCustomizer=".customizer.BaseIndexCustomizer",
     PrivateStage=".local.PrivateStage",
     ensure_acl_list=".config.ensure_acl_list",
     ensure_boolean=".config.ensure_boolean",
