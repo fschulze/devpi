@@ -68,7 +68,7 @@ def test_permissions_for_unknown_index(mapp, xom):
 def test_indexconfig_items(makemapp, maketestapp, makexom):
     from devpi_server.model.config import ensure_list
 
-    class MyStageCustomizer:
+    class MyIndexCustomizer:
         InvalidIndexconfig = InvalidIndexconfig
 
         def get_possible_indexconfig_keys(self):
@@ -89,7 +89,7 @@ def test_indexconfig_items(makemapp, maketestapp, makexom):
             if "bar" not in newconfig:
                 raise self.InvalidIndexconfig(["requires bar"])
 
-    xom = makexom(plugins=[make_stage_plugin(MyStageCustomizer)])
+    xom = makexom(plugins=[make_stage_plugin(MyIndexCustomizer)])
     testapp = maketestapp(xom)
     mapp = makemapp(testapp)
     user = 'user'
@@ -124,7 +124,7 @@ def test_indexconfig_items(makemapp, maketestapp, makexom):
 
 
 def test_validate_config(makemapp, maketestapp, makexom):
-    class MyStageCustomizer:
+    class MyIndexCustomizer:
         InvalidIndexconfig = InvalidIndexconfig
 
         def validate_config(self, oldconfig, newconfig):
@@ -134,7 +134,7 @@ def test_validate_config(makemapp, maketestapp, makexom):
             if errors:
                 raise self.InvalidIndexconfig(errors)
 
-    xom = makexom(plugins=[make_stage_plugin(MyStageCustomizer)])
+    xom = makexom(plugins=[make_stage_plugin(MyIndexCustomizer)])
     testapp = maketestapp(xom)
     mapp = makemapp(testapp)
     user = 'user'
@@ -157,12 +157,12 @@ def test_validate_config(makemapp, maketestapp, makexom):
 
 
 def test_on_modified(makemapp, maketestapp, makexom):
-    class MyStageCustomizer(object):
+    class MyIndexCustomizer:
         def on_modified(self, request, oldconfig):  # noqa: ARG002
             if request.headers.get('X-Fail'):
                 request.apifatal(400, request.headers['X-Fail'])
 
-    xom = makexom(plugins=[make_stage_plugin(MyStageCustomizer)])
+    xom = makexom(plugins=[make_stage_plugin(MyIndexCustomizer)])
     testapp = maketestapp(xom)
     mapp = makemapp(testapp)
     user = 'user'
@@ -186,11 +186,11 @@ def test_on_modified(makemapp, maketestapp, makexom):
 def test_on_modified_http_exception(makemapp, maketestapp, makexom):
     from pyramid.httpexceptions import HTTPClientError
 
-    class MyStageCustomizer(object):
+    class MyIndexCustomizer:
         def on_modified(self, request, oldconfig):  # noqa: ARG002
             raise HTTPClientError
 
-    xom = makexom(plugins=[make_stage_plugin(MyStageCustomizer)])
+    xom = makexom(plugins=[make_stage_plugin(MyIndexCustomizer)])
     testapp = maketestapp(xom)
     mapp = makemapp(testapp)
     user = 'user'
@@ -203,7 +203,7 @@ def test_on_modified_http_exception(makemapp, maketestapp, makexom):
 
 
 def test_package_filters(makemapp, maketestapp, makexom):
-    class MyStageCustomizer(object):
+    class MyIndexCustomizer:
         def get_projects_filter_iter(self, projects):
             for project in projects:
                 yield project != 'pkg'
@@ -216,7 +216,7 @@ def test_package_filters(makemapp, maketestapp, makexom):
             for link_info in links:
                 yield '1.0' not in link_info.key
 
-    xom = makexom(plugins=[make_stage_plugin(MyStageCustomizer)])
+    xom = makexom(plugins=[make_stage_plugin(MyIndexCustomizer)])
     testapp = maketestapp(xom)
     mapp = makemapp(testapp)
     user = 'user'
