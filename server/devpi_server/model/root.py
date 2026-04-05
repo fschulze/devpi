@@ -61,7 +61,7 @@ class RootModel:
         self,
         user,
         index,
-        type="stage",  # noqa: A002
+        type="local",  # noqa: A002
         **kwargs,
     ):
         if user.key_index.with_resolved_parent()(index).exists():
@@ -149,7 +149,7 @@ class CachingRootModel(RootModel):
         self,
         user,
         index,
-        type="stage",  # noqa: A002
+        type="local",  # noqa: A002
         **kwargs,
     ):
         key = (user.name, index)
