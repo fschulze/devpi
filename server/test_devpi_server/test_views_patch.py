@@ -23,15 +23,16 @@ def test_index_patch(testapp):
     testapp.put_json("/foo/dev", dict())
     r = testapp.get("/foo/dev")
     # check defaults
-    assert r.json['result'] == {
-        'acl_toxresult_upload': [':ANONYMOUS:'],
-        'acl_upload': ['foo'],
-        'bases': [],
-        'mirror_whitelist': [],
-        'mirror_whitelist_inheritance': 'intersection',
-        'projects': [],
-        'type': 'stage',
-        'volatile': True}
+    assert r.json["result"] == {
+        "acl_toxresult_upload": [":ANONYMOUS:"],
+        "acl_upload": ["foo"],
+        "bases": [],
+        "mirror_whitelist": [],
+        "mirror_whitelist_inheritance": "intersection",
+        "projects": [],
+        "type": "local",
+        "volatile": True,
+    }
     # add to acl_upload
     testapp.patch_json("/foo/dev", ["acl_upload+=bar"])
     r = testapp.get("/foo/dev")
