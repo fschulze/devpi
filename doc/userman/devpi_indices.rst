@@ -104,7 +104,7 @@ example below, we create the **emilie/prod** production index::
 
    $ devpi index -c prod volatile=False
    http://localhost:3141/emilie/prod?no_projects=:
-     type=stage
+     type=local
      bases=
      volatile=False
      acl_upload=emilie
@@ -131,7 +131,7 @@ which leads to the following::
                    "bases": [],
                    "mirror_whitelist": [],
                    "mirror_whitelist_inheritance": "intersection",
-                   "type": "stage",
+                   "type": "local",
                    "volatile": false
                }
            },
@@ -154,7 +154,7 @@ specifying her ``prod`` index as follow::
 
    $ devpi index -c dev bases=/emilie/prod volatile=True
    http://localhost:3141/emilie/dev?no_projects=:
-     type=stage
+     type=local
      bases=emilie/prod
      volatile=True
      acl_upload=emilie
@@ -179,7 +179,7 @@ which has the following definition on the server side::
            "mirror_whitelist": [],
            "mirror_whitelist_inheritance": "intersection",
            "projects": [],
-           "type": "stage",
+           "type": "local",
            "volatile": true
        },
        "type": "indexconfig"
@@ -283,7 +283,7 @@ Assuming that Sophie has both index types as well::
 
    $ devpi index -c prod volatile=False
    http://localhost:3141/sophie/prod?no_projects=:
-     type=stage
+     type=local
      bases=
      volatile=False
      acl_upload=sophie
@@ -295,7 +295,7 @@ Assuming that Sophie has both index types as well::
 
    $ devpi index -c dev bases=/sophie/prod volatile=True
    http://localhost:3141/sophie/dev?no_projects=:
-     type=stage
+     type=local
      bases=sophie/prod
      volatile=True
      acl_upload=sophie
@@ -321,7 +321,7 @@ bases::
    $ devpi index /emilie/dev bases=/emilie/prod,/sophie/dev
    /emilie/dev bases=/emilie/prod,/sophie/dev
    http://localhost:3141/emilie/dev?no_projects=:
-     type=stage
+     type=local
      bases=emilie/prod,sophie/dev
      volatile=True
      acl_upload=emilie
@@ -340,7 +340,7 @@ When the work is done, this relationship can be revoked by doing::
    $ devpi index /emilie/dev bases=/emilie/prod
    /emilie/dev bases=/emilie/prod
    http://localhost:3141/emilie/dev?no_projects=:
-     type=stage
+     type=local
      bases=emilie/prod
      volatile=True
      acl_upload=emilie
@@ -354,7 +354,7 @@ which now has the ``/emilie/dev`` as a base only::
    
    $ devpi index /emilie/dev
    http://localhost:3141/emilie/dev:
-     type=stage
+     type=local
      bases=emilie/prod
      volatile=True
      acl_upload=emilie
@@ -373,7 +373,7 @@ Emilie may allow sophie to upload to her dev index:
    $ devpi index /emilie/dev acl_upload=emilie,sophie
    /emilie/dev acl_upload=emilie,sophie
    http://localhost:3141/emilie/dev?no_projects=:
-     type=stage
+     type=local
      bases=emilie/prod
      volatile=True
      acl_upload=emilie,sophie
@@ -390,7 +390,7 @@ Suppose you want to allow all users in the "developers" group to upload packages
    $ devpi index /emilie/dev acl_upload=emilie,:developers
    /emilie/dev acl_upload=emilie,:developers
    http://localhost:3141/emilie/dev?no_projects=:
-     type=stage
+     type=local
      bases=emilie/prod
      volatile=True
      acl_upload=emilie,:developers
@@ -405,7 +405,7 @@ It is also possible to allow anonymous uploads if you have a controlled environm
    $ devpi index /emilie/dev acl_upload=:ANONYMOUS:
    /emilie/dev acl_upload=:ANONYMOUS:
    http://localhost:3141/emilie/dev?no_projects=:
-     type=stage
+     type=local
      bases=emilie/prod
      volatile=True
      acl_upload=:ANONYMOUS:
@@ -433,7 +433,7 @@ whitelist. This should only be done for packages that you own or trust on all mi
 
    $ devpi index -c someindex mirror_whitelist=mypkg
    http://localhost:3141/emilie/someindex?no_projects=:
-     type=stage
+     type=local
      bases=
      volatile=True
      acl_upload=emilie
@@ -450,7 +450,7 @@ whitelist itself.
 
    $ devpi index -c wheelindex mirror_whitelist="*"
    http://localhost:3141/emilie/wheelindex?no_projects=:
-     type=stage
+     type=local
      bases=
      volatile=True
      acl_upload=emilie
@@ -476,7 +476,7 @@ An index can have a title and description which is used in ``devpi-web``.
    /emilie/wheelindex title=Wheel Index
    /emilie/wheelindex description=Used for pip wheels
    http://localhost:3141/emilie/wheelindex?no_projects=:
-     type=stage
+     type=local
      bases=
      volatile=True
      acl_upload=emilie
@@ -546,7 +546,7 @@ In the example below, we create a "bad" index and delete it::
 
    $ devpi index -c oups bases=/emilie/prod volatile=True
    http://localhost:3141/emilie/oups?no_projects=:
-     type=stage
+     type=local
      bases=emilie/prod
      volatile=True
      acl_upload=emilie
@@ -571,7 +571,7 @@ here is the bad index::
            "mirror_whitelist": [],
            "mirror_whitelist_inheritance": "intersection",
            "projects": [],
-           "type": "stage",
+           "type": "local",
            "volatile": true
        },
        "type": "indexconfig"

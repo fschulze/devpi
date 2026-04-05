@@ -361,12 +361,16 @@ class IndexDump:
 @define(kw_only=True)
 class Migrator:
     dumpversion: int = field(converter=int)
+    v3_index_type_map: dict[str, str] = field(init=False)
 
     @dumpversion.validator
     def _validate_dumpversion(self, _attribute, value):
         if value not in {1, 2, 3}:
             msg = f"incompatible dumpversion: {self.dumpversion}"
             raise Fatal(msg)
+
+    def __attrs_post_init__(self) -> None:
+        self.v3_index_type_map = dict(stage="local")
 
     def migrate(self, data: dict) -> dict:
         data["indexes"] = {
@@ -423,6 +427,10 @@ class Migrator:
             whitelist = indexconfig.pop("pypi_whitelist")
             if "mirror_whitelist" not in indexconfig:
                 indexconfig["mirror_whitelist"] = whitelist
+        if self.dumpversion < 3:
+            indexconfig["type"] = self.v3_index_type_map.get(
+                indexconfig["type"], indexconfig["type"]
+            )
         return data
 
     def migrate_toxresult(self, data: dict) -> dict:
