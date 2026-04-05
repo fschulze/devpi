@@ -63,7 +63,7 @@ class RootModel:
         self,
         user,
         index,
-        type="stage",  # noqa: A002
+        type="local",  # noqa: A002
         **kwargs,
     ):
         if not is_valid_name(index):
@@ -156,7 +156,7 @@ class CachingRootModel(RootModel):
         self,
         user,
         index,
-        type="stage",  # noqa: A002
+        type="local",  # noqa: A002
         **kwargs,
     ):
         key = (user.name, index)

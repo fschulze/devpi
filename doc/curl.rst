@@ -33,7 +33,7 @@ using the just created "alice" credentials::
       "status": 201, 
       "type": "indexconfig", 
       "result": {
-        "type": "stage", 
+        "type": "local",
         "bases": [
           "root/pypi"
         ], 
@@ -109,7 +109,7 @@ Getting index configuration::
         "bases": [
           "root/pypi"
         ], 
-        "type": "stage"
+        "type": "local"
       }
     }
 
@@ -128,7 +128,7 @@ Getting user information::
             "bases": [
               "root/pypi"
             ], 
-            "type": "stage"
+            "type": "local"
           }
         }
       }
@@ -146,7 +146,7 @@ Getting all users and indexes::
           "email": "qwe", 
           "indexes": {
             "dev": {
-              "type": "stage", 
+              "type": "local",
               "bases": [
                 "root/dev"
               ], 
@@ -163,7 +163,7 @@ Getting all users and indexes::
               "type": "mirror"
             }, 
             "dev": {
-              "type": "stage", 
+              "type": "local",
               "bases": [
                 "root/pypi"
               ], 
@@ -180,7 +180,7 @@ Getting all users and indexes::
               "bases": [
                 "root/pypi"
               ], 
-              "type": "stage"
+              "type": "local"
             }
           }
         }

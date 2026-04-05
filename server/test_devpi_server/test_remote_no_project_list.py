@@ -42,11 +42,7 @@ def mirrorstage(model, simpypi):
 
 @pytest.fixture
 def stage(mirrorstage, user):
-    config = dict(
-        index="world",
-        bases=(mirrorstage.name,),
-        type="stage",
-        volatile=True)
+    config = dict(index="world", bases=(mirrorstage.name,), type="local", volatile=True)
     return user.create_stage(**config)
 
 

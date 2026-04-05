@@ -24,7 +24,7 @@ def test_permissions_for_unknown_index(mapp, xom):
     mapp.upload_file_pypi("hello-1.0.tar.gz", b'content', "hello", "1.0")
     (path,) = mapp.get_release_paths("hello")
     assert 'dev' in mapp.getjson('/%s' % api.user)['result']['indexes']
-    assert mapp.getjson(api.index)['result']['type'] == 'stage'
+    assert mapp.getjson(api.index)["result"]["type"] == "local"
     assert mapp.getjson(api.index)['result']['projects'] == ['hello']
     # change index type to unknown
     with xom.keyfs.write_transaction():
