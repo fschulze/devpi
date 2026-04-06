@@ -11,25 +11,6 @@ from pathlib import Path
 from textwrap import dedent
 
 
-@pytest.fixture
-def remote_index_info(server_version):
-    from devpi_common.metadata import parse_version
-
-    if server_version < parse_version("7.0.0.dev2"):
-
-        class MirrorInfo:
-            type = "mirror"
-            url_option = "mirror_url"
-
-        return MirrorInfo()
-
-    class RemoteInfo:
-        type = "remote"
-        url_option = "remote_url"
-
-    return RemoteInfo()
-
-
 def test_post_tox_json_report(loghub, mock_http_api):
     mock_http_api.set("http://devpi.net", result={})
     post_tox_json_report(loghub, "http://devpi.net", {"hello": "123"})
