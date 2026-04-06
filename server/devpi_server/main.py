@@ -762,10 +762,12 @@ def set_default_indexes(model: RootModel) -> None:
 
 
 _pypi_ixconfig_default = {
-    "type": "mirror", "volatile": False,
+    "type": "remote",
+    "volatile": False,
     "title": "PyPI",
     "mirror_url": "https://pypi.org/simple/",
-    "mirror_web_url_fmt": "https://pypi.org/project/{name}/"}
+    "mirror_web_url_fmt": "https://pypi.org/project/{name}/",
+}
 
 
 def tween_request_profiling(handler, registry):

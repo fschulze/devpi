@@ -1,0 +1,1 @@
+Renamed the ``mirror`` index to ``remote``. This affects the ``type`` field of the HTTP API.

@@ -535,8 +535,8 @@ devpi command reference (server)
                         [--keep-docs-packed] [--indexer-backend NAME]
 
     Start a server which serves multiple users and indices. The special root/pypi
-    index is a cached mirror of pypi.org and is created by default. All indices
-    are suitable for pip or easy_install usage and setup.py upload ...
+    index is an on-demand mirror of pypi.org and is created by default. All
+    indices are suitable for pip or easy_install usage and setup.py upload ...
     invocations.
 
     options:
@@ -620,7 +620,7 @@ devpi command reference (server)
                             number of threads for file download from primary [5]
       --file-replication-skip-indexes INDEXES
                             Comma separated list of index names in
-                            username/indexname form or index type (i.e. 'mirror')
+                            username/indexname form or index type (i.e. 'remote')
                             for which files aren't replicated. This can also be
                             set to 'all' to replicate no files. If the file is
                             requested directly during runtime, it will still be
@@ -718,7 +718,7 @@ devpi command reference (server)
                             "sqla_pg8000": Postgresql backend using SQLAlchemy
                             with files in DB [sqla_lite]
       --include-mirrored-files
-                            include downloaded files from mirror indexes in dump.
+                            include downloaded files from remote indexes in dump.
                             [False]
       --hard-links          use hard links during export, import or with
                             --replica-file-search-path instead of copying or

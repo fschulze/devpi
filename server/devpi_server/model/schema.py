@@ -59,8 +59,8 @@ class EventSubscribers:
         keyfs = self.xom.keyfs
         with keyfs.read_transaction(at_serial=ev.at_serial):
             stage = self.xom.model.getstage(user, index)
-            if stage is not None and stage.index_type == "mirror":
-                return  # we don't trigger on file changes of pypi mirror
+            if stage is not None and stage.index_type == "remote":
+                return  # we don't trigger on file changes of a remote index
             assert is_dict_key(ev.data.key)
             entry = FileEntry(ev.data.key, meta=ev.data.value)
             if not entry.project or not entry.version:
@@ -79,16 +79,16 @@ class EventSubscribers:
                     stage=stage, project=name, version=entry.version, link=links[0]
                 )
 
-    def on_mirror_initialnames(self, ev: KeyChangeEvent) -> None:
-        """when projectnames are first loaded into a mirror."""
+    def on_remote_initialnames(self, ev: KeyChangeEvent) -> None:
+        """when projectnames are first loaded into a remote index."""
         params = ev.data.key.params
         user = params.get("user")
         index = params.get("index")
         keyfs = self.xom.keyfs
         with keyfs.read_transaction(at_serial=ev.at_serial):
             stage = self.xom.model.getstage(user, index)
-            if stage is not None and stage.index_type == "mirror":
-                self.xom.config.hook.devpiserver_mirror_initialnames(
+            if stage is not None and stage.index_type == "remote":
+                self.xom.config.hook.devpiserver_remote_initialnames(
                     stage=stage, projectnames=stage.list_projects_perstage()
                 )
 
@@ -141,7 +141,7 @@ class Schema(KeyFSSchema):
         DictViewReadonly,
     )
 
-    # type mirror related data
+    # type remote related data
     FILE_NOHASH = KeyFSSchema.decl_patterned_key(
         "FILE_NOHASH",
         "+e/{dirname}/{basename}",
@@ -155,15 +155,15 @@ class Schema(KeyFSSchema):
         dict,
         DictViewReadonly,
     )
-    MIRRORFILE = KeyFSSchema.decl_patterned_key(
-        "MIRRORFILE",
+    REMOTEFILE = KeyFSSchema.decl_patterned_key(
+        "REMOTEFILE",
         "{filename}",
         PROJECT,
         dict,
         DictViewReadonly,
     )
-    MIRRORNAMESINIT = KeyFSSchema.decl_anonymous_key(
-        "MIRRORNAMESINIT",
+    REMOTENAMESINIT = KeyFSSchema.decl_anonymous_key(
+        "REMOTENAMESINIT",
         INDEX,
         int,
         int,
@@ -234,5 +234,5 @@ class Schema(KeyFSSchema):
         notifier = keyfs.notifier
         notifier.on_key_change(self.VERSIONMETADATA, sub.on_changed_version_config)
         notifier.on_key_change(self.FILE, sub.on_changed_file_entry)
-        notifier.on_key_change(self.MIRRORNAMESINIT, sub.on_mirror_initialnames)
+        notifier.on_key_change(self.REMOTENAMESINIT, sub.on_remote_initialnames)
         notifier.on_key_change(self.INDEX, sub.on_changed_index)

@@ -761,7 +761,7 @@ class TestUploadFunctional:
             file_upload of {projname_version}*.whl*
             """.format(projname_version=projname_version_norm_fnmatch))
 
-    def test_upload_to_mirror(
+    def test_upload_to_remote(
         self, initproj, out_devpi, projname_version, remote_index_info
     ):
         initproj(projname_version.rsplit("-", 1), {"doc": {
@@ -770,13 +770,13 @@ class TestUploadFunctional:
             "index.html": "<html/>"}})
         assert Path("setup.py").is_file()
 
-        # use mirror
+        # use remote
         out = out_devpi("index", "-c", "mirror", f"type={remote_index_info.type}")
         out = out_devpi("use", "mirror")
         out.stdout.fnmatch_lines_random("current devpi index*/*/mirror*")
         out = out_devpi("upload", "--no-isolation", "--dry-run")
         out.stdout.fnmatch_lines_random("*does not support upload.")
-        out.stdout.fnmatch_lines_random("*it is a mirror.")
+        out.stdout.fnmatch_lines_random("*it is a remote index.")
 
     @pytest.mark.parametrize("other_index", ["root/pypi", "/"])
     def test_index_option(

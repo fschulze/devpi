@@ -620,7 +620,7 @@ class TestImportExport:
                 mirror_use_external_urls=True,
                 mirror_web_url_fmt="https://example.com/project/{name}/",
                 title="Modified PyPI",
-                type="mirror",
+                type="remote",
                 volatile=False,
             )
             expected_keys = {*stage.get_possible_indexconfig_keys(), "type"} - {
@@ -1166,12 +1166,13 @@ class TestImportExport:
             assert "foo_plugin" in stage2.ixconfig
             assert stage2.ixconfig["foo_plugin"] == "bar"
 
-    def test_mirror_settings_preserved(self, http, impexp, pypiurls):
+    def test_remote_settings_preserved(self, http, impexp, pypiurls):
         mapp1 = impexp.mapp1
         indexconfig = dict(
-            type="mirror",
+            type="remote",
             mirror_url="http://localhost:6543/index/",
-            mirror_cache_expiry="600")
+            mirror_cache_expiry="600",
+        )
         api = mapp1.create_and_use(indexconfig=indexconfig)
 
         impexp.export()
@@ -1183,17 +1184,16 @@ class TestImportExport:
         result = mapp2.getjson(api.index)
         assert result["type"] == "indexconfig"
         assert result["result"] == dict(
-            type="mirror",
+            type="remote",
             volatile=True,
             mirror_url="http://localhost:6543/index/",
             mirror_cache_expiry=600,
-            projects=[])
+            projects=[],
+        )
 
-    def test_no_mirror_releases_touched(self, http, impexp, pypiurls):
+    def test_no_remote_releases_touched(self, http, impexp, pypiurls):
         mapp1 = impexp.mapp1
-        indexconfig = dict(
-            type="mirror",
-            mirror_url="http://localhost:6543/index/")
+        indexconfig = dict(type="remote", mirror_url="http://localhost:6543/index/")
         api = mapp1.create_and_use(indexconfig=indexconfig)
 
         http.mockresponse(pypiurls.simple, code=200, text='<a href="pytest">pytest</a>')
@@ -1212,7 +1212,8 @@ class TestImportExport:
         result = mapp2.getjson(api.index)
         assert result["type"] == "indexconfig"
         assert result["result"] == dict(
-            type="mirror",
+            type="remote",
             volatile=True,
             mirror_url="http://localhost:6543/index/",
-            projects=[])
+            projects=[],
+        )

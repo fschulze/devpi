@@ -1,7 +1,7 @@
 from .functional import TestIndexPushThings  # noqa: F401
 from .functional import TestIndexThings  # noqa: F401
-from .functional import TestMirrorIndexThings  # noqa: F401
 from .functional import TestProjectThings  # noqa: F401
+from .functional import TestRemoteIndexThings  # noqa: F401
 from .functional import TestUserThings  # noqa: F401
 from bs4 import BeautifulSoup
 from devpi_common.archive import Archive
@@ -25,6 +25,23 @@ import pytest
 
 proj = pytest.mark.parametrize("proj", [True, False])
 pytestmark = [pytest.mark.notransaction]
+
+
+@pytest.fixture
+def remote_index_info(server_version):
+    from devpi_common.metadata import parse_version
+
+    if server_version < parse_version("7.0.0.dev2"):
+
+        class MirrorInfo:
+            type = "mirror"
+
+        return MirrorInfo()
+
+    class RemoteInfo:
+        type = "remote"
+
+    return RemoteInfo()
 
 
 def getlinks(text):
@@ -652,14 +669,14 @@ def test_simple_refresh(xom, pypistage, testapp):
     assert input_elem.attrs["name"] == "refresh"
     assert input_elem.attrs["value"] == "Refresh"
     with xom.keyfs.read_transaction():
-        key_mirrorfile = pypistage.key_mirrorfile("hello").with_resolved_parent()
-        mirrorfiles = {k.name: v for k, v in key_mirrorfile.iter_ulidkey_values()}
+        key_remotefile = pypistage.key_remotefile("hello").with_resolved_parent()
+        remotefiles = {k.name: v for k, v in key_remotefile.iter_ulidkey_values()}
         key_simpledata = pypistage.key_simpledata("hello").with_resolved_parent()
         simpledata = {k.name: v for k, v in key_simpledata.iter_ulidkey_values()}
         cache_info = (
             pypistage.key_projectcacheinfo("hello").with_resolved_parent().get()
         )
-    assert mirrorfiles == {}
+    assert remotefiles == {}
     assert simpledata == {}
     assert cache_info["serial"] == 10000
     pypistage.mock_simple("hello", pkgver="hello-1.0.zip", pypiserial=10001)
@@ -667,14 +684,14 @@ def test_simple_refresh(xom, pypistage, testapp):
     assert r.status_code == 302
     assert r.location.endswith("/root/pypi/+simple/hello/")
     with xom.keyfs.read_transaction():
-        key_mirrorfile = pypistage.key_mirrorfile("hello").with_resolved_parent()
-        mirrorfiles = {k.name: v for k, v in key_mirrorfile.iter_ulidkey_values()}
+        key_remotefile = pypistage.key_remotefile("hello").with_resolved_parent()
+        remotefiles = {k.name: v for k, v in key_remotefile.iter_ulidkey_values()}
         key_simpledata = pypistage.key_simpledata("hello").with_resolved_parent()
         simpledata = {k.name: v for k, v in key_simpledata.iter_ulidkey_values()}
         cache_info = (
             pypistage.key_projectcacheinfo("hello").with_resolved_parent().get()
         )
-    assert mirrorfiles == {
+    assert remotefiles == {
         "hello-1.0.zip": dict(relpath="+e/https_pypi.org_hello/hello-1.0.zip")
     }
     assert simpledata != {}
@@ -719,11 +736,11 @@ def test_simple_refresh_inherited(mapp, xom, pypistage, testapp, project,
     (input_elem,) = r.html.select("form input")
     assert input_elem.attrs["name"] == "refresh"
     with xom.keyfs.read_transaction():
-        key_mirrorfile = pypistage.key_mirrorfile(project).with_resolved_parent()
-        mirrorfiles = list(key_mirrorfile.iter_ulidkeys())
+        key_remotefile = pypistage.key_remotefile(project).with_resolved_parent()
+        remotefiles = list(key_remotefile.iter_ulidkeys())
         key_simpledata = pypistage.key_simpledata(project).with_resolved_parent()
         simpledata = list(key_simpledata.iter_ulidkeys())
-    assert mirrorfiles
+    assert remotefiles
     assert simpledata
     pypistage.mock_simple(project, '<a href="/%s-2.0.zip" />' % project,
                           serial=200)
@@ -731,12 +748,12 @@ def test_simple_refresh_inherited(mapp, xom, pypistage, testapp, project,
     assert r.status_code == 302
     assert r.location.endswith("/%s/+simple/%s/" % (stagename, project))
     with xom.keyfs.read_transaction():
-        key_mirrorfile = pypistage.key_mirrorfile(project).with_resolved_parent()
-        mirrorfiles = list(key_mirrorfile.iter_ulidkeys())
+        key_remotefile = pypistage.key_remotefile(project).with_resolved_parent()
+        remotefiles = list(key_remotefile.iter_ulidkeys())
         key_simpledata = pypistage.key_simpledata(project).with_resolved_parent()
         simpledata = list(key_simpledata.iter_ulidkeys())
-    assert len(mirrorfiles) == 1
-    assert mirrorfiles[0].name.endswith("-2.0.zip")
+    assert len(remotefiles) == 1
+    assert remotefiles[0].name.endswith("-2.0.zip")
     assert len(simpledata) == 1
     assert simpledata[0].name.endswith("-2.0.zip")
 
@@ -830,7 +847,7 @@ def test_upstream_not_reachable_but_cache_still_returned(pypistage, mapp, testap
     r = testapp.get_json(f'/{index_name}/{name}')
     assert r.status_code == 200
     assert set(r.json['result']) == set(['1.0'])
-    # then we simulate that the mirror is available to fill the cache
+    # then we simulate that the remote is available to fill the cache
     pypistage.mock_simple(name, '<a href="/%s-1.1.zip" />' % name)
     r = testapp.get_json(f'/{index_name}/{name}')
     assert r.status_code == 200
@@ -1459,7 +1476,7 @@ def test_push_from_pypi_fail(mapp, pypistage, testapp):
     assert "https://pypi.org/simple/hello/hello-1.0.tar.gz" in r.json["message"]
 
 
-def test_push_from_pypi_mirror_switch_to_use_external_urls(mapp, pypistage, testapp):
+def test_push_from_pypi_remote_switch_to_use_external_urls(mapp, pypistage, testapp):
     pypistage.mock_simple("hello", text='<a href="hello-1.0.tar.gz"/>')
     content = b"123"
     pypistage.mock_extfile("/simple/hello/hello-1.0.tar.gz", content)
@@ -1469,7 +1486,7 @@ def test_push_from_pypi_mirror_switch_to_use_external_urls(mapp, pypistage, test
     mapp.create_index("newindex1", indexconfig=dict(bases=["root/pypi"]))
     api = mapp.use("root/pypi")
     assert not pypistage.use_external_url
-    # download the file to the mirror index
+    # download the file to the remote index
     pkg_url = api.simpleindex + 'hello/'
     (tag,) = testapp.get(pkg_url).html.select('a')
     r = testapp.get(URL(pkg_url).joinpath(tag['href']).url)
@@ -1901,12 +1918,13 @@ def test_delete_version_on_non_volatile_force(mapp):
 
 
 @pytest.mark.nomocking
-def test_upload_to_mirror_fails(mapp, simpypi):
+def test_upload_to_remote_fails(mapp, simpypi):
     indexconfig = dict(
-        type="mirror",
+        type="remote",
         mirror_url=simpypi.simpleurl,
         mirror_cache_expiry=0,
-        volatile=True)
+        volatile=True,
+    )
     api = mapp.create_and_use(indexconfig=indexconfig)
     name = "pkg1"
     version = "2.6"
@@ -1919,12 +1937,13 @@ def test_upload_to_mirror_fails(mapp, simpypi):
 
 
 @pytest.mark.nomocking
-def test_delete_mirror(mapp, monkeypatch, simpypi, testapp, xom):
+def test_delete_remote(mapp, monkeypatch, simpypi, testapp, xom):
     indexconfig = dict(
-        type="mirror",
+        type="remote",
         mirror_url=simpypi.simpleurl,
         mirror_cache_expiry=0,
-        volatile=True)
+        volatile=True,
+    )
     api = mapp.create_and_use(indexconfig=indexconfig)
     name = "pytest"
     pkgver = "%s-2.6.zip" % name
@@ -1975,15 +1994,17 @@ def test_delete_mirror(mapp, monkeypatch, simpypi, testapp, xom):
         assert getentry(testapp, path) is None
 
 
-def test_delete_from_mirror(mapp, pypistage, testapp):
+def test_delete_from_remote(mapp, pypistage, testapp):
     mapp.login_root()
     mapp.use("root/pypi")
     name = "pytest"
-    other_mirrorpath = "/%s-2.5.zip" % name
-    pypistage.mock_extfile(other_mirrorpath, b"123")
-    mirrorpath = "/%s-2.6.zip" % name
-    pypistage.mock_simple(name, text='<a href="%s"/>\n<a href="%s"/>' % (other_mirrorpath, mirrorpath))
-    pypistage.mock_extfile(mirrorpath, b"123")
+    other_remotepath = "/%s-2.5.zip" % name
+    pypistage.mock_extfile(other_remotepath, b"123")
+    remotepath = "/%s-2.6.zip" % name
+    pypistage.mock_simple(
+        name, text='<a href="%s"/>\n<a href="%s"/>' % (other_remotepath, remotepath)
+    )
+    pypistage.mock_extfile(remotepath, b"123")
     r = testapp.get('/root/pypi/+simple/%s' % name)
     (other_link, link) = sorted(
         x.get('href').replace('../../', '/root/pypi/')
@@ -2020,15 +2041,17 @@ def test_delete_from_mirror(mapp, pypistage, testapp):
         assert not getentry(testapp, other_path).file_exists()
 
 
-def test_delete_version_from_mirror(mapp, pypistage, testapp):
+def test_delete_version_from_remote(mapp, pypistage, testapp):
     mapp.login_root()
     mapp.use("root/pypi")
     name = "pytest"
-    mirrorpath25 = "/%s-2.5.zip" % name
-    mirrorpath26 = "/%s-2.6.zip" % name
-    pypistage.mock_simple(name, text='<a href="%s"/>\n<a href="%s"/>' % (mirrorpath25, mirrorpath26))
-    pypistage.mock_extfile(mirrorpath25, b"123")
-    pypistage.mock_extfile(mirrorpath26, b"456")
+    remotepath25 = "/%s-2.5.zip" % name
+    remotepath26 = "/%s-2.6.zip" % name
+    pypistage.mock_simple(
+        name, text='<a href="%s"/>\n<a href="%s"/>' % (remotepath25, remotepath26)
+    )
+    pypistage.mock_extfile(remotepath25, b"123")
+    pypistage.mock_extfile(remotepath26, b"456")
     # now we have pytest-2.5 and pytest-2.6 releases mocked
     # get the links to extract the paths
     r = testapp.get('/root/pypi/+simple/%s' % name)
@@ -2104,13 +2127,14 @@ def test_delete_volatile_force(mapp, testapp):
 
 
 @pytest.mark.nomocking
-def test_mirror_use_external_urls(mapp, simpypi, testapp):
+def test_remote_use_external_urls(mapp, simpypi, testapp):
     indexconfig = dict(
-        type="mirror",
+        type="remote",
         mirror_url=simpypi.simpleurl,
         mirror_cache_expiry=0,
         mirror_use_external_urls=True,
-        volatile=True)
+        volatile=True,
+    )
     api = mapp.create_and_use(indexconfig=indexconfig)
     name = "pytest"
     pkgver = f"{name}-2.6.zip"
@@ -2294,24 +2318,26 @@ def test_delete_package_where_file_was_deleted(mapp, testapp):
     assert len(getlinks(r.text)) == 0
 
 
-def test_delete_package_from_mirror(mapp, pypistage, testapp):
+def test_delete_package_from_remote(mapp, pypistage, testapp):
     mapp.login_root()
     mapp.use("root/pypi")
     other_name = "otherpackage"
-    mirrorpath = "/%s-2.6.zip" % other_name
-    pypistage.mock_simple(other_name, text='<a href="%s"/>' % mirrorpath)
-    pypistage.mock_extfile(mirrorpath, b"123")
+    remotepath = "/%s-2.6.zip" % other_name
+    pypistage.mock_simple(other_name, text='<a href="%s"/>' % remotepath)
+    pypistage.mock_extfile(remotepath, b"123")
     vv = get_view_version_links(testapp, "/root/pypi", other_name, "2.6")
     # get otherpackage to prime caches and files
     (other_link,) = vv.get_links()
     (other_path,) = mapp.get_release_paths(other_name)
     testapp.get(other_link.href)
     name = "pkg5"
-    mirrorpath1 = "/%s-2.5.zip" % name
-    mirrorpath2 = "/%s-2.6.zip" % name
-    pypistage.mock_simple(name, text='<a href="%s"/>\n<a href="%s"/>' % (mirrorpath1, mirrorpath2))
-    pypistage.mock_extfile(mirrorpath1, b"123")
-    pypistage.mock_extfile(mirrorpath2, b"1234")
+    remotepath1 = "/%s-2.5.zip" % name
+    remotepath2 = "/%s-2.6.zip" % name
+    pypistage.mock_simple(
+        name, text='<a href="%s"/>\n<a href="%s"/>' % (remotepath1, remotepath2)
+    )
+    pypistage.mock_extfile(remotepath1, b"123")
+    pypistage.mock_extfile(remotepath2, b"1234")
     vv = get_view_version_links(testapp, "/root/pypi", name, "2.6")
     r = testapp.get('/root/pypi/+simple/%s' % name)
     (link1, link2) = sorted(
@@ -2644,8 +2670,8 @@ class TestOfflineMode:
         r = testapp.xget(200, "/%s/+simple/package/" % stagename)
         assert getlinks(r.text) == []
         with xom.keyfs.read_transaction():
-            mirrordata = pypistage._get_mirrordata("package")
-            links = mirrordata.get_links()
+            remotedata = pypistage._get_remotedata("package")
+            links = remotedata.get_links()
 
         assert len(links) == 0
 
@@ -2654,8 +2680,8 @@ class TestOfflineMode:
         (link,) = getlinks(r.text)
         assert '/package-1.0.zip' in link.get("href")
         with xom.keyfs.read_transaction():
-            mirrordata = pypistage._get_mirrordata("package")
-            links = mirrordata.get_links()
+            remotedata = pypistage._get_remotedata("package")
+            links = remotedata.get_links()
 
         assert links[0][0] == "package-1.0.zip"
 

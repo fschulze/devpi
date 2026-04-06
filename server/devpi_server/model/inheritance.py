@@ -49,19 +49,19 @@ class check_upstream_error:
             # If we are currently checking ourself raise the error, it is fatal
             return False
         threadlog.warn(
-            "Failed to check mirror whitelist. Assume it does not exist (%s)", val
+            "Failed to check remote whitelist. Assume it does not exist (%s)", val
         )
         self.failed = True
         return True
 
 
 @define(slots=False)
-class InheritanceInfo:
+class ProjectInheritanceInfo:
     traversal_infos: list[tuple[TraversalInfo, bool | NotSet | Unknown]]
 
     @cached_property
-    def blocked_mirror_name(self) -> str | None:
-        for traversal_info, has_project in self._iter_mirrors():
+    def blocked_remote_name(self) -> str | None:
+        for traversal_info, has_project in self._iter_remotes():
             if isinstance(traversal_info, BlockedTraversal):
                 return traversal_info.index.name
             if isinstance(has_project, Unknown):
@@ -72,8 +72,8 @@ class InheritanceInfo:
         return None
 
     @cached_property
-    def has_project_from_mirror(self) -> bool | Unknown:
-        for traversal_info, has_project in self._iter_mirrors():
+    def has_project_from_remote(self) -> bool | Unknown:
+        for traversal_info, has_project in self._iter_remotes():
             if isinstance(traversal_info, BlockedTraversal):
                 return unknown
             if isinstance(has_project, NotSet):
@@ -81,9 +81,9 @@ class InheritanceInfo:
             return has_project
         return False
 
-    def _iter_mirrors(self) -> Iterator[tuple[TraversedIndex, bool | NotSet | Unknown]]:
+    def _iter_remotes(self) -> Iterator[tuple[TraversedIndex, bool | NotSet | Unknown]]:
         for traversal_info, has_project in self._unique_traversed_indexes:
-            if traversal_info.index.index_type != "mirror":
+            if traversal_info.index.index_type != "remote":
                 continue
             yield (traversal_info, has_project)
 
@@ -315,7 +315,9 @@ class IndexBases:
         """Returns bases as tuple of strings."""
         return tuple(self.index.ixconfig.get("bases", ()))
 
-    def _get_inheritance_infos(self, project: NormalizedName) -> InheritanceInfo:
+    def _get_project_inheritance_info(
+        self, project: NormalizedName
+    ) -> ProjectInheritanceInfo:
         filtered_project = not self.index.filter_projects([project])
         policy = InheritancePolicy(index=self.index, project=project)
         traversal_infos: list[tuple[TraversalInfo, bool | NotSet | Unknown]] = []
@@ -335,19 +337,21 @@ class IndexBases:
                     )
                 case _:
                     traversal_infos.append((traversal_info, exists))
-        return InheritanceInfo(traversal_infos)
+        return ProjectInheritanceInfo(traversal_infos)
 
-    def get_inheritance_infos(self, project: NormalizedName) -> InheritanceInfo:
+    def get_project_inheritance_info(
+        self, project: NormalizedName
+    ) -> ProjectInheritanceInfo:
         result = self._per_project_mergability_cache.get(project)
         if result is None:
-            result = self._get_inheritance_infos(project)
+            result = self._get_project_inheritance_info(project)
             self._per_project_mergability_cache.put(project, result)
         return result
 
     def get_mergeable_indexes(
         self, project: NormalizedName, opname: str
     ) -> Iterable[BaseIndex]:
-        return self.get_inheritance_infos(project).iter_indexes(opname)
+        return self.get_project_inheritance_info(project).iter_indexes(opname)
 
     def iter_indexes(self) -> Iterator[BaseIndex]:
         """Iterates indexes in defined order without loops."""
@@ -377,9 +381,9 @@ class IndexBases:
                     raise RuntimeError(traversal_info)
 
     def is_untrusted(self, index: BaseIndex) -> bool:
-        # we have to postpone mirrors, as there
+        # we have to postpone remotes, as there
         # may be private releases in other paths
-        return index.index_type == "mirror"
+        return index.index_type == "remote"
 
     @cached_property
     def traversal_infos(self) -> list[TraversalInfo]:

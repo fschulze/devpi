@@ -557,7 +557,7 @@ class PyPIView:
                     "simpleindex": request.simpleindex_url(stage),
                 }
             )
-            if stage.index_type != "mirror":
+            if stage.index_type != "remote":
                 api["pypisubmit"] = request.route_url(
                     "/{user}/{index}/", user=stage.username, index=stage.index)
         apireturn(200, type="apiconfig", result=api)
@@ -712,8 +712,8 @@ class PyPIView:
             project_inheritance_info = stage.index_bases.get_project_inheritance_info(
                 project
             )
-            embed_form = project_inheritance_info.has_project_from_mirror
-            blocked_index = project_inheritance_info.blocked_mirror_name
+            embed_form = project_inheritance_info.has_project_from_remote
+            blocked_index = project_inheritance_info.blocked_remote_name
         content_type = _select_simple_content_type(self.request)
         if content_type == SIMPLE_API_V1_JSON:
             app_iter = self._simple_list_project_json_v1(
@@ -725,7 +725,7 @@ class PyPIView:
             app_iter=buffered_iterator(app_iter),
             content_type=content_type,
             vary=set(["Accept", "User-Agent"]))
-        if stage.index_type == "mirror":
+        if stage.index_type == "remote":
             serial = (
                 stage.key_projectcacheinfo(project)
                 .with_resolved_parent()
@@ -825,7 +825,7 @@ class PyPIView:
             "/{user}/{index}/+simple/{project}/refresh",
             user=self.context.username, index=self.context.index,
             project=project)
-        title = "Refresh" if stage.index_type == "mirror" else "Refresh mirror links"
+        title = "Refresh" if stage.index_type == "remote" else "Refresh remote links"
         submit = '<input name="refresh" type="submit" value="%s">' % title
         return '<form action="%s" method="post">%s</form>' % (url, submit)
 
@@ -926,7 +926,7 @@ class PyPIView:
     def simple_refresh(self):
         context = self.context
         for stage in context.stage.sro():
-            if stage.index_type != "mirror":
+            if stage.index_type != "remote":
                 continue
             stage.clear_simplelinks_cache(context.project)
             stage.get_simplelinks_perstage(context.project)
@@ -1308,7 +1308,7 @@ class PyPIView:
         request = self.request
         stage = self.context.stage
         if not hasattr(stage, "store_releasefile"):
-            abort_submit(request, 404, "cannot submit to mirror index")
+            abort_submit(request, 404, "cannot submit to remote index")
         stage = cast("LocalIndex", stage)
         if not request.has_permission("upload"):
             # if there is no authenticated user, then issue a basic auth challenge
@@ -1566,7 +1566,7 @@ class PyPIView:
 
         file_exists = entry.file_exists()
 
-        if is_metadata and stage.ixconfig["type"] == "mirror" and not file_exists:
+        if is_metadata and stage.ixconfig["type"] == "remote" and not file_exists:
             if not stage.provides_core_metadata:
                 return apireturn(404, "mirror_provides_core_metadata disabled")
             url = url.replace(path=f"{url.path}.metadata")
@@ -1583,7 +1583,7 @@ class PyPIView:
             # We check whether we should serve the file directly
             # or redirect to the external URL
             if stage.use_external_url:
-                # The file is in a mirror and either deleted or not
+                # The file is in a remote index and either deleted or not
                 # yet downloaded. Redirect to external url
                 # we need to add auth back to the url, as httpx doesn't include it
                 # in the response url
@@ -1599,7 +1599,7 @@ class PyPIView:
                 url = url.replace(**mirror_url_auth)
                 return HTTPFound(location=url.url)
             if (
-                stage.index_type != "mirror"
+                stage.index_type != "remote"
                 and not file_exists
                 and not self.xom.is_replica()
             ):
@@ -1641,14 +1641,14 @@ class PyPIView:
                 app_iter=FileIter(entry.file_open_read()), headers=headers)
 
     @view_config(route_name="/{user}/{index}/+e/{relpath:.*}")
-    def mirror_pkgserv(self):
+    def remote_pkgserv(self):
         relpath = self._relpath_from_request()
         is_metadata = relpath.endswith(".metadata")
         if is_metadata:
             if not self.xom.config.args.enable_core_metadata:
                 return apireturn(404, "core-metadata is disabled")
             relpath = relpath.removesuffix(".metadata")
-        # when a release is deleted from a mirror, we update the metadata,
+        # when a release is deleted from a remote, we update the metadata,
         # hence the key won't exist anymore, but we don't delete the file.
         # We want people to notice that condition by returning a 404, but
         # they can still recover the deleted release from the filesystem
