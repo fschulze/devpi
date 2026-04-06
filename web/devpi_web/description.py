@@ -95,12 +95,17 @@ class DescriptionRenderer:
 
         :return: boolean
         """
-        return self.stage.ixconfig['type'] == 'mirror' \
+        return (
+            self.stage.ixconfig["type"] in {"mirror", "remote"}
             and self._get_mirror_web_url_fmt() is not None
+        )
 
     def _get_mirror_web_url_fmt(self):
         """ Fetch the remote's source url.
 
         :return: string
         """
-        return self.stage.ixconfig.get('mirror_web_url_fmt')
+        ixconfig = self.stage.ixconfig
+        if "remote_web_url_fmt" in ixconfig:
+            return ixconfig["remote_web_url_fmt"]
+        return ixconfig.get("mirror_web_url_fmt")

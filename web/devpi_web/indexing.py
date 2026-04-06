@@ -15,10 +15,10 @@ if TYPE_CHECKING:
 
 
 def is_project_cached(stage, project):
-    if stage.ixconfig['type'] == 'mirror':
-        if not stage.is_project_cached(project):
-            return False
-    return True
+    return not (
+        stage.ixconfig["type"] in {"mirror", "remote"}
+        and not stage.is_project_cached(project)
+    )
 
 
 def preprocess_project(project: ProjectIndexingInfo) -> dict | None:
@@ -33,7 +33,7 @@ def preprocess_project(project: ProjectIndexingInfo) -> dict | None:
     user = ensure_unicode(user)
     index = ensure_unicode(index)
     result: dict[str, object]
-    if stage.ixconfig["type"] == "mirror":
+    if stage.ixconfig["type"] in {"mirror", "remote"}:
         stage.offline = True
         if not stage.is_project_cached(name):
             # only index basic info for projects with no downloads
@@ -86,7 +86,7 @@ class ProjectIndexingInfo:
 
     @property
     def is_from_mirror(self) -> bool:
-        return self.stage.ixconfig['type'] == 'mirror'
+        return self.stage.ixconfig["type"] in {"mirror", "remote"}
 
 
 def iter_indexes(xom):
@@ -96,7 +96,7 @@ def iter_indexes(xom):
         user_info = user.get()
         for index, index_info in user_info.get('indexes', {}).items():
             index = ensure_unicode(index)
-            if index_info['type'] == 'mirror':
+            if index_info["type"] in {"mirror", "remote"}:
                 mirrors.append((username, index))
             else:
                 yield (username, index)
@@ -110,7 +110,7 @@ def iter_projects(xom, *, offline=True):
             continue
         names = stage.list_projects_perstage()
         # only go offline after we got the projects list
-        if stage.ixconfig["type"] == "mirror":
+        if stage.ixconfig["type"] in {"mirror", "remote"}:
             stage.offline = offline
         if isinstance(names, Mapping):
             # since devpi-server 6.6.0 mirrors return a mapping where
