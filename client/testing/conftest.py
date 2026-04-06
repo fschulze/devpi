@@ -70,6 +70,29 @@ def print_info(*args, **kwargs):
     return print(*args, **kwargs)
 
 
+@pytest.fixture
+def remote_index_info(server_version):
+    from devpi_common.metadata import parse_version
+
+    if server_version < parse_version("7.0.0.dev2"):
+
+        class MirrorInfo:
+            refresh_option = "mirror_cache_expiry"
+            type = "mirror"
+            url_fmt_option = "mirror_web_url_fmt"
+            url_option = "mirror_url"
+
+        return MirrorInfo()
+
+    class RemoteInfo:
+        refresh_option = "remote_refresh_delay"
+        type = "remote"
+        url_fmt_option = "remote_web_url_fmt"
+        url_option = "remote_url"
+
+    return RemoteInfo()
+
+
 @pytest.fixture(scope="session")
 def simpypiserver():
     from .simpypi import SimPyPIRequestHandler
