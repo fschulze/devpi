@@ -1,3 +1,8 @@
+from .functional import MappMixin
+from .functional import TestIndexPushThings  # noqa: F401
+from .functional import TestIndexThings  # noqa: F401
+from .functional import TestProjectThings  # noqa: F401
+from .functional import TestUserThings  # noqa: F401
 from io import BytesIO
 import json
 import pytest
@@ -6,12 +11,13 @@ import requests
 import tarfile
 import time
 
-from .functional import TestIndexThings  # noqa: F401
-from .functional import TestIndexPushThings  # noqa: F401
-from .functional import TestProjectThings  # noqa: F401
-from .functional import TestUserThings  # noqa: F401
-from .functional import TestMirrorIndexThings  # noqa: F401
-from .functional import MappMixin
+
+try:
+    from .functional import (  # type: ignore[attr-defined]  # noqa: F401
+        TestRemoteIndexThings,
+    )
+except ImportError:
+    from .functional import TestMirrorIndexThings  # noqa: F401
 
 
 @pytest.fixture
