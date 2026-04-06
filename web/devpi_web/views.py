@@ -415,10 +415,15 @@ class FileInfo:
 
     @cached_property
     def size(self):
-        if self.entry.file_exists():
-            (value, unit) = sizeof_fmt(self.entry.file_size())
-            return f"{value:.0f} {unit}"
-        return ''
+        size = None
+        if hasattr(self.entry, "size"):
+            size = self.entry.size
+        if size is None and self.entry.file_exists():
+            size = self.entry.file_size()
+        if size is None:
+            return ""
+        (value, unit) = sizeof_fmt(size)
+        return f"{value:.0f} {unit}"
 
     @cached_property
     def title(self):
@@ -449,6 +454,45 @@ def get_files_info(request, linkstore, *, show_toxresults=False):
     return [
         FileInfo(request, link, linkstore, show_toxresults)
         for link in filedata]
+
+
+def get_inheritance_info(index):
+    if hasattr(index, "index_bases"):
+        inheritance_info_jsonable = index.index_bases.inheritance_info.jsonable()
+        return dict(
+            inheritance_info=inheritance_info_jsonable,
+            reasons=[
+                reason
+                for ti in inheritance_info_jsonable["traversal_infos"]
+                if (reason := ti.get("reason"))
+            ],
+        )
+    return None
+
+
+def get_merge_info(index, project):
+    if hasattr(index, "index_bases"):
+        project_inheritance_info = index.index_bases.get_project_inheritance_info(
+            project
+        )
+        project_inheritance_info_jsonable = project_inheritance_info.jsonable()
+        return dict(
+            blocked_remote_name=project_inheritance_info.blocked_remote_name,
+            has_project_from_remote=project_inheritance_info.has_project_from_remote,
+            project_inheritance_info=project_inheritance_info_jsonable,
+            reasons=[
+                reason
+                for ti in project_inheritance_info_jsonable["traversal_infos"]
+                if (reason := ti.get("reason"))
+            ],
+        )
+    whitelist_info = index.get_mirror_whitelist_info(project)
+    return dict(
+        blocked_remote_name=whitelist_info["blocked_by_mirror_whitelist"],
+        has_project_from_remote=whitelist_info["has_mirror_base"],
+        project_inheritance_info=None,
+        reasons=None,
+    )
 
 
 def load_toxresult(link):
@@ -496,11 +540,11 @@ def get_toxresults_state(toxresults):
 
 
 def get_docs_info(request, stage, linkstore):
-    if stage.ixconfig['type'] == 'mirror':
-        return
+    if stage.ixconfig["type"] in {"mirror", "remote"}:
+        return None
     links = linkstore.get_links(rel='doczip')
     if not links:
-        return
+        return None
     name, ver = normalize_name(linkstore.project), linkstore.version
     if docs_exist(stage, name, ver, links[0].entry):
         return dict(
@@ -509,6 +553,7 @@ def get_docs_info(request, stage, linkstore):
                 "docviewroot", user=stage.user.name, index=stage.index,
                 project=name, version=ver, relpath="index.html"),
             zip_url=url_for_entrypath(request, links[0].entrypath))
+    return None
 
 
 def get_user_info(context, request, user):
@@ -579,14 +624,21 @@ def index_get(context, request):
         permissions=permissions,
         bases=bases,
         packages=packages,
+        project_inheritance_rules=None,
+        inheritance_info=get_inheritance_info(stage),
         whitelist=whitelist,
         index_name=stage.name,
-        index_title=stage.ixconfig.get('title', None),
-        index_description=stage.ixconfig.get('description', None))
-    if stage.ixconfig['type'] == 'mirror':
+        index_title=stage.ixconfig.get("title", None),
+        index_description=stage.ixconfig.get("description", None),
+    )
+    if stage.ixconfig["type"] in {"mirror", "remote"}:
         return result
 
     if hasattr(stage, "ixconfig"):
+        if "project_inheritance_rules" in stage.ixconfig:
+            result["project_inheritance_rules"] = stage.ixconfig[
+                "project_inheritance_rules"
+            ]
         whitelist.extend(sorted(stage.ixconfig.get('mirror_whitelist', [])))
         for base in stage.ixconfig["bases"]:
             bases.append(dict(
@@ -624,7 +676,7 @@ def index_get(context, request):
             log.error("metadata for project %r empty: %s, skipping",
                       project, verdata)
             continue
-        show_toxresults = (stage.ixconfig['type'] != 'mirror')
+        show_toxresults = stage.ixconfig["type"] not in {"mirror", "remote"}
         linkstore = stage.get_linkstore_perstage(name, ver)
         packages.append(dict(
             info=dict(
@@ -653,24 +705,40 @@ def add_simple_page_navlink(request, context, nav_links):
             user=context.username, index=context.index, project=context.project)))
 
 
-def add_mirror_page_navlink(request, context, whitelist_info, nav_links):
-    if whitelist_info['has_mirror_base']:
+def add_mirror_page_navlink(
+    request,  # noqa: ARG001,
+    context,
+    merge_info,
+    nav_links,
+):
+    if merge_info["has_project_from_remote"]:
         for base in reversed(list(context.stage.sro())):
-            if base.ixconfig["type"] != "mirror":
+            if base.ixconfig["type"] not in {"mirror", "remote"}:
                 continue
-            mirror_web_url_fmt = base.ixconfig.get("mirror_web_url_fmt")
-            if not mirror_web_url_fmt:
+            web_url_fmt = (
+                base.ixconfig["remote_web_url_fmt"]
+                if "remote_web_url_fmt" in base.ixconfig
+                else base.ixconfig.get("mirror_web_url_fmt")
+            )
+            if not web_url_fmt:
                 continue
-            nav_links.append(dict(
-                title="%s page" % base.ixconfig.get("title", "Mirror"),
-                url=mirror_web_url_fmt.format(name=context.verified_project)))
+            nav_links.append(
+                dict(
+                    title="%s page" % base.ixconfig.get("title", "Mirror"),
+                    url=web_url_fmt.format(name=context.verified_project),
+                )
+            )
 
 
 def _index_refresh_form(request, stage, project):
     url = request.route_url(
         "project_refresh",
         user=stage.username, index=stage.index, project=project)
-    title = "Refresh" if stage.ixconfig["type"] == "mirror" else "Refresh mirror links"
+    title = (
+        "Refresh"
+        if stage.ixconfig["type"] in {"mirror", "remote"}
+        else "Refresh mirror links"
+    )
     submit = '<input name="refresh" type="submit" value="%s"/>' % title
     return '<form action="%s" method="post">%s</form>' % (url, submit)
 
@@ -745,8 +813,8 @@ def project_get(context, request):
     versions = []
     for version in get_sorted_versions(version_info):
         versions.append(version_info[version])
-    whitelist_info = context.stage.get_mirror_whitelist_info(context.project)
-    add_mirror_page_navlink(request, context, whitelist_info, nav_links)
+    merge_info = get_merge_info(context.stage, context.project)
+    add_mirror_page_navlink(request, context, merge_info, nav_links)
     stage = context.stage
     latest_verdata = {}
     latest_version = get_latest_version(stage_versions)
@@ -754,20 +822,26 @@ def project_get(context, request):
         latest_verdata = stage.get_versiondata_perstage(
             context.project, latest_version)
     refresh_form = None
-    if whitelist_info['has_mirror_base']:
+    if merge_info["has_project_from_remote"]:
         refresh_form = _index_refresh_form(request, stage, name)
     return dict(
         _context=context,
         title="%s/: %s versions" % (context.stage.name, context.project),
-        blocked_by_mirror_whitelist=whitelist_info['blocked_by_mirror_whitelist'],
+        blocked_by_mirror_whitelist=merge_info["blocked_remote_name"],
+        merge_info=merge_info,
         nav_links=nav_links,
         latest_version=latest_version,
         latest_url=request.route_url(
             "/{user}/{index}/{project}/{version}",
-            user=user, index=index, project=name, version='latest'),
+            user=user,
+            index=index,
+            project=name,
+            version="latest",
+        ),
         latest_version_data=latest_verdata,
         refresh_form=refresh_form,
-        versions=versions)
+        versions=versions,
+    )
 
 
 @define
@@ -819,7 +893,7 @@ def version_get(context, request):
             )
             out_value = escape(in_value)
         infos.append((escape(key), out_value))
-    show_toxresults = (stage.ixconfig['type'] != 'mirror')
+    show_toxresults = stage.ixconfig["type"] not in {"mirror", "remote"}
     linkstore = stage.get_linkstore_perstage(name, version)
     files = get_files_info(request, linkstore, show_toxresults=show_toxresults)
     docs = get_docs_info(request, stage, linkstore)
@@ -834,8 +908,8 @@ def version_get(context, request):
             title="Homepage",
             url=home_page))
     add_simple_page_navlink(request, context, nav_links)
-    whitelist_info = stage.get_mirror_whitelist_info(name)
-    add_mirror_page_navlink(request, context, whitelist_info, nav_links)
+    merge_info = get_merge_info(context.stage, context.project)
+    add_mirror_page_navlink(request, context, merge_info, nav_links)
     cmp_version = Version(version)
     if context._stable_versions:
         stable_version = Version(context._stable_versions[0])
@@ -866,7 +940,8 @@ def version_get(context, request):
         metadata=metadata,
         metadata_list_fields=frozenset(escape(x) for x in metadata_list_fields),
         files=files,
-        blocked_by_mirror_whitelist=whitelist_info["blocked_by_mirror_whitelist"],
+        blocked_by_mirror_whitelist=merge_info["blocked_remote_name"],
+        merge_info=merge_info,
         show_toxresults=show_toxresults,
         make_toxresults_url=functools.partial(
             request.route_url,

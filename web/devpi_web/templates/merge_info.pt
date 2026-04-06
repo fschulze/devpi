@@ -1,4 +1,10 @@
-<p class="infonote" tal:condition="blocked_by_mirror_whitelist">
+<p class="infonote" tal:condition="merge_info.blocked_remote_name and merge_info.reasons is None">
     Because this project isn't in the <code>mirror_whitelist</code>,
-    no releases from <strong>${blocked_by_mirror_whitelist}</strong> are included.
+    no releases from <strong>${merge_info.blocked_remote_name}</strong> are included.
 </p>
+<script id="merge-info" type="application/json">${merge_info}</script>
+<div class="infonote" tal:condition="merge_info.reasons">
+    <ul>
+        <li tal:repeat="reason merge_info.reasons">${reason}</li>
+    </ul>
+</div>

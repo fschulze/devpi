@@ -272,8 +272,13 @@ def devpiserver_add_parser_options(parser):
     add_indexer_backend_option(indexing)
 
 
-@devpiserver_hookimpl
+@devpiserver_hookimpl(optionalhook=True)
 def devpiserver_mirror_initialnames(stage, projectnames):
+    devpiserver_remote_initialnames(stage, projectnames)
+
+
+@devpiserver_hookimpl(optionalhook=True)
+def devpiserver_remote_initialnames(stage, projectnames):
     ix = get_indexer(stage.xom)
     threadlog.info(
         "indexing '%s' mirror with %s projects",
@@ -299,7 +304,7 @@ def devpiserver_stage_created(stage):
     if stage is None:
         # the stage was deleted
         return
-    if stage.ixconfig["type"] == "mirror":
+    if stage.ixconfig["type"] in {"mirror", "remote"}:
         threadlog.info("triggering load of initial projectnames for %s", stage.name)
         stage.list_projects_perstage()
 
@@ -341,7 +346,7 @@ def devpiserver_on_changed_versiondata(stage, project, version, metadata):
     if stage is None:
         return
     if not metadata:
-        if stage.ixconfig["type"] == "mirror":
+        if stage.ixconfig["type"] in {"mirror", "remote"}:
             stage.offline = True
         if is_project_cached(stage, project) and not stage.has_project_perstage(project):
             delete_project(stage, project)
