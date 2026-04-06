@@ -496,11 +496,11 @@ def get_toxresults_state(toxresults):
 
 
 def get_docs_info(request, stage, linkstore):
-    if stage.ixconfig['type'] == 'mirror':
-        return
+    if stage.ixconfig["type"] in {"mirror", "remote"}:
+        return None
     links = linkstore.get_links(rel='doczip')
     if not links:
-        return
+        return None
     name, ver = normalize_name(linkstore.project), linkstore.version
     if docs_exist(stage, name, ver, links[0].entry):
         return dict(
@@ -509,6 +509,7 @@ def get_docs_info(request, stage, linkstore):
                 "docviewroot", user=stage.user.name, index=stage.index,
                 project=name, version=ver, relpath="index.html"),
             zip_url=url_for_entrypath(request, links[0].entrypath))
+    return None
 
 
 def get_user_info(context, request, user):
@@ -583,7 +584,7 @@ def index_get(context, request):
         index_name=stage.name,
         index_title=stage.ixconfig.get('title', None),
         index_description=stage.ixconfig.get('description', None))
-    if stage.ixconfig['type'] == 'mirror':
+    if stage.ixconfig["type"] in {"mirror", "remote"}:
         return result
 
     if hasattr(stage, "ixconfig"):
@@ -624,7 +625,7 @@ def index_get(context, request):
             log.error("metadata for project %r empty: %s, skipping",
                       project, verdata)
             continue
-        show_toxresults = (stage.ixconfig['type'] != 'mirror')
+        show_toxresults = stage.ixconfig["type"] not in {"mirror", "remote"}
         linkstore = stage.get_linkstore_perstage(name, ver)
         packages.append(dict(
             info=dict(
@@ -656,21 +657,32 @@ def add_simple_page_navlink(request, context, nav_links):
 def add_mirror_page_navlink(request, context, whitelist_info, nav_links):
     if whitelist_info['has_mirror_base']:
         for base in reversed(list(context.stage.sro())):
-            if base.ixconfig["type"] != "mirror":
+            if base.ixconfig["type"] not in {"mirror", "remote"}:
                 continue
-            mirror_web_url_fmt = base.ixconfig.get("mirror_web_url_fmt")
-            if not mirror_web_url_fmt:
+            web_url_fmt = (
+                base.ixconfig["remote_web_url_fmt"]
+                if "remote_web_url_fmt" in base.ixconfig
+                else base.ixconfig.get("mirror_web_url_fmt")
+            )
+            if not web_url_fmt:
                 continue
-            nav_links.append(dict(
-                title="%s page" % base.ixconfig.get("title", "Mirror"),
-                url=mirror_web_url_fmt.format(name=context.verified_project)))
+            nav_links.append(
+                dict(
+                    title="%s page" % base.ixconfig.get("title", "Mirror"),
+                    url=web_url_fmt.format(name=context.verified_project),
+                )
+            )
 
 
 def _index_refresh_form(request, stage, project):
     url = request.route_url(
         "project_refresh",
         user=stage.username, index=stage.index, project=project)
-    title = "Refresh" if stage.ixconfig["type"] == "mirror" else "Refresh mirror links"
+    title = (
+        "Refresh"
+        if stage.ixconfig["type"] in {"mirror", "remote"}
+        else "Refresh mirror links"
+    )
     submit = '<input name="refresh" type="submit" value="%s"/>' % title
     return '<form action="%s" method="post">%s</form>' % (url, submit)
 
@@ -819,7 +831,7 @@ def version_get(context, request):
             )
             out_value = escape(in_value)
         infos.append((escape(key), out_value))
-    show_toxresults = (stage.ixconfig['type'] != 'mirror')
+    show_toxresults = stage.ixconfig["type"] not in {"mirror", "remote"}
     linkstore = stage.get_linkstore_perstage(name, version)
     files = get_files_info(request, linkstore, show_toxresults=show_toxresults)
     docs = get_docs_info(request, stage, linkstore)

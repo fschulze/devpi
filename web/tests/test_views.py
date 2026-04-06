@@ -1,14 +1,31 @@
 from devpi_common.archive import zip_dict
 from devpi_common.metadata import parse_version
-from devpi_server import __version__ as _devpi_server_version
 from test_devpi_server.plugin import make_file_url
 import datetime as dt
 import pytest
 import re
 
 
-devpi_server_version = parse_version(_devpi_server_version)
 pytestmark = [pytest.mark.notransaction]
+
+
+@pytest.fixture
+def remote_index_info(server_version):
+    if server_version < parse_version("7.0.0.dev2"):
+
+        class MirrorInfo:
+            merge_all_option = "mirror_whitelist"
+            merge_all_value = "*"
+            type = "mirror"
+
+        return MirrorInfo()
+
+    class RemoteInfo:
+        merge_all_option = "project_inheritance_rules"
+        merge_all_value = ("allow all",)
+        type = "remote"
+
+    return RemoteInfo()
 
 
 def compareable_text(text):
@@ -303,14 +320,18 @@ def test_project_view_root_pypi_external_link_bad_name(mapp, testapp, pypistage)
 
 
 @pytest.mark.with_notifier
-def test_project_view_root_and_docs(keep_docs_packed, mapp, testapp, pypistage):
+@pytest.mark.usefixtures("keep_docs_packed")
+def test_project_view_root_and_docs(mapp, remote_index_info, testapp, pypistage):
     pypistage.mock_simple("pkg1", text='''
             <a href="../../pkg/pkg1-2.7.zip" />
             <a href="../../pkg/pkg1-2.6.zip" />
         ''', pypiserial=10)
-    api = mapp.create_and_use(indexconfig=dict(
-        bases=["root/pypi"],
-        mirror_whitelist=["*"]))
+    api = mapp.create_and_use(
+        indexconfig={
+            "bases": ["root/pypi"],
+            remote_index_info.merge_all_option: remote_index_info.merge_all_value,
+        }
+    )
     content = zip_dict({"index.html": "<html/>"})
     mapp.set_versiondata({"name": "pkg1", "version": "2.6"})
     mapp.upload_doc(
@@ -433,7 +454,6 @@ def test_markdown_description_without_content_type(mapp, testapp, monkeypatch):
 
 
 @pytest.mark.with_notifier
-@pytest.mark.skipif(devpi_server_version < parse_version("4.7.2dev"), reason="Needs Metadata 2.1 support")
 def test_markdown_description_with_content_type(mapp, testapp, monkeypatch):
     api = mapp.create_and_use()
     mapp.upload_file_pypi(
