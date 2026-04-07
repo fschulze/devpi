@@ -1101,7 +1101,7 @@ class TestRemoteIndexProjects:
                 <a href='django'>Django</a><br/>
             </body>""",
         )
-        pypistage.ixconfig._data["mirror_cache_expiry"] = 0
+        pypistage.ixconfig._data["remote_refresh_delay"] = 0
         projectnames = pypistage.cache_projectnames
         assert not projectnames.exists()
         pypistage.list_projects_perstage()
@@ -1551,7 +1551,7 @@ def test_ProjectUpdateCache(monkeypatch):
 def test_cleanup_after_last_entry_deletion(mapp, simpypi):
     mapp.create_and_login_user("remote")
     indexconfig = dict(
-        type="remote", mirror_url=simpypi.simpleurl, mirror_cache_expiry=0
+        type="remote", mirror_url=simpypi.simpleurl, remote_refresh_delay=0
     )
     mapp.create_index("remote", indexconfig=indexconfig)
     mapp.use("remote/remote")
@@ -1585,7 +1585,7 @@ def test_cleanup_after_last_entry_deletion(mapp, simpypi):
 def test_cleanup_after_last_version_deletion(mapp, simpypi):
     mapp.create_and_login_user("remote")
     indexconfig = dict(
-        type="remote", mirror_url=simpypi.simpleurl, mirror_cache_expiry=0
+        type="remote", mirror_url=simpypi.simpleurl, remote_refresh_delay=0
     )
     mapp.create_index("remote", indexconfig=indexconfig)
     mapp.use("remote/remote")
@@ -1623,7 +1623,7 @@ def test_redownload_locally_removed_release(file_digest, mapp, simpypi):
 
     mapp.create_and_login_user("remote")
     indexconfig = dict(
-        type="remote", mirror_url=simpypi.simpleurl, mirror_cache_expiry=0
+        type="remote", mirror_url=simpypi.simpleurl, remote_refresh_delay=0
     )
     mapp.create_index("remote", indexconfig=indexconfig)
     mapp.use("remote/remote")

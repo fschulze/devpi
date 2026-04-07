@@ -14,11 +14,13 @@ def remote_index_info(server_version):
     if server_version < parse_version("7.0.0.dev2"):
 
         class MirrorInfo:
+            refresh_option = "mirror_cache_expiry"
             type = "mirror"
 
         return MirrorInfo()
 
     class RemoteInfo:
+        refresh_option = "remote_refresh_delay"
         type = "remote"
 
     return RemoteInfo()
@@ -93,7 +95,9 @@ def test_replicating_deleted_pypi_release(
     simpypi.add_file('/pkg/pkg-1.0.zip', content)
     mapp.create_and_login_user("remote")
     indexconfig = dict(
-        type=remote_index_info.type, mirror_url=simpypi.simpleurl, mirror_cache_expiry=0
+        type=remote_index_info.type,
+        mirror_url=simpypi.simpleurl,
+        remote_refresh_delay=0,
     )
     mapp.create_index("remote", indexconfig=indexconfig)
     mapp.use("remote/remote")
