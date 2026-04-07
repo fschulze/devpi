@@ -413,25 +413,10 @@ class TestImportExport:
         assert indexlist[api.stagename]["custom_data"] == 42
 
     def test_indexes_mirror_whitelist(self, impexp):
-        mapp1 = impexp.mapp1
-        api = mapp1.create_and_use()
-        mapp1.set_mirror_whitelist("*")
-        impexp.export()
-        mapp2 = impexp.new_import()
-        assert api.user in mapp2.getuserlist()
-        indexlist = mapp2.getindexlist(api.user)
-        assert indexlist[api.stagename]["mirror_whitelist"] == ["*"]
-
-    def test_indexes_mirror_whitelist_project(self, impexp):
-        mapp1 = impexp.mapp1
-        api = mapp1.create_and_use()
-        mapp1.upload_file_pypi("hello-1.0.tar.gz", b"content1", "hello", "1.0")
-        mapp1.set_mirror_whitelist("hello")
-        impexp.export()
-        mapp2 = impexp.new_import()
-        assert api.user in mapp2.getuserlist()
-        indexlist = mapp2.getindexlist(api.user)
-        assert indexlist[api.stagename]["mirror_whitelist"] == ["hello"]
+        mapp = impexp.import_testdata("mirrorwhitelist")
+        indexlist = mapp.getindexlist("root")
+        assert indexlist["root/dev"]["mirror_whitelist"] == ["*"]
+        assert indexlist["root/prod"]["mirror_whitelist"] == ["bar", "foo"]
 
     def test_indexes_pypi_whitelist(self, impexp):
         mapp1 = impexp.mapp1
@@ -625,9 +610,23 @@ class TestImportExport:
             stage = mapp.xom.model.getstage('root/pypi')
             # test that we actually get the config from the import and not
             # the default PyPI settings
-            assert stage.ixconfig['title'] == 'Modified PyPI'
-            assert stage.ixconfig['mirror_url'] == 'https://example.com/simple/'
-            assert stage.ixconfig['mirror_web_url_fmt'] == 'https://example.com/project/{name}/'
+            assert stage.ixconfig == dict(
+                mirror_cache_expiry=600,
+                mirror_ignore_serial_header=True,
+                mirror_no_project_list=True,
+                mirror_provides_core_metadata=True,
+                mirror_url="https://example.com/simple/",
+                mirror_use_external_urls=True,
+                mirror_web_url_fmt="https://example.com/project/{name}/",
+                title="Modified PyPI",
+                type="mirror",
+                volatile=False,
+            )
+            expected_keys = {*stage.get_possible_indexconfig_keys(), "type"} - {
+                "custom_data",
+                "description",
+            }
+            assert set(stage.ixconfig.keys()) == expected_keys
 
     def test_normalization(self, impexp):
         mapp = impexp.import_testdata('normalization')
