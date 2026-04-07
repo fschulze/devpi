@@ -36,12 +36,14 @@ def remote_index_info(server_version):
         class MirrorInfo:
             refresh_option = "mirror_cache_expiry"
             type = "mirror"
+            url_option = "mirror_url"
 
         return MirrorInfo()
 
     class RemoteInfo:
         refresh_option = "remote_refresh_delay"
         type = "remote"
+        url_option = "remote_url"
 
     return RemoteInfo()
 
@@ -366,7 +368,7 @@ def test_projects_pep_691(pypistage, testapp, url):
                 {"name": "Django"},
                 {"name": "ploy_ansible"}
             ]}""")
-    pypistage.xom.http.mockresponse(pypistage.mirror_url, **mockkw)
+    pypistage.xom.http.mockresponse(pypistage.remote_url, **mockkw)
     content_types = [
         "application/vnd.pypi.simple.v1+json",
         "application/vnd.pypi.simple.v1+html;q=0.2",
@@ -1923,7 +1925,7 @@ def test_delete_version_on_non_volatile_force(mapp):
 def test_upload_to_remote_fails(mapp, simpypi):
     indexconfig = dict(
         type="remote",
-        mirror_url=simpypi.simpleurl,
+        remote_url=simpypi.simpleurl,
         remote_refresh_delay=0,
         volatile=True,
     )
@@ -1942,7 +1944,7 @@ def test_upload_to_remote_fails(mapp, simpypi):
 def test_delete_remote(mapp, monkeypatch, simpypi, testapp, xom):
     indexconfig = dict(
         type="remote",
-        mirror_url=simpypi.simpleurl,
+        remote_url=simpypi.simpleurl,
         remote_refresh_delay=0,
         volatile=True,
     )
@@ -2132,7 +2134,7 @@ def test_delete_volatile_force(mapp, testapp):
 def test_remote_use_external_urls(mapp, simpypi, testapp):
     indexconfig = dict(
         type="remote",
-        mirror_url=simpypi.simpleurl,
+        remote_url=simpypi.simpleurl,
         remote_refresh_delay=0,
         mirror_use_external_urls=True,
         volatile=True,
