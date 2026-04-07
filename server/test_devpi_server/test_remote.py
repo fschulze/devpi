@@ -483,7 +483,7 @@ class TestExtPYPIDB:
             ''', pypiserial=10)
 
         with pypistage.keyfs.read_transaction():
-            assert "mirror_ignore_serial_header" not in pypistage.ixconfig
+            assert "remote_ignore_serial_header" not in pypistage.ixconfig
             assert not pypistage.key_remoteprojectinfo("pytest").exists(
                 resolve_parents=True
             )
@@ -496,7 +496,7 @@ class TestExtPYPIDB:
             )
         pypistage.mock_simple("pytest", text="", pypiserial=9)
         with pypistage.keyfs.read_transaction():
-            assert "mirror_ignore_serial_header" not in pypistage.ixconfig
+            assert "remote_ignore_serial_header" not in pypistage.ixconfig
             assert (
                 pypistage.key_remoteprojectinfo("pytest")
                 .with_resolved_parent()
@@ -513,10 +513,10 @@ class TestExtPYPIDB:
         recs = caplog.getrecords(".*serving stale links.*")
         assert len(recs) >= 1
         with pypistage.keyfs.write_transaction():
-            assert "mirror_ignore_serial_header" not in pypistage.ixconfig
+            assert "remote_ignore_serial_header" not in pypistage.ixconfig
             assert (
-                pypistage.modify(mirror_ignore_serial_header=True)[
-                    "mirror_ignore_serial_header"
+                pypistage.modify(remote_ignore_serial_header=True)[
+                    "remote_ignore_serial_header"
                 ]
                 is True
             )
@@ -837,7 +837,7 @@ class TestExtPYPIDB:
         assert "core-metadata" not in file_info
         r = testapp.xget(404, "/root/pypi/+f/123/4/foo-1.0-py3-none-any.whl.metadata")
         with pypistage.xom.keyfs.write_transaction():
-            pypistage.modify(mirror_provides_core_metadata=True)
+            pypistage.modify(remote_provides_core_metadata=True)
         r = testapp.xget(200, "/root/pypi/+simple/foo/")
         assert "core-metadata" in r.text
         r = testapp.xget(

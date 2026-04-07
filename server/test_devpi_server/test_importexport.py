@@ -613,12 +613,12 @@ class TestImportExport:
             # the default PyPI settings
             assert stage.ixconfig == dict(
                 remote_refresh_delay=600,
-                mirror_ignore_serial_header=True,
-                mirror_no_project_list=True,
-                mirror_provides_core_metadata=True,
+                remote_ignore_serial_header=True,
+                remote_no_project_list=True,
+                remote_provides_core_metadata=True,
                 remote_url="https://example.com/simple/",
-                mirror_use_external_urls=True,
-                mirror_web_url_fmt="https://example.com/project/{name}/",
+                remote_use_external_urls=True,
+                remote_web_url_fmt="https://example.com/project/{name}/",
                 title="Modified PyPI",
                 type="remote",
                 volatile=False,

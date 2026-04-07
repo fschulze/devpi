@@ -36,6 +36,7 @@ def remote_index_info(server_version):
         class MirrorInfo:
             refresh_option = "mirror_cache_expiry"
             type = "mirror"
+            url_fmt_option = "mirror_web_url_fmt"
             url_option = "mirror_url"
 
         return MirrorInfo()
@@ -43,6 +44,7 @@ def remote_index_info(server_version):
     class RemoteInfo:
         refresh_option = "remote_refresh_delay"
         type = "remote"
+        url_fmt_option = "remote_web_url_fmt"
         url_option = "remote_url"
 
     return RemoteInfo()
@@ -1497,7 +1499,7 @@ def test_push_from_pypi_remote_switch_to_use_external_urls(mapp, pypistage, test
     assert r.body == b"123"
     with mapp.xom.keyfs.write_transaction():
         # switch to external URLs
-        pypistage.modify(mirror_use_external_urls=True)
+        pypistage.modify(remote_use_external_urls=True)
         # and remove the file to simulate a cleanup
         linkstore = pypistage.get_linkstore_perstage("hello", "1.0")
         (link,) = linkstore.get_links()
@@ -2136,7 +2138,7 @@ def test_remote_use_external_urls(mapp, simpypi, testapp):
         type="remote",
         remote_url=simpypi.simpleurl,
         remote_refresh_delay=0,
-        mirror_use_external_urls=True,
+        remote_use_external_urls=True,
         volatile=True,
     )
     api = mapp.create_and_use(indexconfig=indexconfig)
@@ -2156,14 +2158,14 @@ def test_remote_use_external_urls(mapp, simpypi, testapp):
     with testapp.xom.keyfs.read_transaction():
         assert not getentry(testapp, path).file_exists()
     # now turn external urls off
-    mapp.modify_index(api.stagename, indexconfig=["mirror_use_external_urls=False"])
+    mapp.modify_index(api.stagename, indexconfig=["remote_use_external_urls=False"])
     # and fetch again
     r = testapp.xget(200, link, follow=False)
     with testapp.xom.keyfs.read_transaction():
         # now the file was stored locally
         assert getentry(testapp, path).file_exists()
     # turn external urls on again
-    mapp.modify_index(api.stagename, indexconfig=["mirror_use_external_urls=True"])
+    mapp.modify_index(api.stagename, indexconfig=["remote_use_external_urls=True"])
     # we still get the locally stored file
     r = testapp.xget(200, link, follow=False)
     # now remove the file, but keep metadata in place
