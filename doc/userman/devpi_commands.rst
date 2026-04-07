@@ -522,7 +522,7 @@ devpi command reference (server)
                         [--trusted-proxy-headers TRUSTED_PROXY_HEADERS]
                         [--max-request-body-size MAX_REQUEST_BODY_SIZE]
                         [--outside-url URL] [--absolute-urls]
-                        [--enable-core-metadata] [--mirror-cache-expiry SECS]
+                        [--enable-core-metadata] [--remote-refresh-delay SECS]
                         [--primary-url PRIMARY_URL]
                         [--replica-file-search-path PATH] [--hard-links]
                         [--file-replication-threads NUM]
@@ -602,10 +602,10 @@ devpi command reference (server)
                             (experimental) Enable minimal core-metadata support in
                             simple API. [False]
 
-    mirroring options:
-      --mirror-cache-expiry SECS
-                            (experimental) time after which projects in mirror
-                            indexes are checked for new releases. [1800]
+    remote index options:
+      --remote-refresh-delay SECS
+                            default delay after which projects in remote indexes
+                            are checked for new releases. [1800]
 
     replica options:
       --primary-url PRIMARY_URL
