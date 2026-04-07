@@ -424,14 +424,14 @@ class TestRemoteIndexThings:
         assert indexname not in mapp.getindexlist()
         indexconfig = {
             "type": remote_index_info.type,
-            "mirror_url": simpypi.simpleurl,
+            remote_index_info.url_option: simpypi.simpleurl,
             remote_index_info.refresh_option: 0,
         }
         mapp.create_index("remote", indexconfig=indexconfig)
         assert indexname in mapp.getindexlist()
         result = mapp.getjson("/remote1/remote")
-        assert result['result']['mirror_url'] == simpypi.simpleurl
-        assert result["result"]["remote_refresh_delay"] == 0
+        assert result["result"][remote_index_info.url_option] == simpypi.simpleurl
+        assert result["result"][remote_index_info.refresh_option] == 0
         mapp.delete_index("remote")
         assert indexname not in mapp.getindexlist()
 
@@ -439,7 +439,7 @@ class TestRemoteIndexThings:
         mapp.create_and_login_user("remote2")
         indexconfig = {
             "type": remote_index_info.type,
-            "mirror_url": simpypi.simpleurl,
+            remote_index_info.url_option: simpypi.simpleurl,
             remote_index_info.refresh_option: 0,
         }
         mapp.create_index("remote", indexconfig=indexconfig)
@@ -451,7 +451,7 @@ class TestRemoteIndexThings:
         mapp.create_and_login_user("remote3")
         indexconfig = {
             "type": remote_index_info.type,
-            "mirror_url": simpypi.simpleurl,
+            remote_index_info.url_option: simpypi.simpleurl,
             remote_index_info.refresh_option: 0,
         }
         mapp.create_index("remote", indexconfig=indexconfig)
@@ -464,7 +464,7 @@ class TestRemoteIndexThings:
         mapp.create_and_login_user("remote4")
         indexconfig = {
             "type": remote_index_info.type,
-            "mirror_url": simpypi.simpleurl,
+            remote_index_info.url_option: simpypi.simpleurl,
             remote_index_info.refresh_option: 0,
         }
         mapp.create_index("remote", indexconfig=indexconfig)
@@ -479,7 +479,7 @@ class TestRemoteIndexThings:
         mapp.create_and_login_user("remote5")
         indexconfig = {
             "type": remote_index_info.type,
-            "mirror_url": simpypi.simpleurl,
+            remote_index_info.url_option: simpypi.simpleurl,
             remote_index_info.refresh_option: 0,
         }
         mapp.create_index("remote", indexconfig=indexconfig)
@@ -500,7 +500,7 @@ class TestRemoteIndexThings:
         mapp.create_and_login_user("remote6")
         indexconfig = {
             "type": remote_index_info.type,
-            "mirror_url": simpypi.simpleurl,
+            remote_index_info.url_option: simpypi.simpleurl,
             remote_index_info.refresh_option: 0,
         }
         mapp.create_index("remote", indexconfig=indexconfig)
@@ -517,7 +517,7 @@ class TestRemoteIndexThings:
         mapp.create_and_login_user("remote7")
         indexconfig = {
             "type": remote_index_info.type,
-            "mirror_url": simpypi.simpleurl,
+            remote_index_info.url_option: simpypi.simpleurl,
             remote_index_info.refresh_option: 0,
         }
         mapp.create_index("remote", indexconfig=indexconfig)
@@ -543,11 +543,11 @@ class TestRemoteIndexThings:
         from devpi_server.filestore import relpath_prefix
 
         mapp.create_and_login_user("remote8")
-        indexconfig = dict(
-            type=remote_index_info.type,
-            mirror_url=simpypi.simpleurl,
-            remote_refresh_delay=1800,
-        )
+        indexconfig = {
+            "type": remote_index_info.type,
+            remote_index_info.url_option: simpypi.simpleurl,
+            remote_index_info.refresh_option: 0,
+        }
         mapp.create_index("remote", indexconfig=indexconfig)
         indexconfig = dict(mirror_whitelist="*", bases="remote8/remote")
         mapp.create_index("regular", indexconfig=indexconfig)
@@ -563,7 +563,7 @@ class TestRemoteIndexThings:
         mapp.create_and_login_user("remote9")
         indexconfig = {
             "type": remote_index_info.type,
-            "mirror_url": simpypi.simpleurl,
+            remote_index_info.url_option: simpypi.simpleurl,
             remote_index_info.refresh_option: 0,
         }
         mapp.create_index("remote", indexconfig=indexconfig)
@@ -582,7 +582,7 @@ class TestRemoteIndexThings:
         mapp.create_and_login_user("remote10")
         indexconfig = {
             "type": remote_index_info.type,
-            "mirror_url": simpypi.simpleurl,
+            remote_index_info.url_option: simpypi.simpleurl,
             remote_index_info.refresh_option: 0,
         }
         mapp.create_index("remote", indexconfig=indexconfig)

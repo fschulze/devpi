@@ -1588,15 +1588,15 @@ class PyPIView:
                 # we need to add auth back to the url, as httpx doesn't include it
                 # in the response url
                 # we do it in _pkgserv now to avoid storing the credentials
-                # in the database and avoid changes in the db when mirror_url changes.
-                mirror_url_auth = getattr(stage, "mirror_url_auth", {})
-                if mirror_url_auth:
+                # in the database and avoid changes in the db when remote_url changes.
+                remote_url_auth = getattr(stage, "remote_url_auth", {})
+                if remote_url_auth:
                     threadlog.debug("Returning external URL: %s", url)
                 else:
                     threadlog.debug(
                         "Returning external URL with authentication: %s", url
                     )
-                url = url.replace(**mirror_url_auth)
+                url = url.replace(**remote_url_auth)
                 return HTTPFound(location=url.url)
             if (
                 stage.index_type != "remote"

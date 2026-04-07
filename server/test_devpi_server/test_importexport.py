@@ -616,7 +616,7 @@ class TestImportExport:
                 mirror_ignore_serial_header=True,
                 mirror_no_project_list=True,
                 mirror_provides_core_metadata=True,
-                mirror_url="https://example.com/simple/",
+                remote_url="https://example.com/simple/",
                 mirror_use_external_urls=True,
                 mirror_web_url_fmt="https://example.com/project/{name}/",
                 title="Modified PyPI",
@@ -1170,7 +1170,7 @@ class TestImportExport:
         mapp1 = impexp.mapp1
         indexconfig = dict(
             type="remote",
-            mirror_url="http://localhost:6543/index/",
+            remote_url="http://localhost:6543/index/",
             remote_refresh_delay="600",
         )
         api = mapp1.create_and_use(indexconfig=indexconfig)
@@ -1178,7 +1178,7 @@ class TestImportExport:
         impexp.export()
 
         http.mockresponse(pypiurls.simple, code=200, text="")
-        http.mockresponse(indexconfig["mirror_url"], code=200, text="")
+        http.mockresponse(indexconfig["remote_url"], code=200, text="")
 
         mapp2 = impexp.new_import()
         result = mapp2.getjson(api.index)
@@ -1186,19 +1186,19 @@ class TestImportExport:
         assert result["result"] == dict(
             type="remote",
             volatile=True,
-            mirror_url="http://localhost:6543/index/",
+            remote_url="http://localhost:6543/index/",
             remote_refresh_delay=600,
             projects=[],
         )
 
     def test_no_remote_releases_touched(self, http, impexp, pypiurls):
         mapp1 = impexp.mapp1
-        indexconfig = dict(type="remote", mirror_url="http://localhost:6543/index/")
+        indexconfig = dict(type="remote", remote_url="http://localhost:6543/index/")
         api = mapp1.create_and_use(indexconfig=indexconfig)
 
         http.mockresponse(pypiurls.simple, code=200, text='<a href="pytest">pytest</a>')
         http.mockresponse(
-            indexconfig["mirror_url"], code=200, text='<a href="devpi">devpi</a>'
+            indexconfig["remote_url"], code=200, text='<a href="devpi">devpi</a>'
         )
 
         impexp.export()
@@ -1206,7 +1206,7 @@ class TestImportExport:
         assert [x.name for x in impexp.exportdir.iterdir()] == ['dataindex.json']
 
         http.mockresponse(pypiurls.simple, code=200, text="")
-        http.mockresponse(indexconfig["mirror_url"], code=200, text="")
+        http.mockresponse(indexconfig["remote_url"], code=200, text="")
 
         mapp2 = impexp.new_import()
         result = mapp2.getjson(api.index)
@@ -1214,6 +1214,6 @@ class TestImportExport:
         assert result["result"] == dict(
             type="remote",
             volatile=True,
-            mirror_url="http://localhost:6543/index/",
+            remote_url="http://localhost:6543/index/",
             projects=[],
         )

@@ -16,12 +16,14 @@ def remote_index_info(server_version):
         class MirrorInfo:
             refresh_option = "mirror_cache_expiry"
             type = "mirror"
+            url_option = "mirror_url"
 
         return MirrorInfo()
 
     class RemoteInfo:
         refresh_option = "remote_refresh_delay"
         type = "remote"
+        url_option = "remote_url"
 
     return RemoteInfo()
 
@@ -96,7 +98,7 @@ def test_replicating_deleted_pypi_release(
     mapp.create_and_login_user("remote")
     indexconfig = dict(
         type=remote_index_info.type,
-        mirror_url=simpypi.simpleurl,
+        remote_url=simpypi.simpleurl,
         remote_refresh_delay=0,
     )
     mapp.create_index("remote", indexconfig=indexconfig)

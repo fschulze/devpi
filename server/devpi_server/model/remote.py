@@ -892,7 +892,7 @@ class RemoteIndex(BaseIndex):
             def get_extra_headers(extra_headers):
                 # make a copy of extra_headers
                 extra_headers = {} if extra_headers is None else dict(extra_headers)
-                auth = self.mirror_url_authorization_header
+                auth = self.remote_url_authorization_header
                 if auth:
                     extra_headers["Authorization"] = auth
                 return extra_headers
@@ -913,7 +913,7 @@ class RemoteIndex(BaseIndex):
             hook = self.xom.config.hook
             auth_candidates.extend(
                 hook.devpiserver_get_remote_auth(
-                    mirror_url=self.mirror_url, www_authenticate_header=auth_header
+                    remote_url=self.remote_url, www_authenticate_header=auth_header
                 )
             )
         # return True if we have any new credentials to try
@@ -930,31 +930,31 @@ class RemoteIndex(BaseIndex):
         return self.ixconfig.get("mirror_ignore_serial_header", False)
 
     @property
-    def mirror_url(self):
+    def remote_url(self):
         if self.xom.is_replica():
             url = self.xom.config.primary_url.joinpath(self.name, "+simple")
         else:
-            url = URL(self.ixconfig['mirror_url'])
+            url = URL(self.ixconfig["remote_url"])
         return url.asdir()
 
     @property
-    def mirror_url_without_auth(self):
-        return self.mirror_url.replace(username=None, password=None)
+    def remote_url_without_auth(self):
+        return self.remote_url.replace(username=None, password=None)
 
     @property
-    def mirror_url_auth(self):
-        url = self.mirror_url
+    def remote_url_auth(self):
+        url = self.remote_url
         return dict(username=url.username, password=url.password)
 
     @property
-    def mirror_url_authorization_header(self):
+    def remote_url_authorization_header(self):
         # prefer plugin generated credentials as they will only get generated
         # if the url embedded auth has previously failed
         auth_candidates = self.xom.setdefault_singleton(
             self.name, "auth_candidates", factory=list)
         if auth_candidates:
             return auth_candidates[0]
-        url = self.mirror_url
+        url = self.remote_url
         if url.username or url.password:
             auth = f"{url.username or ''}:{url.password or ''}".encode()
             return f"Basic {b64encode(auth).decode()}"
@@ -981,7 +981,7 @@ class RemoteIndex(BaseIndex):
             "mirror_ignore_serial_header",
             "mirror_no_project_list",
             "mirror_provides_core_metadata",
-            "mirror_url",
+            "remote_url",
             "mirror_use_external_urls",
             "mirror_web_url_fmt",
             "title",
@@ -993,10 +993,9 @@ class RemoteIndex(BaseIndex):
     def normalize_indexconfig_value(self, key, value):
         if key == "volatile":
             return ensure_boolean(value)
-        if key == "mirror_url":
+        if key == "remote_url":
             if not value.startswith(("http://", "https://")):
-                raise self.InvalidIndexconfig([
-                    "'mirror_url' option must be a URL."])
+                raise self.InvalidIndexconfig(["'remote_url' option must be a URL."])
             return value
         if key == "remote_refresh_delay":
             try:
@@ -1138,21 +1137,21 @@ class RemoteIndex(BaseIndex):
         if etag is not None:
             headers["If-None-Match"] = etag
         threadlog.debug(
-            "fetching remote projects from %r with etag %r", self.mirror_url, etag
+            "fetching remote projects from %r with etag %r", self.remote_url, etag
         )
         (response, text) = await self.http.async_get(
-            self.mirror_url_without_auth,
+            self.remote_url_without_auth,
             allow_redirects=True,
             extra_headers=headers,
         )
         if response.status_code == 304:
             raise self.UpstreamNotModified(
-                f"{response.status_code} status on GET {self.mirror_url!r}", etag=etag
+                f"{response.status_code} status on GET {self.remote_url!r}", etag=etag
             )
         if response.status_code != 200 or isinstance(response, FatalResponse):
             raise self.UpstreamError(
                 "URL %r returned %s %s",
-                self.mirror_url,
+                self.remote_url,
                 response.status_code,
                 response.reason_phrase,
             )
@@ -1296,8 +1295,8 @@ class RemoteIndex(BaseIndex):
         cache_info: CacheInfo,
     ) -> None:
         # get the simple page for the project
-        url = self.mirror_url.joinpath(project).asdir()
-        get_url = self.mirror_url_without_auth.joinpath(project).asdir()
+        url = self.remote_url.joinpath(project).asdir()
+        get_url = self.remote_url_without_auth.joinpath(project).asdir()
         threadlog.debug("reading index %r", url)
         headers = {"Accept": SIMPLE_API_ACCEPT}
         etag = self.cache_retrieve_times.get_etag(project) or cache_info["etag"]
