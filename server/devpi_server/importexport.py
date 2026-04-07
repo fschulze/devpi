@@ -431,7 +431,14 @@ class Migrator:
             indexconfig["type"] = self.v3_index_type_map.get(
                 indexconfig["type"], indexconfig["type"]
             )
+        if indexconfig["type"] == "remote":
+            indexconfig = self.migrate_remote_index(indexconfig)
         return data
+
+    def migrate_remote_index(self, indexconfig: dict) -> dict:
+        if "mirror_cache_expiry" in indexconfig:
+            indexconfig["remote_refresh_delay"] = indexconfig.pop("mirror_cache_expiry")
+        return indexconfig
 
     def migrate_toxresult(self, data: dict) -> dict:
         hash_type = None
