@@ -203,7 +203,7 @@ For example when you try to install a package via pip.
 
 By default the info for a package is cached for 30 minutes,
 after that the original is queried again.
-This can be adjusted with the ``mirror_cache_expiry`` option per remote index.
+This can be adjusted with the ``remote_refresh_delay`` option per remote index.
 
 Package releases are downloaded on demand from the original location and stored locally indefinitely from then on.
 This can be adjusted with the ``mirror_use_external_urls`` option per remote index.
@@ -222,7 +222,7 @@ The default settings of *root/pypi* look like this::
         type=remote
         volatile=False
         custom_data=
-        mirror_cache_expiry=1800
+        remote_refresh_delay=1800
         mirror_url=https://pypi.org/simple/
         mirror_web_url_fmt=https://pypi.org/project/{name}/
         title=PyPI

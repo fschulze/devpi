@@ -34,11 +34,13 @@ def remote_index_info(server_version):
     if server_version < parse_version("7.0.0.dev2"):
 
         class MirrorInfo:
+            refresh_option = "mirror_cache_expiry"
             type = "mirror"
 
         return MirrorInfo()
 
     class RemoteInfo:
+        refresh_option = "remote_refresh_delay"
         type = "remote"
 
     return RemoteInfo()
@@ -1922,7 +1924,7 @@ def test_upload_to_remote_fails(mapp, simpypi):
     indexconfig = dict(
         type="remote",
         mirror_url=simpypi.simpleurl,
-        mirror_cache_expiry=0,
+        remote_refresh_delay=0,
         volatile=True,
     )
     api = mapp.create_and_use(indexconfig=indexconfig)
@@ -1941,7 +1943,7 @@ def test_delete_remote(mapp, monkeypatch, simpypi, testapp, xom):
     indexconfig = dict(
         type="remote",
         mirror_url=simpypi.simpleurl,
-        mirror_cache_expiry=0,
+        remote_refresh_delay=0,
         volatile=True,
     )
     api = mapp.create_and_use(indexconfig=indexconfig)
@@ -2131,7 +2133,7 @@ def test_remote_use_external_urls(mapp, simpypi, testapp):
     indexconfig = dict(
         type="remote",
         mirror_url=simpypi.simpleurl,
-        mirror_cache_expiry=0,
+        remote_refresh_delay=0,
         mirror_use_external_urls=True,
         volatile=True,
     )
