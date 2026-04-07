@@ -201,7 +201,7 @@ def devpiserver_auth_denials(request, acl, user, stage):
 
 
 @hookspec
-def devpiserver_get_remote_auth(mirror_url, www_authenticate_header):
+def devpiserver_get_remote_auth(remote_url, www_authenticate_header):
     """Provide an http "Authorization" header to access a remote packaged index.
 
     Return a string which will be set as the authorization header for all http
