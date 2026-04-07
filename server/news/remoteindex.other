@@ -1,1 +1,1 @@
-Renamed the ``mirror`` index to ``remote``. This affects the ``type`` field of the HTTP API.
+Renamed the ``mirror`` index to ``remote``. This affects the ``type`` field of the HTTP API and the "mirror_url" index option.

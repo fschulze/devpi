@@ -29,7 +29,7 @@ def mirrorapi(mapp, simpypi):
             type="remote",
             remote_refresh_delay=0,
             mirror_no_project_list=True,
-            mirror_url=simpypi.simpleurl,
+            remote_url=simpypi.simpleurl,
         ),
     )
     return mapp.use("root/pypi")
@@ -39,7 +39,7 @@ def mirrorapi(mapp, simpypi):
 def remoteindex(model, simpypi):
     stage = model.getstage("root", "pypi")
     stage.ixconfig["mirror_no_project_list"] = True
-    stage.ixconfig["mirror_url"] = simpypi.simpleurl
+    stage.ixconfig["remote_url"] = simpypi.simpleurl
     return stage
 
 

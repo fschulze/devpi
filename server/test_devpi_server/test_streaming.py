@@ -31,11 +31,11 @@ def server_url_session(host_port, simpypi):
         existing = s.get(url).json()["result"]
         if "remote" not in existing["root"]["indexes"]:
             indexconfig = dict(
-                type="remote", mirror_url=simpypi.simpleurl, remote_refresh_delay=0
+                type="remote", remote_url=simpypi.simpleurl, remote_refresh_delay=0
             )
             r = s.put(url + "root/remote", json=indexconfig).json()
             assert r["type"] == "indexconfig"
-            assert r["result"]["mirror_url"] == simpypi.simpleurl
+            assert r["result"]["remote_url"] == simpypi.simpleurl
         yield (url, s)
 
 
