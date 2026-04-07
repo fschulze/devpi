@@ -16,6 +16,7 @@ def remote_index_info(server_version):
         class MirrorInfo:
             refresh_option = "mirror_cache_expiry"
             type = "mirror"
+            url_fmt_option = "mirror_web_url_fmt"
             url_option = "mirror_url"
 
         return MirrorInfo()
@@ -23,6 +24,7 @@ def remote_index_info(server_version):
     class RemoteInfo:
         refresh_option = "remote_refresh_delay"
         type = "remote"
+        url_fmt_option = "remote_web_url_fmt"
         url_option = "remote_url"
 
     return RemoteInfo()
