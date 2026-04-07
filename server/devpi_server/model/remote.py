@@ -927,7 +927,7 @@ class RemoteIndex(BaseIndex):
 
     @property
     def ignore_serial_header(self):
-        return self.ixconfig.get("mirror_ignore_serial_header", False)
+        return self.ixconfig.get("remote_ignore_serial_header", False)
 
     @property
     def remote_url(self):
@@ -962,15 +962,15 @@ class RemoteIndex(BaseIndex):
 
     @property
     def provides_core_metadata(self) -> bool:
-        return self.ixconfig.get("mirror_provides_core_metadata", False)
+        return self.ixconfig.get("remote_provides_core_metadata", False)
 
     @property
     def no_project_list(self) -> bool:
-        return self.ixconfig.get('mirror_no_project_list', False)
+        return self.ixconfig.get("remote_no_project_list", False)
 
     @property
     def use_external_url(self):
-        return self.ixconfig.get('mirror_use_external_urls', False)
+        return self.ixconfig.get("remote_use_external_urls", False)
 
     def get_possible_indexconfig_keys(self):
         return (
@@ -978,12 +978,12 @@ class RemoteIndex(BaseIndex):
             "custom_data",
             "description",
             "remote_refresh_delay",
-            "mirror_ignore_serial_header",
-            "mirror_no_project_list",
-            "mirror_provides_core_metadata",
+            "remote_ignore_serial_header",
+            "remote_no_project_list",
+            "remote_provides_core_metadata",
             "remote_url",
-            "mirror_use_external_urls",
-            "mirror_web_url_fmt",
+            "remote_use_external_urls",
+            "remote_web_url_fmt",
             "title",
         )
 
@@ -1005,15 +1005,15 @@ class RemoteIndex(BaseIndex):
                     "'remote_refresh_delay' option must be an integer"
                 ) from e
             return value
-        if key == "mirror_ignore_serial_header":
+        if key == "remote_ignore_serial_header":
             return ensure_boolean(value)
-        if key == "mirror_no_project_list":
+        if key == "remote_no_project_list":
             return ensure_boolean(value)
-        if key == "mirror_provides_core_metadata":
+        if key == "remote_provides_core_metadata":
             return ensure_boolean(value)
-        if key == "mirror_use_external_urls":
+        if key == "remote_use_external_urls":
             return ensure_boolean(value)
-        if key in ("custom_data", "description", "mirror_web_url_fmt", "title"):
+        if key in ("custom_data", "description", "remote_web_url_fmt", "title"):
             return value
         return None
 

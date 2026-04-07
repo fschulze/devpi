@@ -1568,7 +1568,7 @@ class PyPIView:
 
         if is_metadata and stage.ixconfig["type"] == "remote" and not file_exists:
             if not stage.provides_core_metadata:
-                return apireturn(404, "mirror_provides_core_metadata disabled")
+                return apireturn(404, "remote_provides_core_metadata disabled")
             url = url.replace(path=f"{url.path}.metadata")
             try:
                 app_iter = iter_stream_remote_file(stage, url)

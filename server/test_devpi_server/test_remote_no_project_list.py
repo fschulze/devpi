@@ -28,7 +28,7 @@ def mirrorapi(mapp, simpypi):
         indexconfig=dict(
             type="remote",
             remote_refresh_delay=0,
-            mirror_no_project_list=True,
+            remote_no_project_list=True,
             remote_url=simpypi.simpleurl,
         ),
     )
@@ -38,7 +38,7 @@ def mirrorapi(mapp, simpypi):
 @pytest.fixture
 def remoteindex(model, simpypi):
     stage = model.getstage("root", "pypi")
-    stage.ixconfig["mirror_no_project_list"] = True
+    stage.ixconfig["remote_no_project_list"] = True
     stage.ixconfig["remote_url"] = simpypi.simpleurl
     return stage
 
