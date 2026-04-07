@@ -766,7 +766,7 @@ _pypi_ixconfig_default = {
     "volatile": False,
     "title": "PyPI",
     "remote_url": "https://pypi.org/simple/",
-    "mirror_web_url_fmt": "https://pypi.org/project/{name}/",
+    "remote_web_url_fmt": "https://pypi.org/project/{name}/",
 }
 
 
