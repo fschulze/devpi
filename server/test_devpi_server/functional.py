@@ -422,26 +422,26 @@ class TestRemoteIndexThings:
         mapp.create_and_login_user("remote1")
         indexname = mapp.auth[0] + "/remote"
         assert indexname not in mapp.getindexlist()
-        indexconfig = dict(
-            type=remote_index_info.type,
-            mirror_url=simpypi.simpleurl,
-            mirror_cache_expiry=0,
-        )
+        indexconfig = {
+            "type": remote_index_info.type,
+            "mirror_url": simpypi.simpleurl,
+            remote_index_info.refresh_option: 0,
+        }
         mapp.create_index("remote", indexconfig=indexconfig)
         assert indexname in mapp.getindexlist()
         result = mapp.getjson("/remote1/remote")
         assert result['result']['mirror_url'] == simpypi.simpleurl
-        assert result['result']['mirror_cache_expiry'] == 0
+        assert result["result"]["remote_refresh_delay"] == 0
         mapp.delete_index("remote")
         assert indexname not in mapp.getindexlist()
 
     def test_missing_package(self, mapp, remote_index_info, simpypi):
         mapp.create_and_login_user("remote2")
-        indexconfig = dict(
-            type=remote_index_info.type,
-            mirror_url=simpypi.simpleurl,
-            mirror_cache_expiry=0,
-        )
+        indexconfig = {
+            "type": remote_index_info.type,
+            "mirror_url": simpypi.simpleurl,
+            remote_index_info.refresh_option: 0,
+        }
         mapp.create_index("remote", indexconfig=indexconfig)
         mapp.use("remote2/remote")
         result = mapp.getpkglist()
@@ -449,11 +449,11 @@ class TestRemoteIndexThings:
 
     def test_no_releases(self, mapp, remote_index_info, simpypi):
         mapp.create_and_login_user("remote3")
-        indexconfig = dict(
-            type=remote_index_info.type,
-            mirror_url=simpypi.simpleurl,
-            mirror_cache_expiry=0,
-        )
+        indexconfig = {
+            "type": remote_index_info.type,
+            "mirror_url": simpypi.simpleurl,
+            remote_index_info.refresh_option: 0,
+        }
         mapp.create_index("remote", indexconfig=indexconfig)
         mapp.use("remote3/remote")
         simpypi.add_project('pkg')
@@ -462,11 +462,11 @@ class TestRemoteIndexThings:
 
     def test_releases(self, mapp, remote_index_info, simpypi):
         mapp.create_and_login_user("remote4")
-        indexconfig = dict(
-            type=remote_index_info.type,
-            mirror_url=simpypi.simpleurl,
-            mirror_cache_expiry=0,
-        )
+        indexconfig = {
+            "type": remote_index_info.type,
+            "mirror_url": simpypi.simpleurl,
+            remote_index_info.refresh_option: 0,
+        }
         mapp.create_index("remote", indexconfig=indexconfig)
         mapp.use("remote4/remote")
         simpypi.add_release('pkg', pkgver='pkg-1.0.zip')
@@ -477,11 +477,11 @@ class TestRemoteIndexThings:
 
     def test_download_release_error(self, mapp, remote_index_info, simpypi):
         mapp.create_and_login_user("remote5")
-        indexconfig = dict(
-            type=remote_index_info.type,
-            mirror_url=simpypi.simpleurl,
-            mirror_cache_expiry=0,
-        )
+        indexconfig = {
+            "type": remote_index_info.type,
+            "mirror_url": simpypi.simpleurl,
+            remote_index_info.refresh_option: 0,
+        }
         mapp.create_index("remote", indexconfig=indexconfig)
         mapp.use("remote5/remote")
         simpypi.add_release('pkg', pkgver='pkg-1.0.zip')
@@ -498,11 +498,11 @@ class TestRemoteIndexThings:
 
     def test_download_release(self, mapp, remote_index_info, simpypi):
         mapp.create_and_login_user("remote6")
-        indexconfig = dict(
-            type=remote_index_info.type,
-            mirror_url=simpypi.simpleurl,
-            mirror_cache_expiry=0,
-        )
+        indexconfig = {
+            "type": remote_index_info.type,
+            "mirror_url": simpypi.simpleurl,
+            remote_index_info.refresh_option: 0,
+        }
         mapp.create_index("remote", indexconfig=indexconfig)
         mapp.use("remote6/remote")
         content = b'13'
@@ -515,11 +515,11 @@ class TestRemoteIndexThings:
 
     def test_deleted_package(self, mapp, remote_index_info, simpypi):
         mapp.create_and_login_user("remote7")
-        indexconfig = dict(
-            type=remote_index_info.type,
-            mirror_url=simpypi.simpleurl,
-            mirror_cache_expiry=0,
-        )
+        indexconfig = {
+            "type": remote_index_info.type,
+            "mirror_url": simpypi.simpleurl,
+            remote_index_info.refresh_option: 0,
+        }
         mapp.create_index("remote", indexconfig=indexconfig)
         mapp.use("remote7/remote")
         simpypi.add_project('pkg')
@@ -546,7 +546,7 @@ class TestRemoteIndexThings:
         indexconfig = dict(
             type=remote_index_info.type,
             mirror_url=simpypi.simpleurl,
-            mirror_cache_expiry=1800,
+            remote_refresh_delay=1800,
         )
         mapp.create_index("remote", indexconfig=indexconfig)
         indexconfig = dict(mirror_whitelist="*", bases="remote8/remote")
@@ -561,11 +561,11 @@ class TestRemoteIndexThings:
 
     def test_releases_urlquoting(self, mapp, remote_index_info, simpypi):
         mapp.create_and_login_user("remote9")
-        indexconfig = dict(
-            type=remote_index_info.type,
-            mirror_url=simpypi.simpleurl,
-            mirror_cache_expiry=0,
-        )
+        indexconfig = {
+            "type": remote_index_info.type,
+            "mirror_url": simpypi.simpleurl,
+            remote_index_info.refresh_option: 0,
+        }
         mapp.create_index("remote", indexconfig=indexconfig)
         mapp.use("remote9/remote")
         url_quoted_pkgver = url_quote('pkg-1!2017.4+devpi.zip')
@@ -580,11 +580,11 @@ class TestRemoteIndexThings:
 
     def test_releases_urlquoting_hash(self, mapp, remote_index_info, simpypi):
         mapp.create_and_login_user("remote10")
-        indexconfig = dict(
-            type=remote_index_info.type,
-            mirror_url=simpypi.simpleurl,
-            mirror_cache_expiry=0,
-        )
+        indexconfig = {
+            "type": remote_index_info.type,
+            "mirror_url": simpypi.simpleurl,
+            remote_index_info.refresh_option: 0,
+        }
         mapp.create_index("remote", indexconfig=indexconfig)
         mapp.use("remote10/remote")
         url_quoted_pkgver = "%s#sha256=1234" % url_quote('pkg-1!2017.4+devpi.zip')

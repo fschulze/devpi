@@ -37,7 +37,7 @@ log = threadlog
 hookimpl = HookimplMarker("devpiserver")
 
 
-DEFAULT_MIRROR_CACHE_EXPIRY = 1800
+DEFAULT_REMOTE_REFRESH_DELAY = 1800
 DEFAULT_PROXY_TIMEOUT = 30
 DEFAULT_REQUEST_TIMEOUT = 5
 DEFAULT_FILE_REPLICATION_THREADS = 5
@@ -247,15 +247,20 @@ def add_web_options(
     )
 
 
-def add_mirror_options(
+def add_remote_options(
     parser: MyArgumentParser,
     pluginmanager: PluginManager,  # noqa: ARG001 - call convention
 ) -> None:
     parser.addoption(
-        "--mirror-cache-expiry", type=int, metavar="SECS",
-        default=DEFAULT_MIRROR_CACHE_EXPIRY,
-        help="(experimental) time after which projects in mirror indexes "
-             "are checked for new releases.")
+        "--remote-refresh-delay",
+        type=int,
+        metavar="SECS",
+        default=DEFAULT_REMOTE_REFRESH_DELAY,
+        help=(
+            "default delay after which projects in remote indexes "
+            "are checked for new releases."
+        ),
+    )
 
 
 def add_replica_options(parser: MyArgumentParser, pluginmanager: PluginManager) -> None:
@@ -476,9 +481,7 @@ def addoptions(
     add_web_options(
         parser.addgroup("web serving options"),
         pluginmanager)
-    add_mirror_options(
-        parser.addgroup("mirroring options"),
-        pluginmanager)
+    add_remote_options(parser.addgroup("remote index options"), pluginmanager)
     add_replica_options(
         parser.addgroup("replica options"),
         pluginmanager)
@@ -912,8 +915,8 @@ class Config:
         return getattr(self.args, 'include_mirrored_files', False)
 
     @property
-    def mirror_cache_expiry(self):
-        return getattr(self.args, 'mirror_cache_expiry', DEFAULT_MIRROR_CACHE_EXPIRY)
+    def remote_refresh_delay(self):
+        return getattr(self.args, "remote_refresh_delay", DEFAULT_REMOTE_REFRESH_DELAY)
 
     @property
     def no_root_pypi(self):
