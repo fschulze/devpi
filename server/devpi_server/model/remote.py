@@ -922,7 +922,8 @@ class RemoteIndex(BaseIndex):
     @property
     def cache_expiry(self):
         return self.ixconfig.get(
-            'mirror_cache_expiry', self.xom.config.mirror_cache_expiry)
+            "remote_refresh_delay", self.xom.config.remote_refresh_delay
+        )
 
     @property
     def ignore_serial_header(self):
@@ -976,7 +977,7 @@ class RemoteIndex(BaseIndex):
             *(k for k, v in self.get_default_config_items()),
             "custom_data",
             "description",
-            "mirror_cache_expiry",
+            "remote_refresh_delay",
             "mirror_ignore_serial_header",
             "mirror_no_project_list",
             "mirror_provides_core_metadata",
@@ -997,12 +998,13 @@ class RemoteIndex(BaseIndex):
                 raise self.InvalidIndexconfig([
                     "'mirror_url' option must be a URL."])
             return value
-        if key == "mirror_cache_expiry":
+        if key == "remote_refresh_delay":
             try:
                 value = int(value)
             except (TypeError, ValueError) as e:
-                raise self.InvalidIndexconfig([
-                    "'mirror_cache_expiry' option must be an integer"]) from e
+                raise self.InvalidIndexconfig(
+                    "'remote_refresh_delay' option must be an integer"
+                ) from e
             return value
         if key == "mirror_ignore_serial_header":
             return ensure_boolean(value)
