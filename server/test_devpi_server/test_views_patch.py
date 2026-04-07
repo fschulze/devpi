@@ -89,12 +89,12 @@ def test_remote_index_patch(testapp):
     testapp.set_auth('foo', '123')
     # add remote index
     testapp.put_json(
-        "/foo/dev", dict(type="remote", mirror_url="https://pypi.org/simple/")
+        "/foo/dev", dict(type="remote", remote_url="https://pypi.org/simple/")
     )
     r = testapp.get("/foo/dev")
     # check defaults
     assert r.json["result"] == {
-        "mirror_url": "https://pypi.org/simple/",
+        "remote_url": "https://pypi.org/simple/",
         "projects": [],
         "type": "remote",
         "volatile": True,
@@ -102,7 +102,7 @@ def test_remote_index_patch(testapp):
     # set volatile
     r = testapp.patch_json("/foo/dev", ["volatile=False"])
     assert r.json["result"] == {
-        "mirror_url": "https://pypi.org/simple/",
+        "remote_url": "https://pypi.org/simple/",
         "type": "remote",
         "volatile": False,
     }
