@@ -1,0 +1,1 @@
+Renamed ``--mirror-cache-expiry``/``mirror_cache_expiry`` option to ``--remote-refresh-delay``/``remote_refresh_delay``.

@@ -38,11 +38,14 @@ def test_gen_config_caching(tmpdir):
 
 @pytest.mark.slow
 @pytest.mark.skipif("sys.platform == 'win32'")
-def test_gen_config_mirror_cache_expiry(tmpdir):
+def test_gen_config_remote_refresh_delay(tmpdir):
     tmpdir.chdir()
-    proc = subprocess.Popen([  # noqa: S603,S607
-        "devpi-gen-config",
-        "--mirror-cache-expiry=33"])
+    proc = subprocess.Popen(
+        [
+            "devpi-gen-config",
+            "--remote-refresh-delay=33",
+        ]
+    )
     res = proc.wait()
     assert res == 0
     b = tmpdir.join("gen-config")
