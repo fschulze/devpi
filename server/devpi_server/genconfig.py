@@ -128,19 +128,23 @@ def gen_nginx_caching(
     caching_http = render(
         "nginx-devpi-caching-http.conf",
         format=1,
-        cache_expiry=f"{config.args.mirror_cache_expiry}s")
+        cache_expiry=f"{config.args.remote_refresh_delay}s",
+    )
     caching_server = render(
         "nginx-devpi-caching-server.conf",
         format=1,
-        cache_expiry=f"{config.args.mirror_cache_expiry}s")
+        cache_expiry=f"{config.args.remote_refresh_delay}s",
+    )
     caching_location = render(
         "nginx-devpi-caching-location.conf",
         format=1,
-        cache_expiry=f"{config.args.mirror_cache_expiry}s")
+        cache_expiry=f"{config.args.remote_refresh_delay}s",
+    )
     caching_proxy = render(
         "nginx-devpi-caching-proxy.conf",
         format=1,
-        cache_expiry=f"{config.args.mirror_cache_expiry}s")
+        cache_expiry=f"{config.args.remote_refresh_delay}s",
+    )
     nginxconf = render(
         "nginx-devpi.conf", format=1,
         caching_http=caching_http,
