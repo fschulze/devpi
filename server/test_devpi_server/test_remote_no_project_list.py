@@ -27,7 +27,7 @@ def mirrorapi(mapp, simpypi):
         "root/pypi",
         indexconfig=dict(
             type="remote",
-            mirror_cache_expiry=0,
+            remote_refresh_delay=0,
             mirror_no_project_list=True,
             mirror_url=simpypi.simpleurl,
         ),

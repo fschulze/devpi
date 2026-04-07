@@ -612,7 +612,7 @@ class TestImportExport:
             # test that we actually get the config from the import and not
             # the default PyPI settings
             assert stage.ixconfig == dict(
-                mirror_cache_expiry=600,
+                remote_refresh_delay=600,
                 mirror_ignore_serial_header=True,
                 mirror_no_project_list=True,
                 mirror_provides_core_metadata=True,
@@ -1171,7 +1171,7 @@ class TestImportExport:
         indexconfig = dict(
             type="remote",
             mirror_url="http://localhost:6543/index/",
-            mirror_cache_expiry="600",
+            remote_refresh_delay="600",
         )
         api = mapp1.create_and_use(indexconfig=indexconfig)
 
@@ -1187,7 +1187,7 @@ class TestImportExport:
             type="remote",
             volatile=True,
             mirror_url="http://localhost:6543/index/",
-            mirror_cache_expiry=600,
+            remote_refresh_delay=600,
             projects=[],
         )
 
