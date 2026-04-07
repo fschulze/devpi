@@ -11,7 +11,12 @@
         "type": "mirror",
         "volatile": false,
         "title": "Modified PyPI",
+        "mirror_cache_expiry": 600,
+        "mirror_ignore_serial_header": true,
+        "mirror_no_project_list": true,
+        "mirror_provides_core_metadata": true,
         "mirror_url": "https://example.com/simple/",
+        "mirror_use_external_urls": true,
         "mirror_web_url_fmt": "https://example.com/project/{name}/"
       },
       "projects": {},
