@@ -712,7 +712,7 @@ def add_pypistage_mocks(monkeypatch, http):
             '<a href="%s">%s</a>\n' % (normalize_name(name), name)
             for name in projectlist)
         threadlog.debug("patching simple page with: %s" % t)
-        self.xom.http.mockresponse(self.mirror_url, code=200, text=t)
+        self.xom.http.mockresponse(self.remote_url, code=200, text=t)
 
     monkeypatch.setattr(
         remote.RemoteIndex, "mock_simple_projects", mock_simple_projects, raising=False
@@ -724,7 +724,7 @@ def add_pypistage_mocks(monkeypatch, http):
             "content-type": mimetypes.guess_type(path),
             "last-modified": httpdate.unixtime_to_httpdate(int(time.time())),
         }
-        url = URL(self.mirror_url).joinpath(path)
+        url = URL(self.remote_url).joinpath(path)
         return self.xom.http.mockresponse(
             url.url, content=content, headers=headers, **kw
         )
@@ -738,7 +738,7 @@ def pypiurls():
 
     class RemoteURL:
         def __init__(self):
-            self.simple = _pypi_ixconfig_default['mirror_url']
+            self.simple = _pypi_ixconfig_default["remote_url"]
 
     return RemoteURL()
 

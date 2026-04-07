@@ -438,6 +438,8 @@ class Migrator:
     def migrate_remote_index(self, indexconfig: dict) -> dict:
         if "mirror_cache_expiry" in indexconfig:
             indexconfig["remote_refresh_delay"] = indexconfig.pop("mirror_cache_expiry")
+        if "mirror_url" in indexconfig:
+            indexconfig["remote_url"] = indexconfig.pop("mirror_url")
         return indexconfig
 
     def migrate_toxresult(self, data: dict) -> dict:
