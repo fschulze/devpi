@@ -271,7 +271,7 @@ class TestExtPYPIDB:
     def test_parse_pep691(self, pypistage):
         pypistage.mock_simple_projects(["devpi"])
         pypistage.xom.http.mockresponse(
-            URL(pypistage.mirror_url).joinpath("devpi").asdir().url,
+            URL(pypistage.remote_url).joinpath("devpi").asdir().url,
             code=200,
             content_type="application/vnd.pypi.simple.v1+json",
             text="""{
@@ -297,7 +297,7 @@ class TestExtPYPIDB:
     def test_parse_pep691_data(self, pypistage):
         pypistage.mock_simple_projects(["devpi"])
         pypistage.xom.http.mockresponse(
-            URL(pypistage.mirror_url).joinpath("devpi").asdir().url,
+            URL(pypistage.remote_url).joinpath("devpi").asdir().url,
             code=200,
             content_type="application/vnd.pypi.simple.v1+json",
             text="""{
@@ -324,7 +324,7 @@ class TestExtPYPIDB:
     def test_parse_pep691_md5(self, pypistage):
         pypistage.mock_simple_projects(["devpi"])
         pypistage.xom.http.mockresponse(
-            URL(pypistage.mirror_url).joinpath("devpi").asdir().url,
+            URL(pypistage.remote_url).joinpath("devpi").asdir().url,
             code=200,
             content_type="application/vnd.pypi.simple.v1+json",
             text="""{
@@ -602,9 +602,9 @@ class TestExtPYPIDB:
 
     @pytest.mark.asyncio
     async def test_basic_auth_remote(self, pypistage):
-        pypistage.ixconfig._data["mirror_url"] = "https://foo:bar@example.com/simple/"
+        pypistage.ixconfig._data["remote_url"] = "https://foo:bar@example.com/simple/"
         pypistage.xom.http.mockresponse(
-            pypistage.mirror_url_without_auth,
+            pypistage.remote_url_without_auth,
             code=200,
             text="""
             <html><head><title>Simple Index</title>
@@ -665,7 +665,7 @@ class TestExtPYPIDB:
     @pytest.mark.notransaction
     def test_offline_requires_python(self, mapp, simpypi, testapp, xom):
         mapp.login('root')
-        mapp.modify_index("root/pypi", indexconfig=dict(mirror_url=simpypi.simpleurl))
+        mapp.modify_index("root/pypi", indexconfig=dict(remote_url=simpypi.simpleurl))
         # turn off offline mode for preparations
         xom.config.args.offline_mode = False
         content = b'13'
@@ -690,7 +690,7 @@ class TestExtPYPIDB:
     @pytest.mark.notransaction
     def test_offline_yanked(self, mapp, simpypi, testapp, xom):
         mapp.login('root')
-        mapp.modify_index("root/pypi", indexconfig=dict(mirror_url=simpypi.simpleurl))
+        mapp.modify_index("root/pypi", indexconfig=dict(remote_url=simpypi.simpleurl))
         # turn off offline mode for preparations
         xom.config.args.offline_mode = False
         content = b'13'
@@ -895,7 +895,7 @@ class TestRemoteIndexProjects:
     @pytest.mark.asyncio
     async def test_get_remote_projects(self, pypistage):
         pypistage.xom.http.mockresponse(
-            pypistage.mirror_url,
+            pypistage.remote_url,
             code=200,
             text="""
             <html><head><title>Simple Index</title>
@@ -927,7 +927,7 @@ class TestRemoteIndexProjects:
     )
     async def test_get_remote_projects_pep691_json(self, content_type, pypistage):
         pypistage.xom.http.mockresponse(
-            pypistage.mirror_url,
+            pypistage.remote_url,
             code=200,
             content_type=content_type,
             text="""{
@@ -955,7 +955,7 @@ class TestRemoteIndexProjects:
     @pytest.mark.asyncio
     async def test_get_remote_projects_doctype(self, pypistage):
         pypistage.xom.http.mockresponse(
-            pypistage.mirror_url,
+            pypistage.remote_url,
             code=200,
             text="""
             <!DOCTYPE html>
@@ -975,7 +975,7 @@ class TestRemoteIndexProjects:
         orig_etag = '"foo"'
         changed_etag = '"bar"'
         pypistage.xom.http.add(
-            pypistage.mirror_url,
+            pypistage.remote_url,
             status_code=200,
             text="""
             <html><head><title>Simple Index</title>
@@ -988,10 +988,10 @@ class TestRemoteIndexProjects:
             headers={"ETag": orig_etag},
         )
         pypistage.xom.http.add(
-            pypistage.mirror_url, status_code=304, text="", headers={"ETag": orig_etag}
+            pypistage.remote_url, status_code=304, text="", headers={"ETag": orig_etag}
         )
         pypistage.xom.http.add(
-            pypistage.mirror_url,
+            pypistage.remote_url,
             status_code=200,
             text="""
             <html><head><title>Simple Index</title>
@@ -1052,12 +1052,12 @@ class TestRemoteIndexProjects:
 
         assert set(pypistage.list_projects_perstage()) == VALID
         call = pypistage.xom.http.call_log.pop()
-        assert call['url'] == pypistage.mirror_url
+        assert call["url"] == pypistage.remote_url
 
         for p in VALID:
             pypistage.get_simplelinks_perstage(p)
             call = pypistage.xom.http.call_log.pop()
-            assert call['url'] == pypistage.mirror_url.joinpath(p).asdir()
+            assert call["url"] == pypistage.remote_url.joinpath(p).asdir()
         for p in INVALID:
             with pytest.raises(pypistage.UpstreamNotFoundError):
                 pypistage.get_simplelinks_perstage(p)
@@ -1084,7 +1084,7 @@ class TestRemoteIndexProjects:
 
     def test_name_cache_expiration_updated_when_no_names_changed(self, pypistage):
         pypistage.xom.http.mockresponse(
-            pypistage.mirror_url,
+            pypistage.remote_url,
             code=200,
             text="""
             <body>
@@ -1157,14 +1157,14 @@ class TestRemoteIndexProjects:
         url = URL(simpypi.simpleurl).replace(
             username="foo", password="bar").asdir()  # noqa: S106
         mapp.login('root')
-        mapp.modify_index("root/pypi", indexconfig=dict(mirror_url=url.url))
+        mapp.modify_index("root/pypi", indexconfig=dict(remote_url=url.url))
         simpypi.add_release("pkg", pkgver="pkg-1.0.zip")
         content = b'13'
         simpypi.add_file('/pkg/pkg-1.0.zip', content)
         assert not simpypi.requests
         with mapp.xom.keyfs.read_transaction():
             pypistage = mapp.xom.model.getstage("root/pypi")
-            assert pypistage.mirror_url == url
+            assert pypistage.remote_url == url
             (link,) = pypistage.get_simplelinks("pkg")
         assert "foo" not in link.href
         assert "bar" not in link.href
@@ -1196,14 +1196,14 @@ class TestRemoteIndexProjects:
         url = URL(simpypi.simpleurl).replace(
             username="foo", password="bar").asdir()  # noqa: S106
         mapp.login('root')
-        mapp.modify_index("root/pypi", indexconfig=dict(mirror_url=url.url))
+        mapp.modify_index("root/pypi", indexconfig=dict(remote_url=url.url))
         simpypi.add_release("pkg", pkgver="pkg-1.0.zip#sha256=3fdba35f04dc8c462986c992bcf875546257113072a909c162f7e470e581e278")
         content = b'13'
         simpypi.add_file('/pkg/pkg-1.0.zip', content)
         assert not simpypi.requests
         with mapp.xom.keyfs.read_transaction():
             pypistage = mapp.xom.model.getstage("root/pypi")
-            assert pypistage.mirror_url == url
+            assert pypistage.remote_url == url
             (link,) = pypistage.get_simplelinks("pkg")
         assert "foo" not in link.href
         assert "bar" not in link.href
@@ -1228,21 +1228,21 @@ class TestRemoteIndexProjects:
             and "modified index" not in x]
         assert [x for x in msgs if ("foo:***" in x) or ("***:***" in x)]
 
-    def test_auth_mirror_url_hidden_in_logs(self, caplog, pypistage):
-        pypistage.ixconfig._data["mirror_url"] = "https://foo:bar@example.com/simple/"
+    def test_auth_remote_url_hidden_in_logs(self, caplog, pypistage):
+        pypistage.ixconfig._data["remote_url"] = "https://foo:bar@example.com/simple/"
         pypistage.get_releaselinks("pkg")
         msgs = [x.getMessage() for x in caplog.getrecords()]
         assert not [x for x in msgs if "foo:bar" in x and "mockresponse" not in x]
         assert [x for x in msgs if ("foo:***" in x) or ("***:***" in x)]
 
-    def test_auth_mirror_url_user_only(self, caplog, pypistage):
-        pypistage.ixconfig._data["mirror_url"] = "https://foo@example.com/simple/"
+    def test_auth_remote_url_user_only(self, caplog, pypistage):
+        pypistage.ixconfig._data["remote_url"] = "https://foo@example.com/simple/"
         pypistage.get_releaselinks("pkg")
         msgs = [x.getMessage() for x in caplog.getrecords()]
         assert [x for x in msgs if ("foo@" in x) or ("***@" in x)]
 
-    def test_auth_mirror_url_password_only(self, caplog, pypistage):
-        pypistage.ixconfig._data["mirror_url"] = "https://:bar@example.com/simple/"
+    def test_auth_remote_url_password_only(self, caplog, pypistage):
+        pypistage.ixconfig._data["remote_url"] = "https://:bar@example.com/simple/"
         pypistage.get_releaselinks("pkg")
         msgs = [x.getMessage() for x in caplog.getrecords()]
         assert not [x for x in msgs if "/:bar" in x and "mockresponse" not in x]
@@ -1254,8 +1254,8 @@ class TestRemoteIndexProjects:
 
         class Plugin:
             @hookimpl
-            def devpiserver_get_remote_auth(self, mirror_url, www_authenticate_header):
-                plugin_calls.append((mirror_url, www_authenticate_header))
+            def devpiserver_get_remote_auth(self, remote_url, www_authenticate_header):
+                plugin_calls.append((remote_url, www_authenticate_header))
                 return "Bearer token"
 
         plugin = Plugin()
@@ -1541,7 +1541,7 @@ def test_ProjectUpdateCache(monkeypatch):
 def test_cleanup_after_last_entry_deletion(mapp, simpypi):
     mapp.create_and_login_user("remote")
     indexconfig = dict(
-        type="remote", mirror_url=simpypi.simpleurl, remote_refresh_delay=0
+        type="remote", remote_url=simpypi.simpleurl, remote_refresh_delay=0
     )
     mapp.create_index("remote", indexconfig=indexconfig)
     mapp.use("remote/remote")
@@ -1575,7 +1575,7 @@ def test_cleanup_after_last_entry_deletion(mapp, simpypi):
 def test_cleanup_after_last_version_deletion(mapp, simpypi):
     mapp.create_and_login_user("remote")
     indexconfig = dict(
-        type="remote", mirror_url=simpypi.simpleurl, remote_refresh_delay=0
+        type="remote", remote_url=simpypi.simpleurl, remote_refresh_delay=0
     )
     mapp.create_index("remote", indexconfig=indexconfig)
     mapp.use("remote/remote")
@@ -1613,7 +1613,7 @@ def test_redownload_locally_removed_release(file_digest, mapp, simpypi):
 
     mapp.create_and_login_user("remote")
     indexconfig = dict(
-        type="remote", mirror_url=simpypi.simpleurl, remote_refresh_delay=0
+        type="remote", remote_url=simpypi.simpleurl, remote_refresh_delay=0
     )
     mapp.create_index("remote", indexconfig=indexconfig)
     mapp.use("remote/remote")

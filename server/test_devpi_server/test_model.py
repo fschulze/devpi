@@ -741,16 +741,16 @@ class TestIndex:
 
     def test_whitelist_intersection_two_remotes(self, http, stage, user):
         remote1 = user.create_stage(
-            "remote1", **udict(mirror_url="http://pypi.org/simple", type="remote")
+            "remote1", **udict(remote_url="http://pypi.org/simple", type="remote")
         )
         remote2 = user.create_stage(
-            "remote2", **udict(mirror_url="http://example.com/simple", type="remote")
+            "remote2", **udict(remote_url="http://example.com/simple", type="remote")
         )
         http.mockresponse("http://pypi.org/simple/", text='<a href="someproject"></a>')
         http.mock_simple(
             "someproject",
             "<a href='someproject-1.1.zip' /a>",
-            remoteurl=remote1.mirror_url,
+            remoteurl=remote1.remote_url,
         )
         http.mockresponse(
             "http://example.com/simple/", text='<a href="someproject"></a>'
@@ -758,7 +758,7 @@ class TestIndex:
         http.mock_simple(
             "someproject",
             "<a href='someproject-1.1-py2.py3-none-any.whl' /a>",
-            remoteurl=remote2.mirror_url,
+            remoteurl=remote2.remote_url,
         )
         stage.modify(bases=(remote1.name, remote2.name), mirror_whitelist="*")
         stage2 = user.create_stage(index='inheriting', bases=(stage.name,))
@@ -827,16 +827,16 @@ class TestIndex:
 
     def test_whitelist_union_two_remotes(self, http, stage, user):
         remote1 = user.create_stage(
-            "remote1", **udict(mirror_url="http://pypi.org/simple", type="remote")
+            "remote1", **udict(remote_url="http://pypi.org/simple", type="remote")
         )
         remote2 = user.create_stage(
-            "remote2", **udict(mirror_url="http://example.com/simple", type="remote")
+            "remote2", **udict(remote_url="http://example.com/simple", type="remote")
         )
         http.mockresponse("http://pypi.org/simple/", text='<a href="someproject"></a>')
         http.mock_simple(
             "someproject",
             "<a href='someproject-1.1.zip' /a>",
-            remoteurl=remote1.mirror_url,
+            remoteurl=remote1.remote_url,
         )
         http.mockresponse(
             "http://example.com/simple/", text='<a href="someproject"></a>'
@@ -844,7 +844,7 @@ class TestIndex:
         http.mock_simple(
             "someproject",
             "<a href='someproject-1.1-py2.py3-none-any.whl' /a>",
-            remoteurl=remote2.mirror_url,
+            remoteurl=remote2.remote_url,
         )
         stage.modify(bases=(remote1.name, remote2.name), mirror_whitelist="*")
         stage2 = user.create_stage(
