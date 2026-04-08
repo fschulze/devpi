@@ -50,6 +50,7 @@ import warnings
 
 
 if TYPE_CHECKING:
+    from .customizer import BaseIndexCustomizer
     from .root import RootModel
     from .schema import Schema
     from collections.abc import Callable
@@ -100,6 +101,7 @@ F = TypeVar("F", FileEntry, MutableFileEntry)
 
 
 class BaseIndex:
+    customizer: BaseIndexCustomizer
     keyfs: KeyFS[Schema]
     offline: bool
 
@@ -109,7 +111,7 @@ class BaseIndex:
         username: str,
         index: str,
         ixconfig: DictViewReadonly[str, Any],
-        customizer_cls: type,
+        customizer_cls: type[BaseIndexCustomizer],
     ) -> None:
         self.xom = xom
         self.username = username
