@@ -80,7 +80,10 @@ def traced_pluggy_call(hook, **caller_kwargs):
             if firstresult:
                 break
     if firstresult:
-        return (results[0] if results else None, plugin_names)
+        return (
+            results[0] if results else None,
+            plugin_names[0] if plugin_names else None,
+        )
     return (results, plugin_names)
 
 
