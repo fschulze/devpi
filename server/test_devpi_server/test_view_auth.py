@@ -28,12 +28,12 @@ class TestCredentialPlugin:
     def test_credential_plugin_no_credentials(self, blank_request, dsp, plugin):
         plugin.results = [None]
         request = blank_request()
-        assert dsp._get_credentials(request) == (None, [])
+        assert dsp._get_credentials(request) == (None, None)
 
     def test_credential_plugin_got_credentials(self, blank_request, dsp, plugin):
         plugin.results = [('foo', 'bar')]
         request = blank_request()
-        assert dsp._get_credentials(request) == (('foo', 'bar'), ['TestCredentialPlugin'])
+        assert dsp._get_credentials(request) == (("foo", "bar"), "TestCredentialPlugin")
 
 
 class TestCredentialPlugins:
@@ -71,19 +71,25 @@ class TestCredentialPlugins:
         plugin1.results = [None]
         plugin2.results = [None]
         request = blank_request()
-        assert dsp._get_credentials(request) == (None, [])
+        assert dsp._get_credentials(request) == (None, None)
 
     def test_credential_plugins_got_one_credential(self, blank_request, dsp, plugin1, plugin2):
         plugin1.results = [('foo', 'bar')]
         plugin2.results = [None]
         request = blank_request()
-        assert dsp._get_credentials(request) == (('foo', 'bar'), ['TestCredentialPlugin1'])
+        assert dsp._get_credentials(request) == (
+            ("foo", "bar"),
+            "TestCredentialPlugin1",
+        )
 
     def test_credential_plugins_got_another_credential(self, blank_request, dsp, plugin1, plugin2):
         plugin1.results = [None]
         plugin2.results = [('foo', 'bar')]
         request = blank_request()
-        assert dsp._get_credentials(request) == (('foo', 'bar'), ['TestCredentialPlugin2'])
+        assert dsp._get_credentials(request) == (
+            ("foo", "bar"),
+            "TestCredentialPlugin2",
+        )
 
     def test_credential_plugins_got_two_credential(self, blank_request, dsp, plugin1, plugin2):
         plugin1.results = [('ham', 'egg')]
@@ -91,8 +97,9 @@ class TestCredentialPlugins:
         request = blank_request()
         # one of them wins, depends on entry point order and is undefined
         assert dsp._get_credentials(request) in [
-            (('ham', 'egg'), ['TestCredentialPlugin1']),
-            (('foo', 'bar'), ['TestCredentialPlugin2'])]
+            (("ham", "egg"), "TestCredentialPlugin1"),
+            (("foo", "bar"), "TestCredentialPlugin2"),
+        ]
 
 
 class TestHeaderCredentialPlugin:
@@ -114,13 +121,16 @@ class TestHeaderCredentialPlugin:
     @pytest.mark.usefixtures("plugin")
     def test_credential_plugin_no_credentials(self, blank_request, dsp):
         request = blank_request()
-        assert dsp._get_credentials(request) == (None, [])
+        assert dsp._get_credentials(request) == (None, None)
 
     @pytest.mark.usefixtures("plugin")
     def test_credential_plugin_got_credentials(self, blank_request, dsp):
         request = blank_request()
         request.headers['X-Devpi-User'] = 'foo'
-        assert dsp._get_credentials(request) == (('foo', ''), ['TestHeaderCredentialPlugin'])
+        assert dsp._get_credentials(request) == (
+            ("foo", ""),
+            "TestHeaderCredentialPlugin",
+        )
 
 
 class TestDevpiSecurityPolicy:
