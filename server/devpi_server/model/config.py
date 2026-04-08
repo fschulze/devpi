@@ -1,14 +1,109 @@
 from __future__ import annotations
 
 from .exceptions import InvalidIndexconfig
+from attrs import define
+from attrs import field
+from devpi_server.markers import NotSet
+from devpi_server.markers import notset
 from devpi_server.normalized import normalize_name
 from pyramid.authorization import Authenticated
 from pyramid.authorization import Everyone
+from typing import Generic
 from typing import TYPE_CHECKING
+from typing import TypeVar
 
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+    from collections.abc import Sequence
     from typing import Any
+
+
+CT = TypeVar("CT")
+
+
+@define(kw_only=True)
+class ConfigField(Generic[CT]):
+    _missing: CT | NotSet = field(default=notset)
+    default: CT | NotSet = field(default=notset)
+    name: str
+    normalize: Callable[[Any], CT] | None = field(default=None)
+    type: type[CT] | None
+
+
+def _convert_fields(
+    fields: Sequence[ConfigField] | ConfigFields | dict[str, ConfigField],
+) -> dict[str, ConfigField]:
+    result = {}
+    if isinstance(fields, ConfigFields):
+        _fields = iter(fields._fields.values())
+    elif isinstance(fields, dict):
+        _fields = iter(fields.values())
+    else:
+        _fields = iter(fields)
+    for f in _fields:
+        if not isinstance(f, ConfigField):
+            raise TypeError
+        if f.name in result:
+            raise ValueError(f"Field with duplicate name {f.name!r}")
+        result[f.name] = f
+    return result
+
+
+@define
+class ConfigFields:
+    _fields: dict[str, ConfigField] = field(converter=_convert_fields)
+
+    __iter__ = None
+
+    @property
+    def defaults(self) -> dict[str, Any]:
+        return {
+            f.name: default
+            for f in self._fields.values()
+            if not isinstance(default := f.default, NotSet)
+        }
+
+    def extend(self, fields: Sequence[ConfigField], error_msg: str) -> None:
+        _fields = {f.name: f for f in fields}
+        if "{conflicting}" not in error_msg:
+            raise ValueError("Missing '{conflicting}' marker in error_msg")
+        conflicting = set(self._fields).intersection(_fields)
+        if conflicting:
+            raise ValueError(
+                error_msg.format(conflicting=", ".join(sorted(conflicting)))
+            )
+        self._fields.update(_fields)
+
+    def fill_config_from_kwargs(
+        self, config: dict[str, Any], kwargs: dict[str, Any]
+    ) -> None:
+        # prevent default values from being removed
+        for key in self.defaults:
+            if kwargs.get(key) is RemoveValue:
+                raise InvalidIndexconfig("Default values can't be removed.")
+        # now process the new settings
+        for f in self._fields.values():
+            key = f.name
+            _missing = f._missing
+            if key not in kwargs and isinstance(_missing, NotSet):
+                continue
+            value = kwargs.pop(key, _missing)
+            if value is not RemoveValue:
+                normalize = f.normalize
+                if normalize is not None:
+                    value = normalize(value)
+                if value is None:
+                    raise ValueError(f"The key {key!r} wasn't processed.")
+            config[key] = value
+        # remove keys
+        for key, value in list(kwargs.items()):
+            if value is RemoveValue:
+                config[key] = kwargs.pop(key)
+
+    @property
+    def names(self):
+        return set(self._fields)
 
 
 class RemoveValue:
@@ -64,7 +159,7 @@ def normalize_bases(model, bases):
     # check and normalize base indices
     messages = []
     newbases = []
-    for base in bases:
+    for base in ensure_list(bases):
         try:
             stage_base = model.getstage(base)
         except ValueError:

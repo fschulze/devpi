@@ -680,7 +680,10 @@ class TestImportExport:
                 type="remote",
                 volatile=False,
             )
-            expected_keys = {*stage.get_possible_indexconfig_keys(), "type"} - {
+            expected_keys = {
+                *(stage.get_indexconfig_fields().names),
+                "type",
+            } - {
                 "custom_data",
                 "description",
             }
