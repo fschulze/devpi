@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from .config import ConfigFields
 from .customizer import UnknownCustomizer
 from .exceptions import InvalidIndex
 from .exceptions import InvalidIndexconfig
@@ -75,10 +76,14 @@ class RootModel:
         if isinstance(stage.customizer, UnknownCustomizer):
             raise InvalidIndexconfig("unknown index type %r" % type)
         # apply default values for new indexes
-        for key, value in stage.get_default_config_items():
+        for key, value in ConfigFields(
+            fields=stage.get_indexconfig_fields()
+        ).defaults.items():
             kwargs.setdefault(key, value)
         # apply default values from customizer class for new indexes
-        for key, value in stage.customizer.get_default_config_items():
+        for key, value in ConfigFields(
+            fields=stage.customizer.get_indexconfig_fields()
+        ).defaults.items():
             kwargs.setdefault(key, value)
         stage._modify(**kwargs)
         threadlog.debug("created index %s: %s", stage.name, stage.ixconfig)
