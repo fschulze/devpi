@@ -65,6 +65,10 @@ class MissesVersion(ModelException):
     """A version number is required."""
 
 
+class MissingValueConfigError(InvalidConfig):
+    pass
+
+
 class NotFound(ModelException):
     """If a project or version cannot be found."""
 
