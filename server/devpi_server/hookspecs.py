@@ -5,7 +5,9 @@ from typing import TYPE_CHECKING
 
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from devpi_server.keyfs_types import StorageInfo
+    from devpi_server.model.config import ConfigField
     from devpi_server.views import ToxResultHandling
     from pyramid.request import Request
 
@@ -74,7 +76,7 @@ def devpiserver_get_features():
 
 
 @hookspec
-def devpiserver_describe_storage_backend(settings: dict) -> StorageInfo:  # type:ignore[empty-body]
+def devpiserver_describe_storage_backend(settings: dict) -> StorageInfo:
     """return StorageInfo instance describing the storage implementation."""
 
 
@@ -221,10 +223,22 @@ def devpiserver_get_stage_customizer_classes():
     The index type string must be unique."""
 
 
-@hookspec
+@hookspec(
+    warn_on_impl=DeprecationWarning(
+        "The 'devpiserver_indexconfig_defaults' hook is deprecated, use new 'devpiserver_indexconfig_fields' hook instead."
+    )
+)
 def devpiserver_indexconfig_defaults(index_type):
     """Returns a dictionary with keys and their defaults for the index
     configuration dictionary.
+
+    It's a good idea to use the plugin name as prefix for the key names
+    to avoid clashes between key names in different plugins."""
+
+
+@hookspec
+def devpiserver_indexconfig_fields(index_type: str) -> Sequence[ConfigField]:
+    """Returns a sequence of ConfigField for the index configuration dictionary.
 
     It's a good idea to use the plugin name as prefix for the key names
     to avoid clashes between key names in different plugins."""
