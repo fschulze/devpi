@@ -260,12 +260,12 @@ class DevpiSecurityPolicy:
             request=request)
 
     def load_identity(self, request):
-        (credentials, plugin_names) = self._get_credentials(request)
-        credential_plugin_name = plugin_names[0] if plugin_names else None
-        (result, plugin_names) = traced_pluggy_call(
+        (credentials, credential_plugin_name) = self._get_credentials(request)
+        (result, identity_plugin_name) = traced_pluggy_call(
             self.hook.devpiserver_get_identity,
-            request=request, credentials=credentials)
-        identity_plugin_name = plugin_names[0] if plugin_names else None
+            request=request,
+            credentials=credentials,
+        )
         self.hook.devpiserver_identity_loaded(
             request=request,
             credential_plugin_name=credential_plugin_name,
