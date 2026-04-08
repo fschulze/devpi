@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .exceptions import InvalidIndexconfig
+from .exceptions import MissingValueConfigError
 from attrs import define
 from attrs import field
 from devpi_server.markers import NotSet
@@ -30,6 +31,45 @@ class ConfigField(Generic[CT]):
     normalize: Callable[[Any], CT] | None = field(default=None)
     type: type[CT] | None
 
+    def apply_add_action(self, ixconfig: dict, value: object) -> None:
+        key = self.name
+        typ = self.expected_type(ixconfig)
+        match typ:
+            case type() if issubclass(typ, list):
+                if value not in ixconfig[key]:
+                    ixconfig[key].append(value)
+            case type() if issubclass(typ, tuple):
+                if value not in ixconfig[key]:
+                    ixconfig[key] += (value,)
+            case _:
+                raise TypeError(f"don't know how to handle type {typ!r}")
+
+    def apply_del_action(self, ixconfig: dict, value: object) -> None:
+        key = self.name
+        if value not in ixconfig[key]:
+            msg = f"The {key!r} setting doesn't have value {value!r}"
+            raise MissingValueConfigError(msg)
+        typ = self.expected_type(ixconfig)
+        match typ:
+            case type() if issubclass(typ, list):
+                ixconfig[key].remove(value)
+            case type() if issubclass(typ, tuple):
+                ixconfig[key] = tuple(x for x in ixconfig[key] if x != value)
+            case _:
+                raise TypeError(f"don't know how to handle type {typ!r}")
+
+    def apply_remove_action(self, ixconfig: dict, _value: object) -> None:
+        ixconfig[self.name] = RemoveValue
+
+    def apply_set_action(self, ixconfig: dict, value: object) -> None:
+        ixconfig[self.name] = value
+
+    def expected_type(self, ixconfig: dict) -> list | tuple | object:
+        expected_type = self.type
+        if expected_type is not None:
+            return expected_type
+        return type(ixconfig[self.name])
+
 
 def _convert_fields(
     fields: Sequence[ConfigField] | ConfigFields | dict[str, ConfigField],
@@ -55,6 +95,37 @@ class ConfigFields:
     _fields: dict[str, ConfigField] = field(converter=_convert_fields)
 
     __iter__ = None
+
+    def __getitem__(self, name: str) -> ConfigField:
+        return self._fields[name]
+
+    def apply_actions(
+        self, ixconfig: dict, actions: Sequence[tuple[str, str, object]]
+    ) -> tuple[dict, bool]:
+        keep_unknown = False
+        used_ops = set()
+        for op, key, value in actions:
+            used_ops.add(op)
+            field = self.get(key)
+            if field is None:
+                if op == "drop":
+                    ixconfig[key] = RemoveValue
+                    continue
+                raise KeyError(f"Unknown config field {field!r}")
+            match op:
+                case "del":
+                    field.apply_del_action(ixconfig, value)
+                case "add":
+                    field.apply_add_action(ixconfig, value)
+                case "set":
+                    field.apply_set_action(ixconfig, value)
+                case "drop":
+                    field.apply_remove_action(ixconfig, value)
+                case _:
+                    raise ValueError(f"Unknown operator {op!r}.")
+        if not used_ops.difference({"add", "del", "drop"}):
+            keep_unknown = True
+        return (ixconfig, keep_unknown)
 
     @property
     def defaults(self) -> dict[str, Any]:
@@ -100,6 +171,9 @@ class ConfigFields:
         for key, value in list(kwargs.items()):
             if value is RemoveValue:
                 config[key] = kwargs.pop(key)
+
+    def get(self, name: str) -> ConfigField | None:
+        return self._fields.get(name)
 
     @property
     def names(self):
