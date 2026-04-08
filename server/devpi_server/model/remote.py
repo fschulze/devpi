@@ -8,6 +8,7 @@ toxresult storage.
 from __future__ import annotations
 
 from .base import BaseIndex
+from .config import ConfigField
 from .config import ensure_boolean
 from .customizer import BaseIndexCustomizer
 from .links import ELink
@@ -63,6 +64,7 @@ if TYPE_CHECKING:
     from .links import Yanked
     from .simpleapi import ReleaseLinks
     from collections.abc import Iterator
+    from collections.abc import Sequence
     from devpi_server.filestore import BaseFileEntry
     from devpi_server.filestore import FileEntry
     from devpi_server.httpclient import AsyncGetResponse
@@ -830,50 +832,37 @@ class RemoteIndex(BaseIndex):
     def use_external_url(self):
         return self.ixconfig.get("remote_use_external_urls", False)
 
-    def get_possible_indexconfig_keys(self):
-        return (
-            *(k for k, v in self.get_default_config_items()),
-            "custom_data",
-            "description",
-            "remote_refresh_delay",
-            "remote_ignore_serial_header",
-            "remote_no_project_list",
-            "remote_provides_core_metadata",
-            "remote_url",
-            "remote_use_external_urls",
-            "remote_web_url_fmt",
-            "title",
-        )
+    def get_indexconfig_fields(self) -> Sequence[ConfigField]:
+        return [
+            ConfigField(name="custom_data"),
+            ConfigField(name="description", normalize=str),
+            ConfigField(name="remote_ignore_serial_header", normalize=ensure_boolean),
+            ConfigField(name="remote_no_project_list", normalize=ensure_boolean),
+            ConfigField(name="remote_provides_core_metadata", normalize=ensure_boolean),
+            ConfigField(
+                name="remote_refresh_delay",
+                normalize=self.normalize_remote_refresh_delay,
+            ),
+            ConfigField(name="remote_url", normalize=self.normalize_remote_url),
+            ConfigField(name="remote_use_external_urls", normalize=ensure_boolean),
+            ConfigField(name="remote_web_url_fmt", normalize=str),
+            ConfigField(name="title", normalize=str),
+            ConfigField(name="volatile", default=True, normalize=ensure_boolean),
+        ]
 
-    def get_default_config_items(self):
-        return [("volatile", True)]
+    def normalize_remote_url(self, value):
+        if not value.startswith(("http://", "https://")):
+            raise self.InvalidIndexconfig("'remote_url' option must be a URL.")
+        return value
 
-    def normalize_indexconfig_value(self, key, value):  # noqa: PLR0911
-        if key == "volatile":
-            return ensure_boolean(value)
-        if key == "remote_url":
-            if not value.startswith(("http://", "https://")):
-                raise self.InvalidIndexconfig("'remote_url' option must be a URL.")
-            return value
-        if key == "remote_refresh_delay":
-            try:
-                value = int(value)
-            except (TypeError, ValueError) as e:
-                raise self.InvalidIndexconfig(
-                    "'remote_refresh_delay' option must be an integer"
-                ) from e
-            return value
-        if key == "remote_ignore_serial_header":
-            return ensure_boolean(value)
-        if key == "remote_no_project_list":
-            return ensure_boolean(value)
-        if key == "remote_provides_core_metadata":
-            return ensure_boolean(value)
-        if key == "remote_use_external_urls":
-            return ensure_boolean(value)
-        if key in ("custom_data", "description", "remote_web_url_fmt", "title"):
-            return value
-        return None
+    def normalize_remote_refresh_delay(self, value):
+        try:
+            value = int(value)
+        except (TypeError, ValueError) as e:
+            raise self.InvalidIndexconfig(
+                "'remote_refresh_delay' option must be an integer"
+            ) from e
+        return value
 
     def delete(self) -> None:
         # delete all projects on this index

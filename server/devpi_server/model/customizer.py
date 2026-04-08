@@ -1,16 +1,21 @@
 from __future__ import annotations
 
+from .config import ConfigField
 from .exceptions import InvalidIndex
 from .exceptions import InvalidIndexconfig
 from .exceptions import ReadonlyIndex
 from devpi_server.log import threadlog
+from devpi_server.markers import notset
+from functools import partial
 from operator import iconcat
 from typing import TYPE_CHECKING
 import functools
+import warnings
 
 
 if TYPE_CHECKING:
     from .local import BaseIndex
+    from collections.abc import Sequence
 
 
 def get_stage_customizer_classes(xom):
@@ -91,28 +96,47 @@ class BaseIndexCustomizer:
     get_principals_for_del_project = get_principals_for_del_entry
     get_principals_for_del_verdata = get_principals_for_del_entry
 
-    def get_possible_indexconfig_keys(self):
-        """Returns all possible custom index config keys.
+    def get_indexconfig_fields(self) -> Sequence[ConfigField]:
+        """Returns all possible custom index config fields of type devpi_server.model.config.ConfigField.
 
-        These are in addition to the existing keys of a regular private index.
+        These are in addition to the existing keys of a regular index.
         """
-        return ()
-
-    def get_default_config_items(self):
-        """Returns a list of defaults as key/value tuples.
-
-        Only applies to new keys, not existing options of a private index.
-        """
-        return ()
-
-    def normalize_indexconfig_value(self, key, value):
-        """Returns value normalized to the type stored in the database.
-
-        A return value of None is treated as an error.
-        Can raise InvalidIndexconfig.
-        Will only be called for custom options, not for existing options
-        of a private index.
-        """
+        get_default_config_items = getattr(self, "get_default_config_items", tuple)
+        if get_default_config_items is not tuple:
+            warnings.warn(
+                "The 'get_default_config_items' method is deprecated, "
+                "you should implement 'get_indexconfig_fields' instead.",
+                DeprecationWarning,
+                stacklevel=1,
+            )
+        defaults = dict(get_default_config_items())
+        get_possible_indexconfig_keys = getattr(
+            self, "get_possible_indexconfig_keys", tuple
+        )
+        if get_possible_indexconfig_keys is not tuple:
+            warnings.warn(
+                "The 'get_possible_indexconfig_keys' method is deprecated, "
+                "you should implement 'get_indexconfig_fields' instead.",
+                DeprecationWarning,
+                stacklevel=1,
+            )
+        keys: Sequence[str] = get_possible_indexconfig_keys()
+        normalize = getattr(self, "normalize_indexconfig_value", None)
+        if normalize is not None:
+            warnings.warn(
+                "The 'normalize_indexconfig_value' method is deprecated, "
+                "you should implement 'get_indexconfig_fields' instead.",
+                DeprecationWarning,
+                stacklevel=1,
+            )
+        return [
+            ConfigField(
+                name=key,
+                default=defaults.get(key, notset),
+                normalize=None if normalize is None else partial(normalize, key),
+            )
+            for key in keys
+        ]
 
     def validate_config(self, oldconfig, newconfig):
         """Validates the index config.
