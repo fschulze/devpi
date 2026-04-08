@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .base import BaseIndex
+from .config import ConfigField
 from .config import ensure_acl_list
 from .config import ensure_boolean
 from .config import ensure_list
@@ -31,6 +32,7 @@ from devpi_server.normalized import normalize_name
 from devpi_server.readonly import DictViewReadonly
 from devpi_server.readonly import ensure_deeply_readonly
 from devpi_server.readonly import get_mutable_deepcopy
+from functools import partial
 from lazy import lazy
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -39,6 +41,7 @@ from typing import overload
 
 if TYPE_CHECKING:
     from .links import SimpleLinks
+    from collections.abc import Sequence
     from devpi_server.filestore import BaseFileEntry
     from devpi_server.interfaces import ContentOrFile
     from devpi_server.keyfs_types import LocatedKey
@@ -134,43 +137,37 @@ class LocalIndex(BaseIndex):
     def no_project_list(self) -> Literal[False]:
         return False
 
-    def get_possible_indexconfig_keys(self):
-        return (
-            *tuple(dict(self.get_default_config_items())),
-            "custom_data",
-            "description",
-            "title",
-            "trust_inheritance_rules_from",
-        )
-
-    def get_default_config_items(self):
+    def get_indexconfig_fields(self) -> Sequence[ConfigField]:
         return [
-            ("volatile", True),
-            ("acl_upload", [self.username]),
-            ("acl_toxresult_upload", [":ANONYMOUS:"]),
-            ("bases", ()),
-            ("mirror_whitelist", []),
+            ConfigField(
+                name="acl_toxresult_upload",
+                default=[":ANONYMOUS:"],
+                normalize=ensure_acl_list,
+            ),
+            ConfigField(
+                name="acl_upload", default=[self.username], normalize=ensure_acl_list
+            ),
+            ConfigField(
+                name="bases",
+                default=(),
+                normalize=partial(normalize_bases, self.xom.model),
+            ),
+            ConfigField(name="custom_data"),
+            ConfigField(name="description", normalize=str),
+            ConfigField(
+                name="mirror_whitelist",
+                default=[],
+                normalize=lambda v: [
+                    normalize_whitelist_name(x) for x in ensure_list(v)
+                ],
+            ),
+            ConfigField(name="title", normalize=str),
+            ConfigField(
+                name="trust_inheritance_rules_from",
+                normalize=normalize_trust_inheritance,
+            ),
+            ConfigField(name="volatile", default=True, normalize=ensure_boolean),
         ]
-
-    def normalize_indexconfig_value(self, key, value):
-        match key:
-            case "volatile":
-                value = ensure_boolean(value)
-            case "bases":
-                value = normalize_bases(self.xom.model, ensure_list(value))
-            case "acl_upload":
-                value = ensure_acl_list(value)
-            case "acl_toxresult_upload":
-                value = ensure_acl_list(value)
-            case "mirror_whitelist":
-                value = [normalize_whitelist_name(x) for x in ensure_list(value)]
-            case "trust_inheritance_rules_from":
-                value = normalize_trust_inheritance(value)
-            case "custom_data" | "description" | "title":
-                pass
-            case _:
-                value = None
-        return value
 
     def delete(self) -> None:
         # delete all projects on this index

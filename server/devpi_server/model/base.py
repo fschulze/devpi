@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from .config import ACLList
+from .config import ConfigField
+from .config import ConfigFields
 from .config import RemoveValue
 from .config import ensure_acl_list
 from .config import ensure_boolean
@@ -27,6 +29,7 @@ from .links import SimpleLinks
 from abc import abstractmethod
 from devpi_common.metadata import get_latest_version
 from devpi_common.types import cached_property
+from devpi_server.config import traced_pluggy_call
 from devpi_server.filestore import AbsPath
 from devpi_server.filestore import FileEntry
 from devpi_server.log import threadlog
@@ -47,6 +50,7 @@ import warnings
 if TYPE_CHECKING:
     from .root import RootModel
     from .schema import Schema
+    from collections.abc import Callable
     from collections.abc import Iterable
     from collections.abc import Iterator
     from collections.abc import Sequence
@@ -187,83 +191,75 @@ class BaseIndex:
     def no_project_list(self) -> bool:
         raise NotImplementedError
 
-    def get_indexconfig_from_kwargs(self, **kwargs):  # noqa: PLR0912
+    def _get_devpiserver_indexconfig_fields(
+        self,
+    ) -> list[tuple[list[ConfigField], str]]:
+        results = []
+        for defaults, plugin_name in zip(
+            *traced_pluggy_call(
+                self.xom.config.hook.devpiserver_indexconfig_defaults,
+                index_type=self.index_type,
+            ),
+            strict=True,
+        ):
+            if not isinstance(plugin_name, str):
+                raise TypeError("The {plugin_name!r} is not a string")
+            plugin_results = []
+            for key, default in defaults.items():
+                normalize: Callable[[Any], Any] | None
+                match default:
+                    case ACLList():
+                        normalize = ensure_acl_list
+                    case bool():
+                        normalize = ensure_boolean
+                    case list() | set() | tuple():
+                        normalize = ensure_list
+                    case _:
+                        normalize = None
+                plugin_results.append(
+                    ConfigField(name=key, missing=default, normalize=normalize)
+                )
+            results.append((plugin_results, plugin_name))
+        results.extend(
+            zip(
+                *traced_pluggy_call(
+                    self.xom.config.hook.devpiserver_indexconfig_fields,
+                    index_type=self.index_type,
+                ),
+                strict=True,
+            )
+        )
+        return results
+
+    def get_indexconfig_from_kwargs(
+        self, **kwargs: Any
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
         """Normalizes values and validates keys.
 
         Returns the parts touched by kwargs as dict.
         This is not the complete index configuration."""
         index_type = self.index_type
-        ixconfig = {}
+        ixconfig: dict[str, Any] = {}
         # get known keys and validate them
-        stage_keys = set(self.get_possible_indexconfig_keys())
-        customizer_keys = set(self.customizer.get_possible_indexconfig_keys())
-        conflicting = stage_keys.intersection(customizer_keys)
-        if conflicting:
-            raise ValueError(
-                "The index customizer for '%s' defines keys which conflict "
-                "with existing index configuration keys: %s"
-                % (index_type, ", ".join(sorted(conflicting)))
+        fields = ConfigFields(self.get_indexconfig_fields())
+        fields.extend(
+            self.customizer.get_indexconfig_fields(),
+            f"The index customizer for {index_type!r} defines fields which "
+            "conflict with existing index configuration fields: {conflicting}",
+        )
+        for new_fields, plugin_name in self._get_devpiserver_indexconfig_fields():
+            fields.extend(
+                new_fields,
+                f"The {plugin_name!r} plugin returned the following fields which "
+                f"conflict with existing index configuration fields for {index_type!r}: "
+                "{conflicting}",
             )
-        # prevent default values from being removed
-        for key, _value in self.get_default_config_items():
-            if kwargs.get(key) is RemoveValue:
-                raise InvalidIndexconfig("Default values can't be removed.")
-        # now process any key known by the index class
-        for key in stage_keys:
-            if key not in kwargs:
-                continue
-            value = kwargs.pop(key)
-            if value is not RemoveValue:
-                value = self.normalize_indexconfig_value(key, value)
-                if value is None:
-                    raise ValueError("The key '%s' wasn't processed." % (key))
-            ixconfig[key] = value
-        # prevent removal of defaults from the customizer class
-        for key, _value in self.customizer.get_default_config_items():
-            if kwargs.get(key) is RemoveValue:
-                raise InvalidIndexconfig("Default values can't be removed.")
-        # and process any key known by the customizer class
-        for key in customizer_keys:
-            if key not in kwargs:
-                continue
-            value = kwargs.pop(key)
-            if value is not RemoveValue:
-                value = self.customizer.normalize_indexconfig_value(key, value)
-                if value is None:
-                    raise ValueError("The key '%s' wasn't processed." % (key))
-            ixconfig[key] = value
-        # lastly we get additional default from the hook
-        hooks = self.xom.config.hook
-        for defaults in hooks.devpiserver_indexconfig_defaults(index_type=index_type):
-            conflicting = stage_keys.intersection(defaults)
-            if conflicting:
-                raise ValueError(
-                    "A plugin returned the following keys which conflict with "
-                    "existing index configuration keys for '%s': %s"
-                    % (index_type, ", ".join(sorted(conflicting)))
-                )
-            for key, value in defaults.items():
-                new_value = kwargs.pop(key, value)
-                if new_value is not RemoveValue:
-                    if isinstance(value, bool):
-                        new_value = ensure_boolean(new_value)
-                    elif isinstance(value, ACLList):
-                        new_value = ensure_acl_list(new_value)
-                    elif isinstance(value, (list, tuple, set)):
-                        new_value = ensure_list(new_value)
-                ixconfig.setdefault(key, new_value)
-        for key, value in list(kwargs.items()):
-            if value is RemoveValue:
-                ixconfig[key] = kwargs.pop(key)
+        fields.fill_config_from_kwargs(ixconfig, kwargs)
         ixconfig["type"] = index_type
         return (ixconfig, kwargs)
 
     @abstractmethod
-    def get_default_config_items(self) -> Sequence[tuple[str, Any]]:
-        raise NotImplementedError
-
-    @abstractmethod
-    def get_possible_indexconfig_keys(self) -> Sequence:
+    def get_indexconfig_fields(self) -> Sequence[ConfigField]:
         raise NotImplementedError
 
     @abstractmethod
@@ -290,10 +286,6 @@ class BaseIndex:
 
     @abstractmethod
     def _get_elink_from_entry(self, entry: BaseFileEntry) -> ELink | None:
-        raise NotImplementedError
-
-    @abstractmethod
-    def normalize_indexconfig_value(self, key: str, value: Any) -> Any:
         raise NotImplementedError
 
     @cached_property

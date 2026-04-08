@@ -1,14 +1,100 @@
 from __future__ import annotations
 
 from .exceptions import InvalidIndexconfig
+from attrs import define
+from attrs import field
+from devpi_server.markers import NotSet
+from devpi_server.markers import notset
 from devpi_server.normalized import normalize_name
 from pyramid.authorization import Authenticated
 from pyramid.authorization import Everyone
+from typing import Generic
 from typing import TYPE_CHECKING
+from typing import TypeVar
 
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+    from collections.abc import Sequence
     from typing import Any
+
+
+CT = TypeVar("CT")
+
+
+@define(kw_only=True)
+class ConfigField(Generic[CT]):
+    _missing: CT | NotSet = field(default=notset)
+    default: CT | NotSet = field(default=notset)
+    name: str
+    normalize: Callable[[Any], CT] | None = field(default=None)
+    type: type[CT] = field(default=None)
+
+
+def _convert_fields(fields: Sequence[ConfigField]) -> list[ConfigField]:
+    names = set()
+    result = []
+    for f in fields:
+        if not isinstance(f, ConfigField):
+            raise TypeError
+        if f.name in names:
+            raise ValueError(f"Field with duplicate name {f.name!r}")
+        names.add(f.name)
+        result.append(f)
+    return result
+
+
+@define
+class ConfigFields:
+    fields: list[ConfigField] = field(converter=_convert_fields)
+
+    @property
+    def defaults(self) -> dict[str, Any]:
+        return {
+            f.name: default
+            for f in self.fields
+            if not isinstance(default := f.default, NotSet)
+        }
+
+    def extend(self, fields: Sequence[ConfigField], error_msg: str) -> None:
+        if "{conflicting}" not in error_msg:
+            raise ValueError("Missing '{conflicting}' marker in error_msg")
+        conflicting = self.names.intersection(ConfigFields(fields).names)
+        if conflicting:
+            raise ValueError(
+                error_msg.format(conflicting=", ".join(sorted(conflicting)))
+            )
+        self.fields.extend(fields)
+
+    def fill_config_from_kwargs(
+        self, config: dict[str, Any], kwargs: dict[str, Any]
+    ) -> None:
+        # prevent default values from being removed
+        for key in self.defaults:
+            if kwargs.get(key) is RemoveValue:
+                raise InvalidIndexconfig("Default values can't be removed.")
+        # now process the new settings
+        for f in self.fields:
+            key = f.name
+            _missing = f._missing
+            if key not in kwargs and isinstance(_missing, NotSet):
+                continue
+            value = kwargs.pop(key, _missing)
+            if value is not RemoveValue:
+                normalize = f.normalize
+                if normalize is not None:
+                    value = normalize(value)
+                if value is None:
+                    raise ValueError(f"The key {key!r} wasn't processed.")
+            config[key] = value
+        # remove keys
+        for key, value in list(kwargs.items()):
+            if value is RemoveValue:
+                config[key] = kwargs.pop(key)
+
+    @property
+    def names(self):
+        return {f.name for f in self.fields}
 
 
 class RemoveValue:
@@ -64,7 +150,7 @@ def normalize_bases(model, bases):
     # check and normalize base indices
     messages = []
     newbases = []
-    for base in bases:
+    for base in ensure_list(bases):
         try:
             stage_base = model.getstage(base)
         except ValueError:
