@@ -13,11 +13,11 @@ from .log import thread_pop_log
 from .log import thread_push_log
 from .log import threadlog
 from .markers import Unknown
-from .model.config import RemoveValue
 from .model.exceptions import InvalidIndex
 from .model.exceptions import InvalidIndexconfig
 from .model.exceptions import InvalidUser
 from .model.exceptions import InvalidUserconfig
+from .model.exceptions import MissingValueConfigError
 from .model.exceptions import ReadonlyIndex
 from .model.remote import iter_fetch_remote_file
 from .model.remote import iter_stream_remote_file
@@ -298,7 +298,7 @@ def is_mutating_http_method(method):
     return method in ("PUT", "POST", "PATCH", "DELETE", "PUSH")
 
 
-def get_actions(json):
+def get_actions(json: list) -> list[tuple[str, str, object]]:
     result = []
     for item in json:
         key, sep, value = item.partition('=')
@@ -986,39 +986,18 @@ class PyPIView:
     @view_config(
         route_name="/{user}/{index}/", request_method="PATCH",
         permission="index_modify")
-    def index_modify(self) -> None:  # noqa: PLR0912
+    def index_modify(self) -> None:
         stage = self.context.stage
         json = getjson(self.request)
-        keep_unknown = False
         if isinstance(json, list):
-            used_ops = set()
-            ixconfig = stage.ixconfig_mutable
-            for op, key, value in get_actions(json):
-                used_ops.add(op)
-                if op == 'del':
-                    if value not in ixconfig[key]:
-                        apireturn(
-                            400, "The '%s' setting doesn't have value '%s'" % (key, value))
-                    if isinstance(ixconfig[key], tuple):
-                        ixconfig[key] = tuple(
-                            x for x in ixconfig[key] if x != value)
-                    else:
-                        ixconfig[key].remove(value)
-                elif op == 'add':
-                    if value not in ixconfig[key]:
-                        if isinstance(ixconfig[key], tuple):
-                            ixconfig[key] += (value,)
-                        else:
-                            ixconfig[key].append(value)
-                elif op == 'set':
-                    ixconfig[key] = value
-                elif op == 'drop':
-                    ixconfig[key] = RemoveValue
-                else:
-                    raise ValueError("Unknown operator '%s'." % op)
-            if not used_ops.difference({"add", "del", "drop"}):
-                keep_unknown = True
-            json = ixconfig
+            try:
+                (json, keep_unknown) = stage.get_indexconfig_fields().apply_actions(
+                    stage.ixconfig_mutable, get_actions(json)
+                )
+            except MissingValueConfigError as e:
+                apireturn(400, message=", ".join(e.messages))
+        else:
+            keep_unknown = False
         if json.get('type') == 'indexconfig' and 'result' in json:
             json = json['result']
         oldconfig = dict(stage.ixconfig)
