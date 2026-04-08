@@ -72,6 +72,7 @@ if TYPE_CHECKING:
     from .model.links import ELink
     from .model.local import LocalIndex
     from collections.abc import Iterator
+    from typing import Any
     from typing import NoReturn
 
 
@@ -292,6 +293,51 @@ def set_header_devpi_serial(response, tx):
 
 def is_mutating_http_method(method):
     return method in ("PUT", "POST", "PATCH", "DELETE", "PUSH")
+
+
+def apply_add_action(ixconfig: dict, key: str, value: Any) -> None:
+    match ixconfig[key]:
+        case list():
+            if value not in ixconfig[key]:
+                ixconfig[key].append(value)
+        case tuple():
+            if value not in ixconfig[key]:
+                ixconfig[key] += (value,)
+        case _:
+            raise TypeError(f"don't know how to handle type {type(value)!r}")
+
+
+def apply_del_action(ixconfig: dict, key: str, value: Any) -> None:
+    if value not in ixconfig[key]:
+        apireturn(400, f"The {key!r} setting doesn't have value {value!r}")
+    match ixconfig[key]:
+        case list():
+            ixconfig[key].remove(value)
+        case tuple():
+            ixconfig[key] = tuple(x for x in ixconfig[key] if x != value)
+        case _:
+            raise TypeError(f"don't know how to handle type {type(value)!r}")
+
+
+def apply_actions(ixconfig: dict, json: list) -> tuple[dict, bool]:
+    keep_unknown = False
+    used_ops = set()
+    for op, key, value in get_actions(json):
+        used_ops.add(op)
+        match op:
+            case "del":
+                apply_del_action(ixconfig, key, value)
+            case "add":
+                apply_add_action(ixconfig, key, value)
+            case "set":
+                ixconfig[key] = value
+            case "drop":
+                ixconfig[key] = RemoveValue
+            case _:
+                raise ValueError(f"Unknown operator {op!r}.")
+    if not used_ops.difference({"add", "del", "drop"}):
+        keep_unknown = True
+    return (ixconfig, keep_unknown)
 
 
 def get_actions(json):
@@ -987,39 +1033,13 @@ class PyPIView:
     @view_config(
         route_name="/{user}/{index}/", request_method="PATCH",
         permission="index_modify")
-    def index_modify(self) -> None:  # noqa: PLR0912
+    def index_modify(self) -> None:
         stage = self.context.stage
         json = getjson(self.request)
-        keep_unknown = False
         if isinstance(json, list):
-            used_ops = set()
-            ixconfig = stage.ixconfig_mutable
-            for op, key, value in get_actions(json):
-                used_ops.add(op)
-                if op == 'del':
-                    if value not in ixconfig[key]:
-                        apireturn(
-                            400, "The '%s' setting doesn't have value '%s'" % (key, value))
-                    if isinstance(ixconfig[key], tuple):
-                        ixconfig[key] = tuple(
-                            x for x in ixconfig[key] if x != value)
-                    else:
-                        ixconfig[key].remove(value)
-                elif op == 'add':
-                    if value not in ixconfig[key]:
-                        if isinstance(ixconfig[key], tuple):
-                            ixconfig[key] += (value,)
-                        else:
-                            ixconfig[key].append(value)
-                elif op == 'set':
-                    ixconfig[key] = value
-                elif op == 'drop':
-                    ixconfig[key] = RemoveValue
-                else:
-                    raise ValueError("Unknown operator '%s'." % op)
-            if not used_ops.difference({"add", "del", "drop"}):
-                keep_unknown = True
-            json = ixconfig
+            (json, keep_unknown) = apply_actions(stage.ixconfig_mutable, json)
+        else:
+            keep_unknown = False
         if json.get('type') == 'indexconfig' and 'result' in json:
             json = json['result']
         oldconfig = dict(stage.ixconfig)
