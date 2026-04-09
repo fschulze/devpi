@@ -423,6 +423,17 @@ class TestImportExport:
         indexlist = mapp2.getindexlist(api.user)
         assert indexlist[api.stagename]["mirror_whitelist"] == ["*"]
 
+    def test_indexes_mirror_whitelist_project(self, impexp):
+        mapp1 = impexp.mapp1
+        api = mapp1.create_and_use()
+        mapp1.upload_file_pypi("hello-1.0.tar.gz", b"content1", "hello", "1.0")
+        mapp1.set_mirror_whitelist("hello")
+        impexp.export()
+        mapp2 = impexp.new_import()
+        assert api.user in mapp2.getuserlist()
+        indexlist = mapp2.getindexlist(api.user)
+        assert indexlist[api.stagename]["mirror_whitelist"] == ["hello"]
+
     def test_indexes_pypi_whitelist(self, impexp):
         mapp1 = impexp.mapp1
         api1 = mapp1.create_and_use()
