@@ -4,6 +4,7 @@ from . import fileutil
 from . import hookspecs
 from .interfaces import IIOFileFactory
 from .log import threadlog
+from copy import deepcopy
 from devpi_common.types import cached_property
 from devpi_common.url import URL
 from operator import itemgetter
@@ -776,16 +777,11 @@ def get_io_file_factory(storage_info: dict) -> IIOFileFactory:
     _io_file_factory: Callable
     db_filestore = storage_info.setdefault("db_filestore", True)
     settings = storage_info.setdefault("settings", {})
-    if db_filestore:
-        from .filestore_db import DBIOFile
-
-        _io_file_factory = DBIOFile
-    else:
-        fsbackend = settings.setdefault("fsbackend", "fs")
-        _io_file_factory = __import__(
-            f"filestore_{fsbackend}", globals=globals(), level=1
-        ).fsiofile_factory
-
+    fsbackend = settings.setdefault("fsbackend", "db" if db_filestore else "fs")
+    _io_file_factory = __import__(
+        f"filestore_{fsbackend}", globals=globals(), level=1
+    ).fsiofile_factory
+    if not db_filestore:
         storage_info.setdefault("_test_markers", []).append("storage_with_filesystem")
     verifyObject(IIOFileFactory, _io_file_factory)
 
@@ -1147,7 +1143,7 @@ class Config:
     def _storage_info(self):
         name = self.storage_info["name"]
         settings = self.storage_info["settings"]
-        return self._storage_info_from_name(name, settings)
+        return deepcopy(self._storage_info_from_name(name, settings))
 
     @property
     def io_file_factory(self) -> IIOFileFactory:

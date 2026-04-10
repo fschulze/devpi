@@ -80,3 +80,8 @@ class DBIOFile:
 
     def _rollback(self) -> None:
         pass
+
+
+@provider(IIOFileFactory)
+def fsiofile_factory(conn: Any, settings: dict) -> DBIOFile:
+    return DBIOFile(conn, settings)
