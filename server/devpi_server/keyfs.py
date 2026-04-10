@@ -310,7 +310,6 @@ class KeyFS(Generic[Schema]):
         *,
         io_file_factory: Callable | None = None,
         readonly: bool = False,
-        cache_size: int = 10000,
         schema: type[Schema] | None = None,
     ) -> None:
         self.base_path = Path(basedir)
@@ -328,7 +327,6 @@ class KeyFS(Generic[Schema]):
         self._storage = storage_info.storage_factory(
             self.base_path,
             notify_on_commit=self._notify_on_commit,
-            cache_size=cache_size,
             settings={} if storage_info.settings is None else storage_info.settings,
         )
         for key in self.schema:
