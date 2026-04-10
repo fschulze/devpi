@@ -308,7 +308,7 @@ def storage_io_file_factory(storage_info):
 
 @pytest.fixture
 def makexom(request, gen_path, http, monkeypatch, storage_args, storage_plugin):
-    def makexom(opts=(), http=http, plugins=()):
+    def makexom(opts=(), http=http, plugins=()):  # noqa: PLR0912
         from devpi_server import auth_basic
         from devpi_server import auth_devpi
         from devpi_server import model
@@ -344,9 +344,19 @@ def makexom(request, gen_path, http, monkeypatch, storage_args, storage_plugin):
                 "devpi-server",
                 *([] if "--serverdir" in opts else ["--serverdir", serverdir]),
                 *opts,
-                *([] if no_storage_option else storage_args(serverdir)),
             )
         ]
+        if not no_storage_option:
+            _storage_args = storage_args(serverdir)
+            if "--storage" in fullopts:
+                assert len(_storage_args) == 1
+                storage_options = fullopts[fullopts.index("--storage") + 1]
+                assert storage_options.startswith(":")
+                if ":" in _storage_args[0]:
+                    _storage_args[0] = f"{_storage_args[0]},{storage_options[1:]}"
+                else:
+                    _storage_args[0] = f"{_storage_args[0]}{storage_options}"
+            fullopts.extend(str(x) for x in _storage_args)
         config = parseoptions(pm, fullopts)
         config.init_nodeinfo()
         if (
