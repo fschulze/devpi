@@ -12,8 +12,8 @@ class TestStatus:
         metrics = r.json["result"]["metrics"]
         metric_names = {x[0] for x in metrics}
         for cache_name in (
-            "devpi_server_changelog_cache",
-            "devpi_server_relpath_cache",
+            "devpi_server_large_cache",
+            "devpi_server_small_cache",
         ):
             for name in ("evictions", "hits", "items", "lookups", "misses", "size"):
                 assert f"{cache_name}_{name}" in metric_names
