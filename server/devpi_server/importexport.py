@@ -9,6 +9,7 @@ from .main import Fatal
 from .main import init_default_indexes
 from .main import set_state_version
 from .main import xom_from_config
+from .markers import absent
 from .model import Rel
 from .normalized import normalize_name
 from .readonly import ReadonlyView
@@ -17,6 +18,7 @@ from attrs import define
 from attrs import field
 from collections import defaultdict
 from devpi_common.metadata import BasenameMeta
+from devpi_common.types import parse_hash_spec
 from devpi_common.url import URL
 from devpi_server import __version__ as server_version
 from devpi_server.model import get_stage_customizer_classes
@@ -383,6 +385,8 @@ class Migrator:
             if "hash_spec" in mapping:
                 hashes.add_spec(mapping.pop("hash_spec"))
             mapping["hashes"] = dict(hashes)
+        if "for_entrypath" in data:
+            self.migrate_toxresult(data)
         return data
 
     def migrate_index(self, data: dict) -> dict:
@@ -401,6 +405,24 @@ class Migrator:
             whitelist = indexconfig.pop("pypi_whitelist")
             if "mirror_whitelist" not in indexconfig:
                 indexconfig["mirror_whitelist"] = whitelist
+        return data
+
+    def migrate_toxresult(self, data: dict) -> dict:
+        hash_type = None
+        hash_value = None
+        parts = Path(data["relpath"]).parts
+        if len(parts) == 5:
+            hash_spec = parse_hash_spec(parts[3])
+            if hash_spec[0] is not None:
+                hash_type = hash_spec[0]().name
+                hash_value = hash_spec[1]
+        if (entrymapping := data.get("entrymapping")) is not None:
+            hashes = entrymapping.get("hashes", {})
+            if hashes.get(hash_type, absent) == hash_value:
+                # from 6.5.0 until it was fixed in 6.9.0 the hash for toxresults
+                # was for the linked file, not for the contents, so we remove them
+                # here to prevent mismatch errors
+                hashes.clear()
         return data
 
     def migrate_user(self, data: dict) -> dict:

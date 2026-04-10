@@ -730,6 +730,33 @@ class TestImportExport:
             # we expect the name from the imported data
             assert toxresult.basename == "hello-0.9.tar.gz.toxresult0"
 
+    def test_import_with_wrong_toxresult_hash(self, impexp, tox_result_data):
+        mapp1 = impexp.mapp1
+        api = mapp1.create_and_use()
+        content = b"content"
+        mapp1.upload_file_pypi("hello-1.0.tar.gz", content, "hello", "1.0")
+        (path,) = mapp1.get_release_paths("hello")
+        path = path.strip("/")
+        toxresult_dump = json.dumps(tox_result_data)
+        toxresult_hashes = get_hashes(toxresult_dump.encode())
+        toxresult_hash = toxresult_hashes.get_default_value()
+        r = mapp1.upload_toxresult(f"/{path}", toxresult_dump)
+        toxresult_path = f"/{r.json['result']}"
+        impexp.export()
+        with impexp.update_dataindex_json() as data:
+            files = data["indexes"][api.stagename]["files"]
+            (releasefile,) = (x for x in files if x["type"] == "releasefile")
+            (toxresult,) = (x for x in files if x["type"] == "toxresult")
+            toxresult["entrymapping"]["hash_spec"] = releasefile["entrymapping"][
+                "hash_spec"
+            ]
+            toxresult["entrymapping"]["hashes"] = releasefile["entrymapping"]["hashes"]
+        mapp2 = impexp.new_import()
+        toxresult_link = mapp2.getjson(toxresult_path)["result"]
+        (_hash_algo, hash_value) = parse_hash_spec(toxresult_link["hash_spec"])
+        assert toxresult_link["hashes"] == toxresult_hashes
+        assert hash_value == toxresult_hash
+
     def test_import_without_history_log(self, impexp, tox_result_data):
         impexp.copy_testdata("no_history_log")
         filedir = (
