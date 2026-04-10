@@ -317,7 +317,7 @@ def storage_io_file_factory(storage_info):
 def makexom(
     request, gen_path, http, httpget, monkeypatch, storage_args, storage_plugin
 ):
-    def makexom(opts=(), http=http, httpget=httpget, plugins=()):  # noqa: PLR0912
+    def makexom(opts=(), http=http, httpget=httpget, plugins=()):
         from devpi_server import auth_basic
         from devpi_server import auth_devpi
         from devpi_server import model
@@ -328,23 +328,34 @@ def makexom(
         plugins = [
             plugin[0] if isinstance(plugin, tuple) else plugin
             for plugin in plugins]
-        default_plugins = [
-            auth_basic, auth_devpi, mirror, model, replica, view_auth, views,
-            storage_plugin]
-        for plugin in default_plugins:
-            if plugin not in plugins:
-                plugins.append(plugin)
+        plugins.extend(
+            plugin
+            for plugin in (
+                auth_basic,
+                auth_devpi,
+                mirror,
+                model,
+                replica,
+                view_auth,
+                views,
+                storage_plugin,
+            )
+            if plugin not in plugins
+        )
         pm = get_pluginmanager(load_entrypoints=False)
         for plugin in plugins:
             pm.register(plugin)
+        no_storage_option = request.node.get_closest_marker("no_storage_option")
         serverdir = gen_path()
-        if "--serverdir" in opts:
-            fullopts = ["devpi-server"] + list(opts)
-        else:
-            fullopts = ["devpi-server", "--serverdir", serverdir] + list(opts)
-        if not request.node.get_closest_marker("no_storage_option"):
-            fullopts.extend(storage_args(serverdir))
-        fullopts = [str(x) for x in fullopts]
+        fullopts = [
+            str(x)
+            for x in (
+                "devpi-server",
+                *([] if "--serverdir" in opts else ["--serverdir", serverdir]),
+                *opts,
+                *([] if no_storage_option else storage_args(serverdir)),
+            )
+        ]
         config = parseoptions(pm, fullopts)
         config.init_nodeinfo()
         for marker in ("storage_with_filesystem",):
@@ -360,7 +371,7 @@ def makexom(
             add_pypistage_mocks(monkeypatch, http, httpget)
         request.addfinalizer(xom.thread_pool.kill)
         request.addfinalizer(xom._close_sessions)
-        if not request.node.get_closest_marker("no_storage_option"):
+        if not no_storage_option:
             assert storage_plugin.__name__ in {
                 x.__module__ for x in xom.keyfs._storage.__class__.__mro__}
         # verify storage interface
