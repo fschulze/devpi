@@ -525,6 +525,19 @@ class TestImportExport:
             else:
                 assert stage.ixconfig == _pypi_ixconfig_default
 
+    def test_import_user_with_extra_data(self, impexp):
+        mapp1 = impexp.mapp1
+        api1 = mapp1.create_and_use()
+        impexp.export()
+        with impexp.update_dataindex_json() as data:
+            data["users"][api1.user]["gobbledygook"] = "foo"
+        mapp2 = impexp.new_import()
+        with mapp2.xom.keyfs.read_transaction():
+            user = mapp2.xom.model.get_user(api1.user)
+            # unknown keys are not shown by default
+            assert "gobbledygook" not in user.get()
+            assert user.get(credentials=True)["gobbledygook"] == "foo"
+
     @pytest.mark.parametrize("norootpypi", [False, True])
     def test_import_no_root_pypi(self, impexp, norootpypi):
         from devpi_server.main import _pypi_ixconfig_default
