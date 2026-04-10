@@ -43,7 +43,7 @@ class File:
     basedir: Path = field(kw_only=True)
     file_path_info: FilePathInfo = field(kw_only=True)
     path: Path = field(kw_only=True)
-    digest_path: Path = field(kw_only=True)
+    digest_path: Path | None = field(kw_only=True)
 
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__} {self.path}>"
@@ -70,6 +70,7 @@ class File:
         with suppress(OSError):
             self.path.unlink()
         digest_path = self.digest_path
+        assert digest_path is not None
         if digest_path.exists() and digest_path.stat().st_nlink == 1:
             # if nothing else links to the digest file anymore, then remove it
             digest_path.unlink()
@@ -87,10 +88,13 @@ class DirtyFile(File):
     def commit(self) -> list[str]:
         assert tmpsuffix_for_path(self.path) is not None
         digest_path = self.digest_path
+        assert digest_path is not None
         if digest_path.exists():
             # additional check besides the content digest
             assert getsize(digest_path) == self.getsize()
             # link to the existing digest file
+            if self.dst_path.exists():
+                raise RuntimeError(f"{self.dst_path} -> {digest_path}")
             hardlink(digest_path, self.dst_path)
             # drop the temporary file
             self.drop()
@@ -112,8 +116,11 @@ class DirtyFile(File):
 @provider(IDirtyFileFactory, IFileFactory)
 class HashHLFactory:
     @classmethod
-    def _make_digest_path(cls, basedir: Path, file_path_info: FilePathInfo) -> Path:
-        assert file_path_info.hash_digest is not None
+    def _make_digest_path(
+        cls, basedir: Path, file_path_info: FilePathInfo
+    ) -> Path | None:
+        if file_path_info.hash_digest is None:
+            return None
         return basedir.joinpath("+h", *split_digest(file_path_info.hash_digest))
 
     @classmethod
@@ -184,6 +191,7 @@ class HashHLIOFile(FSIOFileBase):
                     path.unlink()
                     threadlog.warn("completed file-del from crashed tx: %s", path)
                 digest_path = HashHLFactory._make_digest_path(basedir, file_path_info)
+                assert digest_path is not None
                 with suppress(OSError):
                     digest_path.unlink()
                     threadlog.warn(
@@ -193,6 +201,7 @@ class HashHLIOFile(FSIOFileBase):
                 dst = HashHLFactory._make_path(basedir, relpath)
                 src = basedir / rel_rename
                 digest_path = HashHLFactory._make_digest_path(basedir, file_path_info)
+                assert digest_path is not None
                 if digest_path.exists() and src.exists():
                     # additional check besides the content digest
                     assert getsize(digest_path) == getsize(src)

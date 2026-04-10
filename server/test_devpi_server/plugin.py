@@ -277,25 +277,34 @@ def storage_plugin(request):
 
 @pytest.fixture(scope="session")
 def storage_info(request, storage_plugin):
+    settings = {}
     fsbackend = getattr(request.config.option, "devpi_server_storage_fs_backend", None)
-    if fsbackend is None:
-        fsbackend = "fs"
-    return storage_plugin.devpiserver_storage_backend(
-        settings=dict(fsbackend=fsbackend)
-    )
+    if fsbackend is not None:
+        settings["fsbackend"] = fsbackend
+    return storage_plugin.devpiserver_storage_backend(settings=settings)
 
 
 @pytest.fixture(scope="session")
 def storage_args(storage_info):
     def storage_args(basedir):
         args = []
-        if storage_info["name"] != "sqlite":
+        if storage_info["name"] != "sqlite" or storage_info["settings"]:
             storage_option = "--storage=%s" % storage_info["name"]
             _get_test_storage_options = getattr(
                 storage_info["storage"], "_get_test_storage_options", None)
+            got_options = False
             if _get_test_storage_options:
                 storage_options = _get_test_storage_options(str(basedir))
+                got_options = storage_options
                 storage_option = storage_option + storage_options
+            settings = storage_info.get("settings", {})
+            if settings:
+                storage_options = ",".join(f"{k}={v}" for k, v in settings.items())
+                storage_option = (
+                    f"{storage_option},{storage_options}"
+                    if got_options
+                    else f"{storage_option}:{storage_options}"
+                )
             args.append(storage_option)
         return args
     return storage_args
@@ -374,6 +383,17 @@ def makexom(
         if not no_storage_option:
             assert storage_plugin.__name__ in {
                 x.__module__ for x in xom.keyfs._storage.__class__.__mro__}
+            fsbackend = getattr(
+                request.config.option, "devpi_server_storage_fs_backend", None
+            )
+            if fsbackend is not None:
+                with xom.keyfs.get_connection() as conn:
+                    assert (
+                        xom.keyfs.io_file_factory(conn)
+                        .__module__.split(".")[-1]
+                        .removeprefix("filestore_")
+                        == fsbackend
+                    )
         # verify storage interface
         with xom.keyfs.get_connection() as conn:
             verify_connection_interface(conn)
