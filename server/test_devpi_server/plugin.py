@@ -1479,10 +1479,15 @@ def primary_host_port(primary_server_path, secretfile, storage_args):
         "--serverdir", str(primary_server_path),
         *storage_args(primary_server_path)]
     if not primary_server_path.joinpath('.nodeinfo').exists():
-        subprocess.check_call([  # noqa: S607
-            "devpi-init",
-            "--serverdir", str(primary_server_path),
-            *storage_args(primary_server_path)])
+        subprocess.check_call(
+            [  # noqa: S607
+                "devpi-init",
+                "--serverdir",
+                str(primary_server_path),
+                "--no-root-pypi",
+                *storage_args(primary_server_path),
+            ]
+        )
     p = subprocess.Popen(args)
     try:
         wait_for_port(host, port)

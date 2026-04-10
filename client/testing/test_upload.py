@@ -770,8 +770,9 @@ class TestUploadFunctional:
         assert Path("setup.py").is_file()
 
         # use mirror
-        out = out_devpi("use", "root/pypi")
-        out.stdout.fnmatch_lines_random("current devpi index*/root/pypi*")
+        out = out_devpi("index", "-c", "mirror", "type=mirror")
+        out = out_devpi("use", "mirror")
+        out.stdout.fnmatch_lines_random("current devpi index*/*/mirror*")
         out = out_devpi("upload", "--no-isolation", "--dry-run")
         out.stdout.fnmatch_lines_random("*does not support upload.")
         out.stdout.fnmatch_lines_random("*it is a mirror.")

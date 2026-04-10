@@ -226,7 +226,7 @@ def _liveserver(request, clientdir, indexer_backend_option, server_executable):
         "--serverdir", str(clientdir)]
     init_executable = server_executable.replace(
         "devpi-server", "devpi-init")
-    check_call(request, [init_executable, *args])
+    check_call(request, [init_executable, "--no-root-pypi", *args])
     args.extend(indexer_backend_option)
     out = check_output(request, [server_executable, "-h"])
     if b'--argon2' in out:

@@ -168,32 +168,12 @@ class TestIndexThings:
         if m:  # only server-side mapp returns messages
             assert "not/exists" in m
 
-    def test_pypi_index_attributes(self, mapp):
-        mapp.login_root()
-        data = mapp.getjson("/root/pypi?no_projects=")
-        res = data["result"]
-        res.pop("projects", None)
-        assert sorted(res.keys()) == sorted([
-            "type", "volatile", "title", "mirror_url", "mirror_web_url_fmt"])
-        assert res["type"] == "mirror"
-        assert res["volatile"] is False
-        assert res["title"] == "PyPI"
-        assert 'pypi' in res["mirror_url"]
-        assert 'pypi' in res["mirror_web_url_fmt"]
-        assert '{name}' in res["mirror_web_url_fmt"]
-
     def test_create_index_base_empty(self, mapp):
         indexconfig = dict(bases="")
         mapp.login_root()
         mapp.create_index("root/empty", indexconfig=indexconfig, code=200)
         data = mapp.getjson("/root/empty")
         assert not data["result"]["bases"]
-
-    def test_create_index_base_normalized(self, mapp):
-        indexconfig = dict(bases=("/root/pypi",))
-        mapp.login_root()
-        mapp.create_index("root/hello", indexconfig=indexconfig,
-                          code=200)
 
     def test_create_index_base_invalid(self, mapp):
         mapp.login_root()

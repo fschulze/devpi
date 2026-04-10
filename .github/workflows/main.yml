@@ -151,7 +151,7 @@ jobs:
           - project: "client"
             python-version: "3.7"
             os: "ubuntu-22.04"
-            tox-envs: "py37-server520"
+            tox-envs: "py37-server6"
           - project: "client"
             python-version: "3.7"
             os: "ubuntu-22.04"

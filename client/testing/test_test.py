@@ -11,6 +11,25 @@ from pathlib import Path
 from textwrap import dedent
 
 
+@pytest.fixture
+def remote_index_info(server_version):
+    from devpi_common.metadata import parse_version
+
+    if server_version < parse_version("7.0.0.dev2"):
+
+        class MirrorInfo:
+            type = "mirror"
+            url_option = "mirror_url"
+
+        return MirrorInfo()
+
+    class RemoteInfo:
+        type = "remote"
+        url_option = "remote_url"
+
+    return RemoteInfo()
+
+
 def test_post_tox_json_report(loghub, mock_http_api):
     mock_http_api.set("http://devpi.net", result={})
     post_tox_json_report(loghub, "http://devpi.net", {"hello": "123"})
@@ -444,8 +463,18 @@ class TestFunctional:
         (out, err) = capfd.readouterr()
         assert "could not find/receive links for notexists73" in out
 
-    def test_main_example(self, out_devpi, create_and_upload):
-        result = out_devpi("index", "bases=root/pypi")
+    def test_main_example(
+        self, create_and_upload, devpi_username, remote_index_info, out_devpi
+    ):
+        result = out_devpi(
+            "index",
+            "-c",
+            "mirror",
+            f"type={remote_index_info.type}",
+            f"{remote_index_info.url_option}=https://pypi.org/simple/",
+        )
+        assert result.ret == 0
+        result = out_devpi("index", f"bases={devpi_username}/mirror")
         assert result.ret == 0
         create_and_upload("exa-1.0", filedefs={
             "tox.ini": """
@@ -491,8 +520,18 @@ class TestFunctional:
         result = out_devpi("test", "--no-upload", "exa")
         assert result.ret == 0
 
-    def test_specific_version(self, out_devpi, create_and_upload):
-        result = out_devpi("index", "bases=root/pypi")
+    def test_specific_version(
+        self, create_and_upload, devpi_username, remote_index_info, out_devpi
+    ):
+        result = out_devpi(
+            "index",
+            "-c",
+            "mirror",
+            f"type={remote_index_info.type}",
+            f"{remote_index_info.url_option}=https://pypi.org/simple/",
+        )
+        assert result.ret == 0
+        result = out_devpi("index", f"bases={devpi_username}/mirror")
         assert result.ret == 0
         create_and_upload("exa-1.0", filedefs={
             "tox.ini": """
@@ -516,8 +555,18 @@ class TestFunctional:
             *exa-1.0.*
             *tests passed*""")
 
-    def test_pkgname_with_dashes(self, out_devpi, create_and_upload):
-        result = out_devpi("index", "bases=root/pypi")
+    def test_pkgname_with_dashes(
+        self, create_and_upload, devpi_username, remote_index_info, out_devpi
+    ):
+        result = out_devpi(
+            "index",
+            "-c",
+            "mirror",
+            f"type={remote_index_info.type}",
+            f"{remote_index_info.url_option}=https://pypi.org/simple/",
+        )
+        assert result.ret == 0
+        result = out_devpi("index", f"bases={devpi_username}/mirror")
         assert result.ret == 0
         create_and_upload(("my-pkg-123", "1.0"), filedefs={
             "tox.ini": """
