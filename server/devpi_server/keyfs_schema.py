@@ -117,8 +117,7 @@ class KeyFSSchema(metaclass=KeyFSSchemaMeta):
             ),
         )
         key = getattr(self, name)
-        if hasattr(self.keyfs._storage, "add_key"):
-            self.keyfs._storage.add_key(key)
+        self.keyfs._storage.add_key(key)
         return key
 
     def typedkey(
@@ -137,6 +136,5 @@ class KeyFSSchema(metaclass=KeyFSSchemaMeta):
             ),
         )
         key = getattr(self, name)
-        if hasattr(self.keyfs._storage, "add_key"):
-            self.keyfs._storage.add_key(key)
+        self.keyfs._storage.add_key(key)
         return key
