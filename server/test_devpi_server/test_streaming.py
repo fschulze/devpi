@@ -13,8 +13,10 @@ pytestmark = [
 
 
 @pytest.fixture
-def host_port(primary_host_port):
-    return primary_host_port
+def host_port(request, storage_info):
+    if "storage_with_filesystem" not in storage_info.get("_test_markers", []):
+        pytest.skip("The storage doesn't have marker 'storage_with_filesystem'.")
+    return request.getfixturevalue("primary_host_port")
 
 
 @pytest.fixture
@@ -56,10 +58,17 @@ class TestStreaming(object):
     @pytest.mark.slow
     @pytest.mark.parametrize("length,pkg_version,pkg_name", [
         (None, '1.0', 'pkg1'), (False, '1.1', 'pkg2')])
-    def test_streaming_download(self, content_digest, files_path, length, pkg_version, pkg_name, server_url_session, simpypi, storage_info):
+    def test_streaming_download(
+        self,
+        content_digest,
+        files_path,
+        length,
+        pkg_version,
+        pkg_name,
+        server_url_session,
+        simpypi,
+    ):
         from time import sleep
-        if "storage_with_filesystem" not in storage_info.get('_test_markers', []):
-            pytest.skip("The storage doesn't have marker 'storage_with_filesystem'.")
         (content, digest) = content_digest
         (url, s) = server_url_session
         pkgzip = f"{pkg_name}-{pkg_version}.zip"
@@ -93,9 +102,16 @@ class TestStreaming(object):
 
     @pytest.mark.parametrize("size_factor,pkg_version,pkg_name", [
         (2, '1.2', 'pkg3'), (0.5, '1.3', 'pkg4')])
-    def test_streaming_differing_content_size(self, content_digest, files_path, pkg_version, pkg_name, server_url_session, simpypi, size_factor, storage_info):
-        if "storage_with_filesystem" not in storage_info.get('_test_markers', []):
-            pytest.skip("The storage doesn't have marker 'storage_with_filesystem'.")
+    def test_streaming_differing_content_size(
+        self,
+        content_digest,
+        files_path,
+        pkg_version,
+        pkg_name,
+        server_url_session,
+        simpypi,
+        size_factor,
+    ):
         (content, digest) = content_digest
         (url, s) = server_url_session
         pkgzip = f"{pkg_name}-{pkg_version}.zip"

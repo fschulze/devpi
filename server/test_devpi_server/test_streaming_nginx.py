@@ -11,8 +11,10 @@ pytestmark = [
 
 
 @pytest.fixture
-def host_port(nginx_host_port):
-    return nginx_host_port
+def host_port(request, storage_info):
+    if "storage_with_filesystem" not in storage_info.get("_test_markers", []):
+        pytest.skip("The storage doesn't have marker 'storage_with_filesystem'.")
+    return request.getfixturevalue("nginx_host_port")
 
 
 @pytest.fixture
