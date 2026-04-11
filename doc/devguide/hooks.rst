@@ -169,14 +169,8 @@ hook semantics for storage backends
 
 Plugins can provide custom storage backends. The storage API is still experimental::
 
-    def devpiserver_storage_backend(settings):
-        """ return dict containing storage backend info.
-
-        The following keys are defined:
-
-            "storage" - the class implementing the storage API
-            "name" - name for selection from command line
-            "description" - a short description for the commandline help
+    def devpiserver_describe_storage_backend(settings: dict) -> StorageInfo:
+        """ return StorageInfo instance describing the storage implementation.
         """
 
 
