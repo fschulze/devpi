@@ -1,0 +1,1 @@
+Return stale project list for mirrors when the lock can't be acquired within the timeout.

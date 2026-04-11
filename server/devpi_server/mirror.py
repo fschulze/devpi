@@ -628,6 +628,9 @@ class MirrorStage(BaseStage):
         return self.xom.setdefault_singleton(
             self.name, "project_retrieve_times", factory=ProjectUpdateCache)
 
+    def get_projects_timeout(self, timeout: float | None) -> float:
+        return self.projects_timeout if timeout is None else timeout
+
     async def _get_remote_projects(
         self, projects_future: asyncio.Future[ProjectsResult]
     ) -> None:
@@ -675,7 +678,7 @@ class MirrorStage(BaseStage):
     def _update_projects(
         self, timeout: float | None = None
     ) -> tuple[dict[NormalizedName, str], bool]:
-        projects_timeout = self.projects_timeout if timeout is None else timeout
+        projects_timeout = self.get_projects_timeout(timeout)
         projects_future = cast(
             "asyncio.Future[ProjectsResult]", self.xom.create_future()
         )
@@ -740,12 +743,18 @@ class MirrorStage(BaseStage):
         # try without lock first
         if not self.cache_projectnames.is_expired(self.cache_expiry):
             return (self.cache_projectnames.get(), False)
-        with self._list_projects_perstage_lock:
-            # retry in case it was updated in another thread
-            if not self.cache_projectnames.is_expired(self.cache_expiry):
-                return (self.cache_projectnames.get(), False)
-            # no fresh projects or None at all, let's go remote
-            return self._update_projects(timeout=timeout)
+        lock = self._list_projects_perstage_lock
+        projects_timeout = self.get_projects_timeout(timeout)
+        if lock.acquire(timeout=projects_timeout):
+            try:
+                # retry in case it was updated in another thread
+                if not self.cache_projectnames.is_expired(self.cache_expiry):
+                    return (self.cache_projectnames.get(), False)
+                # no fresh projects or None at all, let's go remote
+                return self._update_projects(timeout=timeout)
+            finally:
+                lock.release()
+        return (self._stale_list_projects_perstage(), True)
 
     def list_projects_perstage(self) -> dict[str, NormalizedName | str]:
         """ Return the project names. """
