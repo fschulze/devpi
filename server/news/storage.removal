@@ -1,0 +1,1 @@
+Replaced ``devpiserver_storage_backend`` with new ``devpiserver_describe_storage_backend``.
