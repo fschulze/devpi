@@ -94,6 +94,7 @@ jobs:
     if: ${{ true && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'actions')) }}
     name: "${{ matrix.project }} (${{ matrix.tox-envs }}) with ${{ matrix.python-version }}"
     strategy:
+      fail-fast: false
       matrix:
         include:
           - project: "common"
@@ -144,6 +145,7 @@ jobs:
     name: "${{ matrix.project }} (${{ matrix.tox-envs }}) with ${{ matrix.python-version }}"
     needs: "packages"
     strategy:
+      fail-fast: false
       matrix:
         include:
           - project: "client"
@@ -195,6 +197,7 @@ jobs:
     name: "${{ matrix.project }} (${{ matrix.tox-envs }}) with ${{ matrix.python-version }}"
     needs: "server-tests"
     strategy:
+      fail-fast: false
       matrix:
         include:
           - project: "client"
@@ -242,6 +245,7 @@ jobs:
     name: "${{ matrix.project }} (${{ matrix.tox-envs }}) with ${{ matrix.python-version }}"
     needs: "packages"
     strategy:
+      fail-fast: false
       matrix:
         include:
           - project: "server"
@@ -297,6 +301,7 @@ jobs:
     name: "${{ matrix.project }} (${{ matrix.tox-envs }}) with ${{ matrix.python-version }}"
     needs: "server-tests"
     strategy:
+      fail-fast: false
       matrix:
         include:
           - project: "web"
@@ -460,6 +465,7 @@ jobs:
     name: "${{ matrix.project }} (${{ matrix.tox-envs }}) with ${{ matrix.python-version }}"
     needs: "packages"
     strategy:
+      fail-fast: false
       matrix:
         include:
           - project: "postgresql"
@@ -506,6 +512,7 @@ jobs:
     name: "${{ matrix.project }} (${{ matrix.tox-envs }}) with ${{ matrix.python-version }}"
     needs: ["server-tests", "web-tests"]
     strategy:
+      fail-fast: false
       matrix:
         include:
           - project: "server"
@@ -560,6 +567,7 @@ jobs:
     name: "${{ matrix.project }} (${{ matrix.tox-envs }}) with ${{ matrix.python-version }}"
     needs: ["server-tests"]
     strategy:
+      fail-fast: false
       matrix:
         include:
           # - project: "postgresql"
@@ -642,6 +650,7 @@ jobs:
     name: "${{ matrix.project }} (${{ matrix.tox-envs }}) with ${{ matrix.python-version }}"
     needs: ["postgresql-tests", "web-tests"]
     strategy:
+      fail-fast: false
       matrix:
         include:
           - project: "postgresql"
@@ -700,6 +709,7 @@ jobs:
     name: "${{ matrix.project }} (${{ matrix.tox-envs }}) with ${{ matrix.python-version }}"
     needs: ["client-tests", "server-tests", "web-tests"]
     strategy:
+      fail-fast: false
       matrix:
         include:
           - project: "client"
@@ -810,6 +820,7 @@ jobs:
     name: "${{ matrix.project }} (${{ matrix.tox-envs }}) with ${{ matrix.python-version }}"
     needs: ["client-tests", "server-tests", "web-tests"]
     strategy:
+      fail-fast: false
       matrix:
         include:
           - project: "common"
@@ -871,6 +882,7 @@ jobs:
     name: "${{ matrix.project }} (${{ matrix.tox-envs }}) with ${{ matrix.python-version }}"
     needs: ["client-tests", "server-tests", "web-tests"]
     strategy:
+      fail-fast: false
       matrix:
         include:
           - project: "common"
