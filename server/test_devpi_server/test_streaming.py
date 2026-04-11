@@ -14,7 +14,7 @@ pytestmark = [
 
 @pytest.fixture
 def host_port(request, storage_info):
-    if "storage_with_filesystem" not in storage_info.get("_test_markers", []):
+    if not storage_info.storage_with_filesystem:
         pytest.skip("The storage doesn't have marker 'storage_with_filesystem'.")
     return request.getfixturevalue("primary_host_port")
 
