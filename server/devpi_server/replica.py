@@ -303,7 +303,7 @@ class PrimaryChangelogRequest:
         with self.update_replica_status(start_serial):
             keyfs = self.xom.keyfs
             self._wait_for_serial(start_serial)
-            devpi_serial = keyfs.get_current_serial()
+            devpi_serial = keyfs.tx.conn.last_changelog_serial
             all_changes = []
             raw_size = 0
             start_time = time.time()
@@ -331,7 +331,7 @@ class PrimaryChangelogRequest:
 
         keyfs = self.xom.keyfs
         self._wait_for_serial(start_serial)
-        devpi_serial = keyfs.get_current_serial()
+        devpi_serial = keyfs.tx.conn.last_changelog_serial
         threadlog.info("Streaming from %s to %s", start_serial, devpi_serial)
 
         def iter_changelog_entries():
