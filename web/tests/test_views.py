@@ -1,11 +1,13 @@
 from devpi_common.archive import zip_dict
 from devpi_common.metadata import parse_version
+from devpi_server import __version__ as _devpi_server_version
 from test_devpi_server.plugin import make_file_url
 import datetime as dt
 import pytest
 import re
 
 
+devpi_server_version = parse_version(_devpi_server_version)
 pytestmark = [pytest.mark.notransaction]
 
 
@@ -664,6 +666,82 @@ def test_complex_name(mapp, testapp):
 
 
 @pytest.mark.with_notifier
+@pytest.mark.skipif(
+    devpi_server_version < parse_version("7.0.0dev2"), reason="Needs inheritance_rules"
+)
+def test_inheritance_rules(mapp, pypistage, testapp):
+    pypistage.mock_simple(
+        "pkg1", '<a href="http://example.com/releases/pkg1-2.7.zip" /a>)'
+    )
+    api = mapp.create_and_use(indexconfig=dict(bases=["root/pypi"]))
+    mapp.set_versiondata(
+        {"name": "pkg1", "version": "2.6", "description": "foo"}, set_whitelist=False
+    )
+    mapp.upload_file_pypi(
+        "pkg1-2.6.tgz",
+        b"123",
+        "pkg1",
+        "2.6",
+        code=200,
+        waithooks=True,
+        set_whitelist=False,
+    )
+    # version view
+    r = testapp.get("%s/pkg1/2.6" % api.index, accept="text/html")
+    (infonote,) = r.html.select(".infonote")
+    text = compareable_text(infonote.text)
+    assert (
+        text
+        == "package 'pkg1' located in user1/dev blocks releases from index root/pypi"
+    )
+    # project view
+    r = testapp.get("%s/pkg1" % api.index, accept="text/html")
+    (infonote,) = r.html.select(".infonote")
+    text = compareable_text(infonote.text)
+    assert (
+        text
+        == "package 'pkg1' located in user1/dev blocks releases from index root/pypi"
+    )
+    # index view
+    r = testapp.get(api.index, accept="text/html")
+    assert "project_inheritance_rules" in r.unicode_body
+    assert "block type:remote if local_exists" in r.unicode_body
+    # now set the whitelist
+    mapp.upload_file_pypi(
+        "pkg1-2.8.tgz",
+        b"123",
+        "pkg1",
+        "2.8",
+        code=200,
+        waithooks=True,
+        set_whitelist=True,
+    )
+    # version view
+    r = testapp.get("%s/pkg1/2.8" % api.index, accept="text/html")
+    (infonote,) = r.html.select(".infonote")
+    text = compareable_text(infonote.text)
+    assert (
+        text
+        == "package 'pkg1' project rule 'allow all' from user1/dev allows merging releases from index root/pypi"
+    )
+    # project view
+    r = testapp.get("%s/pkg1" % api.index, accept="text/html")
+    (infonote,) = r.html.select(".infonote")
+    text = compareable_text(infonote.text)
+    assert (
+        text
+        == "package 'pkg1' project rule 'allow all' from user1/dev allows merging releases from index root/pypi"
+    )
+    # index view
+    r = testapp.get(api.index, accept="text/html")
+    assert "project_inheritance_rules" in r.unicode_body
+    assert "block type:remote if local_exists" in r.unicode_body
+
+
+@pytest.mark.with_notifier
+@pytest.mark.skipif(
+    devpi_server_version >= parse_version("7.0.0dev2"), reason="Needs mirror_whitelist"
+)
 def test_whitelist(mapp, pypistage, testapp):
     pypistage.mock_simple(
         "pkg1", '<a href="http://example.com/releases/pkg1-2.7.zip" /a>)')

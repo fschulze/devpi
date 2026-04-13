@@ -451,6 +451,45 @@ def get_files_info(request, linkstore, *, show_toxresults=False):
         for link in filedata]
 
 
+def get_inheritance_info(index):
+    if hasattr(index, "index_bases"):
+        inheritance_info_jsonable = index.index_bases.inheritance_info.jsonable()
+        return dict(
+            inheritance_info=inheritance_info_jsonable,
+            reasons=[
+                reason
+                for ti in inheritance_info_jsonable["traversal_infos"]
+                if (reason := ti.get("reason"))
+            ],
+        )
+    return None
+
+
+def get_merge_info(index, project):
+    if hasattr(index, "index_bases"):
+        project_inheritance_info = index.index_bases.get_project_inheritance_info(
+            project
+        )
+        project_inheritance_info_jsonable = project_inheritance_info.jsonable()
+        return dict(
+            blocked_remote_name=project_inheritance_info.blocked_remote_name,
+            has_project_from_remote=project_inheritance_info.has_project_from_remote,
+            project_inheritance_info=project_inheritance_info_jsonable,
+            reasons=[
+                reason
+                for ti in project_inheritance_info_jsonable["traversal_infos"]
+                if (reason := ti.get("reason"))
+            ],
+        )
+    whitelist_info = index.get_mirror_whitelist_info(project)
+    return dict(
+        blocked_remote_name=whitelist_info["blocked_by_mirror_whitelist"],
+        has_project_from_remote=whitelist_info["has_mirror_base"],
+        project_inheritance_info=None,
+        reasons=None,
+    )
+
+
 def load_toxresult(link):
     with TextIOWrapper(link.entry.file_open_read(), encoding="utf-8") as f:
         return json.load(f)
@@ -580,14 +619,21 @@ def index_get(context, request):
         permissions=permissions,
         bases=bases,
         packages=packages,
+        project_inheritance_rules=None,
+        inheritance_info=get_inheritance_info(stage),
         whitelist=whitelist,
         index_name=stage.name,
-        index_title=stage.ixconfig.get('title', None),
-        index_description=stage.ixconfig.get('description', None))
+        index_title=stage.ixconfig.get("title", None),
+        index_description=stage.ixconfig.get("description", None),
+    )
     if stage.ixconfig["type"] in {"mirror", "remote"}:
         return result
 
     if hasattr(stage, "ixconfig"):
+        if "project_inheritance_rules" in stage.ixconfig:
+            result["project_inheritance_rules"] = stage.ixconfig[
+                "project_inheritance_rules"
+            ]
         whitelist.extend(sorted(stage.ixconfig.get('mirror_whitelist', [])))
         for base in stage.ixconfig["bases"]:
             bases.append(dict(
@@ -654,8 +700,13 @@ def add_simple_page_navlink(request, context, nav_links):
             user=context.username, index=context.index, project=context.project)))
 
 
-def add_mirror_page_navlink(request, context, whitelist_info, nav_links):
-    if whitelist_info['has_mirror_base']:
+def add_mirror_page_navlink(
+    request,  # noqa: ARG001,
+    context,
+    merge_info,
+    nav_links,
+):
+    if merge_info["has_project_from_remote"]:
         for base in reversed(list(context.stage.sro())):
             if base.ixconfig["type"] not in {"mirror", "remote"}:
                 continue
@@ -757,8 +808,8 @@ def project_get(context, request):
     versions = []
     for version in get_sorted_versions(version_info):
         versions.append(version_info[version])
-    whitelist_info = context.stage.get_mirror_whitelist_info(context.project)
-    add_mirror_page_navlink(request, context, whitelist_info, nav_links)
+    merge_info = get_merge_info(context.stage, context.project)
+    add_mirror_page_navlink(request, context, merge_info, nav_links)
     stage = context.stage
     latest_verdata = {}
     latest_version = get_latest_version(stage_versions)
@@ -766,20 +817,26 @@ def project_get(context, request):
         latest_verdata = stage.get_versiondata_perstage(
             context.project, latest_version)
     refresh_form = None
-    if whitelist_info['has_mirror_base']:
+    if merge_info["has_project_from_remote"]:
         refresh_form = _index_refresh_form(request, stage, name)
     return dict(
         _context=context,
         title="%s/: %s versions" % (context.stage.name, context.project),
-        blocked_by_mirror_whitelist=whitelist_info['blocked_by_mirror_whitelist'],
+        blocked_by_mirror_whitelist=merge_info["blocked_remote_name"],
+        merge_info=merge_info,
         nav_links=nav_links,
         latest_version=latest_version,
         latest_url=request.route_url(
             "/{user}/{index}/{project}/{version}",
-            user=user, index=index, project=name, version='latest'),
+            user=user,
+            index=index,
+            project=name,
+            version="latest",
+        ),
         latest_version_data=latest_verdata,
         refresh_form=refresh_form,
-        versions=versions)
+        versions=versions,
+    )
 
 
 @define
@@ -846,8 +903,8 @@ def version_get(context, request):
             title="Homepage",
             url=home_page))
     add_simple_page_navlink(request, context, nav_links)
-    whitelist_info = stage.get_mirror_whitelist_info(name)
-    add_mirror_page_navlink(request, context, whitelist_info, nav_links)
+    merge_info = get_merge_info(context.stage, context.project)
+    add_mirror_page_navlink(request, context, merge_info, nav_links)
     cmp_version = Version(version)
     if context._stable_versions:
         stable_version = Version(context._stable_versions[0])
@@ -878,7 +935,8 @@ def version_get(context, request):
         metadata=metadata,
         metadata_list_fields=frozenset(escape(x) for x in metadata_list_fields),
         files=files,
-        blocked_by_mirror_whitelist=whitelist_info["blocked_by_mirror_whitelist"],
+        blocked_by_mirror_whitelist=merge_info["blocked_remote_name"],
+        merge_info=merge_info,
         show_toxresults=show_toxresults,
         make_toxresults_url=functools.partial(
             request.route_url,
