@@ -1,5 +1,7 @@
 from devpi_common.url import URL
+from pathlib import Path
 import json
+import sys
 
 
 def main(hub, args=None):
@@ -38,8 +40,11 @@ def main_patchjson(hub, args=None):
     args = hub.args
 
     path = args.path
-    with open(args.jsonfile) as f:
-        data = json.load(f)
+    if args.jsonfile == "-":
+        data = json.load(sys.stdin)
+    else:
+        with Path(args.jsonfile).open() as f:
+            data = json.load(f)
 
     current = hub.current
 
