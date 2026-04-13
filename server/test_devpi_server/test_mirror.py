@@ -821,11 +821,15 @@ class TestMirrorStageprojects:
             "django": "Django"}
 
     @pytest.mark.asyncio
-    async def test_get_remote_projects_pep691_json(self, pypistage):
+    @pytest.mark.parametrize(
+        "content_type",
+        ["application/vnd.pypi.simple.v1+json", "application/octet-stream"],
+    )
+    async def test_get_remote_projects_pep691_json(self, content_type, pypistage):
         pypistage.xom.http.mockresponse(
             pypistage.mirror_url,
             code=200,
-            content_type="application/vnd.pypi.simple.v1+json",
+            content_type=content_type,
             text="""{
                 "meta": {"api-version": "1.0"},
                 "projects": [
