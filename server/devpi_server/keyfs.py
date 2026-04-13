@@ -742,6 +742,9 @@ class TransactionRootModel(RootModel):
             del self.model_cache[key]
         super().delete_stage(username, index)
 
+    def get_index(self, user: str, index: str | None = None) -> BaseStage | None:
+        return self.getstage(user, index)
+
     def get_user(self, name):
         if name not in self.model_cache:
             self.model_cache[name] = super().get_user(name)

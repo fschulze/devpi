@@ -236,6 +236,9 @@ class RootModel:
             del indexes[index]
             self.xom.del_singletons(f"{username}/{index}")
 
+    def get_index(self, user: str, index: str | None = None) -> BaseStage | None:
+        return self.getstage(user, index)
+
     def get_user(self, name: str) -> User | None:
         user = User(self, name)
         if user.key.exists():
@@ -491,6 +494,9 @@ class User:
     def MirrorStage(self):
         from .mirror import MirrorStage
         return MirrorStage
+
+    def get_index(self, indexname: str) -> BaseStage | None:
+        return self.getstage(indexname)
 
     def _getstage(self, indexname, index_type, ixconfig):
         if index_type == "mirror":
