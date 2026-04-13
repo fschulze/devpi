@@ -865,8 +865,11 @@ def patchjson(parser):
     """
     parser.add_argument("path", action="store",
         help="path to a resource to patch information on. ")
-    parser.add_argument("jsonfile", action="store",
-        help="file to read json content from")
+    parser.add_argument(
+        "jsonfile",
+        action="store",
+        help="file to read json content from use '-' for STDIN",
+    )
 
 
 @subcommand("devpi.list_remove:main_list", "list")
