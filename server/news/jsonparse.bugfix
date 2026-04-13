@@ -1,1 +1,0 @@
-Fix #1112: Parse simple JSON reply even with wrong content-type in reply if the body seems to contain JSON.
