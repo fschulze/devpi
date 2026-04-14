@@ -386,7 +386,10 @@ class KeyFS:
                 relpaths: Iterable[RelPath],
             ) -> Iterable[FilePathInfo]:
                 for relpath in relpaths:
-                    (_, _, val) = conn.get_relpath_at(relpath, serial)
+                    (_, back_serial, val) = conn.get_relpath_at(relpath, serial)
+                    if val is None:
+                        # the file was deleted, get the data from before
+                        (_, _, val) = conn.get_relpath_at(relpath, back_serial)
                     if (
                         isinstance(val, (dict, DictViewReadonly))
                         and "hash_spec" in val

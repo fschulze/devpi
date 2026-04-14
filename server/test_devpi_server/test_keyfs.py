@@ -1045,3 +1045,20 @@ def test_iter_relpaths_at(keyfs):
         (relpath_info,) = list(tx.iter_relpaths_at([key], tx.at_serial))
     assert relpath_info.keyname == "NAME1"
     assert relpath_info.value == 1
+
+
+def test_finalize_init(mapp):
+    api1 = mapp.create_and_use()
+    mapp.xom.keyfs.finalize_init()
+    content1 = mapp.makepkg("hello-1.0.tar.gz", b"content1", "hello", "1.0")
+    mapp.upload_file_pypi("hello-1.0.tar.gz", content1, "hello", "1.0")
+    mapp.xom.keyfs.finalize_init()
+    api2 = mapp.create_index("prod")
+    mapp.push("hello", "1.0", api2.stagename, api1.stagename)
+    mapp.xom.keyfs.finalize_init()
+    mapp.use(api1.stagename)
+    mapp.delete_project("hello")
+    mapp.xom.keyfs.finalize_init()
+    mapp.use(api2.stagename)
+    mapp.delete_project("hello")
+    mapp.xom.keyfs.finalize_init()
