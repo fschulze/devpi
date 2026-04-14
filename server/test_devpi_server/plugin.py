@@ -1499,16 +1499,26 @@ def primary_host_port(primary_server_path, secretfile, storage_args):
     port = get_open_port(host)
     args = [
         "devpi-server",
-        "--role", "primary",
-        "--secretfile", secretfile,
-        "--argon2-memory-cost", str(LOWER_ARGON2_MEMORY_COST),
-        "--argon2-parallelism", str(LOWER_ARGON2_PARALLELISM),
-        "--argon2-time-cost", str(LOWER_ARGON2_TIME_COST),
-        "--host", host,
-        "--port", str(port),
+        "--debug",
+        "--role",
+        "primary",
+        "--secretfile",
+        secretfile,
+        "--argon2-memory-cost",
+        str(LOWER_ARGON2_MEMORY_COST),
+        "--argon2-parallelism",
+        str(LOWER_ARGON2_PARALLELISM),
+        "--argon2-time-cost",
+        str(LOWER_ARGON2_TIME_COST),
+        "--host",
+        host,
+        "--port",
+        str(port),
         "--requests-only",
-        "--serverdir", str(primary_server_path),
-        *storage_args(primary_server_path)]
+        "--serverdir",
+        str(primary_server_path),
+        *storage_args(primary_server_path),
+    ]
     if not primary_server_path.joinpath('.nodeinfo').exists():
         subprocess.check_call(
             [  # noqa: S607
