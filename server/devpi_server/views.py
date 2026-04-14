@@ -626,6 +626,9 @@ class PyPIView:
         (orig_request.matchdict, orig_request.matched_route) = (
             info['match'], info['route'])
         if orig_request.matched_route is None:
+            threadlog.debug(
+                "Authcheck Forbidden for %s (%s)", url, request.matched_route.name
+            )
             return HTTPForbidden()
         root_factory = orig_request.matched_route.factory or root_factory
         orig_request.context = root_factory(orig_request)
