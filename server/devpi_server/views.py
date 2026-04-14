@@ -1578,6 +1578,12 @@ class PyPIView:
                 # we do it in _pkgserv now to avoid storing the credentials
                 # in the database and avoid changes in the db when mirror_url changes.
                 mirror_url_auth = getattr(stage, "mirror_url_auth", {})
+                if mirror_url_auth:
+                    threadlog.debug("Returning external URL: %s", url)
+                else:
+                    threadlog.debug(
+                        "Returning external URL with authentication: %s", url
+                    )
                 url = url.replace(**mirror_url_auth)
                 return HTTPFound(location=url.url)
             if stage.ixconfig['type'] != "mirror" and not file_exists and not self.xom.is_replica():
