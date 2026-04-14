@@ -747,6 +747,9 @@ class MirrorStage(BaseStage):
             return (self.cache_projectnames.get(), False)
         lock = self._list_projects_perstage_lock
         projects_timeout = self.get_projects_timeout(timeout)
+        threadlog.debug(
+            "Acquiring projects list lock (%r) with timeout %s", lock, timeout
+        )
         if lock.acquire(timeout=projects_timeout):
             try:
                 # retry in case it was updated in another thread
@@ -756,6 +759,7 @@ class MirrorStage(BaseStage):
                 return self._update_projects(timeout=timeout)
             finally:
                 lock.release()
+                threadlog.debug("Released projects list lock (%r)", lock)
         return (self._stale_list_projects_perstage(), True)
 
     def list_projects_perstage(self) -> dict[str, NormalizedName | str]:
@@ -1300,7 +1304,12 @@ class ProjectUpdateLock:
         self.project = project
 
     def acquire(self, timeout: float) -> bool:
-        threadlog.debug("Acquiring lock (%r) for %r", self.lock, self.project)
+        threadlog.debug(
+            "Acquiring lock (%r) for %r with timeout %s",
+            self.lock,
+            self.project,
+            timeout,
+        )
         assert self.lock is not None
         return self.lock.acquire(timeout=timeout)
 
@@ -1317,6 +1326,7 @@ class ProjectUpdateLock:
     def release(self) -> None:
         if self.lock is not None:
             self.lock.release()
+            threadlog.debug("Released lock (%r) for %r", self.lock, self.project)
             self.lock = None
 
     def __repr__(self) -> str:
