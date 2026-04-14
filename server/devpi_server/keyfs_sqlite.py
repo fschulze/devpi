@@ -464,6 +464,7 @@ class BaseStorage(object):
         self._execute_conn_pragmas(sqlconn)
         if write:
             start_time = time.monotonic()
+            log_delay = 2
             thread = current_thread()
             while 1:
                 try:
@@ -475,6 +476,11 @@ class BaseStorage(object):
                     if hasattr(thread, "exit_if_shutdown"):
                         thread.exit_if_shutdown()
                     elapsed = time.monotonic() - start_time
+                    if elapsed >= log_delay:
+                        threadlog.warn(
+                            "Waiting on database connection for %s seconds", log_delay
+                        )
+                        log_delay = log_delay * 1.5
                     if elapsed > timeout:
                         # if it takes this long, something is wrong
                         raise KeyfsTimeoutError(
