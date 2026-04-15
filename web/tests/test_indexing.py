@@ -1,19 +1,13 @@
 from devpi_common.archive import zip_dict
-from devpi_common.metadata import parse_version
 from devpi_web.indexing import ProjectIndexingInfo
 from devpi_web.indexing import iter_projects
 from devpi_web.indexing import preprocess_project
-from devpi_server import __version__ as _devpi_server_version
 import pytest
 
 
-devpi_server_version = parse_version(_devpi_server_version)
 pytestmark = [pytest.mark.notransaction]
 
 
-@pytest.mark.skipif(
-    devpi_server_version < parse_version("6.6.0dev"),
-    reason="Needs un-normalized project names from list_projects_perstage on mirrors")
 def test_original_project_name(pypistage):
     xom = pypistage.xom
     projects = set(["Django", "pytest", "ploy_ansible"])

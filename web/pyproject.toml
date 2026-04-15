@@ -133,9 +133,6 @@ extend-ignore = [
 "devpi_web/whoosh_index.py" = [
     "I001", # maybe cleanup later - import block unsorted
 ]
-"tests/test_indexing.py" = [
-    "I001", # maybe cleanup later - import block unsorted
-]
 "tests/test_main.py" = [
     "I001", # maybe cleanup later - import block unsorted
 ]
