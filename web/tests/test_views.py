@@ -620,10 +620,6 @@ def test_version_view_latest_stable(mapp, testapp):
 
 
 def test_complex_name(mapp, testapp):
-    from devpi_common import __version__
-    from devpi_common.metadata import parse_version
-    if parse_version(__version__) < parse_version('3.2.0dev'):
-        pytest.skip("Only works with devpi-common >= 3.2.0")
     api = mapp.create_and_use()
     content = b"content"
     pkgname = "my-binary-package-name-1-4-3-yip"
