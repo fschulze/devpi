@@ -3,6 +3,7 @@ from __future__ import annotations
 from attrs import define
 from defusedxml.xmlrpc import DefusedExpatParser
 from devpi_common.metadata import Version
+from devpi_common.metadata import get_latest_version
 from devpi_common.metadata import get_pyversion_filetype
 from devpi_common.metadata import get_sorted_versions
 from devpi_common.types import cached_property
@@ -357,7 +358,6 @@ def make_history_view_item(request, log_item):
 
 class FileInfo:
     def __init__(self, request, link, linkstore, show_toxresults):
-        self.entry = link.entry
         self.link = link
         self.linkstore = linkstore
         self.request = request
@@ -365,27 +365,31 @@ class FileInfo:
 
     @cached_property
     def basename(self):
-        return self.entry.basename
+        return self.link.basename
 
     @cached_property
     def dist_type(self):
         (py_version, file_type) = self.pyversion_filetype
         return dist_file_types.get(file_type, '')
 
+    @cached_property
+    def entry(self):
+        return self.link.entry
+
     def get(self, key, default=None):
         return getattr(self, key, default)
 
     @cached_property
     def hash_spec(self):
-        return self.entry.best_available_hash_spec
+        return self.link.best_available_hash_spec
 
     @cached_property
     def hash_type(self):
-        return self.entry.best_available_hash_type
+        return self.link.best_available_hash_type
 
     @cached_property
     def hash_value(self):
-        return self.entry.best_available_hash_value
+        return self.link.best_available_hash_value
 
     @cached_property
     def history(self):
@@ -432,7 +436,7 @@ class FileInfo:
 
     @cached_property
     def url(self):
-        url = url_for_entrypath(self.request, self.entry.relpath)
+        url = url_for_entrypath(self.request, self.link.relpath)
         if self.hash_spec:
             url = f"{url}#{self.hash_spec}"
         return url
@@ -696,7 +700,8 @@ def project_get(context, request):
     version_info = {}
     seen = set()
     for release in releaselinks:
-        user, index = release.entrypath.split("/", 2)[:2]
+        user = release.user
+        index = release.index
         name, version = release.project, release.version
         if not version or version == 'XXX':
             continue
@@ -744,7 +749,7 @@ def project_get(context, request):
     add_mirror_page_navlink(request, context, whitelist_info, nav_links)
     stage = context.stage
     latest_verdata = {}
-    latest_version = stage.get_latest_version_perstage(context.project)
+    latest_version = get_latest_version(stage_versions)
     if latest_version is not None:
         latest_verdata = stage.get_versiondata_perstage(
             context.project, latest_version)
