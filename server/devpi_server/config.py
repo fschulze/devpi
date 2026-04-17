@@ -246,6 +246,12 @@ def add_web_options(
              "This will become the default at some point.")
 
     parser.addoption(
+        "--enable-core-metadata",
+        action="store_true",
+        help="(experimental) Enable minimal core-metadata support in simple API.",
+    )
+
+    parser.addoption(
         "--profile-requests", type=int, metavar="NUM", default=0,
         help="profile NUM requests and print out cumulative stats. "
              "After print profiling is restarted. "

@@ -522,8 +522,8 @@ devpi command reference (server)
                         [--trusted-proxy-headers TRUSTED_PROXY_HEADERS]
                         [--max-request-body-size MAX_REQUEST_BODY_SIZE]
                         [--outside-url URL] [--absolute-urls]
-                        [--profile-requests NUM] [--mirror-cache-expiry SECS]
-                        [--primary-url PRIMARY_URL]
+                        [--enable-core-metadata] [--profile-requests NUM]
+                        [--mirror-cache-expiry SECS] [--primary-url PRIMARY_URL]
                         [--master-url DEPRECATED_MASTER_URL]
                         [--replica-file-search-path PATH] [--hard-links]
                         [--file-replication-threads NUM]
@@ -553,7 +553,7 @@ devpi command reference (server)
                             replication protocol you have to explicitly set the
                             'primary' role. The 'master' role is the deprecated
                             variant of 'primary'. [auto]
-      --version             show devpi_version (6.19.3) [False]
+      --version             show devpi_version (6.20.0) [False]
       --passwd USER         (DEPRECATED, use devpi-passwd command) set password
                             for user USER (interactive) [None]
 
@@ -601,6 +601,9 @@ devpi command reference (server)
                             override the custom X-outside-url header. [None]
       --absolute-urls       use absolute URLs everywhere. This will become the
                             default at some point. [False]
+      --enable-core-metadata
+                            (experimental) Enable minimal core-metadata support in
+                            simple API. [False]
       --profile-requests NUM
                             profile NUM requests and print out cumulative stats.
                             After print profiling is restarted. By default no

@@ -486,6 +486,10 @@ class MirrorStage(BaseStage):
         return None
 
     @property
+    def provides_core_metadata(self) -> bool:
+        return self.ixconfig.get("mirror_provides_core_metadata", False)
+
+    @property
     def no_project_list(self) -> bool:
         return self.ixconfig.get('mirror_no_project_list', False)
 
@@ -501,6 +505,7 @@ class MirrorStage(BaseStage):
             "mirror_cache_expiry",
             "mirror_ignore_serial_header",
             "mirror_no_project_list",
+            "mirror_provides_core_metadata",
             "mirror_url",
             "mirror_use_external_urls",
             "mirror_web_url_fmt",
@@ -528,6 +533,8 @@ class MirrorStage(BaseStage):
         if key == "mirror_ignore_serial_header":
             return ensure_boolean(value)
         if key == "mirror_no_project_list":
+            return ensure_boolean(value)
+        if key == "mirror_provides_core_metadata":
             return ensure_boolean(value)
         if key == "mirror_use_external_urls":
             return ensure_boolean(value)
@@ -972,7 +979,9 @@ class MirrorStage(BaseStage):
                 self.keyfs.tx.on_commit_success(
                     partial(self.cache_retrieve_times.refresh, project, info.etag)
                 )
-                return self.SimpleLinks(links)
+                return self.SimpleLinks(
+                    links, core_metadata=self.provides_core_metadata
+                )
             raise self.UpstreamError("no cache links from primary for %s" %
                                      project)
 
@@ -996,7 +1005,7 @@ class MirrorStage(BaseStage):
                 info.serial,
                 info.etag,
             )
-            return self.SimpleLinks(newlinks)
+            return self.SimpleLinks(newlinks, core_metadata=self.provides_core_metadata)
 
     async def _update_simplelinks_in_future(
         self,
@@ -1042,7 +1051,9 @@ class MirrorStage(BaseStage):
                 threadlog.warn(
                     "serving stale links for %r, waiting for existing request timed out after %s seconds",
                     project, self.timeout)
-                return self.SimpleLinks(links, stale=True)
+                return self.SimpleLinks(
+                    links, core_metadata=self.provides_core_metadata, stale=True
+                )
             raise self.UpstreamError(
                 f"timeout after {self.timeout} seconds while getting data for {project!r}")
 
@@ -1053,7 +1064,9 @@ class MirrorStage(BaseStage):
                 threadlog.debug(
                     "using stale links for %r due to offline mode", project)
                 self._offline_logging.add(project)
-            return self.SimpleLinks(links, stale=True)
+            return self.SimpleLinks(
+                links, core_metadata=self.provides_core_metadata, stale=True
+            )
 
         if links is None:
             is_retrieval_expired = self.cache_retrieve_times.is_expired(
@@ -1094,14 +1107,18 @@ class MirrorStage(BaseStage):
                 threadlog.warn(
                     "serving stale links for %r, getting data timed out after %s seconds",
                     project, self.timeout)
-                return self.SimpleLinks(links, stale=True)
+                return self.SimpleLinks(
+                    links, core_metadata=self.provides_core_metadata, stale=True
+                )
             raise self.UpstreamError(
                 f"timeout after {self.timeout} seconds while getting data for {project!r}")
         except self.UpstreamNotModified as e:
             if links is not None:
                 # immediately update the cache
                 self.cache_retrieve_times.refresh(project, e.etag)
-                return self.SimpleLinks(links)
+                return self.SimpleLinks(
+                    links, core_metadata=self.provides_core_metadata
+                )
             if e.etag is None:
                 threadlog.error(
                     "server returned 304 Not Modified, but we have no links")
@@ -1117,7 +1134,9 @@ class MirrorStage(BaseStage):
                 threadlog.warn(
                     "serving stale links, because of exception %s",
                     lazy_format_exception(e))
-                return self.SimpleLinks(links, stale=True)
+                return self.SimpleLinks(
+                    links, core_metadata=self.provides_core_metadata, stale=True
+                )
             raise
 
         info = newlinks_future.result()
@@ -1126,7 +1145,7 @@ class MirrorStage(BaseStage):
         if links is not None and set(links) == set(newlinks):
             # no changes
             self.cache_retrieve_times.refresh(project, info.etag)
-            return self.SimpleLinks(links)
+            return self.SimpleLinks(links, core_metadata=self.provides_core_metadata)
 
         return self._update_simplelinks(project, info, links, newlinks)
 

@@ -791,6 +791,40 @@ class TestExtPYPIDB:
             assert len(pypistage.get_releaselinks("foo")) == 1
             assert pypistage.list_versions("foo") == {"1.0"}
 
+    @pytest.mark.notransaction
+    def test_core_metadata(self, monkeypatch, pypistage, testapp):
+        # the command-line option alone isn't enough for mirrors
+        monkeypatch.setattr(pypistage.xom.config.args, "enable_core_metadata", True)
+        pypistage.mock_simple(
+            "foo", text='<a href="foo-1.0-py3-none-any.whl#sha256=1234"></a>'
+        )
+        pypistage.url2response[
+            "https://pypi.org/simple/foo/foo-1.0-py3-none-any.whl.metadata"
+        ] = dict(status_code=200, content=b"metadata")
+        r = testapp.xget(200, "/root/pypi/+simple/foo/")
+        assert "core-metadata" not in r.text
+        r = testapp.xget(
+            200,
+            "/root/pypi/+simple/foo/",
+            headers={"Accept": "application/vnd.pypi.simple.v1+json"},
+        )
+        (file_info,) = r.json["files"]
+        assert "core-metadata" not in file_info
+        r = testapp.xget(404, "/root/pypi/+f/123/4/foo-1.0-py3-none-any.whl.metadata")
+        with pypistage.xom.keyfs.write_transaction():
+            pypistage.modify(mirror_provides_core_metadata=True)
+        r = testapp.xget(200, "/root/pypi/+simple/foo/")
+        assert "core-metadata" in r.text
+        r = testapp.xget(
+            200,
+            "/root/pypi/+simple/foo/",
+            headers={"Accept": "application/vnd.pypi.simple.v1+json"},
+        )
+        (file_info,) = r.json["files"]
+        assert file_info["core-metadata"] is True
+        r = testapp.xget(200, "/root/pypi/+f/123/4/foo-1.0-py3-none-any.whl.metadata")
+        assert r.body == b"metadata"
+
 
 class TestMirrorStageprojects:
     @pytest.mark.asyncio
