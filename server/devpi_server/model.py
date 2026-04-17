@@ -675,14 +675,20 @@ class SimpleLinks:
     stale: bool
 
     def __init__(
-        self, links: Sequence[JoinedLink] | SimpleLinks, *, stale: bool = False
+        self,
+        links: Sequence[JoinedLink] | SimpleLinks,
+        *,
+        core_metadata: bool = False,
+        stale: bool = False,
     ) -> None:
         assert links is not None
         if isinstance(links, SimpleLinks):
             self._links = links._links
             self.stale = links.stale or stale
         else:
-            self._links = [SimplelinkMeta(x) for x in links]
+            self._links = [
+                SimplelinkMeta(x, core_metadata=core_metadata) for x in links
+            ]
             self.stale = stale
 
     def __hash__(self):
@@ -1596,7 +1602,8 @@ class PrivateStage(BaseStage):
         requires_python = cast("RequiresPythonList", data.get("requires_python", []))
         yanked: YankedList = []  # PEP 592 isn't supported for private stages yet
         return self.SimpleLinks(
-            join_links_data(links, requires_python, yanked))
+            join_links_data(links, requires_python, yanked), core_metadata=True
+        )
 
     def _regen_simplelinks(self, project_input):
         project = normalize_name(project_input)
@@ -2129,6 +2136,7 @@ class SimplelinkMeta:
         "__path",
         "__url",
         "__version",
+        "core_metadata",
         "href",
         "key",
         "require_python",
@@ -2137,7 +2145,12 @@ class SimplelinkMeta:
     __cmpval: tuple | NotSet
     __hashes: Digests | NotSet
 
-    def __init__(self, link_info: tuple[str, str, RequiresPython, Yanked]) -> None:
+    def __init__(
+        self,
+        link_info: tuple[str, str, RequiresPython, Yanked],
+        *,
+        core_metadata: bool = False,
+    ) -> None:
         self.__basename = notset
         self.__cmpval = notset
         self.__ext = notset
@@ -2147,7 +2160,10 @@ class SimplelinkMeta:
         self.__path = notset
         self.__url = notset
         self.__version = notset
+        self.core_metadata = False
         (self.key, self.href, self.require_python, self.yanked) = link_info
+        if core_metadata and self.basename.endswith(".whl"):
+            self.core_metadata = True
 
     def __hash__(self) -> int:
         return hash(
