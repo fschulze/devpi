@@ -700,7 +700,7 @@ class BaseFileEntry:
         headers = {}
         headers["last-modified"] = str(self.last_modified)
         m = mimetypes.guess_type(self.basename)[0]
-        headers["content-type"] = str(m)
+        headers["content-type"] = "application/octet-stream" if m is None else m
         headers["content-length"] = str(self.file_size())
         headers["cache-control"] = "max-age=365000000, immutable, public"
         return headers
