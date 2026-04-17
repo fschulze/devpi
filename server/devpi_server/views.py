@@ -20,6 +20,7 @@ from .model import InvalidUserconfig
 from .model import ReadonlyIndex
 from .model import RemoveValue
 from .normalized import normalize_name
+from .proxy import clean_response_headers
 from .readonly import get_mutable_deepcopy
 from collections import defaultdict
 from devpi_common.metadata import get_pyversion_filetype
@@ -56,6 +57,7 @@ from time import time
 from typing import TYPE_CHECKING
 from typing import cast
 from urllib.parse import urlparse
+from zipfile import ZipFile
 import attrs
 import contextlib
 import devpi_server
@@ -785,24 +787,29 @@ class PyPIView:
                    "<strong>%s</strong> are included.</p>"
                    % blocked_index).encode('utf-8')
 
+        core_metadata = self.xom.config.args.enable_core_metadata
         make_url = self._makeurl_factory()
 
         for link in result:
             stage = "/".join(link.href.split("/", 2)[:2])
-            attribs = 'href="%s"' % make_url(link.href).url
+            attribs = [f'href="{make_url(link.href).url}"']
+            if core_metadata and link.core_metadata:
+                attribs.append(
+                    'data-dist-info-metadata="true" data-core-metadata="true"'
+                )
             if link.require_python is not None:
-                attribs += ' data-requires-python="%s"' % escape(link.require_python)
+                attribs.append(f'data-requires-python="{escape(link.require_python)}"')
             if link.yanked is not None and link.yanked is not False:
                 yanked = "" if link.yanked is True else link.yanked
-                attribs += ' data-yanked="%s"' % escape(yanked)
-            data = dict(stage=stage, attribs=attribs, key=link.key)
-            yield "{stage} <a {attribs}>{key}</a><br>\n".format(**data).encode("utf-8")
+                attribs.append(f'data-yanked="{escape(yanked)}"')
+            yield f"{stage} <a {' '.join(attribs)}>{link.key}</a><br>\n".encode()
 
-        yield "</body></html>".encode("utf-8")
+        yield b"</body></html>"
 
     def _simple_list_project_json_v1(self, stage, project, result, embed_form, blocked_index):
         yield (f'{{"meta":{{"api-version":"1.0"}},"name":"{project}","files":[').encode("utf-8")
 
+        core_metadata = self.xom.config.args.enable_core_metadata
         make_url = self._makeurl_factory()
 
         first = True
@@ -812,6 +819,8 @@ class PyPIView:
                 "filename": link.key,
                 "url": url.url_nofrag,
                 "hashes": {url.hash_type: url.hash_value} if url.hash_type else {}}
+            if core_metadata and link.core_metadata:
+                data["core-metadata"] = True
             if link.require_python is not None:
                 data["requires-python"] = link.require_python
             if link.yanked is not None and link.yanked is not False:
@@ -1552,21 +1561,38 @@ class PyPIView:
             relpath = relpath.split("#", 1)[0]
         return relpath
 
-    def _pkgserv(self, entry):
+    def _pkgserv(self, entry, *, is_metadata=False):  # noqa: PLR0911,PLR0912
         request = self.request
         if not entry.meta:
             abort(request, 410, "file existed, deleted in later serial")
 
-        if json_preferred(request):
+        if json_preferred(request) and not is_metadata:
             entry_data = get_mutable_deepcopy(entry.meta)
             apireturn(200, type="releasefilemeta", result=entry_data)
 
         # getting the stage from context will cause 404 if stage is deleted
         stage = self.context.stage
 
+        if not request.has_permission("pkg_read"):
+            return apireturn(403, "package read forbidden")
+
         url = URL(entry.url)
 
         file_exists = entry.file_exists()
+
+        if is_metadata and stage.ixconfig["type"] == "mirror" and not file_exists:
+            if not stage.provides_core_metadata:
+                return apireturn(404, "mirror_provides_core_metadata disabled")
+            url = url.replace(path=f"{url.path}.metadata")
+            try:
+                app_iter = iter_stream_remote_file(stage, url)
+                headers = next(app_iter)
+            except BadGateway as e:
+                if e.code == 404:
+                    return apireturn(404, e.args[0])
+                return apireturn(502, e.args[0])
+            return Response(app_iter=app_iter, headers=headers)
+
         if entry.last_modified is None or not file_exists:
             # We check whether we should serve the file directly
             # or redirect to the external URL
@@ -1591,9 +1617,6 @@ class PyPIView:
                 # replica mode, otherwise fall through to fetch file
                 abort(self.request, 404, "no such file")
 
-        if not request.has_permission("pkg_read"):
-            abort(request, 403, "package read forbidden")
-
         try:
             if should_fetch_remote_file(entry, request.headers):
                 app_iter = iter_fetch_remote_file(stage, entry, url)
@@ -1603,6 +1626,21 @@ class PyPIView:
             if e.code == 404:
                 return apireturn(404, e.args[0])
             return apireturn(502, e.args[0])
+
+        if is_metadata:
+            metadata_filename = (
+                f"{entry.project.replace('-', '_')}-{entry.version}.dist-info/METADATA"
+            )
+            with entry.file_open_read() as f, ZipFile(f) as zf:
+                wheel_metadata_contents = zf.read(metadata_filename)
+            return Response(
+                body=wheel_metadata_contents,
+                content_type="application/octet-stream",
+                headers={
+                    "cache-control": "max-age=365000000, immutable, public",
+                    "last-modified": str(entry.last_modified),
+                },
+            )
 
         headers = entry.gethttpheaders()
         if self.request.method == "HEAD":
@@ -1615,6 +1653,11 @@ class PyPIView:
     @view_config(route_name="/{user}/{index}/+e/{relpath:.*}")
     def mirror_pkgserv(self):
         relpath = self._relpath_from_request()
+        is_metadata = relpath.endswith(".metadata")
+        if is_metadata:
+            if not self.xom.config.args.enable_core_metadata:
+                return apireturn(404, "core-metadata is disabled")
+            relpath = relpath.removesuffix(".metadata")
         # when a release is deleted from a mirror, we update the metadata,
         # hence the key won't exist anymore, but we don't delete the file.
         # We want people to notice that condition by returning a 404, but
@@ -1624,15 +1667,20 @@ class PyPIView:
         if key is None or not key.exists():
             abort(self.request, 404, "no such file")
         entry = self.xom.filestore.get_file_entry_from_key(key)
-        return self._pkgserv(entry)
+        return self._pkgserv(entry, is_metadata=is_metadata)
 
     @view_config(route_name="/{user}/{index}/+f/{relpath:.*}")
     def stage_pkgserv(self):
         relpath = self._relpath_from_request()
+        is_metadata = relpath.endswith(".metadata")
+        if is_metadata:
+            if not self.xom.config.args.enable_core_metadata:
+                return apireturn(404, "core-metadata is disabled")
+            relpath = relpath.removesuffix(".metadata")
         entry = self.xom.filestore.get_file_entry(relpath)
         if entry is None:
             abort(self.request, 404, "no such file")
-        return self._pkgserv(entry)
+        return self._pkgserv(entry, is_metadata=is_metadata)
 
     @view_config(route_name="/{user}/{index}/+e/{relpath:.*}",
                  permission="del_entry",
@@ -1851,6 +1899,22 @@ class FileStreamer:
             err = self.hashes.exception_for(self._hashes, self.relpath)
             if err is not None:
                 raise err
+
+
+def iter_stream_remote_file(stage, url):
+    with contextlib.ExitStack() as cstack:
+        r = stage.http.stream(cstack, "GET", url, allow_redirects=True)
+        if r.status_code != 200:
+            r.close()
+            msg = f"error {r.status_code} getting {url}"
+            threadlog.error(msg)
+            raise BadGateway(msg, code=r.status_code, url=url)
+        try:
+            yield clean_response_headers(r)
+            yield from r.iter_raw(10240)
+        except Exception as err:
+            threadlog.error(str(err))
+            raise
 
 
 def iter_cache_remote_file(stage, entry, url):
