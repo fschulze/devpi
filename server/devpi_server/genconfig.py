@@ -18,9 +18,8 @@ import sys
 if TYPE_CHECKING:
     from .config import Config
     from collections.abc import Callable
-    from typing import Union
 
-    WriterCallable = Callable[[str, Union[bytes, str]], None]
+    WriterCallable = Callable[[str, bytes | str], None]
 
 
 # don't sort the keys; that way we can keep our own order
