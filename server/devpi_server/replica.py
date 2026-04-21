@@ -19,6 +19,8 @@ from .markers import Absent
 from .markers import absent
 from .model import UpstreamError
 from .normalized import normalize_name
+from .proxy import clean_request_headers
+from .proxy import clean_response_headers
 from .views import FileStreamer
 from .views import H_MASTER_UUID
 from .views import H_PRIMARY_UUID
@@ -33,8 +35,6 @@ from pyramid.response import Response
 from pyramid.view import view_config
 from repoze.lru import LRUCache
 from typing import TYPE_CHECKING
-from webob.headers import EnvironHeaders
-from webob.headers import ResponseHeaders
 import contextlib
 import io
 import itsdangerous
@@ -1440,40 +1440,6 @@ class SimpleLinksChanged:
                     cache_projectnames.discard(project)
                 else:
                     cache_projectnames.add(project)
-
-
-hop_by_hop = frozenset((
-    'connection',
-    'keep-alive',
-    'proxy-authenticate',
-    'proxy-authorization',
-    'te',
-    'trailers',
-    'transfer-encoding',
-    'upgrade'
-))
-
-
-def clean_request_headers(request):
-    result = EnvironHeaders({})
-    result.update(request.headers)
-    result.pop('host', None)
-    return result
-
-
-def clean_response_headers(response):
-    headers = ResponseHeaders()
-    # remove hop by hop headers, see:
-    # https://www.mnot.net/blog/2011/07/11/what_proxies_must_do
-    hop_keys = set(hop_by_hop)
-    connection = response.headers.get('connection')
-    if connection and connection.lower() != 'close':
-        hop_keys.update(x.strip().lower() for x in connection.split(','))
-    for k, v in response.headers.items():
-        if k.lower() in hop_keys:
-            continue
-        headers[k] = v
-    return headers
 
 
 class BodyFileWrapper:
