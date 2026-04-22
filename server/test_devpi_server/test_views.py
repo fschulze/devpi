@@ -780,11 +780,22 @@ def test_simple_blocked_warning(mapp, pypistage, testapp):
     api = mapp.create_and_use(indexconfig=dict(bases=["root/pypi"]))
     mapp.set_versiondata(dict(name="pkg", version="1.0"), set_whitelist=False)
     r = testapp.xget(200, "/%s/+simple/pkg/" % api.stagename)
-    (paragraph,) = r.html.select('p')
-    assert paragraph.text == "INFO: Because this project isn't in the mirror_whitelist, no releases from root/pypi are included."
+    (ti,) = r.html.select("traversal-infos")
+    assert ti.text == (
+        "Traversal infos:\n"
+        "Traversed user1/dev\n"
+        "Postponed root/pypi\n"
+        "package 'pkg' located in user1/dev blocks releases from index root/pypi\n"
+    )
     mapp.set_versiondata(dict(name="pkg", version="1.1"), set_whitelist=True)
     r = testapp.xget(200, "/%s/+simple/pkg/" % api.stagename)
-    assert r.html.select('p') == []
+    (ti,) = r.html.select("traversal-infos")
+    assert ti.text == (
+        "Traversal infos:\n"
+        "Traversed user1/dev\n"
+        "Postponed root/pypi\n"
+        "package 'pkg' project rule 'allow all' from user1/dev allows merging releases from index root/pypi\n"
+    )
 
 
 def test_simple_with_removed_base(caplog, mapp, testapp):

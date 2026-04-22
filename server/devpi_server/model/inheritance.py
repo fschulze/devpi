@@ -57,8 +57,59 @@ class check_upstream_error:
         return True
 
 
-@define(slots=False)
+@define(kw_only=True, slots=False)
+class IndexInheritanceInfo:
+    index_bases_map: dict[str, tuple[str, ...] | None]
+    traversal_infos: list[TraversalInfo]
+
+    def iter_indexes(self) -> Iterator[BaseIndex]:
+        """Iterates indexes in defined order without loops."""
+        for traversal_info in self.traversal_infos:
+            match traversal_info:
+                case (
+                    PostponedTraversal()
+                    | SkippedTraversal(reason=InheritanceCycle())
+                    | TraversedIndex(seen=True)
+                ):
+                    continue
+                case SkippedTraversal(name=name, reason=MissingIndex(), src=src):
+                    threadlog.warn(
+                        "Index %s refers to non-existing base %s.", src, name
+                    )
+                    continue
+                case SkippedTraversal(name=name, reason=SROSkipHook(), src=src):
+                    threadlog.warn(
+                        "Index %s base %s excluded via devpiserver_sro_skip.",
+                        src,
+                        name,
+                    )
+                    continue
+                case TraversedIndex(index=index, seen=False):
+                    yield index
+                case _:
+                    raise RuntimeError(traversal_info)
+
+    def jsonable(self) -> dict:
+        return dict(
+            index_bases=self.index_bases_map,
+            traversal_infos=self.jsonable_traversal_infos(),
+        )
+
+    def jsonable_traversal_infos(self) -> list:
+        return [ti.jsonable() for ti in self.traversal_infos]
+
+
+has_project_str_map = {
+    False: "false",
+    True: "true",
+    notset: "notset",
+    unknown: "unknown",
+}
+
+
+@define(kw_only=True, slots=False)
 class ProjectInheritanceInfo:
+    index_bases_map: dict[str, tuple[str, ...] | None]
     traversal_infos: list[tuple[TraversalInfo, bool | NotSet | Unknown]]
 
     @cached_property
@@ -104,6 +155,19 @@ class ProjectInheritanceInfo:
             ):
                 yield traversal_info.index
 
+    def jsonable(self) -> dict:
+        return dict(
+            has_project_from_remote=has_project_str_map[self.has_project_from_remote],
+            index_bases=self.index_bases_map,
+            traversal_infos=self.jsonable_traversal_infos(),
+        )
+
+    def jsonable_traversal_infos(self) -> list:
+        return [
+            ti.jsonable() | dict(has_project=has_project_str_map[has_project])
+            for ti, has_project in self.traversal_infos
+        ]
+
     @cached_property
     def _unique_traversed_indexes(
         self,
@@ -147,7 +211,7 @@ class RulesAllow(PermissionAllowed):
     src_name: str
 
     def __str__(self) -> str:
-        return f"package {str(self.project)!r} {self.rule} from {self.src_name} allowes merging releases from index {self.name}"
+        return f"package {str(self.project)!r} {self.rule} from {self.src_name} allows merging releases from index {self.name}"
 
 
 @define(frozen=True, kw_only=True)
@@ -185,10 +249,14 @@ class SROSkipHook(SkipReason):
 class TraversalInfo(ABC):
     name: str
 
+    @abstractmethod
+    def jsonable(self) -> dict: ...
+
 
 @define(frozen=True, kw_only=True)
 class PostponedTraversal(TraversalInfo):
-    pass
+    def jsonable(self) -> dict:
+        return dict(action="postponed", name=self.name)
 
 
 @define(frozen=True, kw_only=True)
@@ -212,26 +280,39 @@ class TraversedIndex(TraversalInfo):
             seen=self.seen,
         )
 
+    def jsonable(self) -> dict:
+        return dict(action="traversed", name=self.name)
+
 
 @define(frozen=True, kw_only=True)
 class AllowedTraversal(TraversedIndex):
     reason: PermissionAllowed
+
+    def jsonable(self) -> dict:
+        return dict(action="allowed", name=self.name, reason=str(self.reason))
 
 
 @define(frozen=True, kw_only=True)
 class BlockedTraversal(TraversedIndex):
     reason: PermissionDenied
 
+    def jsonable(self) -> dict:
+        return dict(action="blocked", name=self.name, reason=str(self.reason))
+
 
 @define(frozen=True, kw_only=True)
 class UntrustedTraversal(TraversedIndex):
-    pass
+    def jsonable(self) -> dict:
+        return dict(action="untrusted", name=self.name)
 
 
 @define(frozen=True, kw_only=True)
 class SkippedTraversal(TraversalInfo):
     reason: SkipReason
     src: str
+
+    def jsonable(self) -> dict:
+        return dict(action="skipped", name=self.name, reason=str(self.reason))
 
 
 @define
@@ -409,6 +490,24 @@ class IndexBases:
         return iter(reversed(self.bases))
 
     @cached_property
+    def _index_bases_map(self) -> dict[str, tuple[str, ...] | None]:
+        getindex = self.model.getstage
+        result: dict[str, tuple[str, ...] | None] = {self.index.name: tuple(self)}
+        todo = list(reversed(self))
+        while todo:
+            current_name = todo.pop()
+            if current_name in result:
+                continue
+            current_index = getindex(current_name)
+            if current_index is None:
+                result[current_name] = None
+                continue
+            bases = current_index.index_bases
+            todo.extend(reversed(bases))
+            result[current_name] = tuple(bases)
+        return result
+
+    @cached_property
     def bases(self) -> tuple[str]:
         """Returns bases as tuple of strings."""
         return tuple(self.index.ixconfig.get("bases", ()))
@@ -435,7 +534,9 @@ class IndexBases:
                     )
                 case _:
                     traversal_infos.append((traversal_info, exists))
-        return ProjectInheritanceInfo(traversal_infos)
+        return ProjectInheritanceInfo(
+            index_bases_map=self._index_bases_map, traversal_infos=traversal_infos
+        )
 
     def get_project_inheritance_info(
         self, project: NormalizedName
@@ -451,32 +552,14 @@ class IndexBases:
     ) -> Iterable[BaseIndex]:
         return self.get_project_inheritance_info(project).iter_indexes(opname)
 
+    @cached_property
+    def inheritance_info(self) -> IndexInheritanceInfo:
+        return IndexInheritanceInfo(
+            index_bases_map=self._index_bases_map, traversal_infos=self.traversal_infos
+        )
+
     def iter_indexes(self) -> Iterator[BaseIndex]:
-        """Iterates indexes in defined order without loops."""
-        for traversal_info in self.traversal_infos:
-            match traversal_info:
-                case (
-                    PostponedTraversal()
-                    | SkippedTraversal(reason=InheritanceCycle())
-                    | TraversedIndex(seen=True)
-                ):
-                    continue
-                case SkippedTraversal(name=name, reason=MissingIndex(), src=src):
-                    threadlog.warn(
-                        "Index %s refers to non-existing base %s.", src, name
-                    )
-                    continue
-                case SkippedTraversal(name=name, reason=SROSkipHook(), src=src):
-                    threadlog.warn(
-                        "Index %s base %s excluded via devpiserver_sro_skip.",
-                        src,
-                        name,
-                    )
-                    continue
-                case TraversedIndex(index=index, seen=False):
-                    yield index
-                case _:
-                    raise RuntimeError(traversal_info)
+        return self.inheritance_info.iter_indexes()
 
     def is_untrusted(self, index: BaseIndex) -> bool:
         # we have to postpone remotes, as there

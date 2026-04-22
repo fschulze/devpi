@@ -359,6 +359,17 @@ def get_actions(json):
     return result
 
 
+def get_result_version(request: Request) -> int:
+    result_version_str = request.GET.get("v", "1")
+    try:
+        return int(result_version_str)
+    except (TypeError, ValueError):
+        raise apiresult(  # noqa: B904
+            400,
+            message=f"The requested result version must be an integer, got {result_version_str!r}",
+        )
+
+
 @exception_view_config(ReadonlyIndex)
 def readonly_index_view(exc, request):
     response = Response("%s" % exc)
@@ -752,21 +763,23 @@ class PyPIView:
         if requested_by_installer:
             # we don't need the extra stuff on the simple page for pip
             embed_form = False
-            blocked_index = None
+            traversal_infos = None
         else:
             # only mere humans need to know and do more
             project_inheritance_info = stage.index_bases.get_project_inheritance_info(
                 project
             )
             embed_form = project_inheritance_info.has_project_from_remote
-            blocked_index = project_inheritance_info.blocked_remote_name
+            traversal_infos = project_inheritance_info.jsonable_traversal_infos()
         content_type = _select_simple_content_type(self.request)
         if content_type == SIMPLE_API_V1_JSON:
             app_iter = self._simple_list_project_json_v1(
-                stage, project, result, embed_form, blocked_index)
+                stage, project, result, embed_form, traversal_infos
+            )
         else:
             app_iter = self._simple_list_project(
-                stage, project, result, embed_form, blocked_index)
+                stage, project, result, embed_form, traversal_infos
+            )
         response = Response(
             app_iter=buffered_iterator(app_iter),
             content_type=content_type,
@@ -803,27 +816,30 @@ class PyPIView:
 
         return make_url
 
-    def _simple_list_project(self, stage, project, result, embed_form, blocked_index):
-        title = "%s: links for %s" % (stage.name, project)
+    def _simple_list_project(self, index, project, result, embed_form, traversal_infos):
+        title = "%s: links for %s" % (index.name, project)
         yield (
             '<!DOCTYPE html><html lang="en"><head><title>%s</title></head><body><h1>%s</h1>\n'
             % (title, title)
         ).encode("utf-8")
 
         if embed_form:
-            yield self._index_refresh_form(stage, project).encode("utf-8")
+            yield self._index_refresh_form(index, project).encode("utf-8")
 
-        if blocked_index:
-            yield ("<p><strong>INFO:</strong> Because this project isn't in "
-                   "the <code>mirror_whitelist</code>, no releases from "
-                   "<strong>%s</strong> are included.</p>"
-                   % blocked_index).encode('utf-8')
+        if traversal_infos:
+            yield b"<traversal-infos><strong>Traversal infos:</strong><ol>\n"
+            for traversal_info in traversal_infos:
+                if "reason" in traversal_info:
+                    yield f"<li>{escape(traversal_info['reason'])}</li>\n".encode()
+                else:
+                    yield f"<li>{escape(traversal_info['action'].title())} {escape(traversal_info['name'])}</li>\n".encode()
+            yield b"</ol></traversal-infos>"
 
         core_metadata = self.xom.config.args.enable_core_metadata
         make_url = self._makeurl_factory()
 
         for link in result:
-            stage = "/".join(link.href.split("/", 2)[:2])
+            index_name = "/".join(link.href.split("/", 2)[:2])
             attribs = [f'href="{make_url(link.href).url}"']
             if core_metadata and link.core_metadata:
                 attribs.append(
@@ -834,11 +850,13 @@ class PyPIView:
             if link.yanked is not None and link.yanked is not False:
                 yanked = "" if link.yanked is True else link.yanked
                 attribs.append(f'data-yanked="{escape(yanked)}"')
-            yield f"{stage} <a {' '.join(attribs)}>{link.key}</a><br>\n".encode()
+            yield f"{index_name} <a {' '.join(attribs)}>{link.key}</a><br>\n".encode()
 
         yield b"</body></html>"
 
-    def _simple_list_project_json_v1(self, stage, project, result, embed_form, blocked_index):
+    def _simple_list_project_json_v1(
+        self, _index, project, result, _embed_form, _traversal_infos
+    ):
         yield (f'{{"meta":{{"api-version":"1.0"}},"name":"{project}","files":[').encode("utf-8")
 
         core_metadata = self.xom.config.args.enable_core_metadata
@@ -1491,6 +1509,7 @@ class PyPIView:
         if not json_preferred(self.request):
             apireturn(415, "unsupported media type %s" %
                       self.request.headers.items())
+        result_version = get_result_version(self.request)
         perstage = 'ignore_bases' in self.request.GET
         context = self.context
         view_metadata = {}
@@ -1499,22 +1518,21 @@ class PyPIView:
             versiondata = context.get_versiondata(
                 version=version, perstage=perstage)
             view_metadata[version] = self._make_view_verdata(versiondata)
-        result_version_str = self.request.GET.get("v", "1")
-        try:
-            result_version = int(result_version_str)
-        except (TypeError, ValueError):
-            return apiresult(
-                400,
-                message=f"The requested result version must be an integer, got {result_version_str!r}",
-            )
         if result_version == 1:
             return apiresult(200, type="projectconfig", result=view_metadata)
         if result_version == 2:
             config = context.stage.get_projectconfig_mutable(context.project)
+            inheritance_info = context.stage.index_bases.get_project_inheritance_info(
+                context.project
+            ).jsonable()
             return apiresult(
                 200,
                 type="projectconfig_v2",
-                result=dict(config=config, versions=view_metadata),
+                result=dict(
+                    config=config,
+                    inheritance_info=inheritance_info,
+                    versions=view_metadata,
+                ),
             )
         return apiresult(
             400,
