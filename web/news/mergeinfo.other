@@ -1,0 +1,1 @@
+project.pt, version.pt: Moved whitelist info to ``merge_info.pt`` macro in preparation for changes in devpi-server 7.x.
