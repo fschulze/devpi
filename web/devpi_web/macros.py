@@ -85,6 +85,11 @@ def logo(request):  # noqa: ARG001
     return dict()
 
 
+@macro_config(template="templates/project_refresh.pt")
+def project_refresh(request):  # noqa: ARG001
+    return dict()
+
+
 @macro_config(template="templates/query_docs.pt")
 def query_doc(request):
     query_docs_html = None
