@@ -85,6 +85,11 @@ def logo(request):  # noqa: ARG001
     return dict()
 
 
+@macro_config(template="templates/merge_info.pt")
+def merge_info(request):  # noqa: ARG001
+    return dict()
+
+
 @macro_config(template="templates/project_refresh.pt")
 def project_refresh(request):  # noqa: ARG001
     return dict()
