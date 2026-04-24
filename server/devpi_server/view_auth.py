@@ -6,8 +6,8 @@ from devpi_common.types import ensure_unicode
 from devpi_server.auth import Auth
 from devpi_server.config import hookimpl
 from devpi_server.config import traced_pluggy_call
-from devpi_server.model import BaseStage
-from devpi_server.model import UpstreamError
+from devpi_server.model.base import BaseStage
+from devpi_server.model.exceptions import UpstreamError
 from devpi_server.replica import REPLICA_USER_NAME
 from devpi_server.views import abort
 from pyramid.authorization import ACLHelper

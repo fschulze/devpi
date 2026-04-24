@@ -8,7 +8,6 @@ from contextlib import suppress
 from devpi_common.metadata import parse_version
 from devpi_common.terminal import TerminalWriter
 from devpi_common.url import URL
-from devpi_server import mirror
 from devpi_server.config import get_pluginmanager
 from devpi_server.log import thread_clear_log
 from devpi_server.log import threadlog
@@ -16,6 +15,7 @@ from devpi_server.main import XOM
 from devpi_server.main import parseoptions
 from devpi_server.markers import NotSet
 from devpi_server.markers import notset
+from devpi_server.model import remote
 from devpi_server.normalized import normalize_name
 from io import BytesIO
 from pathlib import Path
@@ -315,11 +315,11 @@ def makexom(request, gen_path, http, monkeypatch, storage_args, storage_plugin):
     def makexom(opts=(), http=http, plugins=()):  # noqa: PLR0912
         from devpi_server import auth_basic
         from devpi_server import auth_devpi
-        from devpi_server import model
         from devpi_server import replica
         from devpi_server import view_auth
         from devpi_server import views
         from devpi_server.interfaces import verify_connection_interface
+        from devpi_server.model import local
         plugins = [
             plugin[0] if isinstance(plugin, tuple) else plugin
             for plugin in plugins]
@@ -328,8 +328,8 @@ def makexom(request, gen_path, http, monkeypatch, storage_args, storage_plugin):
             for plugin in (
                 auth_basic,
                 auth_devpi,
-                mirror,
-                model,
+                local,
+                remote,
                 replica,
                 view_auth,
                 views,
@@ -668,8 +668,8 @@ def model(xom):
 def devpiserver_makepypistage():
     def makepypistage(xom):
         from devpi_server.main import _pypi_ixconfig_default
-        from devpi_server.mirror import MirrorCustomizer
-        from devpi_server.mirror import MirrorStage
+        from devpi_server.model.remote import MirrorCustomizer
+        from devpi_server.model.remote import MirrorStage
         from devpi_server.readonly import ensure_deeply_readonly
 
         # we copy _pypi_ixconfig_default, otherwise the defaults will
@@ -693,7 +693,7 @@ def add_pypistage_mocks(monkeypatch, http):
     _projects: set = set()
 
     # add some mocking helpers
-    mirror.MirrorStage.url2response = http.url2response  # type: ignore[attr-defined]
+    remote.MirrorStage.url2response = http.url2response  # type: ignore[attr-defined]
 
     def mock_simple(self, name, text=None, pypiserial=10000, **kw):
         cache_expire = kw.pop("cache_expire", True)
@@ -706,8 +706,7 @@ def add_pypistage_mocks(monkeypatch, http):
                 _projects.union([name]), cache_expire=cache_expire)
         return self.xom.http.mock_simple(name, text=text, pypiserial=pypiserial, **kw)
 
-    monkeypatch.setattr(
-        mirror.MirrorStage, "mock_simple", mock_simple, raising=False)
+    monkeypatch.setattr(remote.MirrorStage, "mock_simple", mock_simple, raising=False)
 
     def mock_simple_projects(self, projectlist, cache_expire=True):
         if cache_expire:
@@ -721,8 +720,8 @@ def add_pypistage_mocks(monkeypatch, http):
         self.xom.http.mockresponse(self.mirror_url, code=200, text=t)
 
     monkeypatch.setattr(
-        mirror.MirrorStage, "mock_simple_projects",
-        mock_simple_projects, raising=False)
+        remote.MirrorStage, "mock_simple_projects", mock_simple_projects, raising=False
+    )
 
     def mock_extfile(self, path, content, **kw):
         headers = {
@@ -735,8 +734,7 @@ def add_pypistage_mocks(monkeypatch, http):
             url.url, content=content, headers=headers, **kw
         )
 
-    monkeypatch.setattr(
-        mirror.MirrorStage, "mock_extfile", mock_extfile, raising=False)
+    monkeypatch.setattr(remote.MirrorStage, "mock_extfile", mock_extfile, raising=False)
 
 
 @pytest.fixture
