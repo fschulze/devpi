@@ -80,6 +80,11 @@ def html_head_scripts(request):
     return dict(scripts=scripts)
 
 
+@macro_config(template="templates/index_bases.pt")
+def index_bases(request):  # noqa: ARG001
+    return dict()
+
+
 @macro_config(template="templates/logo.pt", groups="main_header_top")
 def logo(request):  # noqa: ARG001
     return dict()
