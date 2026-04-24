@@ -12,7 +12,7 @@ import sys
 if TYPE_CHECKING:
     from .config import MyArgumentParser
     from .main import XOM
-    from .model import BaseStage
+    from .model.base import BaseStage
     from pluggy import PluginManager
 
 
