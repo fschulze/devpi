@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from devpi_server.config import hookimpl
 from devpi_server.filestore import get_hashes
-from devpi_server.model import InvalidIndexconfig
+from devpi_server.model.exceptions import InvalidIndexconfig
 import pytest
 
 
@@ -19,7 +19,7 @@ def make_stage_plugin(cls, name="mystage"):
 
 
 def test_permissions_for_unknown_index(mapp, xom):
-    from devpi_server.model import ReadonlyIndex
+    from devpi_server.model.exceptions import ReadonlyIndex
     api = mapp.create_and_use()
     mapp.upload_file_pypi("hello-1.0.tar.gz", b'content', "hello", "1.0")
     (path,) = mapp.get_release_paths("hello")
@@ -66,7 +66,7 @@ def test_permissions_for_unknown_index(mapp, xom):
 
 
 def test_indexconfig_items(makemapp, maketestapp, makexom):
-    from devpi_server.model import ensure_list
+    from devpi_server.model.config import ensure_list
 
     class MyStageCustomizer:
         InvalidIndexconfig = InvalidIndexconfig
@@ -268,7 +268,7 @@ def test_package_filters(makemapp, maketestapp, makexom):
 
 
 def test_pkg_read_permission(makemapp, maketestapp, makexom):
-    from devpi_server.model import ACLList
+    from devpi_server.model.config import ACLList
     from webob.headers import ResponseHeaders
     import json
 
@@ -344,7 +344,7 @@ def test_pkg_read_permission(makemapp, maketestapp, makexom):
 
 def test_sro_skip_plugin(makemapp, maketestapp, makexom, pypistage):
     from devpi_common.url import URL
-    from devpi_server.model import ACLList
+    from devpi_server.model.config import ACLList
     from pyramid.threadlocal import get_current_request
 
     class Plugin:

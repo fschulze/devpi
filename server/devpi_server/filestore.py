@@ -47,7 +47,7 @@ if TYPE_CHECKING:
     from .interfaces import ContentOrFile
     from .keyfs import KeyFS
     from .keyfs_types import LocatedKey
-    from .model import Schema
+    from .model.schema import Schema
     from .normalized import NormalizedName
     from .readonly import SetViewReadonly
     from collections.abc import Iterable
