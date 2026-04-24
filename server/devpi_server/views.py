@@ -11,15 +11,15 @@ from .keyfs import KeyfsTimeoutError
 from .log import thread_pop_log
 from .log import thread_push_log
 from .log import threadlog
-from .mirror import SIMPLE_API_V1_JSON
-from .mirror import iter_fetch_remote_file
-from .mirror import iter_stream_remote_file
-from .model import InvalidIndex
-from .model import InvalidIndexconfig
-from .model import InvalidUser
-from .model import InvalidUserconfig
-from .model import ReadonlyIndex
-from .model import RemoveValue
+from .model.config import RemoveValue
+from .model.exceptions import InvalidIndex
+from .model.exceptions import InvalidIndexconfig
+from .model.exceptions import InvalidUser
+from .model.exceptions import InvalidUserconfig
+from .model.exceptions import ReadonlyIndex
+from .model.remote import SIMPLE_API_V1_JSON
+from .model.remote import iter_fetch_remote_file
+from .model.remote import iter_stream_remote_file
 from .normalized import normalize_name
 from .readonly import get_mutable_deepcopy
 from collections import defaultdict
@@ -68,9 +68,9 @@ import re
 
 if TYPE_CHECKING:
     from .main import XOM
-    from .model import BaseStage
-    from .model import ELink
-    from .model import PrivateStage
+    from .model.base import BaseStage
+    from .model.links import ELink
+    from .model.local import PrivateStage
     from collections.abc import Iterator
     from typing import NoReturn
 

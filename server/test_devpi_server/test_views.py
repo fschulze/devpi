@@ -13,7 +13,7 @@ from devpi_server.config import hookimpl
 from devpi_server.filestore import FileEntry
 from devpi_server.filestore import get_hashes
 from devpi_server.filestore import make_splitdir
-from devpi_server.mirror import parse_index
+from devpi_server.model.remote import parse_index
 from devpi_server.views import tween_keyfs_transaction
 from io import BytesIO
 from pyramid.response import Response
@@ -522,7 +522,7 @@ def test_project_redirect(pypistage, testapp):
 
 @pytest.mark.parametrize(*user_agent_parameter_args, ids=user_agent_parameter_ids)
 def test_simple_project_plain_info_for_installers(monkeypatch, pypistage, testapp, user_agent):
-    from devpi_server.model import BaseStage
+    from devpi_server.model.base import BaseStage
     import os.path
     pypistage.mock_simple(
         "py",

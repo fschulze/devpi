@@ -1,9 +1,9 @@
 from devpi_server.keyfs_types import FilePathInfo
 from devpi_server.keyfs_types import RelPath
-from devpi_server.mirror import ProjectNamesCache
-from devpi_server.mirror import ProjectUpdateCache
-from devpi_server.mirror import URL
-from devpi_server.mirror import parse_index
+from devpi_server.model.remote import ProjectNamesCache
+from devpi_server.model.remote import ProjectUpdateCache
+from devpi_server.model.remote import URL
+from devpi_server.model.remote import parse_index
 from devpi_server.normalized import normalize_name
 from test_devpi_server.simpypi import getmd5
 import hashlib
@@ -1344,8 +1344,8 @@ async def test_http_async_user_agent(server_version, simpypi, xom):
     OSError(),
     httpx.RequestError(message="fail")])
 async def test_get_simplelinks_perstage_when_http_error(exc, pypistage, monkeypatch):
-    from devpi_server.mirror import CacheInfo
-    from devpi_server.model import SimpleLinks
+    from devpi_server.model.links import SimpleLinks
+    from devpi_server.model.remote import CacheInfo
 
     # to reach the code path in question, we must have cached links
     links = [("key", "user/index/href", "req_py", "yanked")]
@@ -1363,7 +1363,7 @@ async def test_get_simplelinks_perstage_when_http_error(exc, pypistage, monkeypa
         def get_links(self):
             return links
 
-    monkeypatch.setattr("devpi_server.mirror.MirrorData", MockMirrorData)
+    monkeypatch.setattr("devpi_server.model.remote.MirrorData", MockMirrorData)
 
     async def async_httpget(self, url, **kw):
         raise exc

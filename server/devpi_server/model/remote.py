@@ -6,30 +6,11 @@ toxresult storage.
 """
 from __future__ import annotations
 
-from .config import hookimpl
-from .exceptions import lazy_format_exception
-from .filestore import AbsPath
-from .filestore import BadGateway
-from .filestore import Digests
-from .filestore import MutableFileEntry
-from .filestore import RunningHashes
-from .filestore import key_from_link
-from .htmlpage import HTMLPage
-from .httpclient import FatalResponse
-from .log import threadlog
-from .markers import Absent
-from .markers import absent
-from .markers import deleted
-from .markers import unknown
-from .model import BaseStage
-from .model import BaseStageCustomizer
-from .model import ELink
-from .model import Rel
-from .model import ensure_boolean
-from .normalized import NormalizedName
-from .normalized import normalize_name
-from .proxy import clean_response_headers
-from .readonly import ensure_deeply_readonly
+from .base import BaseStage
+from .config import ensure_boolean
+from .customizer import BaseStageCustomizer
+from .links import ELink
+from .links import Rel
 from asyncio import Future
 from attrs import frozen
 from contextlib import ExitStack
@@ -39,6 +20,25 @@ from devpi_common.metadata import parse_version
 from devpi_common.metadata import splitbasename
 from devpi_common.types import cached_property
 from devpi_common.url import URL
+from devpi_server.config import hookimpl
+from devpi_server.exceptions import lazy_format_exception
+from devpi_server.filestore import AbsPath
+from devpi_server.filestore import BadGateway
+from devpi_server.filestore import Digests
+from devpi_server.filestore import MutableFileEntry
+from devpi_server.filestore import RunningHashes
+from devpi_server.filestore import key_from_link
+from devpi_server.htmlpage import HTMLPage
+from devpi_server.httpclient import FatalResponse
+from devpi_server.log import threadlog
+from devpi_server.markers import Absent
+from devpi_server.markers import absent
+from devpi_server.markers import deleted
+from devpi_server.markers import unknown
+from devpi_server.normalized import NormalizedName
+from devpi_server.normalized import normalize_name
+from devpi_server.proxy import clean_response_headers
+from devpi_server.readonly import ensure_deeply_readonly
 from functools import partial
 from html.parser import HTMLParser
 from pyramid.authentication import b64encode
@@ -55,21 +55,21 @@ import weakref
 
 
 if TYPE_CHECKING:
-    from .filestore import BaseFileEntry
-    from .filestore import FileEntry
-    from .httpclient import AsyncGetResponse
-    from .httpclient import HTTPClient
-    from .keyfs_types import LocatedKey
-    from .keyfs_types import SearchKey
-    from .keyfs_types import ULIDKey
-    from .main import XOM
-    from .markers import Unknown
-    from .model import JoinedLink
-    from .model import RequiresPython
-    from .model import SimpleLinks
-    from .model import Yanked
-    from .readonly import DictViewReadonly
+    from .links import JoinedLink
+    from .links import RequiresPython
+    from .links import SimpleLinks
+    from .links import Yanked
     from collections.abc import Iterator
+    from devpi_server.filestore import BaseFileEntry
+    from devpi_server.filestore import FileEntry
+    from devpi_server.httpclient import AsyncGetResponse
+    from devpi_server.httpclient import HTTPClient
+    from devpi_server.keyfs_types import LocatedKey
+    from devpi_server.keyfs_types import SearchKey
+    from devpi_server.keyfs_types import ULIDKey
+    from devpi_server.main import XOM
+    from devpi_server.markers import Unknown
+    from devpi_server.readonly import DictViewReadonly
     from typing import Any
     from typing import NotRequired
     import asyncio
