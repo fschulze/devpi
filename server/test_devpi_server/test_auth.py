@@ -51,7 +51,7 @@ class TestAuth:
         assert result == dict(status="ok", groups=[])
 
     def test_auth_status_cached(self, auth, model, monkeypatch):
-        from devpi_server.model import User
+        from devpi_server.model.user import User
         username, password = "user", "world"
         model.create_user(username, password)
         orig_validate = User.validate
