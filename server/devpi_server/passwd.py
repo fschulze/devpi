@@ -1,7 +1,7 @@
 from .main import CommandRunner
 from .main import Fatal
 from .main import xom_from_config
-from .model import run_passwd
+from .model.base import run_passwd
 import sys
 
 
