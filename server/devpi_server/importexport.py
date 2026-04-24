@@ -10,7 +10,9 @@ from .main import init_default_indexes
 from .main import set_state_version
 from .main import xom_from_config
 from .markers import absent
-from .model import Rel
+from .model.customizer import get_stage_customizer_classes
+from .model.links import Rel
+from .model.root import is_valid_name
 from .normalized import normalize_name
 from .readonly import ReadonlyView
 from .readonly import get_mutable_deepcopy
@@ -21,8 +23,6 @@ from devpi_common.metadata import BasenameMeta
 from devpi_common.types import parse_hash_spec
 from devpi_common.url import URL
 from devpi_server import __version__ as server_version
-from devpi_server.model import get_stage_customizer_classes
-from devpi_server.model import is_valid_name
 from pathlib import Path
 from typing import TYPE_CHECKING
 from typing import cast
@@ -39,9 +39,9 @@ if TYPE_CHECKING:
     from .filestore import FileEntry
     from .filestore import MutableFileEntry
     from .main import XOM
-    from .mirror import MirrorStage
-    from .model import BaseStage
-    from .model import PrivateStage
+    from .model.local import BaseStage
+    from .model.local import PrivateStage
+    from .model.remote import MirrorStage
     from .readonly import SetViewReadonly
     from collections.abc import Iterable
     from devpi_common.terminal import TerminalWriter
