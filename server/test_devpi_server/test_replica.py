@@ -7,7 +7,7 @@ from devpi_server.keyfs_types import RelPath
 from devpi_server.log import thread_pop_log
 from devpi_server.log import thread_push_log
 from devpi_server.log import threadlog
-from devpi_server.mirror import iter_remote_file_replica
+from devpi_server.model.remote import iter_remote_file_replica
 from devpi_server.replica import H_EXPECTED_PRIMARY_ID
 from devpi_server.replica import H_PRIMARY_UUID
 from devpi_server.replica import H_REPLICA_OUTSIDE_URL
@@ -1261,7 +1261,7 @@ def test_replicate_deleted_user(mapp, replica_xom):
 
 
 def test_auth_status_primary_down(maketestapp, replica_xom, mock):
-    from devpi_server.model import UpstreamError
+    from devpi_server.model.exceptions import UpstreamError
     testapp = maketestapp(replica_xom)
     calls = []
     with mock.patch('devpi_server.replica.proxy_request_to_primary') as prtm:
@@ -1304,7 +1304,7 @@ def test_replica_user_auth_before_other_plugins(makexom):
 def test_pkg_read_permission(makemapp, maketestapp, makexom, secretfile):
     from devpi_common.types import ensure_unicode
     from devpi_server.config import hookimpl
-    from devpi_server.model import ACLList
+    from devpi_server.model.config import ACLList
     from webob.headers import ResponseHeaders
     import itsdangerous
 

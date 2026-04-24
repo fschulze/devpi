@@ -18,9 +18,9 @@ from .log import configure_cli_logging
 from .log import configure_logging
 from .log import thread_push_log
 from .log import threadlog
-from .model import BaseStage
-from .model import RootModel
-from .model import Schema
+from .model.base import BaseStage
+from .model.root import RootModel
+from .model.schema import Schema
 from .views import apireturn
 from collections import defaultdict
 from devpi_common.terminal import TerminalWriter
@@ -478,7 +478,7 @@ class XOM:
     def view_deriver(self, view, info):
         if self.is_replica():
             if info.options.get('is_mutating', True):
-                from .model import ensure_list
+                from .model.config import ensure_list
                 from .replica import proxy_view_to_primary
                 from .views import is_mutating_http_method
                 request_methods = info.options['request_method']

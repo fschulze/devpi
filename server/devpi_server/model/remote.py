@@ -4,43 +4,45 @@ Implementation of the database layer for PyPI Package serving and
 toxresult storage.
 
 """
+
 from __future__ import annotations
 
-from .config import hookimpl
-from .exceptions import lazy_format_exception
-from .filestore import AbsPath
-from .filestore import BadGateway
-from .filestore import Digests
-from .filestore import MutableFileEntry
-from .filestore import RunningHashes
-from .filestore import key_from_link
-from .htmlpage import HTMLPage
-from .httpclient import FatalResponse
-from .log import threadlog
-from .markers import Absent
-from .markers import absent
-from .markers import deleted
-from .markers import unknown
-from .model import BaseStage
-from .model import BaseStageCustomizer
-from .model import ELink
-from .model import Rel
-from .model import ensure_boolean
-from .normalized import NormalizedName
-from .normalized import normalize_name
-from .proxy import clean_response_headers
-from .readonly import ensure_deeply_readonly
+from .base import BaseStage
+from .config import ensure_boolean
+from .customizer import BaseStageCustomizer
+from .links import ELink
+from .links import Rel
+from .simpleapi import ProjectHTMLParser
+from .simpleapi import ProjectJSONv1Parser
+from .simpleapi import SIMPLE_API_ACCEPT
+from .simpleapi import SIMPLE_API_V1_JSON
+from .simpleapi import parse_index
+from .simpleapi import parse_index_v1_json
 from asyncio import Future
 from attrs import frozen
 from contextlib import ExitStack
-from devpi_common.metadata import BasenameMeta
-from devpi_common.metadata import is_archive_of_project
-from devpi_common.metadata import parse_version
 from devpi_common.metadata import splitbasename
 from devpi_common.types import cached_property
 from devpi_common.url import URL
+from devpi_server.config import hookimpl
+from devpi_server.exceptions import lazy_format_exception
+from devpi_server.filestore import AbsPath
+from devpi_server.filestore import BadGateway
+from devpi_server.filestore import Digests
+from devpi_server.filestore import MutableFileEntry
+from devpi_server.filestore import RunningHashes
+from devpi_server.filestore import key_from_link
+from devpi_server.httpclient import FatalResponse
+from devpi_server.log import threadlog
+from devpi_server.markers import Absent
+from devpi_server.markers import absent
+from devpi_server.markers import deleted
+from devpi_server.markers import unknown
+from devpi_server.normalized import NormalizedName
+from devpi_server.normalized import normalize_name
+from devpi_server.proxy import clean_response_headers
+from devpi_server.readonly import ensure_deeply_readonly
 from functools import partial
-from html.parser import HTMLParser
 from pyramid.authentication import b64encode
 from typing import TYPE_CHECKING
 from typing import TypedDict
@@ -55,28 +57,28 @@ import weakref
 
 
 if TYPE_CHECKING:
-    from .filestore import BaseFileEntry
-    from .filestore import FileEntry
-    from .httpclient import AsyncGetResponse
-    from .httpclient import HTTPClient
-    from .keyfs_types import LocatedKey
-    from .keyfs_types import SearchKey
-    from .keyfs_types import ULIDKey
-    from .main import XOM
-    from .markers import Unknown
-    from .model import JoinedLink
-    from .model import RequiresPython
-    from .model import SimpleLinks
-    from .model import Yanked
-    from .readonly import DictViewReadonly
+    from .links import JoinedLink
+    from .links import RequiresPython
+    from .links import SimpleLinks
+    from .links import Yanked
+    from .simpleapi import ReleaseLinks
     from collections.abc import Iterator
+    from devpi_server.filestore import BaseFileEntry
+    from devpi_server.filestore import FileEntry
+    from devpi_server.httpclient import AsyncGetResponse
+    from devpi_server.httpclient import HTTPClient
+    from devpi_server.keyfs_types import LocatedKey
+    from devpi_server.keyfs_types import SearchKey
+    from devpi_server.keyfs_types import ULIDKey
+    from devpi_server.main import XOM
+    from devpi_server.markers import Unknown
+    from devpi_server.readonly import DictViewReadonly
     from typing import Any
     from typing import NotRequired
     import asyncio
 
     ProjectsResult = tuple[set[NormalizedName], str | None]
     JoinedLinkList = list[JoinedLink]
-    ReleaseLinks = list["Link"]
 
 
 class CacheLink(TypedDict):
@@ -99,14 +101,6 @@ class NewLinks:
 
 
 NewLinksFuture = Future[NewLinks]
-
-
-SIMPLE_API_V1_JSON = "application/vnd.pypi.simple.v1+json"
-SIMPLE_API_V1_VERSION = parse_version("1.0")
-SIMPLE_API_V2_VERSION = parse_version("2.0")
-SIMPLE_API_ACCEPT = (
-    f"application/vnd.pypi.simple.v1+html;q=0.2, {SIMPLE_API_V1_JSON}, text/html;q=0.01"
-)
 
 
 def _headers_from_response(r):
@@ -306,147 +300,6 @@ def iter_fetch_remote_file(stage, entry, url):
         yield from iter_remote_file_replica(stage, entry, url)
 
 
-class Link(URL):
-    def __init__(self, url="", *args, **kwargs):
-        self.requires_python = kwargs.pop('requires_python', None)
-        self.yanked = kwargs.pop('yanked', None)
-        URL.__init__(self, url, *args, **kwargs)
-
-
-class ProjectHTMLParser(HTMLParser):
-    def __init__(self, url):
-        HTMLParser.__init__(self)
-        self.projects = set()
-        self.baseurl = URL(url)
-        self.basehost = self.baseurl.hostname
-        self.project = None
-
-    def handle_data(self, data):
-        if self.project:
-            self.project = data.strip()
-
-    def handle_starttag(self, tag, attrs):
-        if tag == 'a':
-            self.project = None
-            attrs = dict(attrs)
-            if 'href' not in attrs:
-                return
-            href = attrs['href']
-            if '://' not in href:
-                project = href.rstrip('/').rsplit('/', 1)[-1]
-            else:
-                newurl = self.baseurl.joinpath(href)
-                # remove trailing slashes, so basename works correctly
-                newurl = newurl.asfile()
-                if not newurl.is_valid_http_url():
-                    return
-                if not newurl.path.startswith(self.baseurl.path):
-                    return
-                if self.basehost != newurl.hostname:
-                    return
-                project = newurl.basename
-            self.project = project
-
-    def handle_endtag(self, tag):
-        if tag == 'a' and self.project:
-            self.projects.add(self.project)
-            self.project = None
-
-
-class ProjectJSONv1Parser:
-    def __init__(self, url):
-        self.baseurl = URL(url)
-
-    def feed(self, data):
-        meta = data['meta']
-        api_version = parse_version(meta.get('api-version', '1.0'))
-        if not (SIMPLE_API_V1_VERSION <= api_version < SIMPLE_API_V2_VERSION):
-            raise ValueError(
-                "Wrong API version %r in mirror json response."
-                % api_version)
-        self.projects = set(x['name'] for x in data['projects'])
-
-
-class IndexParser:
-
-    def __init__(self, project):
-        self.project = normalize_name(project)
-        self.basename2link = {}
-
-    def _mergelink_ifbetter(self, newlink):
-        """
-        Stores a link given it's better fit than an existing one (if any).
-
-        A link with hash_spec replaces one w/o it, even if the latter got other
-        non-empty attributes (like requires_python), unlike the former.
-        As soon as the first link with hash_spec is encountered, those that
-        appear later are ignored.
-        """
-        entry = self.basename2link.get(newlink.basename)
-        if entry is None or (not entry.hash_spec and (newlink.hash_spec or (
-            not entry.requires_python and newlink.requires_python
-        ))):
-            self.basename2link[newlink.basename] = newlink
-            threadlog.debug("indexparser: adding link %s", newlink)
-        else:
-            threadlog.debug("indexparser: ignoring candidate link %s", newlink)
-
-    @property
-    def releaselinks(self) -> ReleaseLinks:
-        # the BasenameMeta wrapping essentially does link validation
-        return [BasenameMeta(x).obj for x in self.basename2link.values()]
-
-    def parse_index(self, disturl, html):
-        p = HTMLPage(html, disturl.url)
-        seen = set()
-        for link in p.links:
-            newurl = Link(link.url, requires_python=link.requires_python, yanked=link.yanked)
-            if not newurl.is_valid_http_url():
-                continue
-            if is_archive_of_project(newurl, self.project):
-                if not newurl.is_valid_http_url():
-                    threadlog.warn("unparsable/unsupported url: %r", newurl)
-                else:
-                    seen.add(newurl.url)
-                    self._mergelink_ifbetter(newurl)
-                    continue
-
-
-def parse_index(disturl, html):
-    if not isinstance(disturl, URL):
-        disturl = URL(disturl)
-    project = disturl.basename or disturl.parentbasename
-    parser = IndexParser(project)
-    parser.parse_index(disturl, html)
-    return parser
-
-
-def parse_index_v1_json(disturl: URL | str, text: str) -> ReleaseLinks:
-    if not isinstance(disturl, URL):
-        disturl = URL(disturl)
-    data = json.loads(text)
-    meta = data['meta']
-    api_version = parse_version(meta.get('api-version', '1.0'))
-    if not (SIMPLE_API_V1_VERSION <= api_version < SIMPLE_API_V2_VERSION):
-        raise ValueError(
-            "Wrong API version %r in mirror json response."
-            % api_version)
-    result = []
-    for item in data['files']:
-        url = disturl.joinpath(item['url'])
-        hashes = item['hashes']
-        if 'sha256' in hashes:
-            url = url.replace(fragment=f"sha256={hashes['sha256']}")
-        elif hashes:
-            url = url.replace(fragment="=".join(next(iter(hashes.items()))))
-        # the BasenameMeta wrapping essentially does link validation
-        result.append(BasenameMeta(Link(
-            url,
-            requires_python=item.get('requires-python'),
-            yanked=item.get('yanked'))).obj)
-    return result
-
-
 def join_links_data(
     releaselinks: ReleaseLinks,
     key_index: LocatedKey | ULIDKey,
@@ -483,7 +336,7 @@ class MirrorHTTPClient:
         url: URL | str,
         *,
         allow_redirects: bool,
-        timeout: float | None = None,
+        timeout: float | None = None,  # noqa: ASYNC109
         extra_headers: dict | None = None,
     ) -> AsyncGetResponse:
         extra_headers = self.get_extra_headers(extra_headers)
@@ -826,8 +679,7 @@ class MirrorStage(BaseStage):
         ixconfig: DictViewReadonly[str, Any],
         customizer_cls: type,
     ) -> None:
-        super().__init__(
-            xom, username, index, ixconfig, customizer_cls)
+        super().__init__(xom, username, index, ixconfig, customizer_cls)
         self.xom = xom
         self.offline = self.xom.config.offline_mode
         self.timeout = xom.config.request_timeout
@@ -908,21 +760,25 @@ class MirrorStage(BaseStage):
         # discard it, allowing any others in the list to be tried
         # if we didn't have any auth candidates, try and obtain some
         auth_candidates = self.xom.setdefault_singleton(
-            self.name, "auth_candidates", factory=list)
+            self.name, "auth_candidates", factory=list
+        )
         if auth_candidates:
             auth_candidates.pop(0)
         else:
             hook = self.xom.config.hook
-            auth_candidates.extend(hook.devpiserver_get_mirror_auth(
-                mirror_url=self.mirror_url,
-                www_authenticate_header=auth_header))
+            auth_candidates.extend(
+                hook.devpiserver_get_mirror_auth(
+                    mirror_url=self.mirror_url, www_authenticate_header=auth_header
+                )
+            )
         # return True if we have any new credentials to try
         return len(auth_candidates) > 0
 
     @property
     def cache_expiry(self):
         return self.ixconfig.get(
-            'mirror_cache_expiry', self.xom.config.mirror_cache_expiry)
+            "mirror_cache_expiry", self.xom.config.mirror_cache_expiry
+        )
 
     @property
     def ignore_serial_header(self):
@@ -933,7 +789,7 @@ class MirrorStage(BaseStage):
         if self.xom.is_replica():
             url = self.xom.config.primary_url.joinpath(self.name, "+simple")
         else:
-            url = URL(self.ixconfig['mirror_url'])
+            url = URL(self.ixconfig["mirror_url"])
         return url.asdir()
 
     @property
@@ -950,7 +806,10 @@ class MirrorStage(BaseStage):
         # prefer plugin generated credentials as they will only get generated
         # if the url embedded auth has previously failed
         auth_candidates = self.xom.setdefault_singleton(
-            self.name, "auth_candidates", factory=list)
+            self.name,
+            "auth_candidates",
+            factory=list,
+        )
         if auth_candidates:
             return auth_candidates[0]
         url = self.mirror_url
@@ -965,11 +824,11 @@ class MirrorStage(BaseStage):
 
     @property
     def no_project_list(self) -> bool:
-        return self.ixconfig.get('mirror_no_project_list', False)
+        return self.ixconfig.get("mirror_no_project_list", False)
 
     @property
     def use_external_url(self):
-        return self.ixconfig.get('mirror_use_external_urls', False)
+        return self.ixconfig.get("mirror_use_external_urls", False)
 
     def get_possible_indexconfig_keys(self):
         return (
@@ -989,20 +848,20 @@ class MirrorStage(BaseStage):
     def get_default_config_items(self):
         return [("volatile", True)]
 
-    def normalize_indexconfig_value(self, key, value):
+    def normalize_indexconfig_value(self, key, value):  # noqa: PLR0911
         if key == "volatile":
             return ensure_boolean(value)
         if key == "mirror_url":
             if not value.startswith(("http://", "https://")):
-                raise self.InvalidIndexconfig([
-                    "'mirror_url' option must be a URL."])
+                raise self.InvalidIndexconfig(["'mirror_url' option must be a URL."])
             return value
         if key == "mirror_cache_expiry":
             try:
                 value = int(value)
             except (TypeError, ValueError) as e:
-                raise self.InvalidIndexconfig([
-                    "'mirror_cache_expiry' option must be an integer"]) from e
+                raise self.InvalidIndexconfig(
+                    ["'mirror_cache_expiry' option must be an integer"]
+                ) from e
             return value
         if key == "mirror_ignore_serial_header":
             return ensure_boolean(value)
@@ -1056,8 +915,9 @@ class MirrorStage(BaseStage):
     ) -> None:
         project = normalize_name(project)
         if not self.has_project_perstage(project):
-            raise self.NotFound("project %r not found on stage %r" %
-                                (project, self.name))
+            raise self.NotFound(
+                "project %r not found on stage %r" % (project, self.name)
+            )
         # since this is a mirror, we only have the simple links and no
         # metadata, so only delete the files and keep the simple links
         # for the possibility to re-download a release
@@ -1104,26 +964,29 @@ class MirrorStage(BaseStage):
 
     @property
     def _list_projects_perstage_lock(self):
-        """ get server wide lock for this index """
+        """get server wide lock for this index"""
         return self.xom.setdefault_singleton(
-            self.name, "projects_update_lock", factory=threading.Lock)
+            self.name, "projects_update_lock", factory=threading.Lock
+        )
 
     @property
     def cache_projectnames(self) -> ProjectNamesCache:
-        """ cache for full list of projectnames. """
+        """cache for full list of projectnames."""
         # we could keep this info inside keyfs but pypi.org
         # produces a several MB list of names and it changes often which
         # would spam the database.
         return self.xom.setdefault_singleton(
-            self.name, "projectnames", factory=ProjectNamesCache)
+            self.name, "projectnames", factory=ProjectNamesCache
+        )
 
     @property
     def cache_retrieve_times(self):
-        """ per-xom RAM cache for keeping track when we last updated simplelinks. """
+        """per-xom RAM cache for keeping track when we last updated simplelinks."""
         # we could keep this info in keyfs but it would lead to a write
         # for each remote check.
         return self.xom.setdefault_singleton(
-            self.name, "project_retrieve_times", factory=ProjectUpdateCache)
+            self.name, "project_retrieve_times", factory=ProjectUpdateCache
+        )
 
     def get_projects_timeout(self, timeout: float | None) -> float:
         return self.projects_timeout if timeout is None else timeout
@@ -1229,9 +1092,9 @@ class MirrorStage(BaseStage):
     def _list_projects_perstage(
         self, *, timeout: float | None = None
     ) -> tuple[set[NormalizedName], bool]:
-        """ Return the cached project names.
+        """Return the cached project names.
 
-            Only for internal use which makes sure the data isn't modified.
+        Only for internal use which makes sure the data isn't modified.
         """
         if self.offline:
             threadlog.warn("offline mode: using stale projects list")
@@ -1261,14 +1124,14 @@ class MirrorStage(BaseStage):
         return (self._stale_list_projects_perstage(), True)
 
     def list_projects_perstage(self) -> dict[str, NormalizedName | str]:
-        """ Return the project names. """
+        """Return the project names."""
         # return a read-only version of the cached data,
         # so it can't be modified accidentally and we avoid a copy
         (projects, _stale) = self._list_projects_perstage()
         return ensure_deeply_readonly({v: v.original for v in projects})
 
     def is_project_cached(self, project: NormalizedName | str) -> bool:
-        """ return True if we have some cached simpelinks information. """
+        """return True if we have some cached simpelinks information."""
         return self.key_projectcacheinfo(project).exists(resolve_parents=True)
 
     def _entry_from_href(self, href: str) -> FileEntry | None:
@@ -1306,18 +1169,18 @@ class MirrorStage(BaseStage):
         )
         if response.status_code == 304:
             raise self.UpstreamNotModified(
-                "%s status on GET %r" % (response.status_code, url),
-                etag=etag)
+                "%s status on GET %r" % (response.status_code, url), etag=etag
+            )
         if response.status_code != 200 or isinstance(response, FatalResponse):
             if response.status_code == 404:
                 # immediately cache the not found with no ETag
                 self.cache_retrieve_times.refresh(project, None)
-                raise self.UpstreamNotFoundError(
-                    "not found on GET %r" % url)
+                raise self.UpstreamNotFoundError("not found on GET %r" % url)
 
             # we don't have an old result and got a non-404 code.
-            raise self.UpstreamError("%s status on GET %r" % (
-                response.status_code, url))
+            raise self.UpstreamError(
+                "%s status on GET %r" % (response.status_code, url)
+            )
 
         # pypi.org provides X-PYPI-LAST-SERIAL header in case of 200 returns.
         # devpi-primary may provide a 200 but not supply the header
@@ -1352,7 +1215,7 @@ class MirrorStage(BaseStage):
         # make sure we don't store credential in the database
         response_url = URL(str(response.url)).replace(username=None, password=None)
         # parse simple index's link
-        if response.headers.get('content-type') == SIMPLE_API_V1_JSON:
+        if response.headers.get("content-type") == SIMPLE_API_V1_JSON:
             releaselinks = parse_index_v1_json(response_url, text)
         else:
             releaselinks = parse_index(response_url, text).releaselinks
@@ -1387,13 +1250,15 @@ class MirrorStage(BaseStage):
                 msg = f"no serial header from primary for {project}"
                 raise self.UpstreamError(msg)
             devpi_serial = int(_devpi_serial)
-            threadlog.debug("get_simplelinks pypi: waiting for devpi_serial %r",
-                            devpi_serial)
+            threadlog.debug(
+                "get_simplelinks pypi: waiting for devpi_serial %r", devpi_serial
+            )
             links = None
             if self.keyfs.wait_tx_serial(devpi_serial, timeout=self.timeout):
-                threadlog.debug("get_simplelinks pypi: finished waiting for devpi_serial %r",
-                                devpi_serial)
-                # XXX raise TransactionRestart to get a consistent clean view
+                threadlog.debug(
+                    "get_simplelinks pypi: finished waiting for devpi_serial %r",
+                    devpi_serial,
+                )
                 self.keyfs.restart_read_transaction()
                 mirrorlinks = self._get_mirrordata(project)
                 links = mirrorlinks.get_fresh_links()
@@ -1408,8 +1273,7 @@ class MirrorStage(BaseStage):
                 return self.SimpleLinks(
                     links, core_metadata=self.provides_core_metadata
                 )
-            raise self.UpstreamError("no cache links from primary for %s" %
-                                     project)
+            raise self.UpstreamError("no cache links from primary for %s" % project)
 
         with self.keyfs.write_transaction(allow_restart=True):
             # on the master we need to write the updated links.
@@ -1439,13 +1303,12 @@ class MirrorStage(BaseStage):
             if links is None or set(links) != set(newlinks):
                 # we got changes, so store them
                 self._update_simplelinks(project, info, links, newlinks)
-                threadlog.debug(
-                    "Updated simplelinks for %r in background", project)
+                threadlog.debug("Updated simplelinks for %r in background", project)
             else:
                 threadlog.debug("Unchanged simplelinks for %r", project)
 
     def get_simplelinks_perstage(self, project: NormalizedName | str) -> SimpleLinks:  # noqa: PLR0911, PLR0912
-        """ return all releaselinks from the index, returning cached entries
+        """return all releaselinks from the index, returning cached entries
         if we have a recent enough request stored locally.
 
         Raise UpstreamError if the pypi server cannot be reached or
@@ -1466,19 +1329,21 @@ class MirrorStage(BaseStage):
             if links is not None:
                 threadlog.warn(
                     "serving stale links for %r, waiting for existing request timed out after %s seconds",
-                    project, self.timeout)
+                    project,
+                    self.timeout,
+                )
                 return self.SimpleLinks(
                     links, core_metadata=self.provides_core_metadata, stale=True
                 )
             raise self.UpstreamError(
-                f"timeout after {self.timeout} seconds while getting data for {project!r}")
+                f"timeout after {self.timeout} seconds while getting data for {project!r}"
+            )
 
         if self.offline and links is None:
             raise self.UpstreamError("offline mode")
         if links is not None and (self.offline or not is_expired):
             if self.offline and project not in self._offline_logging:
-                threadlog.debug(
-                    "using stale links for %r due to offline mode", project)
+                threadlog.debug("using stale links for %r due to offline mode", project)
                 self._offline_logging.add(project)
             return self.SimpleLinks(
                 links, core_metadata=self.provides_core_metadata, stale=True
@@ -1486,10 +1351,12 @@ class MirrorStage(BaseStage):
 
         if links is None:
             is_retrieval_expired = self.cache_retrieve_times.is_expired(
-                project, self.cache_expiry)
+                project, self.cache_expiry
+            )
             if not is_retrieval_expired:
                 raise self.UpstreamNotFoundError(
-                    "cached not found for project %s" % project)
+                    "cached not found for project %s" % project
+                )
             exists = self.has_project_perstage(project)
             if exists is unknown and self.no_project_list:
                 pass
@@ -1590,7 +1457,7 @@ class MirrorStage(BaseStage):
 
     def list_versions_perstage(self, project):
         try:
-            return set(x.version for x in self.get_simplelinks_perstage(project))
+            return {x.version for x in self.get_simplelinks_perstage(project)}
         except self.UpstreamNotFoundError:
             return set()
 
@@ -1650,12 +1517,12 @@ class MirrorStage(BaseStage):
             link_version = sm.version
             if version == link_version:
                 if not verdata:
-                    verdata['name'] = project
-                    verdata['version'] = version
+                    verdata["name"] = project
+                    verdata["version"] = version
                 if sm.require_python is not None:
-                    verdata['requires_python'] = sm.require_python
+                    verdata["requires_python"] = sm.require_python
                 if sm.yanked is not None and sm.yanked is not False:
-                    verdata['yanked'] = sm.yanked
+                    verdata["yanked"] = sm.yanked
                 if with_elinks:
                     elinks = verdata.setdefault("+elinks", [])
                     elinks.append(
@@ -1676,12 +1543,11 @@ class MirrorCustomizer(BaseStageCustomizer):
 @hookimpl
 def devpiserver_get_stage_customizer_classes():
     # prevent plugins from installing their own under the reserved names
-    return [
-        ("mirror", MirrorCustomizer)]
+    return [("mirror", MirrorCustomizer)]
 
 
 class ProjectNamesCache:
-    """ Helper class for maintaining project names from a mirror. """
+    """Helper class for maintaining project names from a mirror."""
 
     _data: set[NormalizedName]
     _etag: str | None
@@ -1713,17 +1579,17 @@ class ProjectNamesCache:
         return self._etag
 
     def add(self, project: NormalizedName | str) -> None:
-        """ Add project to cache. """
+        """Add project to cache."""
         with self._lock:
             self._data.add(normalize_name(project))
 
     def discard(self, project: NormalizedName | str) -> None:
-        """ Remove project from cache. """
+        """Remove project from cache."""
         with self._lock:
             self._data.discard(normalize_name(project))
 
     def set(self, data: set[NormalizedName], etag: str | None) -> None:
-        """ Set data and update timestamp. """
+        """Set data and update timestamp."""
         with self._lock:
             if data != self._data:
                 assert isinstance(data, set)
@@ -1743,8 +1609,7 @@ class ProjectUpdateInnerLock:
     # it is needed to add the is_from_current_thread method
     # and to allow the WeakValueDictionary work correctly
 
-    __slots__ = (
-        '__weakref__', 'acquire', 'locked', 'release', 'thread_ident')
+    __slots__ = ("__weakref__", "acquire", "locked", "release", "thread_ident")
 
     def __init__(self) -> None:
         self.thread_ident = threading.get_ident()
@@ -1796,11 +1661,13 @@ class ProjectUpdateLock:
             self.lock = None
 
     def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} project={self.project!r} lock={self.lock!r}>"
+        return (
+            f"<{self.__class__.__name__} project={self.project!r} lock={self.lock!r}>"
+        )
 
 
 class ProjectUpdateCache:
-    """ Helper class to manage when we last updated something project specific. """
+    """Helper class to manage when we last updated something project specific."""
 
     _project2lock: weakref.WeakValueDictionary[str, ProjectUpdateInnerLock]
     _project2time: dict[str, tuple[float, str | None]]
