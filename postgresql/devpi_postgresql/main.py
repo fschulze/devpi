@@ -12,7 +12,7 @@ from devpi_server.keyfs_types import StorageInfo
 from devpi_server.log import threadlog
 from devpi_server.markers import Absent
 from devpi_server.markers import absent
-from devpi_server.model import ensure_boolean
+from devpi_server.model.config import ensure_boolean
 from io import BytesIO
 from io import RawIOBase
 from pg8000.native import literal
