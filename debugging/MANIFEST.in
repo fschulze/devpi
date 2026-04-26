@@ -1,0 +1,3 @@
+include .flake8 *.ini *.rst LICENSE
+recursive-include devpi_debugging/templates *
+recursive-include tests *.py
