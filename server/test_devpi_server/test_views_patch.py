@@ -83,27 +83,29 @@ def test_index_patch_trailing_slash(testapp):
     assert r.json['message'] == "The 'mirror_whitelist' setting doesn't have value 'foo'"
 
 
-def test_mirror_index_patch(testapp):
+def test_remote_index_patch(testapp):
     # add and login user
     testapp.put_json("/foo", dict(password="123"))
     testapp.set_auth('foo', '123')
-    # add mirror index
-    testapp.put_json("/foo/dev", dict(
-        type='mirror',
-        mirror_url='https://pypi.org/simple/'))
+    # add remote index
+    testapp.put_json(
+        "/foo/dev", dict(type="remote", mirror_url="https://pypi.org/simple/")
+    )
     r = testapp.get("/foo/dev")
     # check defaults
-    assert r.json['result'] == {
-        'mirror_url': 'https://pypi.org/simple/',
-        'projects': [],
-        'type': 'mirror',
-        'volatile': True}
+    assert r.json["result"] == {
+        "mirror_url": "https://pypi.org/simple/",
+        "projects": [],
+        "type": "remote",
+        "volatile": True,
+    }
     # set volatile
     r = testapp.patch_json("/foo/dev", ["volatile=False"])
-    assert r.json['result'] == {
-        'mirror_url': 'https://pypi.org/simple/',
-        'type': 'mirror',
-        'volatile': False}
+    assert r.json["result"] == {
+        "mirror_url": "https://pypi.org/simple/",
+        "type": "remote",
+        "volatile": False,
+    }
 
 
 def test_patch_index_with_unknown_option(
