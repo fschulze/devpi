@@ -837,7 +837,7 @@ class PyPIView:
         make_url = self._makeurl_factory()
 
         for link in result:
-            index_name = "/".join(link.href.split("/", 2)[:2])
+            index_name = f"{link.user}/{link.index}"
             attribs = [f'href="{make_url(link.href).url}"']
             if core_metadata and link.core_metadata:
                 attribs.append(

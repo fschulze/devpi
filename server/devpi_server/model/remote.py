@@ -13,6 +13,8 @@ from .config import ensure_boolean
 from .customizer import BaseIndexCustomizer
 from .links import ELink
 from .links import Rel
+from .links import SimpleLinks
+from .links import SimplelinkMeta
 from .simpleapi import ProjectHTMLParser
 from .simpleapi import ProjectJSONv1Parser
 from .simpleapi import SIMPLE_API_ACCEPT
@@ -32,6 +34,7 @@ from devpi_server.filestore import BadGateway
 from devpi_server.filestore import Digests
 from devpi_server.filestore import MutableFileEntry
 from devpi_server.filestore import RunningHashes
+from devpi_server.filestore import index_relpath
 from devpi_server.filestore import key_from_link
 from devpi_server.httpclient import FatalResponse
 from devpi_server.log import threadlog
@@ -51,22 +54,18 @@ from typing import cast
 from typing import overload
 import contextlib
 import json
-import re
 import threading
 import time
 import weakref
 
 
 if TYPE_CHECKING:
-    from .links import JoinedLink
     from .links import RequiresPython
-    from .links import SimpleLinks
     from .links import Yanked
     from .simpleapi import ReleaseLinks
     from collections.abc import Iterator
     from collections.abc import Sequence
     from devpi_server.filestore import BaseFileEntry
-    from devpi_server.filestore import FileEntry
     from devpi_server.httpclient import AsyncGetResponse
     from devpi_server.httpclient import HTTPClient
     from devpi_server.keyfs_types import LocatedKey
@@ -80,7 +79,6 @@ if TYPE_CHECKING:
     import asyncio
 
     ProjectsResult = tuple[set[NormalizedName], str | None]
-    JoinedLinkList = list[JoinedLink]
 
 
 class CacheLink(TypedDict):
@@ -307,24 +305,31 @@ def iter_fetch_remote_file(stage, entry, url):
 def join_links_data(
     releaselinks: ReleaseLinks,
     key_index: LocatedKey | ULIDKey,
-) -> JoinedLinkList:
-    # build list of (key, href, require_python, yanked) tuples
-    result = []
+    *,
+    core_metadata: bool,
+) -> SimpleLinks:
+    index = key_index.params["index"]
     keyfs = key_index.keyfs
-    for releaselink in releaselinks:
-        key = key_from_link(keyfs, releaselink, key_index)
-        href = str(key.relpath)
-        if releaselink.hash_spec:
-            href = f"{href}#{releaselink.hash_spec}"
-        result.append(
-            (
-                releaselink.basename,
-                href,
-                releaselink.requires_python,
-                None if releaselink.yanked is False else releaselink.yanked,
+    user = key_index.params["user"]
+    return SimpleLinks(
+        [
+            SimplelinkMeta(
+                basename=releaselink.basename,
+                core_metadata=core_metadata,
+                hashes=Digests.from_spec(releaselink.hash_spec),
+                index=index,
+                relpath=index_relpath(
+                    user,
+                    index,
+                    AbsPath(key_from_link(keyfs, releaselink, key_index).relpath),
+                ),
+                require_python=releaselink.requires_python,
+                user=user,
+                yanked=None if releaselink.yanked is False else releaselink.yanked,
             )
-        )
-    return result
+            for releaselink in releaselinks
+        ]
+    )
 
 
 class RemoteHTTPClient:
@@ -451,43 +456,43 @@ class RemoteData:
         cache_info.setdefault("etag", None)
         return cast("CacheInfo", cache_info)
 
-    def get_fresh_links(self) -> list | None:
+    def get_fresh_links(self) -> SimpleLinks | None:
         if not self.key_project.exists(resolve_parents=True):
             return None
         stage = self.get_stage()
+        core_metadata = stage.provides_core_metadata
         key_simpledata = stage.key_simpledata(
             project=self.project
         ).with_resolved_parent()
         username = stage.username
         index = stage.index
-        links_with_data = []
-        for k, v in key_simpledata.iter_ulidkey_values():
-            entrypath = f"{username}/{index}/{v['relpath']}"
-            if (
-                "hashes" in v
-                and (hash_spec := Digests(v["hashes"]).best_available_spec) is not None
-            ):
-                entrypath = f"{entrypath}#{hash_spec}"
-            links_with_data.append(
-                (
-                    k.params["filename"],
-                    entrypath,
-                    v.get("requires_python"),
-                    v.get("yanked"),
+        links = SimpleLinks(
+            [
+                SimplelinkMeta(
+                    basename=k.params["filename"],
+                    core_metadata=core_metadata,
+                    hashes=Digests(v["hashes"]) if "hashes" in v else Digests(),
+                    index=index,
+                    relpath=v["relpath"],
+                    require_python=v.get("requires_python"),
+                    user=username,
+                    yanked=v.get("yanked"),
                 )
-            )
-        if stage.offline and links_with_data is not None:
-            entries = stage.get_entries_for_entrypaths(x[1] for x in links_with_data)
-            links_with_data = ensure_deeply_readonly(
+                for k, v in key_simpledata.iter_ulidkey_values()
+            ]
+        )
+        if stage.offline and links is not None:
+            entries = stage.get_entries_for_entrypaths(x.abspath for x in links)
+            links = SimpleLinks(
                 [
                     link
-                    for (link, entry) in zip(links_with_data, entries, strict=True)
+                    for (link, entry) in zip(links, entries, strict=True)
                     if entry is not None and entry.file_exists()
                 ]
             )
-        return links_with_data
+        return links
 
-    def get_links(self) -> list | None:
+    def get_links(self) -> SimpleLinks | None:
         # we might implement caching in get_links
         return self.get_fresh_links()
 
@@ -810,9 +815,7 @@ class RemoteIndex(BaseIndex):
         # prefer plugin generated credentials as they will only get generated
         # if the url embedded auth has previously failed
         auth_candidates = self.xom.setdefault_singleton(
-            self.name,
-            "auth_candidates",
-            factory=list,
+            self.name, "auth_candidates", factory=list
         )
         if auth_candidates:
             return auth_candidates[0]
@@ -888,7 +891,9 @@ class RemoteIndex(BaseIndex):
             raise KeyError("project not found")
         remotedata = self._get_remotedata(project)
         if (links := remotedata.get_links()) is not None:
-            for entry in (self._mutable_entry_from_href(x[1]) for x in links):
+            for entry in (
+                self.filestore.get_mutable_file_entry(x.abspath) for x in links
+            ):
                 if entry is None:
                     continue
                 if entry.file_exists():
@@ -918,7 +923,9 @@ class RemoteIndex(BaseIndex):
         remotedata = self._get_remotedata(project)
         if (links := remotedata.get_links()) is not None:
             entries_to_check = []
-            for entry in (self._mutable_entry_from_href(x[1]) for x in links):
+            for entry in (
+                self.filestore.get_mutable_file_entry(x.abspath) for x in links
+            ):
                 if entry is None:
                     continue
                 if entry.version == version and entry.file_exists():
@@ -1128,18 +1135,8 @@ class RemoteIndex(BaseIndex):
         """return True if we have some cached simpelinks information."""
         return self.key_remoteprojectinfo(project).exists(resolve_parents=True)
 
-    def _entry_from_href(self, href: str) -> FileEntry | None:
-        # extract relpath from href by cutting of the hash
-        abspath = AbsPath(re.sub(r"#.*$", "", href))
-        return self.filestore.get_file_entry(abspath)
-
-    def _mutable_entry_from_href(self, href: str) -> MutableFileEntry | None:
-        # extract relpath from href by cutting of the hash
-        relpath = AbsPath(re.sub(r"#.*$", "", href))
-        return self.filestore.get_mutable_file_entry(relpath)
-
     def _is_file_cached(self, link):
-        entry = self._entry_from_href(link[1])
+        entry = self.filestore.get_file_entry(link.abspath)
         return entry is not None and entry.file_exists()
 
     def clear_simplelinks_cache(self, project: NormalizedName | str) -> None:
@@ -1236,8 +1233,8 @@ class RemoteIndex(BaseIndex):
         self,
         project: NormalizedName | str,
         info: NewLinks,
-        links: JoinedLinkList | None,
-        newlinks: JoinedLinkList,
+        links: SimpleLinks | None,
+        newlinks: SimpleLinks,
     ) -> SimpleLinks:
         if self.xom.is_replica():
             # on the replica we wait for the changes to arrive (changes were
@@ -1269,9 +1266,7 @@ class RemoteIndex(BaseIndex):
                         info.cache_info["etag"],
                     )
                 )
-                return self.SimpleLinks(
-                    links, core_metadata=self.provides_core_metadata
-                )
+                return self.SimpleLinks(links)
             raise self.UpstreamError("no cache links from primary for %s" % project)
 
         with self.keyfs.write_transaction(allow_restart=True):
@@ -1281,7 +1276,7 @@ class RemoteIndex(BaseIndex):
                 info.releaselinks,
                 info.cache_info,
             )
-            return self.SimpleLinks(newlinks, core_metadata=self.provides_core_metadata)
+            return newlinks
 
     async def _update_simplelinks_in_future(
         self,
@@ -1293,7 +1288,9 @@ class RemoteIndex(BaseIndex):
         info = await newlinks_future
         threadlog.debug("Got simple links for %r", project)
 
-        newlinks = join_links_data(info.releaselinks, self.key_index)
+        newlinks = join_links_data(
+            info.releaselinks, self.key_index, core_metadata=self.provides_core_metadata
+        )
         with self.keyfs.write_transaction():
             self.keyfs.tx.on_finished(lock.release)
             # fetch current links
@@ -1331,9 +1328,7 @@ class RemoteIndex(BaseIndex):
                     project,
                     self.timeout,
                 )
-                return self.SimpleLinks(
-                    links, core_metadata=self.provides_core_metadata, stale=True
-                )
+                return self.SimpleLinks(links, stale=True)
             raise self.UpstreamError(
                 f"timeout after {self.timeout} seconds while getting data for {project!r}"
             )
@@ -1344,9 +1339,7 @@ class RemoteIndex(BaseIndex):
             if self.offline and project not in self._offline_logging:
                 threadlog.debug("using stale links for %r due to offline mode", project)
                 self._offline_logging.add(project)
-            return self.SimpleLinks(
-                links, core_metadata=self.provides_core_metadata, stale=True
-            )
+            return self.SimpleLinks(links, stale=True)
 
         if links is None:
             is_retrieval_expired = self.cache_retrieve_times.is_expired(
@@ -1389,9 +1382,7 @@ class RemoteIndex(BaseIndex):
                     project,
                     self.timeout,
                 )
-                return self.SimpleLinks(
-                    links, core_metadata=self.provides_core_metadata, stale=True
-                )
+                return self.SimpleLinks(links, stale=True)
             raise self.UpstreamError(
                 f"timeout after {self.timeout} seconds while getting data for {project!r}"
             ) from e
@@ -1399,9 +1390,7 @@ class RemoteIndex(BaseIndex):
             if links is not None:
                 # immediately update the cache
                 self.cache_retrieve_times.refresh(project, e.etag)
-                return self.SimpleLinks(
-                    links, core_metadata=self.provides_core_metadata
-                )
+                return links
             if e.etag is None:
                 threadlog.error(
                     "server returned 304 Not Modified, but we have no links"
@@ -1419,18 +1408,18 @@ class RemoteIndex(BaseIndex):
                     "serving stale links, because of exception %s",
                     lazy_format_exception(e),
                 )
-                return self.SimpleLinks(
-                    links, core_metadata=self.provides_core_metadata, stale=True
-                )
+                return self.SimpleLinks(links, stale=True)
             raise
 
         info = newlinks_future.result()
 
-        newlinks = join_links_data(info.releaselinks, self.key_index)
+        newlinks = join_links_data(
+            info.releaselinks, self.key_index, core_metadata=self.provides_core_metadata
+        )
         if links is not None and set(links) == set(newlinks):
             # no changes
             self.cache_retrieve_times.refresh(project, info.cache_info["etag"])
-            return self.SimpleLinks(links, core_metadata=self.provides_core_metadata)
+            return links
 
         return self._update_simplelinks(project, info, links, newlinks)
 

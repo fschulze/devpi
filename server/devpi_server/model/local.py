@@ -563,21 +563,24 @@ class LocalIndex(BaseIndex):
         return ensure_deeply_readonly(verdata)
 
     def get_simplelinks_perstage(self, project: NormalizedName | str) -> SimpleLinks:
-        links = self.SimpleLinks([])
         username = self.username
         index = self.index
         key_simpledata = self.key_simpledata(project).with_resolved_parent()
-        for k, v in key_simpledata.iter_ulidkey_values():
-            href = f"{username}/{index}/{v['relpath']}"
-            if hash_spec := Digests(v["hashes"]).best_available_spec:
-                href += "#" + hash_spec
-            links.append(
+        return self.SimpleLinks(
+            [
                 SimplelinkMeta(
-                    (k.params["filename"], href, v.get("requires_python"), None),
+                    basename=k.params["filename"],
                     core_metadata=True,
+                    hashes=Digests(v["hashes"]),
+                    index=index,
+                    relpath=v["relpath"],
+                    require_python=v.get("requires_python"),
+                    user=username,
+                    yanked=None,
                 )
-            )
-        return links
+                for k, v in key_simpledata.iter_ulidkey_values()
+            ]
+        )
 
     def list_projects_perstage(self) -> dict[str, NormalizedName | str]:
         key_project = self.key_project.with_resolved_parent()
