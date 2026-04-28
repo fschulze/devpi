@@ -13,7 +13,6 @@ from devpi_server.readonly import get_mutable_deepcopy
 from operator import itemgetter
 from test_devpi_server.simpypi import getmd5
 from typing import TYPE_CHECKING
-import hashlib
 import httpx
 import pytest
 import time
@@ -43,19 +42,15 @@ class TestIndexParsing:
             %(hash_type, hash_value))
         link, = result.releaselinks
         assert link.basename == "py-1.4.12.zip"
-        assert link.hash_spec == "%s=%s" %(hash_type, hash_value)
-        if hash_type == "md5":
-            assert link.md5 == hash_value
-        else:
-            assert link.md5 is None
-        assert link.hash_algo == getattr(hashlib, hash_type)
+        assert link.hashes == {hash_type: hash_value}
 
     def test_parse_index_simple_tilde(self):
         result = parse_index(self.simplepy,
             """<a href="/~user/py-1.4.12.zip#md5=12ab">qwe</a>""")
         link, = result.releaselinks
         assert link.basename == "py-1.4.12.zip"
-        assert link.url.endswith("/~user/py-1.4.12.zip#md5=12ab")
+        assert link.hashes == dict(md5="12ab")
+        assert link.url.url.endswith("/~user/py-1.4.12.zip")
 
     def test_parse_index_simple_nocase(self):
         simplepy = URL("https://pypi.org/simple/Py/")
@@ -71,7 +66,7 @@ class TestIndexParsing:
                <a href="../../pkg/ndg_httpsclient-1.0.tar.gz" />
         """)
         assert len(result.releaselinks) == 1
-        assert result.releaselinks[0].url.endswith("ndg_httpsclient-1.0.tar.gz")
+        assert result.releaselinks[0].url.url.endswith("ndg_httpsclient-1.0.tar.gz")
 
     def test_parse_index_simple_nomatch(self):
         result = parse_index(self.simplepy,
@@ -88,7 +83,7 @@ class TestIndexParsing:
         """ % (rel,rel, rel))
         assert len(result.releaselinks) == 1
         link, = result.releaselinks
-        assert link == "http://pylib2.org/py-1.0.zip"
+        assert link.url.url == "http://pylib2.org/py-1.0.zip"
 
     def test_parse_index_invalid_link(self):
         result = parse_index(self.simplepy, '''
@@ -121,7 +116,7 @@ class TestIndexParsing:
         assert len(result.releaselinks) == 1
         link, = result.releaselinks
         assert link.basename == "py-1.0.zip"
-        assert link.hash_spec == "md5=pony"
+        assert link.hashes == dict(md5="pony")
         assert link.requires_python is None
 
     def test_parse_index_with_requires_python_first_with_hash_spec_kept(self):
@@ -132,7 +127,7 @@ class TestIndexParsing:
         assert len(result.releaselinks) == 1
         link, = result.releaselinks
         assert link.basename == "py-1.0.zip"
-        assert link.hash_spec == "md5=pony"
+        assert link.hashes == dict(md5="pony")
         assert link.requires_python is None
 
     def test_parse_index_with_yanked(self):
@@ -161,7 +156,7 @@ class TestIndexParsing:
         assert len(result.releaselinks) == 1
         link, = result.releaselinks
         assert link.basename == "py-1.0.zip"
-        assert link.hash_spec == "md5=pony"
+        assert link.hashes == dict(md5="pony")
         assert link.yanked is None
 
     def test_parse_index_with_yanked_first_with_hash_spec_kept(self):
@@ -172,7 +167,7 @@ class TestIndexParsing:
         assert len(result.releaselinks) == 1
         link, = result.releaselinks
         assert link.basename == "py-1.0.zip"
-        assert link.hash_spec == "md5=pony"
+        assert link.hashes == dict(md5="pony")
         assert link.yanked is None
 
     @pytest.mark.parametrize("basename", [
@@ -238,7 +233,9 @@ class TestIndexParsing:
         """)
         assert len(result.releaselinks) == 2
         links = list(result.releaselinks)
-        assert links[0].url == "https://pypi.org/pkg/py-1.4.12.zip#md5=12ab"
+        assert links[0].hashes == dict(md5="12ab")
+        assert links[0].url == "https://pypi.org/pkg/py-1.4.12.zip"
+        assert links[1].hashes == {}
         assert links[1].url == "http://pylib.org/py-1.1-py27.egg"
 
     def test_releasefile_and_scrape_no_ftp(self):
@@ -266,9 +263,12 @@ class TestIndexParsing:
         """)
         assert len(result.releaselinks) == 3
         link1, link2, link3 = result.releaselinks
-        assert link1.url == "https://pypi.org/pkg/py-1.4.12.zip#md5=12ab"
-        assert link2.url == "http://pylib.org/py-1.4.11.zip#md5=1111"
-        assert link3.url == "https://pypi.org/pkg/py-1.4.10.zip#md5=2222"
+        assert link1.url == "https://pypi.org/pkg/py-1.4.12.zip"
+        assert link1.hashes == dict(md5="12ab")
+        assert link2.url == "http://pylib.org/py-1.4.11.zip"
+        assert link2.hashes == dict(md5="1111")
+        assert link3.url == "https://pypi.org/pkg/py-1.4.10.zip"
+        assert link3.hashes == dict(md5="2222")
 
 
 def test_get_updated(pypistage):
