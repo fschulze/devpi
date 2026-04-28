@@ -533,15 +533,17 @@ class BaseIndex:
     ) -> dict[str, bool | Unknown | str | None]:
         warnings.warn(
             "The 'get_mirror_whitelist_info' method is deprecated, "
-            "use 'index_bases.get_inheritance_infos()' instead.",
+            "use 'index_bases.get_project_inheritance_info()' instead.",
             DeprecationWarning,
             stacklevel=2,
         )
         project = normalize_name(project)
-        inheritance_infos = self.index_bases.get_inheritance_infos(project)
+        project_inheritance_info = self.index_bases.get_project_inheritance_info(
+            project
+        )
         return dict(
-            has_mirror_base=inheritance_infos.has_project_from_mirror,
-            blocked_by_mirror_whitelist=inheritance_infos.blocked_mirror_name,
+            has_mirror_base=project_inheritance_info.has_project_from_remote,
+            blocked_by_mirror_whitelist=project_inheritance_info.blocked_remote_name,
         )
 
     def filter_projects(self, projects):

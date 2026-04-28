@@ -1222,10 +1222,10 @@ def install(parser):
 
 @subcommand("devpi.refresh")
 def refresh(parser):
-    """ invalidates the mirror caches for the specified package(s).
+    """invalidates the remote caches for the specified package(s).
 
     In case your devpi server hasn't updated the list of latest releases, this
-    forces a reload of the them (EXPERIMENTAL).
+    forces a reload of the them.
     """
     parser.add_argument("--index", default=None,
         help="index to refresh (defaults to current index)")

@@ -1,10 +1,27 @@
 from .functional import TestIndexPushThings as BaseTestIndexPushThings
 from .functional import TestIndexThings as BaseTestIndexThings
-from .functional import TestMirrorIndexThings as BaseTestMirrorIndexThings
 from .functional import TestProjectThings as BaseTestProjectThings
+from .functional import TestRemoteIndexThings as BaseTestRemoteIndexThings
 from .functional import TestUserThings as BaseTestUserThings
 import pytest
 import time
+
+
+@pytest.fixture
+def remote_index_info(server_version):
+    from devpi_common.metadata import parse_version
+
+    if server_version < parse_version("7.0.0.dev2"):
+
+        class MirrorInfo:
+            type = "mirror"
+
+        return MirrorInfo()
+
+    class RemoteInfo:
+        type = "remote"
+
+    return RemoteInfo()
 
 
 @pytest.fixture
@@ -45,7 +62,7 @@ class TestIndexPushThings(BaseTestIndexPushThings):
 
 
 @pytest.mark.slow
-class TestMirrorIndexThings(BaseTestMirrorIndexThings):
+class TestRemoteIndexThings(BaseTestRemoteIndexThings):
     pass
 
 
@@ -53,9 +70,14 @@ class TestMirrorIndexThings(BaseTestMirrorIndexThings):
 @pytest.mark.nomocking
 @pytest.mark.storage_with_filesystem
 def test_replicating_deleted_pypi_release(
-        makemapp, makefunctionaltestapp,
-        primary_host_port, primary_server_path,
-        replica_mapp, simpypi):
+    makemapp,
+    makefunctionaltestapp,
+    primary_host_port,
+    primary_server_path,
+    remote_index_info,
+    replica_mapp,
+    simpypi,
+):
     # this was the behavior of devpi-server 4.3.1:
     # - a release was mirrored from pypi
     # - at some point the locally cached file was removed from the filesystem
@@ -69,13 +91,12 @@ def test_replicating_deleted_pypi_release(
     content = b'13'
     simpypi.add_release('pkg', pkgver='pkg-1.0.zip')
     simpypi.add_file('/pkg/pkg-1.0.zip', content)
-    mapp.create_and_login_user('mirror')
+    mapp.create_and_login_user("remote")
     indexconfig = dict(
-        type="mirror",
-        mirror_url=simpypi.simpleurl,
-        mirror_cache_expiry=0)
-    mapp.create_index("mirror", indexconfig=indexconfig)
-    mapp.use("mirror/mirror")
+        type=remote_index_info.type, mirror_url=simpypi.simpleurl, mirror_cache_expiry=0
+    )
+    mapp.create_index("remote", indexconfig=indexconfig)
+    mapp.use("remote/remote")
     result = mapp.getreleaseslist("pkg")
     assert len(result) == 1
     r = mapp.downloadrelease(200, result[0])
@@ -89,7 +110,7 @@ def test_replicating_deleted_pypi_release(
         tries += 1
     path.unlink()
     simpypi.remove_file('/pkg/pkg-1.0.zip')
-    mapp.delete_index("mirror")
+    mapp.delete_index("remote")
     # now start the replication thread
     primary_serial = mapp.getjson("/+status")["result"]["serial"]
     replica_mapp.xom.thread_pool.start_one(replica_mapp.xom.replica_thread)

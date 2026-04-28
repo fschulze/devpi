@@ -211,7 +211,7 @@ def iter_cache_remote_file(stage, entry, url):
                 )
                 if entry.project:
                     stage = xom.model.getstage(entry.user, entry.index)
-                    # for mirror indexes this makes sure the project is in the database
+                    # for remote indexes this makes sure the project is in the database
                     # as soon as a file was fetched
                     stage.add_project_name(entry.project)
                 # on Windows we need to close the file
@@ -323,7 +323,7 @@ def join_links_data(
     return result
 
 
-class MirrorHTTPClient:
+class RemoteHTTPClient:
     http: HTTPClient
 
     def __init__(self, http, get_extra_headers, update_auth_candidates):
@@ -420,7 +420,7 @@ class MirrorHTTPClient:
         return response
 
 
-class MirrorData:
+class RemoteData:
     def __init__(self, stage: RemoteIndex, project: NormalizedName) -> None:
         self._stage = weakref.ref(stage)
         self.project = project
@@ -437,7 +437,7 @@ class MirrorData:
     def get_cache_info(self) -> CacheInfo:
         cache_info = (
             self.get_stage()
-            .key_projectcacheinfo(self.project)
+            .key_remoteprojectinfo(self.project)
             .with_resolved_parent()
             .get_mutable()
             if self.key_project.exists(resolve_parents=True)
@@ -533,16 +533,16 @@ class MirrorData:
         del projectdata
         if cache_info is None:
             cache_info = self.get_cache_info()
-        stage.key_projectcacheinfo(project).with_resolved_parent().set(
+        stage.key_remoteprojectinfo(project).with_resolved_parent().set(
             cast("dict", cache_info)
         )
-        key_mirrorfile = stage.key_mirrorfile(project).with_resolved_parent()
+        key_remotefile = stage.key_remotefile(project).with_resolved_parent()
         key_simpledata = stage.key_simpledata(project).with_resolved_parent()
-        name_key_mirrorfile_map = {}
+        name_key_remotefile_map = {}
         old = {}
         seen_names = set()
-        for k, v in key_mirrorfile.iter_ulidkey_values():
-            name_key_mirrorfile_map[k.name] = k
+        for k, v in key_remotefile.iter_ulidkey_values():
+            name_key_remotefile_map[k.name] = k
             if k.name not in name_version_map:
                 (projectname, version, _ext) = splitbasename(k.name)
                 if projectname not in seen_names:
@@ -567,13 +567,13 @@ class MirrorData:
                     continue
                 if isinstance(new_value, Absent):
                     num_deleted += 1
-                    name_key_mirrorfile_map[name].delete()
+                    name_key_remotefile_map[name].delete()
                     key_simpledata(
                         version=name_version_map[name], filename=name
                     ).delete()
                 else:
                     num_changed += 1
-                    name_key_mirrorfile_map[name].set(cast("dict", new_value))
+                    name_key_remotefile_map[name].set(cast("dict", new_value))
                     entry = MutableFileEntry(name_key_file_map[name])
                     entry.url = name_url_map[name]
                     if (hashes := new_value.get("hashes")) is not None:
@@ -587,11 +587,11 @@ class MirrorData:
                     )
                 del name
             del old
-            new_mirrorfile_keys = [key_mirrorfile(name) for name in data]
+            new_remotefile_keys = [key_remotefile(name) for name in data]
             new_file_keys = [name_key_file_map[name] for name in data]
             new_simpledata_keys = []
             for _k, ulid_key in tx.resolve_keys(
-                new_mirrorfile_keys, fetch=True, fill_cache=True, new_for_missing=True
+                new_remotefile_keys, fetch=True, fill_cache=True, new_for_missing=True
             ):
                 num_new += 1
                 ulid_key.set(
@@ -604,7 +604,7 @@ class MirrorData:
                 new_simpledata_keys.append(
                     key_simpledata(version=version, filename=ulid_key.name)
                 )
-            del new_mirrorfile_keys
+            del new_remotefile_keys
             for _k, ulid_key in tx.resolve_keys(
                 new_file_keys, fetch=True, fill_cache=True, new_for_missing=True
             ):
@@ -651,24 +651,24 @@ class MirrorData:
         (projectname, version, _ext) = splitbasename(filename)
         assert normalize_name(projectname) == project
         stage = self.get_stage()
-        key_mirrorfile = stage.key_mirrorfile(project, filename).with_resolved_parent()
+        key_remotefile = stage.key_remotefile(project, filename).with_resolved_parent()
         key_simpledata = stage.key_simpledata(
             project, (version, filename)
         ).with_resolved_parent()
         with (
-            key_mirrorfile.update() as mirrorfiledata,
+            key_remotefile.update() as remotefiledata,
             key_simpledata.update() as simpledata,
         ):
-            assert not mirrorfiledata
+            assert not remotefiledata
             assert not simpledata
             data: dict = {}
             yield data
-            mirrorfiledata.update({k: v for k, v in data.items() if k != "hashes"})
+            remotefiledata.update({k: v for k, v in data.items() if k != "hashes"})
             simpledata.update(data)
 
 
 class RemoteIndex(BaseIndex):
-    _mirrordata: dict[NormalizedName, MirrorData]
+    _remotedata: dict[NormalizedName, RemoteData]
     _offline_logging: set[str]
 
     def __init__(
@@ -689,22 +689,22 @@ class RemoteIndex(BaseIndex):
         self.projects_timeout = max(self.timeout, 60 if self.xom.is_replica() else 30)
         # used to log about stale projects only once
         self._offline_logging = set()
-        self._mirrordata = {}
+        self._remotedata = {}
 
     @overload
-    def key_mirrorfile(
+    def key_remotefile(
         self, project: NormalizedName | str, filename: str
     ) -> LocatedKey[dict, DictViewReadonly]: ...
 
     @overload
-    def key_mirrorfile(
+    def key_remotefile(
         self, project: NormalizedName | str, filename: None = None
     ) -> SearchKey[dict, DictViewReadonly]: ...
 
-    def key_mirrorfile(
+    def key_remotefile(
         self, project: NormalizedName | str, filename: str | None = None
     ) -> LocatedKey[dict, DictViewReadonly] | SearchKey[dict, DictViewReadonly]:
-        key = self.keyfs.schema.MIRRORFILE
+        key = self.keyfs.schema.REMOTEFILE
         (kw, meth) = (
             ({}, key.search)
             if filename is None
@@ -715,19 +715,19 @@ class RemoteIndex(BaseIndex):
         )
 
     @overload
-    def key_projectcacheinfo(
+    def key_remoteprojectinfo(
         self, project: str
     ) -> LocatedKey[dict, DictViewReadonly]: ...
 
     @overload
-    def key_projectcacheinfo(
+    def key_remoteprojectinfo(
         self, project: None
     ) -> SearchKey[dict, DictViewReadonly]: ...
 
-    def key_projectcacheinfo(
+    def key_remoteprojectinfo(
         self, project: str | None = None
     ) -> LocatedKey[dict, DictViewReadonly] | SearchKey[dict, DictViewReadonly]:
-        key = self.keyfs.schema.PROJECTCACHEINFO
+        key = self.keyfs.schema.REMOTEPROJECTINFO
         (kw, meth) = (
             ({}, key.search)
             if project is None
@@ -736,7 +736,7 @@ class RemoteIndex(BaseIndex):
         return meth(user=self.username, index=self.index, **kw)
 
     @cached_property
-    def http(self) -> MirrorHTTPClient:
+    def http(self) -> RemoteHTTPClient:
         if self.xom.is_replica():
             get_extra_headers = (
                 self.xom.replica_thread.connection.http.get_extra_headers
@@ -751,7 +751,7 @@ class RemoteIndex(BaseIndex):
                     extra_headers["Authorization"] = auth
                 return extra_headers
 
-        return MirrorHTTPClient(
+        return RemoteHTTPClient(
             self.xom.http, get_extra_headers, self._update_auth_candidates
         )
 
@@ -767,7 +767,7 @@ class RemoteIndex(BaseIndex):
         else:
             hook = self.xom.config.hook
             auth_candidates.extend(
-                hook.devpiserver_get_mirror_auth(
+                hook.devpiserver_get_remote_auth(
                     mirror_url=self.mirror_url, www_authenticate_header=auth_header
                 )
             )
@@ -892,22 +892,22 @@ class RemoteIndex(BaseIndex):
     def del_project(self, project: NormalizedName | str) -> None:
         if not self.is_project_cached(project):
             raise KeyError("project not found")
-        mirrorlinks = self._get_mirrordata(project)
-        if (links := mirrorlinks.get_links()) is not None:
+        remotedata = self._get_remotedata(project)
+        if (links := remotedata.get_links()) is not None:
             for entry in (self._entry_from_href(x[1]) for x in links):
                 if entry is None:
                     continue
                 if entry.file_exists():
                     entry.delete()
-        key_mirrorfile = self.key_mirrorfile(project).with_resolved_parent()
+        key_remotefile = self.key_remotefile(project).with_resolved_parent()
         key_simpledata = self.key_simpledata(project).with_resolved_parent()
         for key in (
-            *key_mirrorfile.iter_ulidkeys(fill_cache=False),
+            *key_remotefile.iter_ulidkeys(fill_cache=False),
             *key_simpledata.iter_ulidkeys(fill_cache=False),
         ):
             key.delete()
         self.cache_retrieve_times.expire(project)
-        self.key_projectcacheinfo(project).with_resolved_parent().delete()
+        self.key_remoteprojectinfo(project).with_resolved_parent().delete()
         self.key_project(project).with_resolved_parent().delete()
 
     def del_versiondata(
@@ -918,11 +918,11 @@ class RemoteIndex(BaseIndex):
             raise self.NotFound(
                 "project %r not found on stage %r" % (project, self.name)
             )
-        # since this is a mirror, we only have the simple links and no
+        # since this is a remote, we only have the simple links and no
         # metadata, so only delete the files and keep the simple links
         # for the possibility to re-download a release
-        mirrorlinks = self._get_mirrordata(project)
-        if (links := mirrorlinks.get_links()) is not None:
+        remotedata = self._get_remotedata(project)
+        if (links := remotedata.get_links()) is not None:
             entries_to_check = []
             for entry in (self._entry_from_href(x[1]) for x in links):
                 if entry is None:
@@ -932,10 +932,10 @@ class RemoteIndex(BaseIndex):
                 elif cleanup:
                     entries_to_check.append(entry)
             if cleanup and not any(x.file_exists() for x in entries_to_check):
-                key_mirrorfile = self.key_mirrorfile(project).with_resolved_parent()
+                key_remotefile = self.key_remotefile(project).with_resolved_parent()
                 key_simpledata = self.key_simpledata(project).with_resolved_parent()
                 for key in (
-                    *key_mirrorfile.iter_ulidkeys(fill_cache=False),
+                    *key_remotefile.iter_ulidkeys(fill_cache=False),
                     *key_simpledata.iter_ulidkeys(fill_cache=False),
                 ):
                     key.delete()
@@ -949,14 +949,14 @@ class RemoteIndex(BaseIndex):
             raise self.NotFound("entry has no file data %r" % entry)
         entry.delete()
         if cleanup:
-            mirrorlinks = self._get_mirrordata(project)
-            if (links := mirrorlinks.get_links()) is None:
+            remotedata = self._get_remotedata(project)
+            if (links := remotedata.get_links()) is None:
                 return
             if not any(self._is_file_cached(x) for x in links):
-                key_mirrorfile = self.key_mirrorfile(project).with_resolved_parent()
+                key_remotefile = self.key_remotefile(project).with_resolved_parent()
                 key_simpledata = self.key_simpledata(project).with_resolved_parent()
                 for key in (
-                    *key_mirrorfile.iter_ulidkeys(fill_cache=False),
+                    *key_remotefile.iter_ulidkeys(fill_cache=False),
                     *key_simpledata.iter_ulidkeys(fill_cache=False),
                 ):
                     key.delete()
@@ -1079,7 +1079,7 @@ class RemoteIndex(BaseIndex):
                 # called from the notification thread
                 if not self.keyfs.tx.write:
                     self.keyfs.restart_read_transaction()
-                k = self.keyfs.schema.MIRRORNAMESINIT.locate(
+                k = self.keyfs.schema.REMOTENAMESINIT.locate(
                     user=self.username, index=self.index
                 ).with_resolved_parent()
                 # when 0 it is new, when 1 it is pre 6.6.0 with
@@ -1100,7 +1100,7 @@ class RemoteIndex(BaseIndex):
             threadlog.warn("offline mode: using stale projects list")
             return (self._stale_list_projects_perstage(), True)
         if self.no_project_list:
-            # upstream of mirror configured as not having a project list
+            # upstream of remote configured as not having a project list
             # return only locally known projects
             return (self._stale_list_projects_perstage(), True)
         # try without lock first
@@ -1132,7 +1132,7 @@ class RemoteIndex(BaseIndex):
 
     def is_project_cached(self, project: NormalizedName | str) -> bool:
         """return True if we have some cached simpelinks information."""
-        return self.key_projectcacheinfo(project).exists(resolve_parents=True)
+        return self.key_remoteprojectinfo(project).exists(resolve_parents=True)
 
     def _entry_from_href(self, href: str) -> FileEntry | None:
         # extract relpath from href by cutting of the hash
@@ -1147,7 +1147,7 @@ class RemoteIndex(BaseIndex):
         # we have to set to an empty dict instead of removing the key, so
         # replicas behave correctly
         self.cache_retrieve_times.expire(project)
-        self.key_projectcacheinfo(project).with_resolved_parent().set({})
+        self.key_remoteprojectinfo(project).with_resolved_parent().set({})
         threadlog.debug("cleared cache for %s", project)
 
     async def _async_fetch_releaselinks(
@@ -1227,11 +1227,11 @@ class RemoteIndex(BaseIndex):
             )
         )
 
-    def _get_mirrordata(self, project: NormalizedName | str) -> MirrorData:
+    def _get_remotedata(self, project: NormalizedName | str) -> RemoteData:
         project = normalize_name(project)
-        if project not in self._mirrordata:
-            self._mirrordata[project] = MirrorData(self, project)
-        return self._mirrordata[project]
+        if project not in self._remotedata:
+            self._remotedata[project] = RemoteData(self, project)
+        return self._remotedata[project]
 
     def _update_simplelinks(
         self,
@@ -1260,8 +1260,8 @@ class RemoteIndex(BaseIndex):
                     devpi_serial,
                 )
                 self.keyfs.restart_read_transaction()
-                mirrorlinks = self._get_mirrordata(project)
-                links = mirrorlinks.get_fresh_links()
+                remotedata = self._get_remotedata(project)
+                links = remotedata.get_fresh_links()
             if links is not None:
                 self.keyfs.tx.on_commit_success(
                     partial(
@@ -1278,7 +1278,7 @@ class RemoteIndex(BaseIndex):
         with self.keyfs.write_transaction(allow_restart=True):
             # on the master we need to write the updated links.
             assert len(newlinks) == len(info.releaselinks)
-            self._get_mirrordata(project).save_links(
+            self._get_remotedata(project).save_links(
                 info.releaselinks,
                 info.cache_info,
             )
@@ -1298,8 +1298,8 @@ class RemoteIndex(BaseIndex):
         with self.keyfs.write_transaction():
             self.keyfs.tx.on_finished(lock.release)
             # fetch current links
-            mirrorlinks = self._get_mirrordata(project)
-            links = mirrorlinks.get_fresh_links()
+            remotedata = self._get_remotedata(project)
+            links = remotedata.get_fresh_links()
             if links is None or set(links) != set(newlinks):
                 # we got changes, so store them
                 self._update_simplelinks(project, info, links, newlinks)
@@ -1319,12 +1319,12 @@ class RemoteIndex(BaseIndex):
         lock = self.cache_retrieve_times.acquire(project, self.timeout)
         if lock is not None:
             self.keyfs.tx.on_finished(lock.release)
-        mirrorlinks = self._get_mirrordata(project)
-        is_expired = mirrorlinks.are_expired()
+        remotedata = self._get_remotedata(project)
+        is_expired = remotedata.are_expired()
         if not is_expired and lock is not None:
             lock.release()
 
-        links = mirrorlinks.get_links()
+        links = remotedata.get_links()
         if lock is None:
             if links is not None:
                 threadlog.warn(
@@ -1370,7 +1370,7 @@ class RemoteIndex(BaseIndex):
         try:
             self.xom.run_coroutine_threadsafe(
                 self._async_fetch_releaselinks(
-                    newlinks_future, project, mirrorlinks.get_cache_info()
+                    newlinks_future, project, remotedata.get_cache_info()
                 ),
                 timeout=self.timeout,
             )
@@ -1472,16 +1472,24 @@ class RemoteIndex(BaseIndex):
         if projectname in (absent, deleted):
             # the whole project never existed or was deleted
             return last_serial
-        for mirrorfile_key in tx.conn.iter_ulidkeys_at_serial(
-            (self.key_mirrorfile(project).with_resolved_parent(),),
+        for remotefile_key in tx.conn.iter_ulidkeys_at_serial(
+            (self.key_remotefile(project).with_resolved_parent(),),
             at_serial=at_serial,
             fill_cache=False,
             with_deleted=True,
         ):
-            last_serial = max(last_serial, mirrorfile_key.last_serial)
+            last_serial = max(last_serial, remotefile_key.last_serial)
             if last_serial >= at_serial:
                 return last_serial
         return last_serial
+
+    def get_remoteprojectserial(self, project: NormalizedName) -> int | None:
+        return (
+            self.key_remoteprojectinfo(project)
+            .with_resolved_parent()
+            .get()
+            .get("serial")
+        )
 
     def _get_elink_from_entry(self, entry: BaseFileEntry) -> ELink | None:
         return ELink(
@@ -1543,11 +1551,11 @@ class RemoteIndexCustomizer(BaseIndexCustomizer):
 @hookimpl
 def devpiserver_get_stage_customizer_classes():
     # prevent plugins from installing their own under the reserved names
-    return [("mirror", RemoteIndexCustomizer)]
+    return [("remote", RemoteIndexCustomizer)]
 
 
 class ProjectNamesCache:
-    """Helper class for maintaining project names from a mirror."""
+    """Helper class for maintaining project names from a remote index."""
 
     _data: set[NormalizedName]
     _etag: str | None

@@ -114,11 +114,11 @@ class IndexType:
         if other._index_type is None:
             # the other is deleted, so we come first
             return True
-        if self._index_type == "mirror":
-            # mirrors are just before deleted
+        if self._index_type == "remote":
+            # remotes are just before deleted
             return False
-        if other._index_type == "mirror":
-            # the other is a mirror, so we come before
+        if other._index_type == "remote":
+            # the other is a remote, so we come before
             return True
         # everything else is by alphabet
         return self._index_type < other._index_type
@@ -890,9 +890,9 @@ class FileReplicationSharedData:
             )
             return
         if self.xom.replica_thread.replica_metadata_in_sync_at is None:
-            # Don't queue files from mirrors until we have been in sync first.
+            # Don't queue files from remotes until we have been in sync first.
             # The InitialQueueThread will queue in one go on initial sync
-            if index_type == IndexType("mirror"):
+            if index_type == IndexType("remote"):
                 return
             # Don't queue from deleted indexes
             if index_type == IndexType(None):
@@ -1271,7 +1271,7 @@ class FileReplicationThread:
                 raise
             if r.status_code == 302:
                 r.close()
-                # mirrors might redirect to external file when
+                # remotes might redirect to external file when
                 # mirror_use_external_urls is set
                 threadlog.info(
                     "ignoring because of redirection to external URL: %s", relpath
@@ -1292,15 +1292,15 @@ class FileReplicationThread:
                     stage = self.xom.model.getstage(stagename)
                 if stage is None:
                     threadlog.warn(
-                        "ignoring file where mirror index was deleted '%s': %s",
+                        "ignoring file where remote index was deleted '%s': %s",
                         stagename,
                         relpath,
                     )
                     self.shared_data.errors.remove(entry)
                     return
-                if stage.index_type == "mirror":
+                if stage.index_type == "remote":
                     threadlog.warn(
-                        "ignoring file which couldn't be retrieved from mirror index '%s': %s",
+                        "ignoring file which couldn't be retrieved from remote index '%s': %s",
                         stagename,
                         relpath,
                     )
@@ -1380,15 +1380,20 @@ class FileReplicationThread:
                     msg = f"{name}-{entry.version} on stage {stage.name} at {stage.keyfs.tx.at_serial}"
                     raise stage.MissesRegistration(msg)  # noqa: TRY301
             except (stage.MissesRegistration, stage.UpstreamError):
-                if index_type == IndexType(None) or index_type == IndexType("mirror"):
+                if index_type == IndexType(None) or index_type == IndexType("remote"):
                     return
                 raise
             link = stage._get_elink_from_entry(entry)
             if link is not None:
                 self.xom.config.hook.devpiserver_on_replicated_file(
-                    stage=stage, project=name, version=entry.version, link=link,
-                    serial=serial, back_serial=back_serial,
-                    is_from_mirror=index_type == IndexType("mirror"))
+                    stage=stage,
+                    project=name,
+                    version=entry.version,
+                    link=link,
+                    serial=serial,
+                    back_serial=back_serial,
+                    is_from_remote=index_type == IndexType("remote"),
+                )
 
     def tick(self) -> None:
         self.thread.exit_if_shutdown()
@@ -1462,7 +1467,7 @@ class InitialQueueThread:
                 if entry.file_exists() or not entry.last_modified:
                     continue
                 # note the negated serial for the PriorityQueue
-                # the index_type boolean will prioritize non mirrors
+                # the index_type boolean will prioritize non remotes
                 self.shared_data.queue.put(
                     (
                         index_type,
@@ -1502,11 +1507,11 @@ class ProjectChanged:
         assert normalize_name(project) == project
 
         with self.xom.keyfs.read_transaction():
-            mirror_stage = self.xom.model.getstage(username, index)
-            if mirror_stage and mirror_stage.index_type == "mirror":
+            remote_index = self.xom.model.getstage(username, index)
+            if remote_index and remote_index.index_type == "remote":
                 if TYPE_CHECKING:
-                    assert isinstance(mirror_stage, RemoteIndex)
-                cache_projectnames = mirror_stage.cache_projectnames
+                    assert isinstance(remote_index, RemoteIndex)
+                cache_projectnames = remote_index.cache_projectnames
                 if isinstance(cache, Deleted):  # deleted
                     cache_projectnames.discard(project)
                 else:
