@@ -21,8 +21,6 @@ from .markers import nodefault as _nodefault
 from .readonly import DictViewReadonly
 from .readonly import ensure_deeply_readonly
 from .readonly import get_mutable_deepcopy
-from contextlib import suppress
-from devpi_common.metadata import splitbasename
 from devpi_common.types import parse_hash_spec
 from inspect import currentframe
 from io import BytesIO
@@ -32,14 +30,12 @@ from typing import NewType
 from typing import TYPE_CHECKING
 from typing import cast
 from typing import overload
-from urllib.parse import unquote
 from zipfile import BadZipFile
 from zipfile import ZipFile
 import datetime
 import hashlib
 import httpdate
 import mimetypes
-import re
 
 
 if TYPE_CHECKING:
@@ -49,7 +45,6 @@ if TYPE_CHECKING:
     from .model.schema import Schema
     from .normalized import NormalizedName
     from .readonly import SetViewReadonly
-    from devpi_common.url import URL
     from typing import Any
 
 
@@ -338,8 +333,7 @@ def index_relpath(user: str, index: str, relpath: AbsPath) -> RelPath:
 def make_splitdir(hash_spec):
     parts = hash_spec.split("=")
     assert len(parts) == 2
-    hash_value = parts[1]
-    return hash_value[:3], hash_value[3:16]
+    return split_digest(parts[1])
 
 
 def metadata_filename(project: NormalizedName, version: str) -> str:
@@ -354,29 +348,6 @@ def relpath_prefix(content_or_file, hash_type=absent):
     return "/".join(make_splitdir(hash_spec))
 
 
-def key_from_link(
-    keyfs: KeyFS[Schema],
-    link: URL,
-    key_index: LocatedKey[dict, DictViewReadonly] | ULIDKey[dict, DictViewReadonly],
-) -> LocatedKey[dict, DictViewReadonly]:
-    if link.hash_spec:
-        # we can only create 32K entries per directory
-        # so let's take the first 3 bytes which gives
-        # us a maximum of 16^3 = 4096 entries in the root dir
-        a, b = make_splitdir(link.hash_spec)
-        return keyfs.schema.FILE.locate(
-            parent_key=key_index, hashdir_a=a, hashdir_b=b, filename=link.basename
-        )
-    else:
-        parts = link.torelpath().split("/")
-        assert parts
-        dirname = "_".join(parts[:-1])
-        dirname = re.sub('[^a-zA-Z0-9_.-]', '_', dirname)
-        return keyfs.schema.FILE_NOHASH.locate(
-            parent_key=key_index, dirname=unquote(dirname), basename=link.basename
-        )
-
-
 def parse_last_modified(last_modified):
     try:
         _last_modified = datetime.datetime.strptime(
@@ -388,6 +359,10 @@ def parse_last_modified(last_modified):
             tz=datetime.UTC,
         )
     return _last_modified.astimezone(datetime.UTC)
+
+
+def split_digest(digest: str) -> tuple[str, str]:
+    return (digest[:3], digest[3:16])
 
 
 def unicode_if_bytes(val):
@@ -404,30 +379,6 @@ class FileStore:
 
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__} {self.keyfs!r}>"
-
-    def maplink(
-        self, link: URL, user: str, index: str, project: str
-    ) -> MutableFileEntry:
-        keyfs = self.keyfs
-        key_index = keyfs.schema.INDEX.locate(user=user, index=index).resolve(
-            fetch=True
-        )
-        key = key_from_link(keyfs, link, key_index)
-        entry = MutableFileEntry(key)
-        entry.url = link.geturl_nofragment().url
-        if digest := link.hash_value:
-            entry._hashes = Digests({link.hash_type: digest})
-        entry.project = project
-        version = None
-        with suppress(ValueError):
-            (_projectname, version, _ext) = splitbasename(link.basename)
-        # only store version on entry if we can determine it
-        # since version is a meta property of FileEntry, it will return None
-        # if not set, if we set it explicitly, it would waste space in the
-        # database
-        if version is not None:
-            entry.version = version
-        return entry
 
     def _get_file_entry_info(
         self, abspath: AbsPath

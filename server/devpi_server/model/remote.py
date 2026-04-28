@@ -35,7 +35,6 @@ from devpi_server.filestore import Digests
 from devpi_server.filestore import MutableFileEntry
 from devpi_server.filestore import RunningHashes
 from devpi_server.filestore import index_relpath
-from devpi_server.filestore import key_from_link
 from devpi_server.httpclient import FatalResponse
 from devpi_server.log import threadlog
 from devpi_server.markers import Absent
@@ -62,7 +61,7 @@ import weakref
 if TYPE_CHECKING:
     from .links import RequiresPython
     from .links import Yanked
-    from .simpleapi import ReleaseLinks
+    from .simpleapi import SimpleInfos
     from collections.abc import Iterator
     from collections.abc import Sequence
     from devpi_server.filestore import BaseFileEntry
@@ -96,7 +95,7 @@ class CacheInfo(TypedDict):
 @frozen
 class NewLinks:
     cache_info: CacheInfo
-    releaselinks: ReleaseLinks
+    releaselinks: SimpleInfos
     devpi_serial: str | None
 
 
@@ -303,25 +302,25 @@ def iter_fetch_remote_file(stage, entry, url):
 
 
 def join_links_data(
-    releaselinks: ReleaseLinks,
+    releaselinks: SimpleInfos,
     key_index: LocatedKey | ULIDKey,
     *,
     core_metadata: bool,
 ) -> SimpleLinks:
     index = key_index.params["index"]
-    keyfs = key_index.keyfs
+    schema = key_index.keyfs.schema
     user = key_index.params["user"]
     return SimpleLinks(
         [
             SimplelinkMeta(
                 basename=releaselink.basename,
                 core_metadata={} if core_metadata else None,
-                hashes=Digests.from_spec(releaselink.hash_spec),
+                hashes=releaselink.hashes,
                 index=index,
                 relpath=index_relpath(
                     user,
                     index,
-                    AbsPath(key_from_link(keyfs, releaselink, key_index).relpath),
+                    AbsPath(releaselink.make_key(schema, key_index).relpath),
                 ),
                 require_python=releaselink.requires_python,
                 size=None,
@@ -507,7 +506,7 @@ class RemoteData:
 
     def save_links(  # noqa: PLR0912
         self,
-        releaselinks: ReleaseLinks,
+        releaselinks: SimpleInfos,
         cache_info: CacheInfo | None,
     ) -> None:
         project = self.project
@@ -519,6 +518,7 @@ class RemoteData:
         name_key_file_map = {}
         name_url_map = {}
         name_version_map = {}
+        schema = keyfs.schema
         seen_names = set()
         for releaselink in releaselinks:
             fn = releaselink.basename
@@ -527,18 +527,18 @@ class RemoteData:
                 assert normalize_name(projectname) == project
                 seen_names.add(projectname)
             name_version_map[fn] = version
-            name_key_file_map[fn] = key = key_from_link(keyfs, releaselink, key_index)
-            name_url_map[fn] = releaselink.geturl_nofragment().url
+            name_key_file_map[fn] = key = releaselink.make_key(schema, key_index)
+            name_url_map[fn] = releaselink.url.url
             link_data = data[fn] = CacheLink(relpath=key.name)
-            if hash_spec := releaselink.hash_spec:
-                link_data["hashes"] = Digests.from_spec(hash_spec)
+            if releaselink.hashes:
+                link_data["hashes"] = releaselink.hashes
             if rp := releaselink.requires_python:
                 link_data["requires_python"] = rp
             if (
                 y := None if releaselink.yanked is False else releaselink.yanked
             ) is not None:
                 link_data["yanked"] = y
-            del _ext, fn, hash_spec, key, link_data
+            del _ext, fn, key, link_data
             del projectname, releaselink, rp, version, y
         del key_index, keyfs, releaselinks
         with self.key_project.with_resolved_parent().update() as projectdata:
@@ -1027,10 +1027,10 @@ class RemoteIndex(BaseIndex):
         if (
             response.headers.get("content-type") == SIMPLE_API_V1_JSON
         ) or text.startswith("{"):
-            parser = ProjectJSONv1Parser(response.url)
+            parser = ProjectJSONv1Parser(str(response.url))
             parser.feed(json.loads(text))
         else:
-            parser = ProjectHTMLParser(response.url)
+            parser = ProjectHTMLParser(str(response.url))
             parser.feed(text)
         projects_future.set_result(
             ({normalize_name(x) for x in parser.projects}, response.headers.get("ETag"))
