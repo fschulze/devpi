@@ -29,11 +29,11 @@ def server_url_session(host_port, simpypi):
         auth = "%s:%s" % ("root", r["result"]["password"])
         s.headers["X-Devpi-Auth"] = base64.b64encode(auth.encode()).decode()
         existing = s.get(url).json()["result"]
-        if "mirror" not in existing["root"]["indexes"]:
+        if "remote" not in existing["root"]["indexes"]:
             indexconfig = dict(
-                type="mirror", mirror_url=simpypi.simpleurl, mirror_cache_expiry=0
+                type="remote", mirror_url=simpypi.simpleurl, mirror_cache_expiry=0
             )
-            r = s.put(url + "root/mirror", json=indexconfig).json()
+            r = s.put(url + "root/remote", json=indexconfig).json()
             assert r["type"] == "indexconfig"
             assert r["result"]["mirror_url"] == simpypi.simpleurl
         yield (url, s)
@@ -75,7 +75,7 @@ class TestStreaming(object):
         simpypi.add_release(pkg_name, pkgver='%s#sha256=%s' % (pkgzip, digest))
         simpypi.add_file(
             f"/{pkg_name}/{pkgzip}", content, stream=True, length=length)
-        with contextlib.closing(s.get(url + f"root/mirror/{pkg_name}")) as r:
+        with contextlib.closing(s.get(url + f"root/remote/{pkg_name}")) as r:
             r = r.json()
         assert pkg_version in r['result'], r
         href = r['result'][pkg_version]['+links'][0]['href']
@@ -92,7 +92,8 @@ class TestStreaming(object):
                 data = data + part
             assert data == content
         pkg_file = files_path.joinpath(
-            'root', 'mirror', '+f', digest[:3], digest[3:16], pkgzip)
+            "root", "remote", "+f", digest[:3], digest[3:16], pkgzip
+        )
         # this is sometimes delayed a bit, so we check for a while
         for i in range(50):
             if pkg_file.exists():
@@ -119,7 +120,7 @@ class TestStreaming(object):
         simpypi.add_release(pkg_name, pkgver='%s#sha256=%s' % (pkgzip, digest))
         simpypi.add_file(
             f"/{pkg_name}/{pkgzip}", content, stream=True, length=length)
-        with contextlib.closing(s.get(url + f"root/mirror/{pkg_name}")) as _r:
+        with contextlib.closing(s.get(url + f"root/remote/{pkg_name}")) as _r:
             r = _r.json()
         assert pkg_version in r['result'], r
         href = r['result'][pkg_version]['+links'][0]['href']
