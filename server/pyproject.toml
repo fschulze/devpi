@@ -135,7 +135,6 @@ exclude = [
     "test_devpi_server/test_nginx_replica.py",
     "test_devpi_server/test_permissions.py",
     "test_devpi_server/test_remote.py",
-    "test_devpi_server/test_remote_no_project_list.py",
     "test_devpi_server/test_replica.py",
     "test_devpi_server/test_replica_functional.py",
     "test_devpi_server/test_streaming.py",

@@ -486,12 +486,12 @@ class TestExtPYPIDB:
 
         with pypistage.keyfs.read_transaction():
             assert "mirror_ignore_serial_header" not in pypistage.ixconfig
-            assert not pypistage.key_projectcacheinfo("pytest").exists(
+            assert not pypistage.key_remoteprojectinfo("pytest").exists(
                 resolve_parents=True
             )
             assert len(pypistage.get_releaselinks("pytest")) == 1
             assert (
-                pypistage.key_projectcacheinfo("pytest")
+                pypistage.key_remoteprojectinfo("pytest")
                 .with_resolved_parent()
                 .get()["serial"]
                 == 10
@@ -500,14 +500,14 @@ class TestExtPYPIDB:
         with pypistage.keyfs.read_transaction():
             assert "mirror_ignore_serial_header" not in pypistage.ixconfig
             assert (
-                pypistage.key_projectcacheinfo("pytest")
+                pypistage.key_remoteprojectinfo("pytest")
                 .with_resolved_parent()
                 .get()["serial"]
                 == 10
             )
             assert len(pypistage.get_releaselinks("pytest")) == 1
             assert (
-                pypistage.key_projectcacheinfo("pytest")
+                pypistage.key_remoteprojectinfo("pytest")
                 .with_resolved_parent()
                 .get()["serial"]
                 == 10
@@ -523,14 +523,14 @@ class TestExtPYPIDB:
                 is True
             )
             assert (
-                pypistage.key_projectcacheinfo("pytest")
+                pypistage.key_remoteprojectinfo("pytest")
                 .with_resolved_parent()
                 .get()["serial"]
                 == 10
             )
             assert len(pypistage.get_releaselinks("pytest")) == 0
             assert (
-                pypistage.key_projectcacheinfo("pytest")
+                pypistage.key_remoteprojectinfo("pytest")
                 .with_resolved_parent()
                 .get()["serial"]
                 == -1
@@ -547,7 +547,7 @@ class TestExtPYPIDB:
 
         pypistage.keyfs.commit_transaction_in_thread()
         pypistage.keyfs.begin_transaction_in_thread()
-        # pretend the last mirror check is very old
+        # pretend the last remote check is very old
         pypistage.cache_retrieve_times.expire("pytest")
 
         # now make sure that we don't cause writes
@@ -601,7 +601,7 @@ class TestExtPYPIDB:
         assert len(recs) >= 1
 
     @pytest.mark.asyncio
-    async def test_basic_auth_mirror(self, pypistage):
+    async def test_basic_auth_remote(self, pypistage):
         pypistage.ixconfig._data["mirror_url"] = "https://foo:bar@example.com/simple/"
         pypistage.xom.http.mockresponse(
             pypistage.mirror_url_without_auth,
@@ -617,7 +617,7 @@ class TestExtPYPIDB:
         await pypistage._get_remote_projects(projects_future)
         assert projects_future.result() == ({normalize_name("Pkg")}, None)
 
-    def test_pypi_mirror_redirect_to_canonical_issue139(self, pypistage):
+    def test_pypi_remote_redirect_to_canonical_issue139(self, pypistage):
         # GET https://pypi.org/simple/Hello_World
         # will result in the request response to have a "real" URL of
         # https://pypi.org/simple/hello-world because of the
@@ -665,7 +665,7 @@ class TestExtPYPIDB:
     @pytest.mark.notransaction
     def test_offline_requires_python(self, mapp, simpypi, testapp, xom):
         mapp.login('root')
-        mapp.modify_index("root/pypi", indexconfig=dict(type='mirror', mirror_url=simpypi.simpleurl))
+        mapp.modify_index("root/pypi", indexconfig=dict(mirror_url=simpypi.simpleurl))
         # turn off offline mode for preparations
         xom.config.args.offline_mode = False
         content = b'13'
@@ -690,7 +690,7 @@ class TestExtPYPIDB:
     @pytest.mark.notransaction
     def test_offline_yanked(self, mapp, simpypi, testapp, xom):
         mapp.login('root')
-        mapp.modify_index("root/pypi", indexconfig=dict(type='mirror', mirror_url=simpypi.simpleurl))
+        mapp.modify_index("root/pypi", indexconfig=dict(mirror_url=simpypi.simpleurl))
         # turn off offline mode for preparations
         xom.config.args.offline_mode = False
         content = b'13'
@@ -839,7 +839,7 @@ class TestExtPYPIDB:
 
     @pytest.mark.notransaction
     def test_core_metadata(self, monkeypatch, pypistage, testapp):
-        # the command-line option alone isn't enough for mirrors
+        # the command-line option alone isn't enough for remotes
         monkeypatch.setattr(pypistage.xom.config.args, "enable_core_metadata", True)
         pypistage.mock_simple(
             "foo", text='<a href="foo-1.0-py3-none-any.whl#sha256=1234"></a>'
@@ -1035,7 +1035,7 @@ class TestRemoteIndexProjects:
         (call,) = pypistage.xom.http.call_log
         assert call['extra_headers']['If-None-Match'] == orig_etag
 
-    def test_no_mirror_access_for_invalid_packages(self, pypistage):
+    def test_no_remote_access_for_invalid_packages(self, pypistage):
         """Test that a project needs to be in the index for devpi to attempt to
         load it from the upstream server"""
 
@@ -1127,7 +1127,7 @@ class TestRemoteIndexProjects:
         initial_serial = tx.commit_serial
         assert initial_serial == 1
 
-        # now expire the cache, add a version on the mirror and fetch again with a timeout
+        # now expire the cache, add a version on the remote and fetch again with a timeout
         pypistage.cache_retrieve_times.expire("pkg")
         pypistage.mock_simple("pkg", text='<a href="pkg-1.0.zip"</a><a href="pkg-2.0.zip"</a>')
         monkeypatch.setattr(pypistage.xom.http, "async_get", sleeping_async_get)
@@ -1152,14 +1152,12 @@ class TestRemoteIndexProjects:
 
     @pytest.mark.nomocking
     @pytest.mark.notransaction
-    def test_auth_mirror_url_no_hash(self, caplog, mapp, simpypi, testapp):
+    def test_auth_remote_url_no_hash(self, caplog, mapp, simpypi, testapp):
         import base64
         url = URL(simpypi.simpleurl).replace(
             username="foo", password="bar").asdir()  # noqa: S106
         mapp.login('root')
-        mapp.modify_index(
-            "root/pypi",
-            indexconfig=dict(type='mirror', mirror_url=url.url))
+        mapp.modify_index("root/pypi", indexconfig=dict(mirror_url=url.url))
         simpypi.add_release("pkg", pkgver="pkg-1.0.zip")
         content = b'13'
         simpypi.add_file('/pkg/pkg-1.0.zip', content)
@@ -1193,14 +1191,12 @@ class TestRemoteIndexProjects:
 
     @pytest.mark.nomocking
     @pytest.mark.notransaction
-    def test_auth_mirror_url_with_hash(self, caplog, mapp, simpypi, testapp):
+    def test_auth_remote_url_with_hash(self, caplog, mapp, simpypi, testapp):
         import base64
         url = URL(simpypi.simpleurl).replace(
             username="foo", password="bar").asdir()  # noqa: S106
         mapp.login('root')
-        mapp.modify_index(
-            "root/pypi",
-            indexconfig=dict(type='mirror', mirror_url=url.url))
+        mapp.modify_index("root/pypi", indexconfig=dict(mirror_url=url.url))
         simpypi.add_release("pkg", pkgver="pkg-1.0.zip#sha256=3fdba35f04dc8c462986c992bcf875546257113072a909c162f7e470e581e278")
         content = b'13'
         simpypi.add_file('/pkg/pkg-1.0.zip', content)
@@ -1252,13 +1248,13 @@ class TestRemoteIndexProjects:
         assert not [x for x in msgs if "/:bar" in x and "mockresponse" not in x]
         assert [x for x in msgs if "/:***" in x]
 
-    def test_auth_mirror_plugin(self, http, makemapp, maketestapp, makexom):
+    def test_auth_remote_plugin(self, http, makemapp, maketestapp, makexom):
         from devpi_server.config import hookimpl
         plugin_calls = []
 
         class Plugin:
             @hookimpl
-            def devpiserver_get_mirror_auth(self, mirror_url, www_authenticate_header):
+            def devpiserver_get_remote_auth(self, mirror_url, www_authenticate_header):
                 plugin_calls.append((mirror_url, www_authenticate_header))
                 return "Bearer token"
 
@@ -1390,7 +1386,7 @@ async def test_get_simplelinks_perstage_when_http_error(exc, pypistage, monkeypa
     # to reach the code path in question, we must have cached links
     links = [("key", "user/index/href", "req_py", "yanked")]
 
-    class MockMirrorData:
+    class MockRemoteData:
         def __init__(self, stage, project):
             pass
 
@@ -1403,7 +1399,7 @@ async def test_get_simplelinks_perstage_when_http_error(exc, pypistage, monkeypa
         def get_links(self):
             return links
 
-    monkeypatch.setattr("devpi_server.model.remote.MirrorData", MockMirrorData)
+    monkeypatch.setattr("devpi_server.model.remote.RemoteData", MockRemoteData)
 
     async def async_httpget(self, url, **kw):
         raise exc
@@ -1543,12 +1539,12 @@ def test_ProjectUpdateCache(monkeypatch):
 @pytest.mark.notransaction
 @pytest.mark.nomocking
 def test_cleanup_after_last_entry_deletion(mapp, simpypi):
-    mapp.create_and_login_user("mirror")
+    mapp.create_and_login_user("remote")
     indexconfig = dict(
-        type="mirror", mirror_url=simpypi.simpleurl, mirror_cache_expiry=0
+        type="remote", mirror_url=simpypi.simpleurl, mirror_cache_expiry=0
     )
-    mapp.create_index("mirror", indexconfig=indexconfig)
-    mapp.use("mirror/mirror")
+    mapp.create_index("remote", indexconfig=indexconfig)
+    mapp.use("remote/remote")
     content = b"14"
     simpypi.add_release("pkg", pkgver="pkg-1.0.zip")
     simpypi.add_file("/pkg/pkg-1.0.zip", content)
@@ -1556,18 +1552,18 @@ def test_cleanup_after_last_entry_deletion(mapp, simpypi):
     r = mapp.downloadrelease(200, release)
     assert r == content
     with mapp.xom.keyfs.write_transaction():
-        stage = mapp.xom.model.getstage("mirror/mirror")
+        stage = mapp.xom.model.getstage("remote/remote")
         assert stage.key_project("pkg").exists(resolve_parents=True)
-        assert list(stage.key_mirrorfile("pkg").with_resolved_parent().iter_ulidkeys())
+        assert list(stage.key_remotefile("pkg").with_resolved_parent().iter_ulidkeys())
         assert list(stage.key_simpledata("pkg").with_resolved_parent().iter_ulidkeys())
         ls = stage.get_linkstore_perstage("pkg", "1.0")
         (link,) = ls.get_links()
         stage.del_entry(link.entry)
     with mapp.xom.keyfs.read_transaction():
-        stage = mapp.xom.model.getstage("mirror/mirror")
+        stage = mapp.xom.model.getstage("remote/remote")
         assert not stage.key_project("pkg").exists(resolve_parents=True)
         assert not list(
-            stage.key_mirrorfile("pkg").with_resolved_parent().iter_ulidkeys()
+            stage.key_remotefile("pkg").with_resolved_parent().iter_ulidkeys()
         )
         assert not list(
             stage.key_simpledata("pkg").with_resolved_parent().iter_ulidkeys()
@@ -1577,12 +1573,12 @@ def test_cleanup_after_last_entry_deletion(mapp, simpypi):
 @pytest.mark.notransaction
 @pytest.mark.nomocking
 def test_cleanup_after_last_version_deletion(mapp, simpypi):
-    mapp.create_and_login_user("mirror")
+    mapp.create_and_login_user("remote")
     indexconfig = dict(
-        type="mirror", mirror_url=simpypi.simpleurl, mirror_cache_expiry=0
+        type="remote", mirror_url=simpypi.simpleurl, mirror_cache_expiry=0
     )
-    mapp.create_index("mirror", indexconfig=indexconfig)
-    mapp.use("mirror/mirror")
+    mapp.create_index("remote", indexconfig=indexconfig)
+    mapp.use("remote/remote")
     content1 = b"10"
     simpypi.add_release("pkg", pkgver="pkg-1.0.zip")
     simpypi.add_file("/pkg/pkg-1.0.zip", content1)
@@ -1593,16 +1589,16 @@ def test_cleanup_after_last_version_deletion(mapp, simpypi):
     r = mapp.downloadrelease(200, release1)
     assert r == content1
     with mapp.xom.keyfs.write_transaction():
-        stage = mapp.xom.model.getstage("mirror/mirror")
+        stage = mapp.xom.model.getstage("remote/remote")
         assert stage.key_project("pkg").exists(resolve_parents=True)
-        assert list(stage.key_mirrorfile("pkg").with_resolved_parent().iter_ulidkeys())
+        assert list(stage.key_remotefile("pkg").with_resolved_parent().iter_ulidkeys())
         assert list(stage.key_simpledata("pkg").with_resolved_parent().iter_ulidkeys())
         stage.del_versiondata("pkg", "1.0")
     with mapp.xom.keyfs.read_transaction():
-        stage = mapp.xom.model.getstage("mirror/mirror")
+        stage = mapp.xom.model.getstage("remote/remote")
         assert not stage.key_project("pkg").exists(resolve_parents=True)
         assert not list(
-            stage.key_mirrorfile("pkg").with_resolved_parent().iter_ulidkeys()
+            stage.key_remotefile("pkg").with_resolved_parent().iter_ulidkeys()
         )
         assert not list(
             stage.key_simpledata("pkg").with_resolved_parent().iter_ulidkeys()
@@ -1614,13 +1610,13 @@ def test_cleanup_after_last_version_deletion(mapp, simpypi):
 @pytest.mark.nomocking
 def test_redownload_locally_removed_release(file_digest, mapp, simpypi):
     from devpi_common.url import URL
-    mapp.create_and_login_user('mirror')
+
+    mapp.create_and_login_user("remote")
     indexconfig = dict(
-        type="mirror",
-        mirror_url=simpypi.simpleurl,
-        mirror_cache_expiry=0)
-    mapp.create_index("mirror", indexconfig=indexconfig)
-    mapp.use("mirror/mirror")
+        type="remote", mirror_url=simpypi.simpleurl, mirror_cache_expiry=0
+    )
+    mapp.create_index("remote", indexconfig=indexconfig)
+    mapp.use("remote/remote")
     content = b'14'
     simpypi.add_release('pkg', pkgver='pkg-1.0.zip')
     simpypi.add_file('/pkg/pkg-1.0.zip', content)
@@ -1657,7 +1653,7 @@ def test_get_last_project_change_serial_perstage(xom, pypistage):
         first_serial = tx.at_serial
         assert pypistage.list_projects_perstage() == {}
     with xom.keyfs.read_transaction() as tx:
-        # the list_projects_perstage call above triggered a MIRRORNAMESINIT update
+        # the list_projects_perstage call above triggered a REMOTENAMESINIT update
         assert tx.at_serial == (first_serial + 1)
         assert pypistage.get_last_project_change_serial_perstage('pkg') == -1
         with pytest.raises(pypistage.UpstreamNotFoundError):
