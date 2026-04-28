@@ -160,7 +160,7 @@ Getting all users and indexes::
             "pypi": {
               "volatile": false, 
               "bases": [], 
-              "type": "mirror"
+              "type": "remote"
             }, 
             "dev": {
               "type": "local",

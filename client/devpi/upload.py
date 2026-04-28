@@ -33,7 +33,8 @@ def main(hub, args):
     if not args.index and not current.pypisubmit:
         hub.fatal(
             "The current index %s does not support upload."
-            "\nMost likely, it is a mirror." % current.index)
+            "\nMost likely, it is a remote index." % current.index
+        )
 
     if args.path:
         return main_fromfiles(hub, args)
@@ -59,6 +60,7 @@ def main(hub, args):
         if args.index:
             uploader.pypisubmit = hub.current.get_index_url(args.index).url
         uploader.do_upload_paths(archives)
+    return None
 
 
 def filter_latest(path_pkginfo):
