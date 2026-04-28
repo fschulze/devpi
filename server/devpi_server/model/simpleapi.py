@@ -80,7 +80,7 @@ class ProjectJSONv1Parser:
         api_version = parse_version(meta.get("api-version", "1.0"))
         if not (SIMPLE_API_V1_VERSION <= api_version < SIMPLE_API_V2_VERSION):
             raise ValueError(
-                f"Wrong API version {api_version!r} in mirror json response."
+                f"Wrong API version {api_version!r} in remote json response."
             )
         self.projects = {x["name"] for x in data["projects"]}
 
@@ -151,7 +151,7 @@ def parse_index_v1_json(disturl: URL | str, text: str) -> ReleaseLinks:
     meta = data["meta"]
     api_version = parse_version(meta.get("api-version", "1.0"))
     if not (SIMPLE_API_V1_VERSION <= api_version < SIMPLE_API_V2_VERSION):
-        raise ValueError(f"Wrong API version {api_version!r} in mirror json response.")
+        raise ValueError(f"Wrong API version {api_version!r} in remote json response.")
     result = []
     for item in data["files"]:
         url = disturl.joinpath(item["url"])

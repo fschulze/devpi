@@ -739,16 +739,18 @@ class TestIndex:
             'someproject-1.0.zip',
             'someproject-1.1-py2.py3-none-any.whl']
 
-    def test_whitelist_intersection_two_mirrors(self, http, stage, user):
-        mirror1 = user.create_stage("mirror1", **udict(
-            mirror_url="http://pypi.org/simple", type="mirror"))
-        mirror2 = user.create_stage("mirror2", **udict(
-            mirror_url="http://example.com/simple", type="mirror"))
+    def test_whitelist_intersection_two_remotes(self, http, stage, user):
+        remote1 = user.create_stage(
+            "remote1", **udict(mirror_url="http://pypi.org/simple", type="remote")
+        )
+        remote2 = user.create_stage(
+            "remote2", **udict(mirror_url="http://example.com/simple", type="remote")
+        )
         http.mockresponse("http://pypi.org/simple/", text='<a href="someproject"></a>')
         http.mock_simple(
             "someproject",
             "<a href='someproject-1.1.zip' /a>",
-            remoteurl=mirror1.mirror_url,
+            remoteurl=remote1.mirror_url,
         )
         http.mockresponse(
             "http://example.com/simple/", text='<a href="someproject"></a>'
@@ -756,20 +758,18 @@ class TestIndex:
         http.mock_simple(
             "someproject",
             "<a href='someproject-1.1-py2.py3-none-any.whl' /a>",
-            remoteurl=mirror2.mirror_url,
+            remoteurl=remote2.mirror_url,
         )
-        stage.modify(
-            bases=(mirror1.name, mirror2.name),
-            mirror_whitelist='*')
+        stage.modify(bases=(remote1.name, remote2.name), mirror_whitelist="*")
         stage2 = user.create_stage(index='inheriting', bases=(stage.name,))
         assert stage.ixconfig['mirror_whitelist_inheritance'] == 'intersection'
         assert stage2.ixconfig['mirror_whitelist_inheritance'] == 'intersection'
-        assert mirror1.list_versions('someproject') == {'1.1'}
-        assert get_release_basenames(mirror1, 'someproject') == [
-            'someproject-1.1.zip']
-        assert mirror2.list_versions('someproject') == {'1.1'}
-        assert get_release_basenames(mirror2, 'someproject') == [
-            'someproject-1.1-py2.py3-none-any.whl']
+        assert remote1.list_versions("someproject") == {"1.1"}
+        assert get_release_basenames(remote1, "someproject") == ["someproject-1.1.zip"]
+        assert remote2.list_versions("someproject") == {"1.1"}
+        assert get_release_basenames(remote2, "someproject") == [
+            "someproject-1.1-py2.py3-none-any.whl"
+        ]
         assert stage.list_versions('someproject') == {'1.1'}
         assert get_release_basenames(stage, 'someproject') == [
             'someproject-1.1-py2.py3-none-any.whl',
@@ -825,16 +825,18 @@ class TestIndex:
             'someproject-1.1-py2.py3-none-any.whl',
             'someproject-1.1.zip']
 
-    def test_whitelist_union_two_mirrors(self, http, stage, user):
-        mirror1 = user.create_stage("mirror1", **udict(
-            mirror_url="http://pypi.org/simple", type="mirror"))
-        mirror2 = user.create_stage("mirror2", **udict(
-            mirror_url="http://example.com/simple", type="mirror"))
+    def test_whitelist_union_two_remotes(self, http, stage, user):
+        remote1 = user.create_stage(
+            "remote1", **udict(mirror_url="http://pypi.org/simple", type="remote")
+        )
+        remote2 = user.create_stage(
+            "remote2", **udict(mirror_url="http://example.com/simple", type="remote")
+        )
         http.mockresponse("http://pypi.org/simple/", text='<a href="someproject"></a>')
         http.mock_simple(
             "someproject",
             "<a href='someproject-1.1.zip' /a>",
-            remoteurl=mirror1.mirror_url,
+            remoteurl=remote1.mirror_url,
         )
         http.mockresponse(
             "http://example.com/simple/", text='<a href="someproject"></a>'
@@ -842,22 +844,20 @@ class TestIndex:
         http.mock_simple(
             "someproject",
             "<a href='someproject-1.1-py2.py3-none-any.whl' /a>",
-            remoteurl=mirror2.mirror_url,
+            remoteurl=remote2.mirror_url,
         )
-        stage.modify(
-            bases=(mirror1.name, mirror2.name),
-            mirror_whitelist='*')
+        stage.modify(bases=(remote1.name, remote2.name), mirror_whitelist="*")
         stage2 = user.create_stage(
             index='inheriting', bases=(stage.name,),
             mirror_whitelist_inheritance='union')
         assert stage.ixconfig['mirror_whitelist_inheritance'] == 'intersection'
         assert stage2.ixconfig['mirror_whitelist_inheritance'] == 'union'
-        assert mirror1.list_versions('someproject') == {'1.1'}
-        assert get_release_basenames(mirror1, 'someproject') == [
-            'someproject-1.1.zip']
-        assert mirror2.list_versions('someproject') == {'1.1'}
-        assert get_release_basenames(mirror2, 'someproject') == [
-            'someproject-1.1-py2.py3-none-any.whl']
+        assert remote1.list_versions("someproject") == {"1.1"}
+        assert get_release_basenames(remote1, "someproject") == ["someproject-1.1.zip"]
+        assert remote2.list_versions("someproject") == {"1.1"}
+        assert get_release_basenames(remote2, "someproject") == [
+            "someproject-1.1-py2.py3-none-any.whl"
+        ]
         assert stage.list_versions('someproject') == {'1.1'}
         assert get_release_basenames(stage, 'someproject') == [
             'someproject-1.1-py2.py3-none-any.whl',
@@ -1133,7 +1133,7 @@ class TestIndex:
 
     @pytest.mark.notransaction
     @pytest.mark.storage_with_filesystem
-    def test_mirror_stage_missing_file_ignored_for_subscribers(self, mapp, pypistage):
+    def test_remote_stage_missing_file_ignored_for_subscribers(self, mapp, pypistage):
         from devpi_server.filestore import FileEntry
         from devpi_server.readonly import DictViewReadonly
 
@@ -1511,7 +1511,7 @@ class TestIndex:
             # and this time we can know when it was deleted
             assert stage.get_last_project_change_serial_perstage('pkg') == (first_serial + 12)
 
-    def test_multi_path_to_mirror_sro(self, user):
+    def test_multi_path_to_remote_sro(self, user):
         stage1 = user.create_stage("stage1", bases=["root/pypi"])
         stage2 = user.create_stage("stage2", bases=["root/pypi"])
         stage3 = user.create_stage("stage3", bases=[stage1.name, stage2.name])
@@ -1722,7 +1722,7 @@ def test_setdefault_indexes(xom):
     with xom.keyfs.write_transaction():
         set_default_indexes(xom.model)
     with xom.keyfs.read_transaction():
-        assert xom.model.getstage("root/pypi").index_type == "mirror"
+        assert xom.model.getstage("root/pypi").index_type == "remote"
     with xom.keyfs.read_transaction():
         ixconfig = xom.model.getstage("root/pypi").ixconfig
         for key in ixconfig:

@@ -85,8 +85,8 @@ def devpiserver_pyramid_configure(config, pyramid_config):
 
 
 @hookspec
-def devpiserver_mirror_initialnames(stage, projectnames):
-    """ called when projectnames are first loaded into a mirror
+def devpiserver_remote_initialnames(stage, projectnames):
+    """called when projectnames are first loaded into a remote
     (both for replica and a primary)
     """
 
@@ -123,11 +123,11 @@ def devpiserver_on_changed_versiondata(stage, project, version, metadata):
 
 @hookspec
 def devpiserver_on_upload(stage, project, version, link):
-    """ called when a file is uploaded to a private stage for
+    """called when a file is uploaded to a private stage for
     a project/version.  link.entry.file_exists() may be false because
     a more recent revision deleted the file (and files are not revisioned).
     NOTE that this hook is currently NOT called for the implicit "caching"
-    uploads to the pypi mirror.
+    uploads of remote indexes.
     """
 
 
@@ -201,11 +201,11 @@ def devpiserver_auth_denials(request, acl, user, stage):
 
 
 @hookspec
-def devpiserver_get_mirror_auth(mirror_url, www_authenticate_header):
-    """Provide an http "Authorization" header to access a mirror.
+def devpiserver_get_remote_auth(mirror_url, www_authenticate_header):
+    """Provide an http "Authorization" header to access a remote packaged index.
 
     Return a string which will be set as the authorization header for all http
-    requests to this mirror.
+    requests to this remote.
 
     Return None or an empty string if no credentials can be determined for the
     supplied url.

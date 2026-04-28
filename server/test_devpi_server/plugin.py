@@ -736,11 +736,11 @@ def add_pypistage_mocks(monkeypatch, http):
 def pypiurls():
     from devpi_server.main import _pypi_ixconfig_default
 
-    class MirrorURL:
+    class RemoteURL:
         def __init__(self):
             self.simple = _pypi_ixconfig_default['mirror_url']
 
-    return MirrorURL()
+    return RemoteURL()
 
 
 @pytest.fixture
@@ -907,12 +907,17 @@ class Mapp(MappMixin):
         else:
             user, password = self.testapp.auth
             index = indexname
-        r = self.testapp.patch_json("/%s/%s" % (user, index), indexconfig,
-                                  expect_errors=True)
+        path = f"/{user}/{index}"
+        expected_index_type = "local"
+        if isinstance(indexconfig, dict):
+            r = self.testapp.get_json(f"{path}?no_projects=", {}, expect_errors=True)
+            assert r.json["type"] == "indexconfig"
+            expected_index_type = r.json["result"]["type"]
+        r = self.testapp.patch_json(path, indexconfig, expect_errors=True)
         assert r.status_code == code
         if code in (200,201):
             if isinstance(indexconfig, dict):
-                assert r.json["result"]["type"] == indexconfig.get("type", "local")
+                assert r.json["result"]["type"] == expected_index_type
             return r.json["result"]
         if code == 400:
             return r.json["message"]

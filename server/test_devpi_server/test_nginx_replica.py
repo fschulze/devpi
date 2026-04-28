@@ -1,7 +1,7 @@
 from .functional import TestIndexPushThings as BaseTestIndexPushThings
 from .functional import TestIndexThings as BaseTestIndexThings
-from .functional import TestMirrorIndexThings as BaseTestMirrorIndexThings
 from .functional import TestProjectThings as BaseTestProjectThings
+from .functional import TestRemoteIndexThings as BaseTestRemoteIndexThings
 from .functional import TestUserThings as BaseTestUserThings
 import pytest
 
@@ -17,6 +17,23 @@ def mapp(makemapp, monkeypatch, nginx_host_port, secretfile):
         yield app
     finally:
         app.xom.thread_pool.kill()
+
+
+@pytest.fixture
+def remote_index_info(server_version):
+    from devpi_common.metadata import parse_version
+
+    if server_version < parse_version("7.0.0.dev2"):
+
+        class MirrorInfo:
+            type = "mirror"
+
+        return MirrorInfo()
+
+    class RemoteInfo:
+        type = "remote"
+
+    return RemoteInfo()
 
 
 @pytest.mark.slow
@@ -40,5 +57,5 @@ class TestIndexPushThings(BaseTestIndexPushThings):
 
 
 @pytest.mark.slow
-class TestMirrorIndexThings(BaseTestMirrorIndexThings):
+class TestRemoteIndexThings(BaseTestRemoteIndexThings):
     pass

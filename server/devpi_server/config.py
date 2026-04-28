@@ -281,7 +281,7 @@ def add_replica_options(parser: MyArgumentParser, pluginmanager: PluginManager) 
         default=None,
         help=(
             "Comma separated list of index names in username/indexname form "
-            "or index type (i.e. 'mirror') for which files aren't replicated. "
+            "or index type (i.e. 'remote') for which files aren't replicated. "
             "This can also be set to 'all' to replicate no files. "
             "If the file is requested directly during runtime, "
             "it will still be fetched and stored."
@@ -363,8 +363,10 @@ def add_export_options(
     pluginmanager: PluginManager,  # noqa: ARG001 - call convention
 ) -> None:
     parser.addoption(
-        "--include-mirrored-files", action="store_true",
-        help="include downloaded files from mirror indexes in dump.")
+        "--include-mirrored-files",
+        action="store_true",
+        help="include downloaded files from remote indexes in dump.",
+    )
 
 
 def add_import_options(
@@ -509,12 +511,13 @@ def try_argcomplete(parser: MyArgumentParser) -> None:
 def get_parser(pluginmanager: PluginManager) -> MyArgumentParser:
     parser = MyArgumentParser(
         description="Start a server which serves multiple users and "
-                    "indices. The special root/pypi index is a cached "
-                    "mirror of pypi.org and is created by default. "
-                    "All indices are suitable for pip or easy_install usage "
-                    "and setup.py upload ... invocations.",
+        "indices. The special root/pypi index is an on-demand "
+        "mirror of pypi.org and is created by default. "
+        "All indices are suitable for pip or easy_install usage "
+        "and setup.py upload ... invocations.",
         add_help=False,
-        pluginmanager=pluginmanager)
+        pluginmanager=pluginmanager,
+    )
     addoptions(parser, pluginmanager)
     pluginmanager.hook.devpiserver_add_parser_options(parser=parser)
     return parser
