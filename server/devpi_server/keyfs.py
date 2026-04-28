@@ -229,7 +229,7 @@ class TxNotificationThread(Generic[Schema]):
             # the index doesn't exist (anymore)
             return True
         # check if the index uses external URLs now
-        return ixconfig.get("type") == "mirror" and bool(
+        return ixconfig.get("type") == "remote" and bool(
             ixconfig.get("mirror_use_external_urls", False)
         )
 
@@ -243,7 +243,7 @@ class TxNotificationThread(Generic[Schema]):
         if entry.deleted_or_never_fetched or self.skip_by_index_config(
             self.get_ixconfig(entry, event_serial)
         ):
-            # file/index removed or mirror related skip
+            # file/index removed or remote index related skip
             return
         with self.keyfs.filestore_transaction():
             if entry.file_exists():
@@ -265,8 +265,8 @@ class TxNotificationThread(Generic[Schema]):
             current_ixconfig = self.get_ixconfig(entry, serial)
             if self.skip_by_index_config(current_ixconfig):
                 return
-            if current_ixconfig and current_ixconfig.get("type") == "mirror":
-                # this is a mirror entry where missing files can be ignored
+            if current_ixconfig and current_ixconfig.get("type") == "remote":
+                # this is a remote entry where missing files can be ignored
                 return
             missing_source = f"current_entry.meta {current_entry.meta!r}"
         missing_source = missing_source or f"entry.meta {entry.meta!r}"

@@ -242,19 +242,19 @@ And from there, the urls should be set to::
           himself/herself. This implies that other users are not allowed 
           to upload packages in that index.  
 
-.. _mirror_index:
+.. _remote_index:
 
-Creating a mirror index
+Creating a remote index
 ^^^^^^^^^^^^^^^^^^^^^^^
 
 .. versionadded:: 3.0
 
-A mirroring index can be created by using ``type=mirror`` and setting the
+A mirroring index can be created by using ``type=remote`` and setting the
 ``mirror_url`` option::
 
-   $ devpi index -c pypi type=mirror mirror_url=https://test.pypi.org/simple/
+   $ devpi index -c pypi type=remote mirror_url=https://test.pypi.org/simple/
    http://localhost:3141/emilie/pypi?no_projects=:
-     type=mirror
+     type=remote
      volatile=True
      mirror_url=https://test.pypi.org/simple/
 
@@ -264,7 +264,7 @@ for ``mirror_web_url_fmt`` is ``https://pypi.org/project/{name}/``. That is
 a Python format string, so the ``{name}`` part is replaced by the project name.
 
 .. _devpi_um_indices_modify:
-   
+
 Modifying an Index
 ------------------
 
