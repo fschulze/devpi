@@ -162,7 +162,7 @@ class User:
         return self.getstage(indexname)
 
     def _getstage(self, indexname, index_type, ixconfig):
-        cls = RemoteIndex if index_type == "mirror" else LocalIndex
+        cls = RemoteIndex if index_type == "remote" else LocalIndex
         customizer_cls = get_stage_customizer_class(self.xom, index_type)
         return cls(
             self.xom,

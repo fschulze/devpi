@@ -3,5 +3,5 @@
         proxy_cache_bypass $bypass_caching;
         add_header X-Cached $upstream_cache_status;
         # adjust the life time to your liking, by default it matches
-        # the mirror cache expiry setting
+        # the remote cache expiry setting
         proxy_cache_valid 200 %(cache_expiry)s;

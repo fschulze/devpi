@@ -95,7 +95,7 @@ There are currently two hooks notifying plugins of changes::
     # link.entry.file_exists() may be false because a more recent
     # revision deleted the file (and files are not revisioned)
     # This hook is currently NOT called for the implicit "caching" 
-    # uploads to the pypi mirror.
+    # uploads of remote indexes.
 
 - Both hooks are called within a read-transaction pointing at the serial
   where the change occurred. This means that hooks may read values but
@@ -154,14 +154,14 @@ Plugins can add key names and default values to the index configuration::
         key names in different plugins."""
 
 
-hook semantics for mirror indexes
+hook semantics for remote indexes
 ---------------------------------
 
-Plugins can process the initial list of projectnames when a mirror loads it::
+Plugins can process the initial list of projectnames when a remote loads it::
 
-    def devpiserver_mirror_initialnames(stage, projectnames):
-        """called with a mirror stage and a list of projectnames, initially
-        retrieved from the mirrored remote site. """
+    def devpiserver_remote_initialnames(stage, projectnames):
+        """called with a remote index and a list of projectnames, initially
+        retrieved from the remote package index site. """
 
 
 hook semantics for storage backends

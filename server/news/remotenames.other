@@ -1,0 +1,1 @@
+Renamed ``devpiserver_mirror_initialnames`` hook to ``devpiserver_remote_initialnames``.

@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .main import XOM
+    from .normalized import NormalizedName
 
 
 class RootFactory:
@@ -178,10 +179,10 @@ class RootFactory:
         return self.matchdict.get('index')
 
     @cached_property
-    def project(self):
+    def project(self) -> NormalizedName | None:
         project = self.matchdict.get('project')
         if project is None:
-            return
+            return None
 
         # redirect GETs to non-normalized projects
         n_project = normalize_name(project)
