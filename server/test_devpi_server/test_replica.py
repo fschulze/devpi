@@ -9,6 +9,7 @@ from devpi_server.log import thread_pop_log
 from devpi_server.log import thread_push_log
 from devpi_server.log import threadlog
 from devpi_server.model.remote import iter_remote_file_replica
+from devpi_server.model.simpleapi import SimpleInfo
 from devpi_server.replica import H_EXPECTED_PRIMARY_ID
 from devpi_server.replica import H_PRIMARY_UUID
 from devpi_server.replica import H_REPLICA_OUTSIDE_URL
@@ -863,7 +864,8 @@ class TestFileReplication:
         md5_1 = get_hashes(content1, hash_types=("md5",))
         link = gen.pypi_package_link("pytest-1.8.zip", hash_spec=md5_1.get_spec("md5"))
         with xom.keyfs.write_transaction():
-            entry = xom.filestore.maplink(link, "root", "pypi", "pytest")
+            info = SimpleInfo.from_url(link)
+            entry = info.make_mutable_entry(xom.keyfs.schema, "root", "pypi", "pytest")
             assert not entry.file_exists()
 
         replay(xom, replica_xom)
@@ -916,7 +918,8 @@ class TestFileReplication:
         md5_1 = get_hashes(content1, hash_types=("md5",))
         link = gen.pypi_package_link("pytest-1.8.zip", hash_spec=md5_1.get_spec("md5"))
         with xom.keyfs.write_transaction():
-            entry = xom.filestore.maplink(link, "root", "pypi", "pytest")
+            info = SimpleInfo.from_url(link)
+            entry = info.make_mutable_entry(xom.keyfs.schema, "root", "pypi", "pytest")
             assert not entry.file_exists()
 
         primary_url = replica_xom.config.primary_url
@@ -955,7 +958,8 @@ class TestFileReplication:
         content1 = b'hello'
         link = gen.pypi_package_link("some-1.8.zip", hash_spec=False)
         with xom.keyfs.write_transaction():
-            entry = xom.filestore.maplink(link, "root", "pypi", "some")
+            info = SimpleInfo.from_url(link)
+            entry = info.make_mutable_entry(xom.keyfs.schema, "root", "pypi", "pytest")
             assert not entry.file_exists()
             assert entry.best_available_hash_spec is None
             assert not entry.hashes
@@ -1018,7 +1022,8 @@ class TestFileReplication:
                             lambda x: l.append(x))
         with xom.keyfs.write_transaction():
             link = gen.pypi_package_link("pytest-1.8.zip")
-            entry = xom.filestore.maplink(link, "root", "pypi", "pytest")
+            info = SimpleInfo.from_url(link)
+            entry = info.make_mutable_entry(xom.keyfs.schema, "root", "pypi", "pytest")
             assert entry.best_available_hash_value is not None
             assert entry.hashes
             assert not entry.file_exists()
@@ -1042,7 +1047,8 @@ class TestFileReplication:
         with xom.keyfs.write_transaction():
             md5_1 = get_hashes(content, hash_types=("md5",)).get_spec("md5")
             link = gen.pypi_package_link("pytest-1.8.zip", hash_spec=md5_1)
-            entry = xom.filestore.maplink(link, "root", "pypi", "pytest")
+            info = SimpleInfo.from_url(link)
+            entry = info.make_mutable_entry(xom.keyfs.schema, "root", "pypi", "pytest")
             assert entry.best_available_hash_spec == md5_1
             assert not entry.file_exists()
         replay(xom, replica_xom)
