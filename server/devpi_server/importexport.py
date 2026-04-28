@@ -14,6 +14,7 @@ from .markers import absent
 from .model.customizer import get_stage_customizer_classes
 from .model.links import Rel
 from .model.root import is_valid_name
+from .model.simpleapi import SimpleInfo
 from .normalized import normalize_name
 from .readonly import ReadonlyView
 from .readonly import get_mutable_deepcopy
@@ -799,9 +800,16 @@ class Importer:
             else:  # remotes
                 stage = cast("RemoteIndex", stage)
                 link = None
-                url = URL(mapping['url']).replace(fragment=hashes.best_available_spec)
-                entry = self.xom.filestore.maplink(
-                    url, stage.username, stage.index, project)
+                url = URL(mapping["url"])
+                entry = SimpleInfo(
+                    basename=url.basename,
+                    hashes=hashes,
+                    requires_python=versions[version].get("requires_python"),
+                    url=url.geturl_nofragment(),
+                    yanked=versions[version].get("yanked"),
+                ).make_mutable_entry(
+                    self.xom.keyfs.schema, stage.username, stage.index, project
+                )
                 entry.file_set_content(
                     f, hashes=hashes, last_modified=mapping["last_modified"], size=size
                 )
