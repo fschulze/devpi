@@ -1349,11 +1349,27 @@ async def test_http_async_user_agent(server_version, simpypi, xom):
     OSError(),
     httpx.RequestError(message="fail")])
 async def test_get_simplelinks_perstage_when_http_error(exc, pypistage, monkeypatch):
+    from devpi_server.filestore import Digests
+    from devpi_server.keyfs_types import RelPath
     from devpi_server.model.links import SimpleLinks
+    from devpi_server.model.links import SimplelinkMeta
     from devpi_server.model.remote import CacheInfo
 
     # to reach the code path in question, we must have cached links
-    links = [("key", "user/index/href", "req_py", "yanked")]
+    links = SimpleLinks(
+        [
+            SimplelinkMeta(
+                basename="key",
+                core_metadata=False,
+                hashes=Digests(),
+                index="index",
+                relpath=RelPath("href"),
+                require_python="req_py",
+                user="user",
+                yanked="yanked",
+            )
+        ]
+    )
 
     class MockRemoteData:
         def __init__(self, stage, project):
@@ -1365,7 +1381,7 @@ async def test_get_simplelinks_perstage_when_http_error(exc, pypistage, monkeypa
         def get_cache_info(self):
             return CacheInfo(serial=42, etag='"foo"')
 
-        def get_links(self):
+        def get_links(self) -> SimpleLinks:
             return links
 
     monkeypatch.setattr("devpi_server.model.remote.RemoteData", MockRemoteData)
@@ -1375,7 +1391,7 @@ async def test_get_simplelinks_perstage_when_http_error(exc, pypistage, monkeypa
 
     monkeypatch.setattr(httpx.AsyncClient, "get", async_httpget)
 
-    assert pypistage.get_simplelinks_perstage("def_missing") == SimpleLinks(links)
+    assert pypistage.get_simplelinks_perstage("def_missing") == links
 
 
 def test_is_project_cached(pypistage):

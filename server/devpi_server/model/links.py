@@ -4,9 +4,7 @@ from .exceptions import MissesRegistration
 from .exceptions import NonVolatile
 from devpi_common.metadata import parse_version
 from devpi_common.metadata import splitbasename
-from devpi_common.url import URL
 from devpi_server.filestore import AbsPath
-from devpi_server.filestore import Digests
 from devpi_server.filestore import FileEntry
 from devpi_server.filestore import MutableFileEntry
 from devpi_server.keyfs_types import RelPath
@@ -32,9 +30,9 @@ import enum
 if TYPE_CHECKING:
     from collections.abc import Iterable
     from collections.abc import MutableSequence
-    from collections.abc import Sequence
     from devpi_common.metadata import Version
     from devpi_server.filestore import BaseFileEntry
+    from devpi_server.filestore import Digests
     from devpi_server.filestore import FileStore
     from devpi_server.interfaces import ContentOrFile
     from devpi_server.keyfs_types import LocatedKey
@@ -47,7 +45,6 @@ if TYPE_CHECKING:
 
     RequiresPython = str | None
     Yanked = Literal[True] | str | None
-    JoinedLink = tuple[str, str, RequiresPython, Yanked]
 
 
 class FileLogEntry(TypedDict):
@@ -492,64 +489,58 @@ class SimplelinkMeta:
     """helper class to provide information for items from get_simplelinks()"""
 
     __slots__ = (
-        "__basename",
         "__cmpval",
         "__ext",
-        "__hashes",
-        "__index",
         "__name",
-        "__relpath",
-        "__url",
-        "__user",
         "__version",
+        "basename",
         "core_metadata",
-        "href",
-        "key",
+        "hashes",
+        "index",
+        "relpath",
         "require_python",
+        "user",
         "yanked",
     )
-    __cmpval: tuple | NotSet
-    __hashes: Digests | NotSet
-    __relpath: str | NotSet
+    __cmpval: tuple[Version, NormalizedName, str] | NotSet
 
     def __init__(
         self,
-        link_info: tuple[str, str, RequiresPython, Yanked],
         *,
+        basename: str,
         core_metadata: bool = False,
+        hashes: Digests,
+        index: str,
+        relpath: RelPath,
+        require_python: RequiresPython,
+        user: str,
+        yanked: Yanked,
     ) -> None:
-        self.__basename = notset
         self.__cmpval = notset
         self.__ext = notset
-        self.__hashes = notset
-        self.__index = notset
         self.__name = notset
-        self.__relpath = notset
-        self.__url = notset
-        self.__user = notset
         self.__version = notset
+        self.basename = basename
         self.core_metadata = False
-        (self.key, self.href, self.require_python, self.yanked) = link_info
+        self.hashes = hashes
+        self.index = index
+        self.relpath = relpath
+        self.require_python = require_python
+        self.user = user
+        self.yanked = yanked
         if core_metadata and self.basename.endswith(".whl"):
             self.core_metadata = True
 
     def __hash__(self) -> int:
         return hash(
             (
-                self.__basename,
-                self.__cmpval,
-                self.__ext,
-                self.__hashes,
-                self.__index,
-                self.__name,
-                self.__relpath,
-                self.__url,
-                self.__user,
-                self.__version,
+                self.basename,
                 self.core_metadata,
-                self.href,
-                self.key,
+                tuple(sorted(self.hashes.items())),
+                self.index,
+                self.relpath,
                 self.require_python,
+                self.user,
                 self.yanked,
             )
         )
@@ -569,70 +560,28 @@ class SimplelinkMeta:
             self.basename, checkarch=False
         )
 
-    def __parse_url(self) -> None:
-        url = URL(self.href)
-        self.__basename = url.basename
-        self.__hashes = Digests()
-        if hash_type := url.hash_type:
-            self.__hashes[hash_type] = url.hash_value
-        parts = url.path.split("/")
-        self.__user = parts[0]
-        self.__index = parts[1]
-        self.__relpath = "/".join(parts[2:])
-
     @property
     def abspath(self) -> AbsPath:
         return AbsPath(f"{self.user}/{self.index}/{self.relpath}")
 
     @property
-    def basename(self) -> str:
-        if self.__basename is notset:
-            self.__parse_url()
-        if TYPE_CHECKING:
-            assert isinstance(self.__basename, str)
-        return self.__basename
+    def href(self) -> str:
+        hash_spec = self.hashes.best_available_spec
+        if hash_spec is None:
+            return f"{self.abspath}"
+        return f"{self.abspath}#{hash_spec}"
 
     @property
-    def hashes(self) -> Digests:
-        if self.__hashes is notset:
-            self.__parse_url()
-        if TYPE_CHECKING:
-            assert isinstance(self.__hashes, Digests)
-        return self.__hashes
-
-    @property
-    def index(self) -> str:
-        if self.__index is notset:
-            self.__parse_url()
-        if TYPE_CHECKING:
-            assert isinstance(self.__index, str)
-        return self.__index
+    def key(self) -> str:
+        return self.basename
 
     @property
     def path(self) -> str:
-        if self.__relpath is notset:
-            self.__parse_url()
         if TYPE_CHECKING:
-            assert isinstance(self.__index, str)
-            assert isinstance(self.__relpath, str)
-            assert isinstance(self.__user, str)
-        return f"{self.__user}/{self.__index}/{self.__relpath}"
-
-    @property
-    def relpath(self) -> str:
-        if self.__relpath is notset:
-            self.__parse_url()
-        if TYPE_CHECKING:
-            assert isinstance(self.__relpath, str)
-        return self.__relpath
-
-    @property
-    def user(self) -> str:
-        if self.__user is notset:
-            self.__parse_url()
-        if TYPE_CHECKING:
-            assert isinstance(self.__user, str)
-        return self.__user
+            assert isinstance(self.index, str)
+            assert isinstance(self.relpath, str)
+            assert isinstance(self.user, str)
+        return f"{self.user}/{self.index}/{self.relpath}"
 
     @property
     def name(self) -> str:
@@ -677,9 +626,9 @@ class SimplelinkMeta:
         clsname = f"{self.__class__.__module__}.{self.__class__.__name__}"
         return (
             f"<{clsname} "
-            f"key={self.key!r} "
-            f"href={self.href!r} "
+            f"basename={self.basename!r} "
             f"core_metadata={self.core_metadata!r} "
+            f"hashes={self.hashes!r} "
             f"require_python={self.require_python!r} "
             f"yanked={self.yanked!r}>"
         )
@@ -693,19 +642,15 @@ class SimpleLinks:
 
     def __init__(
         self,
-        links: Sequence[JoinedLink] | SimpleLinks,
+        links: Iterable[SimplelinkMeta] | SimpleLinks,
         *,
-        core_metadata: bool = False,
         stale: bool = False,
     ) -> None:
-        assert links is not None
         if isinstance(links, SimpleLinks):
             self._links = links._links
             self.stale = links.stale or stale
         else:
-            self._links = [
-                SimplelinkMeta(x, core_metadata=core_metadata) for x in links
-            ]
+            self._links = list(links)
             self.stale = stale
 
     def __hash__(self):
