@@ -13,9 +13,9 @@ import time
 
 
 try:
-    from .functional import TestRemoteIndexThings  # type: ignore[attr-defined]  # noqa: F401
+    from .functional import TestRemoteIndexThings  # noqa: F401
 except ImportError:
-    from .functional import TestMirrorIndexThings  # noqa: F401
+    from .functional import TestMirrorIndexThings  # type: ignore[attr-defined]  # noqa: F401
 
 
 @pytest.fixture

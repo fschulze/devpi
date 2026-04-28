@@ -1,6 +1,6 @@
 # adjust the path for your system,
 # the size (in keys_zone) and the life time to your liking,
-# by default the life time matches the mirror cache expiry setting
+# by default the life time matches the remote cache expiry setting
 proxy_cache_path /var/cache/nginx levels=1:2 keys_zone=devpi_cache:10m inactive=%(cache_expiry)s use_temp_path=off;
 
 map $http_user_agent $devpi_installer_agent {

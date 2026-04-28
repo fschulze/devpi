@@ -248,7 +248,7 @@ class IndexDump:
         self.indexmeta["indexconfig"] = stage.ixconfig
         self.should_dump = (
             self.exporter.config.include_mirrored_files
-            or self.stage.index_type != "mirror"
+            or self.stage.index_type != "remote"
         )
 
     def dump(self) -> None:
@@ -370,7 +370,7 @@ class Migrator:
             raise Fatal(msg)
 
     def __attrs_post_init__(self) -> None:
-        self.v3_index_type_map = dict(stage="local")
+        self.v3_index_type_map = dict(mirror="remote", stage="local")
 
     def migrate(self, data: dict) -> dict:
         data["indexes"] = {
@@ -717,7 +717,7 @@ class Importer:
                     last_modified=mapping["last_modified"],
                 )
                 entry = link.entry
-            else:  # mirrors
+            else:  # remotes
                 stage = cast("RemoteIndex", stage)
                 link = None
                 url = URL(mapping['url']).replace(fragment=hashes.best_available_spec)
@@ -725,8 +725,8 @@ class Importer:
                     url, stage.username, stage.index, project)
                 entry.file_set_content(
                     f, hashes=hashes, last_modified=mapping["last_modified"])
-                mirrordata = stage._get_mirrordata(project)
-                with mirrordata.link_setter(url.basename) as linkdata:
+                remotedata = stage._get_remotedata(project)
+                with remotedata.link_setter(url.basename) as linkdata:
                     linkdata["relpath"] = entry.index_relpath
                     if entry.hashes is not None:
                         linkdata["hashes"] = entry.hashes
@@ -736,7 +736,7 @@ class Importer:
                         linkdata["requires_python"] = requires_python
                     if (yanked := versions[version].get("yanked")) is not None:
                         linkdata["yanked"] = yanked
-                threadlog.info("added mirror file %s", entry.relpath)
+                threadlog.info("added remote file %s", entry.relpath)
         elif filedesc["type"] == Rel.DocZip:
             stage = cast("LocalIndex", stage)
             version = filedesc["version"]

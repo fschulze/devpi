@@ -1,0 +1,1 @@
+Renamed ``devpiserver_get_mirror_auth`` hook to ``devpiserver_get_remote_auth``.
