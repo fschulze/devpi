@@ -2702,9 +2702,9 @@ class TestOfflineMode:
         assert '/package-1.0.zip' in link.get("href")
         with xom.keyfs.read_transaction():
             remotedata = pypistage._get_remotedata("package")
-            links = remotedata.get_links()
+            links = list(remotedata.get_links())
 
-        assert links[0][0] == "package-1.0.zip"
+        assert links[0].basename == "package-1.0.zip"
 
 
 class Test_getjson:
