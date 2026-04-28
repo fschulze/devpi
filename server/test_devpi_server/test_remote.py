@@ -7,6 +7,7 @@ from devpi_server.model.simpleapi import parse_index
 from devpi_server.normalized import normalize_name
 from test_devpi_server.simpypi import getmd5
 import httpx
+import json
 import pytest
 import time
 
@@ -74,10 +75,14 @@ class TestIndexParsing:
         assert link.url.url == "http://pylib2.org/py-1.0.zip"
 
     def test_parse_index_invalid_link(self):
+        from devpi_server.model.simpleapi import SIMPLE_API_V1_0_VERSION
+        from devpi_server.model.simpleapi import SimpleInfos
         result = parse_index(self.simplepy, '''
                 <a rel="download" href="https:/host.com/123" />
         ''')
-        assert result.releaselinks == []
+        assert result.releaselinks == SimpleInfos(
+            infos=[], version=SIMPLE_API_V1_0_VERSION
+        )
 
     def test_parse_index_with_wheel(self):
         result = parse_index(self.simplepy,
@@ -302,7 +307,6 @@ class TestExtPYPIDB:
         ],
     )
     def test_parse_pep691_data(self, core_metadata, metadata_hashes, pypistage):
-        import json
         pypistage.mock_simple_projects(["devpi"])
         file_data = {
             "filename": "devpi-0.9.tar.gz",
@@ -358,6 +362,47 @@ class TestExtPYPIDB:
         assert link.best_available_hash_spec == "md5=dbb53f3699703c028483658773628452"
         assert link.yanked is None
         assert link.require_python is None
+
+    @pytest.mark.parametrize("upload_time", [None, "2026-04-29T07:31:41Z"])
+    @pytest.mark.notransaction
+    def test_parse_pep700_data(self, pypistage, upload_time, testapp):
+        pypistage.mock_simple_projects(["devpi"])
+        file_data = {
+            "filename": "devpi-0.9.tar.gz",
+            "hashes": {
+                "sha256": "b89846ad42cfee0e44934ef77f28ad44e90b7e744041ace91047dd4c7892cc5e"
+            },
+            "size": 1234,
+            "url": "https://files.pythonhosted.org/packages/40/b6/45e98504eba446c8e97ce946760893072cdf3bf6cdd18c296394a55621f9/devpi-0.9.tar.gz",
+        }
+        data = {
+            "meta": {"api-version": "1.1"},
+            "name": "devpi",
+            "files": [file_data],
+        }
+        if upload_time is not None:
+            file_data["upload-time"] = upload_time
+        pypistage.xom.http.mockresponse(
+            URL(pypistage.remote_url).joinpath("devpi").asdir().url,
+            code=200,
+            content_type="application/vnd.pypi.simple.v1+json",
+            text=json.dumps(data),
+        )
+        r = testapp.xget(
+            200,
+            f"/{pypistage.name}/+simple/devpi/",
+            headers={"Accept": "application/vnd.pypi.simple.v1+json"},
+        )
+        (file_info,) = r.json["files"]
+        assert file_info["size"] == 1234
+        if upload_time is None:
+            assert "upload-time" not in file_info
+        else:
+            assert file_info["upload-time"] == upload_time
+        with pypistage.keyfs.read_transaction():
+            (link,) = pypistage.get_releaselinks("devpi")
+            assert link.size == 1234
+            assert link.upload_time == upload_time
 
     def test_parse_project_nomd5(self, pypistage):
         pypistage.mock_simple("pytest", pkgver="pytest-1.0.zip")

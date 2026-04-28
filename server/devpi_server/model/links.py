@@ -99,6 +99,7 @@ class ELink(Generic[F]):
     metadata_hashes = linkdictprop("metadata_hashes", default=None)
     rel = linkdictprop("rel", default=None)
     require_python = linkdictprop("require_python")
+    upload_time = linkdictprop("upload_time")
     yanked = linkdictprop("yanked")
 
     def __init__(self, entry: F, linkdict: dict) -> None:
@@ -549,6 +550,8 @@ class SimplelinkMeta:
                 self.index,
                 self.relpath,
                 self.require_python,
+                self.size,
+                self.upload_time,
                 self.user,
                 self.yanked,
             )
@@ -639,6 +642,8 @@ class SimplelinkMeta:
             f"core_metadata={self.core_metadata!r} "
             f"hashes={self.hashes!r} "
             f"require_python={self.require_python!r} "
+            f"size={self.size!r} "
+            f"upload_time={self.upload_time!r} "
             f"yanked={self.yanked!r}>"
         )
 

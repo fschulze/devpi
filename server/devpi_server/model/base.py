@@ -373,6 +373,7 @@ class BaseIndex:
                     metadata_hashes=l.core_metadata,
                     rel=Rel.ReleaseFile,
                     require_python=l.require_python,
+                    upload_time=l.upload_time,
                     yanked=l.yanked,
                 ),
             )
