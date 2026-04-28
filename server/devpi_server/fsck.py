@@ -39,9 +39,9 @@ class IndexCache:
             self.cache[key] = self.xom.model.getstage(user, index)
         return self.cache[key]
 
-    def is_mirror(self, user: str, index: str) -> bool:
+    def is_remote(self, user: str, index: str) -> bool:
         stage = self.get(user, index)
-        return stage is not None and stage.index_type == "mirror"
+        return stage is not None and stage.index_type == "remote"
 
 
 def fsck():
@@ -81,7 +81,7 @@ def fsck():
                 if not entry.last_modified:
                     continue
                 if not entry.file_exists():
-                    if index_cache.is_mirror(entry.user, entry.index):
+                    if index_cache.is_remote(entry.user, entry.index):
                         warning_count += 1
                         log.warning("Missing file %s", entry.relpath)
                     else:
@@ -98,7 +98,7 @@ def fsck():
             log.info("Finished with a total of %s files.", processed)
             if warning_count:
                 log.warning(
-                    "A total of %s files are missing in mirrors.", warning_count
+                    "A total of %s files are missing in remotes.", warning_count
                 )
             if error_count:
                 log.error("A total of %s files are missing.", error_count)
