@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from .exceptions import MissesRegistration
 from .exceptions import NonVolatile
+from .simpleapi import SIMPLE_API_V1_0_VERSION
+from .simpleapi import SIMPLE_API_V1_1_VERSION
 from devpi_common.metadata import parse_version
 from devpi_common.metadata import splitbasename
 from devpi_server.filestore import AbsPath
@@ -499,6 +501,7 @@ class SimplelinkMeta:
         "index",
         "relpath",
         "require_python",
+        "size",
         "user",
         "yanked",
     )
@@ -513,6 +516,7 @@ class SimplelinkMeta:
         index: str,
         relpath: RelPath,
         require_python: RequiresPython,
+        size: int | None,
         user: str,
         yanked: Yanked,
     ) -> None:
@@ -526,6 +530,7 @@ class SimplelinkMeta:
         self.index = index
         self.relpath = relpath
         self.require_python = require_python
+        self.size = size
         self.user = user
         self.yanked = yanked
         if core_metadata and self.basename.endswith(".whl"):
@@ -636,22 +641,29 @@ class SimplelinkMeta:
 
 @total_ordering
 class SimpleLinks:
-    __slots__ = ("_links", "stale")
+    __slots__ = ("_links", "stale", "version")
     _links: list[SimplelinkMeta]
     stale: bool
+    version: Version
 
     def __init__(
         self,
         links: Iterable[SimplelinkMeta] | SimpleLinks,
         *,
         stale: bool = False,
+        version: Version | None = None,
     ) -> None:
         if isinstance(links, SimpleLinks):
             self._links = links._links
             self.stale = links.stale or stale
+            self.version = (
+                links.version if version is None else min(links.version, version)
+            )
         else:
-            self._links = list(links)
+            self._links = []
+            self.version = SIMPLE_API_V1_1_VERSION if version is None else version
             self.stale = stale
+            self.extend(links)
 
     def __hash__(self):
         return hash((self._links, self.stale))
@@ -672,8 +684,18 @@ class SimpleLinks:
             other = other._links
         return self._links < other
 
-    def append(self, item):
-        self._links.append(item)
+    def extend(self, items: Iterable[SimplelinkMeta]) -> None:
+        append = self._links.append
+        is_v1_1 = True
+        for item in items:
+            if item.size is None:
+                # size is required
+                is_v1_1 = False
+            append(item)
+        if is_v1_1:
+            self.version = min(self.version, SIMPLE_API_V1_1_VERSION)
+        else:
+            self.version = SIMPLE_API_V1_0_VERSION
 
     def sort(self, *args, **kw):
         self._links.sort(*args, **kw)
@@ -681,4 +703,4 @@ class SimpleLinks:
     def __repr__(self) -> str:
         clsname = f"{self.__class__.__module__}.{self.__class__.__name__}"
         content = ", ".join(repr(x) for x in self._links)
-        return f"<{clsname} stale={self.stale!r} [{content}]>"
+        return f"<{clsname} stale={self.stale!r} version={self.version!r} [{content}]>"

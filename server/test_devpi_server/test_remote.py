@@ -1405,6 +1405,7 @@ async def test_get_simplelinks_perstage_when_http_error(exc, pypistage, monkeypa
                 index="index",
                 relpath=RelPath("href"),
                 require_python="req_py",
+                size=None,
                 user="user",
                 yanked="yanked",
             )
