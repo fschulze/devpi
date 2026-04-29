@@ -501,6 +501,7 @@ class SimplelinkMeta:
         "relpath",
         "require_python",
         "size",
+        "upload_time",
         "user",
         "yanked",
     )
@@ -516,6 +517,7 @@ class SimplelinkMeta:
         relpath: RelPath,
         require_python: RequiresPython,
         size: int | None,
+        upload_time: str | None,
         user: str,
         yanked: Yanked,
     ) -> None:
@@ -530,6 +532,7 @@ class SimplelinkMeta:
         self.relpath = relpath
         self.require_python = require_python
         self.size = size
+        self.upload_time = upload_time
         self.user = user
         self.yanked = yanked
         if core_metadata and self.basename.endswith(".whl"):
