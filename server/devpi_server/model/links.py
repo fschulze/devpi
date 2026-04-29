@@ -129,6 +129,10 @@ class ELink(Generic[F]):
         return self.entry.hashes
 
     @property
+    def size(self) -> int | None:
+        return self.entry.size
+
+    @property
     def basename(self):
         _basename = getattr(self, "_basename", None)
         if _basename is None:
@@ -285,6 +289,7 @@ class MutableLinkStore(LinkStore):
         *,
         hashes: Digests,
         last_modified: str | None = None,
+        size: int,
     ) -> ELink:
         overwrite = None
         for link in self.get_links(rel=rel, basename=basename):
@@ -302,7 +307,11 @@ class MutableLinkStore(LinkStore):
             )
         self.remove_links(rel=rel, basename=basename)
         file_entry = self._create_file_entry(
-            basename, content_or_file, hashes=hashes, last_modified=last_modified
+            basename,
+            content_or_file,
+            hashes=hashes,
+            last_modified=last_modified,
+            size=size,
         )
         link = self._add_link_to_file_entry(rel, file_entry)
         if overwrite is not None:
@@ -372,6 +381,7 @@ class MutableLinkStore(LinkStore):
         filename: str | None = None,
         hashes: Digests,
         last_modified: str | None = None,
+        size: int,
     ) -> ELink:
         links = self.get_links(entrypath=for_link.relpath)
         assert len(links) == 1, f"need exactly one reference, got {links}"
@@ -392,6 +402,7 @@ class MutableLinkStore(LinkStore):
             hashes=hashes,
             last_modified=last_modified,
             ref_hash_spec=base_entry.ref_hash_spec,
+            size=size,
         )
         return self._add_link_to_file_entry(rel, entry, for_link=for_link)
 
@@ -434,6 +445,7 @@ class MutableLinkStore(LinkStore):
         hashes: Digests,
         last_modified: str | None = None,
         ref_hash_spec: str | None = None,
+        size: int,
     ) -> MutableFileEntry:
         entry = self.filestore.store(
             user=self.stage.username,
@@ -443,6 +455,7 @@ class MutableLinkStore(LinkStore):
             last_modified=last_modified,
             ref_hash_spec=ref_hash_spec,
             hashes=hashes,
+            size=size,
         )
         entry.project = self.project
         entry.version = self.version
