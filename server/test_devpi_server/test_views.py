@@ -467,7 +467,7 @@ def test_project_pep_691_multiple(mapp, testapp):
     assert 'yanked' not in item2
 
 
-def test_project_pep_691_core_metadata(mapp, monkeypatch, testapp):
+def test_project_pep_691_core_metadata(mapp, testapp):
     from zipfile import ZipFile
 
     api = mapp.create_and_use()
@@ -476,18 +476,6 @@ def test_project_pep_691_core_metadata(mapp, monkeypatch, testapp):
         zf.writestr("pkg1-2.6.dist-info/METADATA", b"metadata")
     content = content_io.getvalue()
     mapp.upload_file_pypi("pkg1-2.6.whl", content, "pkg1", "2.6")
-    r = testapp.xget(
-        200,
-        f"/{api.stagename}/+simple/pkg1",
-        headers={"Accept": "application/vnd.pypi.simple.v1+json"},
-        follow=False,
-    )
-    assert r.headers["content-type"] == "application/vnd.pypi.simple.v1+json"
-    (file_info,) = r.json["files"]
-    assert "core-metadata" not in file_info
-    metadata_url = URL(api.simpleindex).joinpath(file_info["url"] + ".metadata")
-    testapp.xget(404, metadata_url)
-    monkeypatch.setattr(mapp.xom.config.args, "enable_core_metadata", True)
     r = testapp.xget(
         200,
         f"/{api.stagename}/+simple/pkg1",

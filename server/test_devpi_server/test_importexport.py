@@ -656,7 +656,6 @@ class TestImportExport:
                 remote_refresh_delay=600,
                 remote_ignore_serial_header=True,
                 remote_no_project_list=True,
-                remote_provides_core_metadata=True,
                 remote_url="https://example.com/simple/",
                 remote_use_external_urls=True,
                 remote_web_url_fmt="https://example.com/project/{name}/",

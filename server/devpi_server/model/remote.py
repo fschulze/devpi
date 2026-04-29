@@ -83,6 +83,7 @@ if TYPE_CHECKING:
 class CacheLink(TypedDict):
     relpath: str
     hashes: NotRequired[dict[str, str]]
+    metadata_hashes: NotRequired[dict[str, str]]
     requires_python: NotRequired[RequiresPython]
     yanked: NotRequired[Yanked]
 
@@ -304,8 +305,6 @@ def iter_fetch_remote_file(stage, entry, url):
 def join_links_data(
     releaselinks: SimpleInfos,
     key_index: LocatedKey | ULIDKey,
-    *,
-    core_metadata: bool,
 ) -> SimpleLinks:
     index = key_index.params["index"]
     schema = key_index.keyfs.schema
@@ -314,7 +313,7 @@ def join_links_data(
         [
             SimplelinkMeta(
                 basename=releaselink.basename,
-                core_metadata={} if core_metadata else None,
+                core_metadata=releaselink.metadata_hashes,
                 hashes=releaselink.hashes,
                 index=index,
                 relpath=index_relpath(
@@ -461,7 +460,6 @@ class RemoteData:
         if not self.key_project.exists(resolve_parents=True):
             return None
         stage = self.get_stage()
-        core_metadata = stage.provides_core_metadata
         key_simpledata = stage.key_simpledata(
             project=self.project
         ).with_resolved_parent()
@@ -471,7 +469,7 @@ class RemoteData:
             [
                 SimplelinkMeta(
                     basename=k.params["filename"],
-                    core_metadata={} if core_metadata else None,
+                    core_metadata=v.get("metadata_hashes"),
                     hashes=Digests(v["hashes"]) if "hashes" in v else Digests(),
                     index=index,
                     relpath=v["relpath"],
@@ -532,6 +530,8 @@ class RemoteData:
             link_data = data[fn] = CacheLink(relpath=key.name)
             if releaselink.hashes:
                 link_data["hashes"] = releaselink.hashes
+            if releaselink.metadata_hashes is not None:
+                link_data["metadata_hashes"] = releaselink.metadata_hashes
             if rp := releaselink.requires_python:
                 link_data["requires_python"] = rp
             if (
@@ -830,10 +830,6 @@ class RemoteIndex(BaseIndex):
         return None
 
     @property
-    def provides_core_metadata(self) -> bool:
-        return self.ixconfig.get("remote_provides_core_metadata", False)
-
-    @property
     def no_project_list(self) -> bool:
         return self.ixconfig.get("remote_no_project_list", False)
 
@@ -847,7 +843,6 @@ class RemoteIndex(BaseIndex):
             ConfigField(name="description", normalize=str),
             ConfigField(name="remote_ignore_serial_header", normalize=ensure_boolean),
             ConfigField(name="remote_no_project_list", normalize=ensure_boolean),
-            ConfigField(name="remote_provides_core_metadata", normalize=ensure_boolean),
             ConfigField(
                 name="remote_refresh_delay",
                 normalize=self.normalize_remote_refresh_delay,
@@ -1292,9 +1287,7 @@ class RemoteIndex(BaseIndex):
         info = await newlinks_future
         threadlog.debug("Got simple links for %r", project)
 
-        newlinks = join_links_data(
-            info.releaselinks, self.key_index, core_metadata=self.provides_core_metadata
-        )
+        newlinks = join_links_data(info.releaselinks, self.key_index)
         with self.keyfs.write_transaction():
             self.keyfs.tx.on_finished(lock.release)
             # fetch current links
@@ -1417,9 +1410,7 @@ class RemoteIndex(BaseIndex):
 
         info = newlinks_future.result()
 
-        newlinks = join_links_data(
-            info.releaselinks, self.key_index, core_metadata=self.provides_core_metadata
-        )
+        newlinks = join_links_data(info.releaselinks, self.key_index)
         if links is not None and set(links) == set(newlinks):
             # no changes
             self.cache_retrieve_times.refresh(project, info.cache_info["etag"])

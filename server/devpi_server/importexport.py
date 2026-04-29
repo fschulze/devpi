@@ -492,10 +492,7 @@ class Migrator:
             indexconfig["remote_no_project_list"] = indexconfig.pop(
                 "mirror_no_project_list"
             )
-        if "mirror_provides_core_metadata" in indexconfig:
-            indexconfig["remote_provides_core_metadata"] = indexconfig.pop(
-                "mirror_provides_core_metadata"
-            )
+        indexconfig.pop("mirror_provides_core_metadata", None)
         if "mirror_url" in indexconfig:
             indexconfig["remote_url"] = indexconfig.pop("mirror_url")
         if "mirror_use_external_urls" in indexconfig:
@@ -804,6 +801,7 @@ class Importer:
                 entry = SimpleInfo(
                     basename=url.basename,
                     hashes=hashes,
+                    metadata_hashes=versions[version].get("metadata_hashes"),
                     requires_python=versions[version].get("requires_python"),
                     url=url.geturl_nofragment(),
                     yanked=versions[version].get("yanked"),

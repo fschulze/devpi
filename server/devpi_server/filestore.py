@@ -190,6 +190,13 @@ class Digests(dict[str, str]):
         return None
 
     @classmethod
+    def from_metadata_spec(cls, hash_spec: str) -> Digests:
+        result = cls()
+        if hash_spec and hash_spec.lower() != "true":
+            result.add_spec(hash_spec)
+        return result
+
+    @classmethod
     def from_spec(cls, hash_spec: str) -> Digests:
         result = cls()
         if hash_spec:
