@@ -325,6 +325,7 @@ def join_links_data(
                 ),
                 require_python=releaselink.requires_python,
                 size=None,
+                upload_time=None,
                 user=user,
                 yanked=None if releaselink.yanked is False else releaselink.yanked,
             )
@@ -477,6 +478,7 @@ class RemoteData:
                     relpath=v["relpath"],
                     require_python=v.get("requires_python"),
                     size=v.get("size"),
+                    upload_time=v.get("upload_time"),
                     user=username,
                     yanked=v.get("yanked"),
                 )

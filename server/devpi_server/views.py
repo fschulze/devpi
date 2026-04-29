@@ -886,6 +886,8 @@ class PyPIView:
             if is_v1_1:
                 data["size"] = link.size
                 versions.add(link.version)
+                if link.upload_time:
+                    data["upload-time"] = link.upload_time
             info = json.dumps(data, indent=None, sort_keys=False)
             if first:
                 yield f"{info}".encode()

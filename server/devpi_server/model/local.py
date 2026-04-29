@@ -577,6 +577,7 @@ class LocalIndex(BaseIndex):
                     relpath=v["relpath"],
                     require_python=v.get("requires_python"),
                     size=v["size"],
+                    upload_time=v["upload_time"],
                     user=username,
                     yanked=None,
                 )
@@ -642,6 +643,7 @@ class LocalIndex(BaseIndex):
             if rp := versiondata.get("requires_python"):
                 simpledata["requires_python"] = rp
             simpledata["size"] = link.entry.size
+            simpledata["upload_time"] = link.entry.last_modified
         return link
 
     def store_doczip(
