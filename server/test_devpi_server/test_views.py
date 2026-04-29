@@ -519,7 +519,9 @@ def test_project_pep_700(mapp, testapp):
     (item,) = r.json["files"]
     assert item["filename"] == "pkg1-2.6.tgz"
     assert item["size"] == len(content)
-    assert "upload-time" not in item
+    assert "T" in item["upload-time"]
+    assert item["upload-time"].endswith("Z")
+    assert len(item["upload-time"]) == 20
     assert r.json["versions"] == ["2.6"]
 
 
