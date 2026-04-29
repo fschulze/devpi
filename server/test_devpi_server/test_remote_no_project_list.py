@@ -1,6 +1,7 @@
 from bs4 import BeautifulSoup
 from devpi_common.metadata import splitbasename
 from devpi_server.filestore import get_hashes
+from devpi_server.filestore import get_size
 from devpi_server.markers import unknown
 import pytest
 
@@ -16,7 +17,12 @@ def register_and_store(stage, basename, content=b"123", name=None):
         name = n
     stage.set_versiondata(dict(name=name, version=version))
     return stage.store_releasefile(
-        name, version, basename, content, hashes=get_hashes(content)
+        name,
+        version,
+        basename,
+        content,
+        hashes=get_hashes(content),
+        size=get_size(content),
     )
 
 
