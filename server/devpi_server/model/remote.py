@@ -315,7 +315,7 @@ def join_links_data(
         [
             SimplelinkMeta(
                 basename=releaselink.basename,
-                core_metadata=core_metadata,
+                core_metadata={} if core_metadata else None,
                 hashes=Digests.from_spec(releaselink.hash_spec),
                 index=index,
                 relpath=index_relpath(
@@ -472,7 +472,7 @@ class RemoteData:
             [
                 SimplelinkMeta(
                     basename=k.params["filename"],
-                    core_metadata=core_metadata,
+                    core_metadata={} if core_metadata else None,
                     hashes=Digests(v["hashes"]) if "hashes" in v else Digests(),
                     index=index,
                     relpath=v["relpath"],

@@ -23,6 +23,7 @@ from devpi_common.validation import validate_metadata
 from devpi_server.config import hookimpl
 from devpi_server.filestore import AbsPath
 from devpi_server.filestore import Digests
+from devpi_server.filestore import get_core_metadata_hashes
 from devpi_server.filestore import get_hashes
 from devpi_server.filestore import get_size
 from devpi_server.log import threadlog
@@ -571,7 +572,7 @@ class LocalIndex(BaseIndex):
             [
                 SimplelinkMeta(
                     basename=k.params["filename"],
-                    core_metadata=True,
+                    core_metadata=v.get("metadata_hashes"),
                     hashes=Digests(v["hashes"]),
                     index=index,
                     relpath=v["relpath"],
@@ -639,6 +640,10 @@ class LocalIndex(BaseIndex):
         ).with_resolved_parent()
         with key_simpledata.update() as simpledata:
             simpledata["relpath"] = link.entry.index_relpath
+            if metadata_hashes := get_core_metadata_hashes(
+                content_or_file, link.entry.project, link.entry.version
+            ):
+                simpledata["metadata_hashes"] = metadata_hashes
             simpledata["hashes"] = link.entry.hashes
             if rp := versiondata.get("requires_python"):
                 simpledata["requires_python"] = rp

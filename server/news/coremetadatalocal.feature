@@ -1,0 +1,1 @@
+Support core-metadata hashes for local indexes. Refs #1018

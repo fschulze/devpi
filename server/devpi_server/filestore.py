@@ -25,6 +25,7 @@ from contextlib import suppress
 from devpi_common.metadata import splitbasename
 from devpi_common.types import parse_hash_spec
 from inspect import currentframe
+from io import BytesIO
 from os import SEEK_END
 from pathlib import Path
 from typing import NewType
@@ -32,6 +33,8 @@ from typing import TYPE_CHECKING
 from typing import cast
 from typing import overload
 from urllib.parse import unquote
+from zipfile import BadZipFile
+from zipfile import ZipFile
 import datetime
 import hashlib
 import httpdate
@@ -44,6 +47,7 @@ if TYPE_CHECKING:
     from .keyfs import KeyFS
     from .keyfs_types import LocatedKey
     from .model.schema import Schema
+    from .normalized import NormalizedName
     from .readonly import SetViewReadonly
     from devpi_common.url import URL
     from typing import Any
@@ -252,6 +256,24 @@ def best_available_hash_type(hashes: Digests) -> str | None:
     return next(iter(hashes))
 
 
+def get_core_metadata_hashes(
+    content_or_file: ContentOrFile, project: NormalizedName, version: str
+) -> str | None:
+    zip_file = (
+        BytesIO(content_or_file)
+        if isinstance(content_or_file, bytes)
+        else content_or_file
+    )
+    try:
+        with ZipFile(zip_file) as zf:
+            contents = zf.read(metadata_filename(project, version))
+        return get_hashes(contents, hash_types=("sha256",))
+    except (BadZipFile, KeyError):
+        return None
+    finally:
+        zip_file.seek(0)
+
+
 def get_hashes(content_or_file, *, hash_types=absent, additional_hash_types=None):
     if hash_types is absent:
         # in tests this is overwritten and fails if used as default in kwarg
@@ -318,6 +340,10 @@ def make_splitdir(hash_spec):
     assert len(parts) == 2
     hash_value = parts[1]
     return hash_value[:3], hash_value[3:16]
+
+
+def metadata_filename(project: NormalizedName, version: str) -> str:
+    return f"{project.replace('-', '_')}-{version}.dist-info/METADATA"
 
 
 def relpath_prefix(content_or_file, hash_type=absent):

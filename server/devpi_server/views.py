@@ -7,6 +7,7 @@ from .filestore import BadGateway
 from .filestore import get_hashes
 from .filestore import get_seekable_content_or_file
 from .filestore import get_size
+from .filestore import metadata_filename
 from .fileutil import buffered_iterator
 from .keyfs import KeyfsTimeoutError
 from .log import thread_pop_log
@@ -840,9 +841,14 @@ class PyPIView:
         for link in result:
             index_name = f"{link.user}/{link.index}"
             attribs = [f'href="{make_url(link.href).url}"']
-            if core_metadata and link.core_metadata:
+            if core_metadata and link.core_metadata is not None:
+                metadata_spec = (
+                    f"sha256={link.core_metadata['sha256']}"
+                    if "sha256" in link.core_metadata
+                    else "true"
+                )
                 attribs.append(
-                    'data-dist-info-metadata="true" data-core-metadata="true"'
+                    f'data-dist-info-metadata="{metadata_spec}" data-core-metadata="{metadata_spec}"'
                 )
             if link.require_python is not None:
                 attribs.append(f'data-requires-python="{escape(link.require_python)}"')
@@ -877,8 +883,8 @@ class PyPIView:
                 "filename": link.key,
                 "url": url.url_nofrag,
                 "hashes": {url.hash_type: url.hash_value} if url.hash_type else {}}
-            if core_metadata and link.core_metadata:
-                data["core-metadata"] = True
+            if core_metadata and link.core_metadata is not None:
+                data["core-metadata"] = link.core_metadata or True
             if link.require_python is not None:
                 data["requires-python"] = link.require_python
             if link.yanked is not None and link.yanked is not False:
@@ -1759,11 +1765,10 @@ class PyPIView:
             return apireturn(502, e.args[0])
 
         if is_metadata:
-            metadata_filename = (
-                f"{entry.project.replace('-', '_')}-{entry.version}.dist-info/METADATA"
-            )
             with entry.file_open_read() as f, ZipFile(f) as zf:
-                wheel_metadata_contents = zf.read(metadata_filename)
+                wheel_metadata_contents = zf.read(
+                    metadata_filename(entry.project, entry.version)
+                )
             return Response(
                 body=wheel_metadata_contents,
                 content_type="application/octet-stream",

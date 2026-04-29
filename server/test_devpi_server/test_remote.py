@@ -1360,7 +1360,7 @@ async def test_get_simplelinks_perstage_when_http_error(exc, pypistage, monkeypa
         [
             SimplelinkMeta(
                 basename="key",
-                core_metadata=False,
+                core_metadata=None,
                 hashes=Digests(),
                 index="index",
                 relpath=RelPath("href"),
