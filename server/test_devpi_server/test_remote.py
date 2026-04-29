@@ -694,23 +694,30 @@ class TestExtPYPIDB:
     def test_etag(self, pypistage):
         pypistage.mock_simple(
             "foo", text='<a href="foo-1.0.tar.gz"</a>', etag='"foo"')
+        assert len(pypistage.xom.http.call_log) == 0
         with pypistage.keyfs.read_transaction():
             pypistage.get_simplelinks_perstage("foo")
             # call twice
             pypistage.get_simplelinks_perstage("foo")
-        # the second call has the etag from the persistent cache info in the transaction
+        # three calls in total, last two are for the project, first is project list
+        assert len(pypistage.xom.http.call_log) == 3
+        # the last call has the etag from the persistent cache info in the transaction
         call2 = pypistage.xom.http.call_log.pop()
         assert call2["url"] == "https://pypi.org/simple/foo/"
         assert call2["extra_headers"]["If-None-Match"] == '"foo"'
+        assert len(pypistage.xom.http.call_log) == 2
         call1 = pypistage.xom.http.call_log.pop()
         assert call1["url"] == "https://pypi.org/simple/foo/"
         assert "If-None-Match" not in call1["extra_headers"]
+        assert len(pypistage.xom.http.call_log) == 1
+        assert pypistage.xom.http.call_log.pop()["response"].url.endswith("/simple/")
         assert pypistage.cache_retrieve_times.get_etag("foo") == '"foo"'
         pypistage.cache_retrieve_times.expire("foo", etag='"foo"')
         with pypistage.keyfs.read_transaction():
             pypistage.get_simplelinks_perstage("foo")
             # call twice
             pypistage.get_simplelinks_perstage("foo")
+        assert len(pypistage.xom.http.call_log) == 1
         call = pypistage.xom.http.call_log.pop()
         assert pypistage.cache_retrieve_times.get_etag("foo") == '"foo"'
         assert call['extra_headers']['If-None-Match'] == '"foo"'
@@ -722,12 +729,14 @@ class TestExtPYPIDB:
             pypistage.get_simplelinks_perstage("foo")
             # call twice
             pypistage.get_simplelinks_perstage("foo")
+        assert len(pypistage.xom.http.call_log) == 1
         call = pypistage.xom.http.call_log.pop()
         assert call['extra_headers']['If-None-Match'] == '"foo"'
         assert pypistage.cache_retrieve_times.get_etag("foo") == '"bar"'
         del pypistage.cache_retrieve_times._project2time["foo"]
         with pypistage.keyfs.read_transaction():
             pypistage.get_simplelinks_perstage("foo")
+        assert len(pypistage.xom.http.call_log) == 1
         call = pypistage.xom.http.call_log.pop()
         assert call["extra_headers"]["If-None-Match"] == '"foo"'
 
