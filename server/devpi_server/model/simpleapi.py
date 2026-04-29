@@ -17,7 +17,8 @@ if TYPE_CHECKING:
 
 
 SIMPLE_API_V1_JSON = "application/vnd.pypi.simple.v1+json"
-SIMPLE_API_V1_VERSION = parse_version("1.0")
+SIMPLE_API_V1_0_VERSION = parse_version("1.0")
+SIMPLE_API_V1_1_VERSION = parse_version("1.1")
 SIMPLE_API_V2_VERSION = parse_version("2.0")
 SIMPLE_API_ACCEPT = (
     f"application/vnd.pypi.simple.v1+html;q=0.2, {SIMPLE_API_V1_JSON}, text/html;q=0.01"
@@ -78,7 +79,7 @@ class ProjectJSONv1Parser:
     def feed(self, data):
         meta = data["meta"]
         api_version = parse_version(meta.get("api-version", "1.0"))
-        if not (SIMPLE_API_V1_VERSION <= api_version < SIMPLE_API_V2_VERSION):
+        if not (SIMPLE_API_V1_0_VERSION <= api_version < SIMPLE_API_V2_VERSION):
             raise ValueError(
                 f"Wrong API version {api_version!r} in remote json response."
             )
@@ -150,7 +151,7 @@ def parse_index_v1_json(disturl: URL | str, text: str) -> ReleaseLinks:
     data = json.loads(text)
     meta = data["meta"]
     api_version = parse_version(meta.get("api-version", "1.0"))
-    if not (SIMPLE_API_V1_VERSION <= api_version < SIMPLE_API_V2_VERSION):
+    if not (SIMPLE_API_V1_0_VERSION <= api_version < SIMPLE_API_V2_VERSION):
         raise ValueError(f"Wrong API version {api_version!r} in remote json response.")
     result = []
     for item in data["files"]:
