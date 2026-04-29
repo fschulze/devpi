@@ -496,7 +496,9 @@ def test_project_pep_691_core_metadata(mapp, monkeypatch, testapp):
     )
     assert r.headers["content-type"] == "application/vnd.pypi.simple.v1+json"
     (file_info,) = r.json["files"]
-    assert file_info["core-metadata"] is True
+    assert file_info["core-metadata"] == dict(
+        sha256="45447b7afbd5e544f7d0f1df0fccd26014d9850130abd3f020b89ff96b82079f"
+    )
     metadata_url = URL(api.simpleindex).joinpath(file_info["url"] + ".metadata")
     r = testapp.xget(200, metadata_url)
     assert r.body == b"metadata"
