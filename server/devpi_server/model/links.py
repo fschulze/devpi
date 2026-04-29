@@ -512,7 +512,7 @@ class SimplelinkMeta:
         self,
         *,
         basename: str,
-        core_metadata: bool = False,
+        core_metadata: dict[str, str] | None = None,
         hashes: Digests,
         index: str,
         relpath: RelPath,
@@ -527,7 +527,7 @@ class SimplelinkMeta:
         self.__name = notset
         self.__version = notset
         self.basename = basename
-        self.core_metadata = False
+        self.core_metadata = get_mutable_deepcopy(core_metadata)
         self.hashes = hashes
         self.index = index
         self.relpath = relpath
@@ -536,8 +536,6 @@ class SimplelinkMeta:
         self.upload_time = upload_time
         self.user = user
         self.yanked = yanked
-        if core_metadata and self.basename.endswith(".whl"):
-            self.core_metadata = True
 
     def __hash__(self) -> int:
         return hash(
