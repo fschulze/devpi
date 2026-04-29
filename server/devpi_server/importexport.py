@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from .filestore import Digests
 from .filestore import get_hashes
+from .filestore import get_size
 from .log import threadlog
 from .main import CommandRunner
 from .main import DATABASE_VERSION
@@ -771,6 +772,10 @@ class Importer:
         # docs and toxresults didn't always have entrymapping in export dump
         mapping = filedesc.get("entrymapping", {})
         hashes = Digests(mapping.get("hashes", {}))
+        size = mapping.get("size")
+        if not isinstance(size, int):
+            size = get_size(f)
+        assert size == get_size(f)
         # note that the actual hash_type used within devpi-server is not
         # determined here but in store_releasefile/store_doczip/store_toxresult etc
         hashes.update(get_hashes(f, hash_types=hashes.get_missing_hash_types()))
@@ -788,6 +793,7 @@ class Importer:
                     f,
                     hashes=hashes,
                     last_modified=mapping["last_modified"],
+                    size=size,
                 )
                 entry = link.entry
             else:  # remotes
@@ -797,7 +803,8 @@ class Importer:
                 entry = self.xom.filestore.maplink(
                     url, stage.username, stage.index, project)
                 entry.file_set_content(
-                    f, hashes=hashes, last_modified=mapping["last_modified"])
+                    f, hashes=hashes, last_modified=mapping["last_modified"], size=size
+                )
                 remotedata = stage._get_remotedata(project)
                 with remotedata.link_setter(url.basename) as linkdata:
                     linkdata["relpath"] = entry.index_relpath
@@ -816,7 +823,13 @@ class Importer:
             # docs didn't always have entrymapping in export dump
             last_modified = mapping.get("last_modified")
             link = stage.store_doczip(
-                project, version, f, hashes=hashes, last_modified=last_modified)
+                project,
+                version,
+                f,
+                hashes=hashes,
+                last_modified=last_modified,
+                size=size,
+            )
             entry = link.entry
         elif filedesc["type"] == Rel.ToxResult:
             stage = cast("LocalIndex", stage)
@@ -829,7 +842,12 @@ class Importer:
             (link,) = linkstore.get_links(basename=for_basename)
             filename = Path(filedesc["relpath"]).name
             link = stage.store_toxresult(
-                link, f, filename=filename, hashes=hashes, last_modified=last_modified
+                link,
+                f,
+                filename=filename,
+                hashes=hashes,
+                last_modified=last_modified,
+                size=size,
             )
             entry = link.entry
         else:
