@@ -23,6 +23,7 @@ from devpi_server.config import hookimpl
 from devpi_server.filestore import AbsPath
 from devpi_server.filestore import Digests
 from devpi_server.filestore import get_hashes
+from devpi_server.filestore import get_size
 from devpi_server.log import threadlog
 from devpi_server.markers import Absent
 from devpi_server.markers import Deleted
@@ -339,6 +340,7 @@ class LocalIndex(BaseIndex):
                 basename=f"{project}-{version}.readme",
                 content_or_file=content,
                 hashes=get_hashes(content),
+                size=get_size(content),
             )
             metadata["description"] = {
                 "relpath": entry.index_relpath,
@@ -596,6 +598,7 @@ class LocalIndex(BaseIndex):
         *,
         hashes: Digests,
         last_modified: str | None = None,
+        size: int,
     ) -> ELink:
         if self.customizer.readonly:
             raise ReadonlyIndex("index is marked read only")
@@ -617,6 +620,7 @@ class LocalIndex(BaseIndex):
             content_or_file=content_or_file,
             hashes=hashes,
             last_modified=last_modified,
+            size=size,
         )
         versiondata = (
             {}
@@ -641,6 +645,7 @@ class LocalIndex(BaseIndex):
         *,
         hashes: Digests,
         last_modified: str | None = None,
+        size: int,
     ) -> ELink:
         if self.customizer.readonly:
             raise ReadonlyIndex("index is marked read only")
@@ -665,6 +670,7 @@ class LocalIndex(BaseIndex):
             content_or_file=content_or_file,
             hashes=hashes,
             last_modified=last_modified,
+            size=size,
         )
 
     def get_doczip_link(self, project, version):

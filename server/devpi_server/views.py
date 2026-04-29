@@ -6,6 +6,7 @@ from .exceptions import lazy_format_exception_only
 from .filestore import BadGateway
 from .filestore import get_hashes
 from .filestore import get_seekable_content_or_file
+from .filestore import get_size
 from .fileutil import buffered_iterator
 from .keyfs import KeyfsTimeoutError
 from .log import thread_pop_log
@@ -703,7 +704,9 @@ class PyPIView:
         # but we store the original body
         toxresultdata = self.request.body
         hashes = get_hashes(toxresultdata)
-        tox_link = stage.store_toxresult(link, toxresultdata, hashes=hashes)
+        tox_link = stage.store_toxresult(
+            link, toxresultdata, hashes=hashes, size=get_size(toxresultdata)
+        )
         tox_link.add_log(
             'upload', self.request.authenticated_userid, dst=stage.name)
         apireturn(200, type="toxresultpath",
@@ -1291,9 +1294,14 @@ class PyPIView:
                 entry = _entry
             with entry.file_open_read() as f:
                 new_link = target_stage.store_releasefile(
-                    name, version, entry.basename, f,
+                    name,
+                    version,
+                    entry.basename,
+                    f,
                     hashes=entry.hashes,
-                    last_modified=entry.last_modified)
+                    last_modified=entry.last_modified,
+                    size=entry.size,
+                )
             new_link.add_logs(
                 x for x in logs
                 if x.get('what') != 'overwrite')
@@ -1311,7 +1319,11 @@ class PyPIView:
                     ref_link = tstore.get_links(entrypath=new_entry.relpath)[0]
                     with toxlink.entry.file_open_read() as f:
                         tlink = target_stage.store_toxresult(
-                            ref_link, f, hashes=toxlink.entry.hashes)
+                            ref_link,
+                            f,
+                            hashes=toxlink.entry.hashes,
+                            size=toxlink.entry.size,
+                        )
                     tlink.add_logs(
                         x for x in toxlink.get_logs()
                         if x.get('what') != 'overwrite')
@@ -1324,7 +1336,12 @@ class PyPIView:
         for link in links.get("doczip", ()):
             with link.entry.file_open_read() as doczip:
                 new_link = target_stage.store_doczip(
-                    name, version, doczip, hashes=link.entry.hashes)
+                    name,
+                    version,
+                    doczip,
+                    hashes=link.entry.hashes,
+                    size=link.entry.size,
+                )
             new_link.add_logs(link.get_logs())
             new_link.add_log(
                 'push',
@@ -1386,8 +1403,13 @@ class PyPIView:
             self._update_versiondata_form(stage, request.POST)
             try:
                 link = stage.store_releasefile(
-                    project, version,
-                    content_filename, content_file, hashes=hashes)
+                    project,
+                    version,
+                    content_filename,
+                    content_file,
+                    hashes=hashes,
+                    size=get_size(content_file),
+                )
             except stage.NonVolatile as e:
                 if e.link.matches_hashes(hashes):
                     abort_submit(
@@ -1411,7 +1433,12 @@ class PyPIView:
                 self._update_versiondata_form(stage, request.POST)
             try:
                 link = stage.store_doczip(
-                    project, version, content_file, hashes=hashes)
+                    project,
+                    version,
+                    content_file,
+                    hashes=hashes,
+                    size=get_size(content_file),
+                )
             except stage.MissesVersion as e:
                 abort_submit(
                     request, 400,

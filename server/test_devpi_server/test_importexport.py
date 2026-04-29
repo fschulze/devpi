@@ -5,6 +5,7 @@ from devpi_common.metadata import Version
 from devpi_common.url import URL
 from devpi_server.config import hookimpl
 from devpi_server.filestore import get_hashes
+from devpi_server.filestore import get_size
 from devpi_server.filestore import make_splitdir
 from devpi_server.filestore import relpath_prefix
 from devpi_server.importexport import Exporter
@@ -884,7 +885,11 @@ class TestImportExport:
             stage = mapp1.xom.model.getstage(api.stagename)
             doccontent = zip_dict({"index.html": "<html><body>Hello"})
             link1 = stage.store_doczip(
-                name, "1.0", doccontent, hashes=get_hashes(doccontent)
+                name,
+                "1.0",
+                doccontent,
+                hashes=get_hashes(doccontent),
+                size=get_size(doccontent),
             )
 
         impexp.export()

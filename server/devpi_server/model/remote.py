@@ -152,6 +152,7 @@ class FileStreamer:
             yield data
 
         self.hashes = running_hashes.digests
+        self.size = filesize
 
         if content_size and int(content_size) != filesize:
             raise ValueError(
@@ -210,6 +211,7 @@ def iter_cache_remote_file(stage, entry, url):
                     f,
                     last_modified=r.headers.get("last-modified", None),
                     hashes=file_streamer.hashes,
+                    size=file_streamer.size,
                 )
                 if entry.project:
                     stage = xom.model.getstage(entry.user, entry.index)

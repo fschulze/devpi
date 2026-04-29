@@ -377,13 +377,17 @@ class BaseIndex:
             for l in simplelinks
         ]
 
-    def get_linkstore_perstage(self, name, version):
-        return LinkStore(self, name, version)
+    def get_linkstore_perstage(
+        self, project: NormalizedName | str, version: str
+    ) -> LinkStore:
+        return LinkStore(self, project, version)
 
-    def get_mutable_linkstore_perstage(self, name, version):
+    def get_mutable_linkstore_perstage(
+        self, project: NormalizedName | str, version: str
+    ) -> MutableLinkStore:
         if self.customizer.readonly:
             threadlog.warn("index is marked read only")
-        return MutableLinkStore(self, name, version)
+        return MutableLinkStore(self, project, version)
 
     def get_keys_for_entrypaths(
         self, entrypaths: Iterable[str]
@@ -462,6 +466,7 @@ class BaseIndex:
         filename: str | None = None,
         hashes: Digests,
         last_modified: str | None = None,
+        size: int,
     ) -> ELink:
         if self.customizer.readonly:
             raise ReadonlyIndex("index is marked read only")
@@ -474,6 +479,7 @@ class BaseIndex:
             filename=filename,
             hashes=hashes,
             last_modified=last_modified,
+            size=size,
         )
 
     def get_toxresults(self, link):

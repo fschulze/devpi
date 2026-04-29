@@ -1,4 +1,5 @@
 from devpi_server.filestore import get_hashes
+from devpi_server.filestore import get_size
 from devpi_server.fileutil import dumps
 from devpi_server.fileutil import loads
 from devpi_server.keyfs import MissingFileException
@@ -872,7 +873,9 @@ class TestFileReplication:
             assert r_entry.meta
 
         with xom.keyfs.write_transaction():
-            entry.file_set_content(content1, hashes=get_hashes(content1))
+            entry.file_set_content(
+                content1, hashes=get_hashes(content1), size=get_size(content1)
+            )
             assert entry.file_exists()
             assert entry.last_modified is not None
 
@@ -921,7 +924,9 @@ class TestFileReplication:
 
         # first we create
         with xom.keyfs.write_transaction():
-            entry.file_set_content(content1, hashes=get_hashes(content1))
+            entry.file_set_content(
+                content1, hashes=get_hashes(content1), size=get_size(content1)
+            )
 
         # then we delete
         with xom.keyfs.write_transaction():
@@ -964,7 +969,9 @@ class TestFileReplication:
             assert not r_entry.hashes
 
         with xom.keyfs.write_transaction():
-            entry.file_set_content(content1, hashes=get_hashes(content1))
+            entry.file_set_content(
+                content1, hashes=get_hashes(content1), size=get_size(content1)
+            )
 
         primary_url = replica_xom.config.primary_url
         primary_file_path = primary_url.joinpath(entry.relpath).url

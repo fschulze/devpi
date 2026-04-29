@@ -142,6 +142,7 @@ class TestRenameFileLogic:
     def test_finalize_init(self, caplog, makexom, mock, monkeypatch, tmp_path):
         from devpi_server.filestore import MutableFileEntry
         from devpi_server.filestore import get_hashes
+        from devpi_server.filestore import get_size
         from devpi_server.filestore import make_splitdir
 
         _commit = mock.Mock()
@@ -168,7 +169,7 @@ class TestRenameFileLogic:
                 filename="foo.txt",
             ).with_resolved_parent()
             entry = MutableFileEntry(key)
-            entry.file_set_content(content, hashes=hashes)
+            entry.file_set_content(content, hashes=hashes, size=get_size(content))
             path = Path(tx.io_file.os_path(entry.file_path_info))
             (rel_rename,) = tx.io_file.get_crash_actions()
         assert _commit.called

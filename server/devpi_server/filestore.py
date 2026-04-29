@@ -25,6 +25,7 @@ from contextlib import suppress
 from devpi_common.metadata import splitbasename
 from devpi_common.types import parse_hash_spec
 from inspect import currentframe
+from os import SEEK_END
 from pathlib import Path
 from typing import NewType
 from typing import TYPE_CHECKING
@@ -299,6 +300,15 @@ def get_hash_spec(content_or_file, hash_type):
     return get_hashes(content_or_file, hash_types=(hash_type,)).get_spec(hash_type)
 
 
+def get_size(content_or_file: ContentOrFile) -> int:
+    if isinstance(content_or_file, bytes):
+        return len(content_or_file)
+    content_or_file.seek(0, SEEK_END)
+    size = content_or_file.tell()
+    content_or_file.seek(0)
+    return size
+
+
 def index_relpath(user: str, index: str, relpath: AbsPath) -> RelPath:
     return RelPath(Path(relpath).relative_to(Path(f"{user}/{index}")).as_posix())
 
@@ -446,6 +456,7 @@ class FileStore:
         ref_hash_spec: str | None = None,
         hashes: Digests,
         last_modified: str | None = None,
+        size: int,
     ) -> MutableFileEntry:
         # ref_hash_spec is set for toxresult files to store them alongside the tested release
         if ref_hash_spec is None:
@@ -460,7 +471,7 @@ class FileStore:
         ).with_resolved_parent()
         entry = MutableFileEntry(key)
         entry.file_set_content(
-            content_or_file, hashes=hashes, last_modified=last_modified
+            content_or_file, hashes=hashes, last_modified=last_modified, size=size
         )
         return entry
 
@@ -495,6 +506,7 @@ class BaseFileEntry:
     last_modified = metaprop("last_modified")
     url = metaprop("url")
     project = metaprop("project")
+    size: int | None = metaprop("size")
     version = metaprop("version")
 
     def __init__(
@@ -647,7 +659,7 @@ class BaseFileEntry:
             )
         m = mimetypes.guess_type(self.basename)[0]
         headers["content-type"] = "application/octet-stream" if m is None else m
-        headers["content-length"] = str(self.file_size())
+        headers["content-length"] = str(self.size)
         headers["cache-control"] = "max-age=365000000, immutable, public"
         return headers
 
@@ -727,6 +739,7 @@ class MutableFileEntry(BaseFileEntry):
         *,
         last_modified: str | None = None,
         hashes: Digests,
+        size: int,
     ) -> None:
         if last_modified != -1:
             self.last_modified = (
@@ -742,6 +755,7 @@ class MutableFileEntry(BaseFileEntry):
             msg = f"Missing hash types: {missing_hash_types!r}"
             raise RuntimeError(msg)
         self._hashes = self.hashes | hashes
+        self.size = size
         self.tx.io_file.set_content(self.file_path_info, content_or_file)
         # we make sure we always refresh the meta information
         # when we set the file content. Otherwise we might
