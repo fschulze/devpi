@@ -53,6 +53,7 @@ import warnings
 
 if TYPE_CHECKING:
     from .customizer import BaseIndexCustomizer
+    from .links import SimplelinkMeta
     from .root import RootModel
     from .schema import Schema
     from collections.abc import Callable
@@ -556,6 +557,13 @@ class BaseIndex:
         all_links = self.SimpleLinks([])
         seen = set()
 
+        def iter_res(res: SimpleLinks) -> Iterator[SimplelinkMeta]:
+            for link_info in res:
+                key = link_info.key
+                if key not in seen:
+                    seen.add(key)
+                    yield link_info
+
         try:
             for stage in self.index_bases.get_mergeable_indexes(
                 project, "get_simplelinks"
@@ -570,11 +578,7 @@ class BaseIndex:
                 iterator = self.customizer.get_simple_links_filter_iter(project, res)
                 if iterator is not None:
                     res = apply_filter_iter(res, iterator)
-                for link_info in res:
-                    key = link_info.key
-                    if key not in seen:
-                        seen.add(key)
-                        all_links.append(link_info)
+                all_links.extend(iter_res(res))
         except self.UpstreamNotFoundError:
             return self.SimpleLinks([])
 

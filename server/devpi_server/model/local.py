@@ -15,6 +15,7 @@ from .exceptions import ReadonlyIndex
 from .links import ELink
 from .links import Rel
 from .links import SimplelinkMeta
+from .simpleapi import SIMPLE_API_V1_1_VERSION
 from contextlib import suppress
 from devpi_common.types import cached_property
 from devpi_common.types import ensure_unicode
@@ -575,11 +576,13 @@ class LocalIndex(BaseIndex):
                     index=index,
                     relpath=v["relpath"],
                     require_python=v.get("requires_python"),
+                    size=v["size"],
                     user=username,
                     yanked=None,
                 )
                 for k, v in key_simpledata.iter_ulidkey_values()
-            ]
+            ],
+            version=SIMPLE_API_V1_1_VERSION,
         )
 
     def list_projects_perstage(self) -> dict[str, NormalizedName | str]:
@@ -638,6 +641,7 @@ class LocalIndex(BaseIndex):
             simpledata["hashes"] = link.entry.hashes
             if rp := versiondata.get("requires_python"):
                 simpledata["requires_python"] = rp
+            simpledata["size"] = link.entry.size
         return link
 
     def store_doczip(

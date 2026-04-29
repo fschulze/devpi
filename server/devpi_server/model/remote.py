@@ -324,6 +324,7 @@ def join_links_data(
                     AbsPath(key_from_link(keyfs, releaselink, key_index).relpath),
                 ),
                 require_python=releaselink.requires_python,
+                size=None,
                 user=user,
                 yanked=None if releaselink.yanked is False else releaselink.yanked,
             )
@@ -475,6 +476,7 @@ class RemoteData:
                     index=index,
                     relpath=v["relpath"],
                     require_python=v.get("requires_python"),
+                    size=v.get("size"),
                     user=username,
                     yanked=v.get("yanked"),
                 )

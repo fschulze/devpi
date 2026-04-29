@@ -16,6 +16,7 @@ from devpi_server.filestore import make_splitdir
 from devpi_server.model.simpleapi import parse_index
 from devpi_server.views import tween_keyfs_transaction
 from io import BytesIO
+from operator import itemgetter
 from pyramid.response import Response
 import devpi_server.views
 import json
@@ -416,7 +417,7 @@ def test_project_pep_691(mapp, testapp):
     assert 'Accept' in r.headers['Vary']
     assert 'User-Agent' in r.headers['Vary']
     assert r.headers['content-type'] == "application/vnd.pypi.simple.v1+json"
-    assert r.json['meta']['api-version'] == '1.0'
+    assert r.json["meta"]["api-version"] == "1.1"
     (item,) = r.json['files']
     assert item['filename'] == 'pkg1-2.6.tgz'
     assert item['url'] == f'../+f/{hashdir}/pkg1-2.6.tgz'
@@ -426,7 +427,6 @@ def test_project_pep_691(mapp, testapp):
 
 
 def test_project_pep_691_multiple(mapp, testapp):
-    from operator import itemgetter
     api = mapp.create_and_use()
     content1 = b"123"
     hashes1 = get_hashes(content1)
@@ -453,7 +453,7 @@ def test_project_pep_691_multiple(mapp, testapp):
     assert 'Accept' in r.headers['Vary']
     assert 'User-Agent' in r.headers['Vary']
     assert r.headers['content-type'] == "application/vnd.pypi.simple.v1+json"
-    assert r.json['meta']['api-version'] == '1.0'
+    assert r.json["meta"]["api-version"] == "1.1"
     (item1, item2) = sorted(r.json['files'], key=itemgetter("filename"))
     assert item1['filename'] == 'pkg1-2.6.tgz'
     assert item1['url'] == f'../+f/{hashdir1}/pkg1-2.6.tgz'
@@ -500,6 +500,64 @@ def test_project_pep_691_core_metadata(mapp, monkeypatch, testapp):
     metadata_url = URL(api.simpleindex).joinpath(file_info["url"] + ".metadata")
     r = testapp.xget(200, metadata_url)
     assert r.body == b"metadata"
+
+
+def test_project_pep_700(mapp, testapp):
+    api = mapp.create_and_use()
+    content = b"123"
+    mapp.upload_file_pypi("pkg1-2.6.tgz", content, "pkg1", "2.6")
+    headers = {
+        "Accept": "application/vnd.pypi.simple.v1+json, "
+        "application/vnd.pypi.simple.v1+html;q=0.2, "
+        "text/html;q=0.01"
+    }
+    r = testapp.xget(
+        200, f"/{api.stagename}/+simple/pkg1", headers=headers, follow=False
+    )
+    assert r.headers["content-type"] == "application/vnd.pypi.simple.v1+json"
+    assert r.json["meta"]["api-version"] == "1.1"
+    (item,) = r.json["files"]
+    assert item["filename"] == "pkg1-2.6.tgz"
+    assert item["size"] == len(content)
+    assert "upload-time" not in item
+    assert r.json["versions"] == ["2.6"]
+
+
+@pytest.mark.nomocking
+def test_project_pep_700_inherit_old_remote(mapp, simpypi, testapp):
+    indexconfig = dict(
+        type="remote",
+        remote_url=simpypi.simpleurl,
+        remote_refresh_delay=0,
+        volatile=True,
+    )
+    api = mapp.create_and_use(indexconfig=indexconfig)
+    name = "pkg1"
+    version = "2.5"
+    pkgver = f"{name}-{version}.tgz"
+    simpypi.add_release(name, pkgver=pkgver)
+    simpypi.add_file(f"/{name}/{version}", b"123")
+    api = mapp.create_and_use(indexconfig=dict(bases=[api.stagename]))
+    content = b"456"
+    mapp.upload_file_pypi("pkg1-2.6.tgz", content, "pkg1", "2.6")
+    headers = {
+        "Accept": "application/vnd.pypi.simple.v1+json, "
+        "application/vnd.pypi.simple.v1+html;q=0.2, "
+        "text/html;q=0.01"
+    }
+    r = testapp.xget(
+        200, f"/{api.stagename}/+simple/pkg1", headers=headers, follow=False
+    )
+    assert r.headers["content-type"] == "application/vnd.pypi.simple.v1+json"
+    assert r.json["meta"]["api-version"] == "1.0"
+    (item1, item2) = sorted(r.json["files"], key=itemgetter("filename"))
+    assert item1["filename"] == "pkg1-2.5.tgz"
+    assert "size" not in item1
+    assert "upload-time" not in item1
+    assert item2["filename"] == "pkg1-2.6.tgz"
+    assert "size" not in item2
+    assert "upload-time" not in item2
+    assert "versions" not in r.json
 
 
 def test_projects_redirect(pypistage, testapp):

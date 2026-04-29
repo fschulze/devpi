@@ -20,6 +20,7 @@ from .model.exceptions import InvalidUserconfig
 from .model.exceptions import ReadonlyIndex
 from .model.remote import iter_fetch_remote_file
 from .model.remote import iter_stream_remote_file
+from .model.simpleapi import SIMPLE_API_V1_1_VERSION
 from .model.simpleapi import SIMPLE_API_V1_JSON
 from .normalized import normalize_name
 from .readonly import get_mutable_deepcopy
@@ -855,12 +856,21 @@ class PyPIView:
     def _simple_list_project_json_v1(
         self, _index, project, result, _embed_form, _traversal_infos
     ):
-        yield (f'{{"meta":{{"api-version":"1.0"}},"name":"{project}","files":[').encode("utf-8")
+        yield (
+            "{"
+            '"meta":{'
+            f'"api-version":"{result.version}"'
+            "},"
+            f'"name":"{project}",'
+            '"files":['
+        ).encode()
 
         core_metadata = self.xom.config.args.enable_core_metadata
         make_url = self._makeurl_factory()
 
         first = True
+        is_v1_1 = result.version >= SIMPLE_API_V1_1_VERSION
+        versions = set()
         for link in result:
             url = make_url(link.href)
             data = {
@@ -873,14 +883,22 @@ class PyPIView:
                 data["requires-python"] = link.require_python
             if link.yanked is not None and link.yanked is not False:
                 data["yanked"] = link.yanked
+            if is_v1_1:
+                data["size"] = link.size
+                versions.add(link.version)
             info = json.dumps(data, indent=None, sort_keys=False)
             if first:
-                yield f'{info}'.encode("utf-8")
+                yield f"{info}".encode()
                 first = False
             else:
-                yield f',{info}'.encode("utf-8")
+                yield f",{info}".encode()
 
-        yield "]}".encode("utf-8")
+        if is_v1_1:
+            yield b'],"versions":'
+            yield json.dumps(list(versions), indent=None, sort_keys=False).encode()
+            yield b"}"
+        else:
+            yield b"]}"
 
     def _index_refresh_form(self, stage, project):
         url = self.request.route_url(
