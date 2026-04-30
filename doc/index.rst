@@ -1,20 +1,12 @@
 devpi: PyPI server and packaging/testing/release tool
 =================================================================
 
-
-.. note::
-
-  See :ref:`how to update your pre devpi-server 4.5.0 PyPI mirror indexes for pypi.org <label_server_4_5>`.
-
 .. include:: links.rst
 
 .. sidebar:: Links and contact
 
    `issue tracker <https://github.com/devpi/devpi/issues>`_,
    `mailing list <https://mail.python.org/mm3/mailman3/lists/devpi-dev.python.org/>`_
-
-   :ref:`tutorials and documentation <label_quickstart_section>`
-   
    `repo of server/web/client <https://github.com/devpi/devpi/>`_
 
 Introduction
@@ -23,7 +15,12 @@ Lorem Ipsum
 
 Getting Started
 -----------------------------------------
-Lorem Ipsum
+Getting started with devpi, setting up a client and server, and pushing packages.
+
+.. toctree::
+  :maxdepth: 3
+
+  quickstart/index
 
 Common Terms
 -----------------------------------------
@@ -32,6 +29,12 @@ Lorem Ipsum
 Documentation Overview
 -----------------------------------------
 Lorem Ipsum
+
+.. toctree::
+  :maxdepth: 3
+
+  server/index
+  client/index
 
 Customizing
 -----------------------------------------
