@@ -29,6 +29,7 @@ wheels/
 */pip-wheel-metadata/
 /pip-selfcheck.json
 /pip.conf
+/uv.lock
 
 # Installer logs
 pip-log.txt
