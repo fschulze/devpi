@@ -135,21 +135,21 @@ install`` of a pypi package using the index from our already running server::
     --> .$ /tmp/docenv/bin/pip install -U pytest==8.3.5 attrs==23.1.0 exceptiongroup==1.3.1 iniconfig==2.0.0 pluggy==1.6.0 py==1.11.0 toml==0.10.2 typing_extensions==4.15.0  [PIP_INDEX_URL=URL('http://****:****@localhost:3141/testuser/dev/+simple/'),PIP_PRE='1',PIP_USE_WHEEL='1']
     Looking in indexes: http://testuser:****@localhost:3141/testuser/dev/+simple/
     Collecting pytest==8.3.5
-      Downloading http://localhost:3141/root/pypi/%2Bf/c69/214aa47deac29/pytest-8.3.5-py3-none-any.whl (343 kB)
+      Downloading pytest-8.3.5-py3-none-any.whl (343 kB)
     Collecting attrs==23.1.0
-      Downloading http://localhost:3141/root/pypi/%2Bf/1f2/8b4522cdc2fb4/attrs-23.1.0-py3-none-any.whl (61 kB)
+      Downloading attrs-23.1.0-py3-none-any.whl (61 kB)
     Collecting exceptiongroup==1.3.1
-      Downloading http://localhost:3141/root/pypi/%2Bf/a7a/39a3bd276781e/exceptiongroup-1.3.1-py3-none-any.whl (16 kB)
+      Downloading exceptiongroup-1.3.1-py3-none-any.whl (16 kB)
     Collecting iniconfig==2.0.0
-      Downloading http://localhost:3141/root/pypi/%2Bf/b6a/85871a79d2e3b/iniconfig-2.0.0-py3-none-any.whl (5.9 kB)
+      Downloading iniconfig-2.0.0-py3-none-any.whl (5.9 kB)
     Collecting pluggy==1.6.0
-      Downloading http://localhost:3141/root/pypi/%2Bf/e92/0276dd6813095/pluggy-1.6.0-py3-none-any.whl (20 kB)
+      Downloading pluggy-1.6.0-py3-none-any.whl (20 kB)
     Collecting py==1.11.0
-      Downloading http://localhost:3141/root/pypi/%2Bf/607/c53218732647d/py-1.11.0-py2.py3-none-any.whl (98 kB)
+      Downloading py-1.11.0-py2.py3-none-any.whl (98 kB)
     Collecting toml==0.10.2
-      Downloading http://localhost:3141/root/pypi/%2Bf/806/143ae5bfb6a3c/toml-0.10.2-py2.py3-none-any.whl (16 kB)
+      Downloading toml-0.10.2-py2.py3-none-any.whl (16 kB)
     Collecting typing_extensions==4.15.0
-      Downloading http://localhost:3141/root/pypi/%2Bf/f0f/a19c6845758ab/typing_extensions-4.15.0-py3-none-any.whl (44 kB)
+      Downloading typing_extensions-4.15.0-py3-none-any.whl (44 kB)
     Requirement already satisfied: packaging in /tmp/docenv/lib/python3.9/site-packages (from pytest==8.3.5) (26.0)
     Requirement already satisfied: tomli>=1 in /tmp/docenv/lib/python3.9/site-packages (from pytest==8.3.5) (2.4.0)
     Installing collected packages: typing_extensions, toml, py, pluggy, iniconfig, attrs, exceptiongroup, pytest
@@ -222,7 +222,7 @@ We can now install the freshly uploaded package::
     --> .$ /tmp/docenv/bin/pip install -U example  [PIP_INDEX_URL=URL('http://****:****@localhost:3141/testuser/dev/+simple/'),PIP_PRE='1',PIP_USE_WHEEL='1']
     Looking in indexes: http://testuser:****@localhost:3141/testuser/dev/+simple/
     Collecting example
-      Downloading http://localhost:3141/testuser/dev/%2Bf/0b1/6414c21b576b1/example-1.0-py3-none-any.whl (1.4 kB)
+      Downloading example-1.0-py3-none-any.whl (1.4 kB)
     Installing collected packages: example
     Successfully installed example-1.0
 
