@@ -1,1 +1,0 @@
-Support upcoming devpi-server 7.0.0 release.

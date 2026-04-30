@@ -1,1 +1,0 @@
-Allow ``patchjson`` to read from stdin with ``-`` as JSON filename.

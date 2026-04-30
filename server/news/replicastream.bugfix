@@ -1,1 +1,0 @@
-Update replica status when the replica is waiting for new serials using the streaming changelog endpoint.

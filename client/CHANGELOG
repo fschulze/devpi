@@ -2,6 +2,15 @@
 
 .. towncrier release notes start
 
+7.3.0 (2026-04-30)
+==================
+
+Features
+--------
+
+- Allow ``patchjson`` to read from stdin with ``-`` as JSON filename.
+
+
 7.2.1 (2026-03-17)
 ==================
 

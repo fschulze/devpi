@@ -1,1 +1,0 @@
-With devpi-server 7.x information and warnings about inheritance from bases of an index are reported. This includes inheritance cycles, missing bases and how rules for merging project releases from bases are applied.

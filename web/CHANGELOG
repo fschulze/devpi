@@ -2,6 +2,26 @@
 
 .. towncrier release notes start
 
+5.1.0 (2026-04-30)
+==================
+
+Features
+--------
+
+- With devpi-server 7.x information and warnings about inheritance from bases of an index are reported. This includes inheritance cycles, missing bases and how rules for merging project releases from bases are applied.
+
+- Support upcoming devpi-server 7.0.0 release.
+
+Other Changes
+-------------
+
+- index.pt: Moved bases and whitelist info to ``index_bases.pt`` macro.
+
+- project.pt, version.pt: Moved whitelist info to ``merge_info.pt`` macro in preparation for changes in devpi-server 7.x.
+
+- project.pt: Moved refresh button to ``project_refresh.pt`` macro.
+
+
 5.0.2 (2026-03-17)
 ==================
 

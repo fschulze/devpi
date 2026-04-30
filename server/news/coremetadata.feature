@@ -1,1 +1,0 @@
-Add experimental bare bones core-metadata ([PEP 658](https://peps.python.org/pep-0658/), [PEP 714](https://peps.python.org/pep-0714/)) support with ``--enable-core-metadata`` command line option and ``mirror_provides_core_metadata`` mirror index option. Refs #1018
