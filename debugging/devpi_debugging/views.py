@@ -153,7 +153,7 @@ def keyfs_changelog_view(request: Request) -> dict:
                     serial=keydata.serial,
                 )
                 for keydata in conn.iter_keys_at_serial(
-                    raw_parent_keys, serial, with_deleted=False
+                    raw_parent_keys, serial, fill_cache=True, with_deleted=False
                 )
             ),
             key=itemgetter("name", "relpath"),
@@ -162,7 +162,10 @@ def keyfs_changelog_view(request: Request) -> dict:
             serial: {
                 keydata.key: keydata
                 for keydata in conn.iter_keys_at_serial(
-                    (kd.key for kd in keysdata), serial, with_deleted=False
+                    (kd.key for kd in keysdata),
+                    serial,
+                    fill_cache=True,
+                    with_deleted=False,
                 )
             }
             for serial, keysdata in groupby(
