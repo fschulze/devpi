@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from .keyfs_types import PatternedKey
     from .keyfs_types import Record
     from .keyfs_types import RelPath
+    from .keyfs_types import SearchKey
     from .keyfs_types import ULID
     from .keyfs_types import ULIDKey
     from collections.abc import Callable
@@ -202,10 +203,11 @@ class IStorageConnection(Interface):
         """Returns deserialized readonly changes for given serial."""
 
     def iter_keys_at_serial(
-        typedkeys: Iterable[LocatedKey | PatternedKey],
+        typedkeys: Iterable[LocatedKey | PatternedKey | SearchKey | ULIDKey],
         at_serial: int,
         *,
         skip_ulid_keys: set[ULIDKey] = emptyset,
+        fill_cache: bool,
         with_deleted: bool,
     ) -> Iterator[KeyData]:
         """Iterate over all relpaths of the given typed keys starting
@@ -215,10 +217,11 @@ class IStorageConnection(Interface):
         """Returns deserialized rel_renames for given serial."""
 
     def iter_ulidkeys_at_serial(
-        keys: Iterable[LocatedKey | PatternedKey],
+        keys: Iterable[LocatedKey | PatternedKey | SearchKey],
         at_serial: int,
         *,
         skip_ulid_keys: set[ULIDKey] = emptyset,
+        fill_cache: bool,
         with_deleted: bool,
     ) -> Iterator[ULIDKey]:
         """Get ULIDKey for given LocatedKeys."""
