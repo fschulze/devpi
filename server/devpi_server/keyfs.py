@@ -23,7 +23,9 @@ from .keyfs_types import KeyFSTypesRO
 from .keyfs_types import KeyType
 from .keyfs_types import KeyTypeRO
 from .keyfs_types import LocatedKey
+from .keyfs_types import PatternedKey
 from .keyfs_types import Record
+from .keyfs_types import SearchKey
 from .keyfs_types import ULID
 from .keyfs_types import ULIDKey
 from .keyfs_types import is_dict_key
@@ -56,7 +58,6 @@ import time
 
 if TYPE_CHECKING:
     from .interfaces import IIOFile
-    from .keyfs_types import PatternedKey
     from .keyfs_types import RelPath
     from .keyfs_types import StorageInfo
     from .log import TagLogger
@@ -207,9 +208,11 @@ class TxNotificationThread(Generic[Schema]):
         if cache_key in self._get_ixconfig_cache:
             return self._get_ixconfig_cache[cache_key]
         with keyfs.read_transaction():
-            key = keyfs.schema.USER(user=user).with_resolved_parent()
+            key = keyfs.schema.USER.locate(user=user).with_resolved_parent()
             value = key.get_mutable()
-            key = keyfs.schema.INDEX(user=user, index=index).with_resolved_parent()
+            key = keyfs.schema.INDEX.locate(
+                user=user, index=index
+            ).with_resolved_parent()
             ixconfig = key.get_mutable()
         if not value:
             # the user doesn't exist anymore
@@ -430,7 +433,10 @@ class KeyFS(Generic[Schema]):
                     key = key.with_resolved_parent(resolve=resolve)
                     result = next(
                         conn.iter_ulidkeys_at_serial(
-                            (key,), at_serial=serial, with_deleted=True
+                            (key,),
+                            at_serial=serial,
+                            fill_cache=False,
+                            with_deleted=True,
                         ),
                         absent,
                     )
@@ -450,13 +456,17 @@ class KeyFS(Generic[Schema]):
                     ) is not None:
                         key = key.with_resolved_parent(resolve=resolve)
                         (key_data,) = conn.iter_keys_at_serial(
-                            (key,), at_serial=serial, with_deleted=True
+                            (key,),
+                            at_serial=serial,
+                            fill_cache=False,
+                            with_deleted=True,
                         )
                         if isinstance(key_data.value, Deleted):
                             # the file was deleted, get the data from before
                             (key_data,) = conn.iter_keys_at_serial(
                                 (key,),
                                 at_serial=key_data.back_serial,
+                                fill_cache=False,
                                 with_deleted=True,
                             )
                         if isinstance(val := key_data.value, (dict, DictViewReadonly)):
@@ -570,7 +580,7 @@ class KeyFS(Generic[Schema]):
         key = self.get_key(keyname)
         assert key is not None
         if not isinstance(key, LocatedKey):
-            key = key(**key.extract_params(relpath))
+            key = key.locate(**key.extract_params(relpath))
         return key
 
     def match_key(self, relpath, *key_candidates):
@@ -821,9 +831,126 @@ class FileStoreTransaction:
         self._close()
 
 
+class KeysChecker:
+    def __init__(
+        self, tx: Transaction, keys: Sequence[LocatedKey | PatternedKey | SearchKey]
+    ) -> None:
+        all_key_names: set[str] = set()
+        key_names: set[str] = {k.key_name for k in keys if isinstance(k, PatternedKey)}
+        key_name_locations: set[tuple[str, str]] = set()
+        key_name_relpaths: set[tuple[str, str]] = set()
+        for key in keys:
+            assert isinstance(key, (LocatedKey, PatternedKey, SearchKey))
+            all_key_names.add(key.key_name)
+            if isinstance(key, SearchKey) and key.key_name not in key_names:
+                key_name_locations.add((key.key_name, key.location))
+            if isinstance(key, LocatedKey) and key.key_name not in key_names:
+                key_name_relpaths.add((key.key_name, key.relpath))
+        self.tx = tx
+        self.all_key_names = all_key_names
+        self.key_name_locations = key_name_locations
+        self.key_name_relpaths = key_name_relpaths
+        self.key_names = key_names
+        self.processed_ulid_keys: set[ULIDKey] = set()
+        self.ulidkeys_to_skip: set[ULIDKey] = set()
+
+    @overload
+    def iter_ulidkey_values(
+        self, *, with_deleted: Literal[False]
+    ) -> Iterator[tuple[ULIDKey, KeyFSTypesRO]]: ...
+
+    @overload
+    def iter_ulidkey_values(
+        self, *, with_deleted: bool
+    ) -> Iterator[tuple[ULIDKey, KeyFSTypesRO] | tuple[ULIDKey, Deleted]]: ...
+
+    def iter_ulidkey_values(
+        self, *, with_deleted: bool
+    ) -> Iterator[tuple[ULIDKey, KeyFSTypesRO] | tuple[ULIDKey, Deleted]]:
+        _dirty = self.tx._dirty
+        _original = self.tx._original
+        all_key_names = self.all_key_names
+        key_name_locations = self.key_name_locations
+        key_name_relpaths = self.key_name_relpaths
+        key_names = self.key_names
+        processed_ulid_keys = self.processed_ulid_keys
+        ulidkeys_to_skip = self.ulidkeys_to_skip
+        for ulid_key in _dirty:
+            if (
+                ulid_key in processed_ulid_keys
+                or ulid_key.key_name not in all_key_names
+            ):
+                continue
+            processed_ulid_keys.add(ulid_key)
+            value = _dirty[ulid_key]
+            if isinstance(value, Deleted):
+                continue
+            if (
+                ulid_key.key_name in key_names
+                or (ulid_key.key_name, ulid_key.location) in key_name_locations
+                or (ulid_key.key_name, ulid_key.relpath) in key_name_relpaths
+            ):
+                if not isinstance(value, Deleted):
+                    yield (ulid_key, ensure_deeply_readonly(value))
+                if with_deleted:
+                    yield (ulid_key, deleted)
+                ulidkeys_to_skip.add(ulid_key)
+        for ulid_key in _original:
+            if (
+                ulid_key in processed_ulid_keys
+                or ulid_key.key_name not in all_key_names
+            ):
+                continue
+            processed_ulid_keys.add(ulid_key)
+            (_back_serial, old_ulid_key, old_value) = _original[ulid_key]
+            if isinstance(old_ulid_key, Absent) or isinstance(old_value, Absent):
+                continue
+            if (
+                old_ulid_key.key_name in key_names
+                or (old_ulid_key.key_name, old_ulid_key.location) in key_name_locations
+                or (old_ulid_key.key_name, old_ulid_key.relpath) in key_name_relpaths
+            ):
+                if not isinstance(old_value, Deleted):
+                    yield (old_ulid_key, old_value)
+                if with_deleted:
+                    yield (old_ulid_key, deleted)
+                ulidkeys_to_skip.add(old_ulid_key)
+        # we don't check _ulid_keys here, because we need the values
+
+    def iter_ulidkeys(self, *, with_deleted: bool) -> Iterator[ULIDKey]:
+        for k, _v in self.iter_ulidkey_values(with_deleted=with_deleted):
+            yield k
+        all_key_names = self.all_key_names
+        key_name_locations = self.key_name_locations
+        key_name_relpaths = self.key_name_relpaths
+        key_names = self.key_names
+        processed_ulid_keys = self.processed_ulid_keys
+        ulidkeys_to_skip = self.ulidkeys_to_skip
+        for ulid_key in self.tx._ulid_keys.values():
+            if (
+                isinstance(ulid_key, (Absent, Deleted))
+                or ulid_key in processed_ulid_keys
+                or ulid_key.key_name not in all_key_names
+            ):
+                continue
+            processed_ulid_keys.add(ulid_key)
+            # if we get here, then the ulid_key was iterated over before,
+            # but the original value wasn't fetch
+            # we can still be sure it exists, because we checked _dirty and
+            # _original first and the key will only be here when iterated over
+            if (
+                ulid_key.key_name in key_names
+                or (ulid_key.key_name, ulid_key.location) in key_name_locations
+                or (ulid_key.key_name, ulid_key.relpath) in key_name_relpaths
+            ):
+                yield ulid_key
+                ulidkeys_to_skip.add(ulid_key)
+
+
 class Transaction:
     _dirty: dict[ULIDKey, KeyFSTypes | Deleted]
     _finished_listeners: list[Callable]
+    _got_all: set[LocatedKey | PatternedKey | SearchKey]
     _model: TransactionRootModel | Absent
     _original: dict[
         ULIDKey,
@@ -850,6 +977,7 @@ class Transaction:
         if at_serial is None:
             at_serial = self.conn.last_changelog_serial
         self.at_serial = at_serial
+        self._got_all = set()
         self._original = {}
         self._ulid_keys = {}
         self._dirty = {}
@@ -881,7 +1009,9 @@ class Transaction:
         ],
         at_serial: int,
     ) -> Iterator[KeyData[KeyType, KeyTypeRO]]:
-        return self.conn.iter_keys_at_serial(keys, at_serial, with_deleted=True)
+        return self.conn.iter_keys_at_serial(
+            keys, at_serial, fill_cache=False, with_deleted=True
+        )
 
     def iter_serial_and_value_backwards(
         self,
@@ -896,6 +1026,98 @@ class Transaction:
             assert not isinstance(data.value, Deleted)
             yield (data.last_serial, data.value)
             last_serial = data.back_serial
+
+    @overload
+    def iter_ulidkey_values_for(
+        self,
+        keys: Sequence[LocatedKey | PatternedKey | SearchKey],
+        *,
+        fill_cache: bool = True,
+        with_deleted: Literal[False],
+    ) -> Iterator[tuple[ULIDKey, KeyFSTypesRO]]: ...
+
+    @overload
+    def iter_ulidkey_values_for(
+        self,
+        keys: Sequence[LocatedKey | PatternedKey | SearchKey],
+        *,
+        fill_cache: bool = True,
+        with_deleted: bool = False,
+    ) -> Iterator[tuple[ULIDKey, KeyFSTypesRO]]: ...
+
+    def iter_ulidkey_values_for(
+        self,
+        keys: Sequence[LocatedKey | PatternedKey | SearchKey],
+        *,
+        fill_cache: bool = True,
+        with_deleted: bool = False,
+    ) -> Iterator[tuple[ULIDKey, KeyFSTypesRO] | tuple[ULIDKey, Deleted]]:
+        keys_checker = KeysChecker(self, keys)
+        yield from keys_checker.iter_ulidkey_values(with_deleted=with_deleted)
+        if all(k in self._got_all for k in keys):
+            return
+        processed_ulid_keys = keys_checker.processed_ulid_keys
+        for keydata in self.conn.iter_keys_at_serial(
+            keys,
+            self.at_serial,
+            skip_ulid_keys=keys_checker.ulidkeys_to_skip,
+            fill_cache=fill_cache,
+            with_deleted=with_deleted,
+        ):
+            key = keydata.key
+            if key in processed_ulid_keys:
+                continue
+            if fill_cache and key not in self._original:
+                value = keydata.value
+                if isinstance(value, Deleted):
+                    self._original[key] = (
+                        keydata.serial,
+                        key,
+                        deleted,
+                    )
+                else:
+                    self._original[key] = (
+                        keydata.serial,
+                        key,
+                        cast("KeyFSTypesRO", value),
+                    )
+                _key = getattr(self.keyfs.schema, key.key_name)
+                if not isinstance(_key, LocatedKey):
+                    _key = _key(**key.params)
+                self._ulid_keys[_key] = key
+            yield (key, keydata.value)
+        if fill_cache:
+            for _key in keys:
+                self._got_all.add(_key)
+
+    def iter_ulidkeys_for(
+        self,
+        keys: Sequence[LocatedKey | PatternedKey | SearchKey],
+        *,
+        fill_cache: bool = True,
+        with_deleted: bool = False,
+    ) -> Iterator[ULIDKey]:
+        keys_checker = KeysChecker(self, keys)
+        yield from keys_checker.iter_ulidkeys(with_deleted=with_deleted)
+        if all(k in self._got_all for k in keys):
+            return
+        processed_ulid_keys = keys_checker.processed_ulid_keys
+        for key in self.conn.iter_ulidkeys_at_serial(
+            keys,
+            self.at_serial,
+            skip_ulid_keys=keys_checker.ulidkeys_to_skip,
+            fill_cache=fill_cache,
+            with_deleted=with_deleted,
+        ):
+            if key in processed_ulid_keys:
+                continue
+            _key = getattr(self.keyfs.schema, key.key_name)
+            if not isinstance(_key, LocatedKey):
+                _key = _key(**key.params)
+            self._ulid_keys[_key] = key
+            yield key
+        for _key in keys:
+            self._got_all.add(_key)
 
     def get_last_serial_and_value_at(
         self,
@@ -1145,73 +1367,151 @@ class Transaction:
             )
         return keydata.key
 
+    def _new_absent_ulidkey(self, key):
+        new_ulid_key = key.new_ulidkey()
+        self._ulid_keys[key] = new_ulid_key
+        self._original[new_ulid_key] = (-1, absent, absent)
+        return new_ulid_key
+
     def resolve(
-        self, key: LocatedKey[KeyType, KeyTypeRO], *, fetch: bool
+        self,
+        key: LocatedKey[KeyType, KeyTypeRO],
+        *,
+        fetch: bool,
+        new_for_missing: bool = False,
     ) -> ULIDKey[KeyType, KeyTypeRO]:
-        try:
-            ulid_key = self._ulid_keys[key]
-        except KeyError:
-            pass
-        else:
-            if isinstance(ulid_key, (Absent, Deleted)):
-                raise KeyError(key)
-            return ulid_key
-        fetched_ulid_key: ULIDKey[KeyType, KeyTypeRO] | Absent
-        key = key.with_resolved_parent()
-        if fetch:
-            fetched_keydata = next(
-                self.conn.iter_keys_at_serial(
-                    (key,), at_serial=self.at_serial, with_deleted=True
-                ),
-                absent,
-            )
-            if isinstance(fetched_keydata, Absent):
-                fetched_ulid_key = absent
-            else:
-                fetched_ulid_key = fetched_keydata.key
-                parent_key = fetched_ulid_key.parent_key
-                if parent_key is not None and not parent_key.exists():
-                    # parent was deleted
-                    self._ulid_keys[key] = deleted
-                    raise KeyError(key)
-                if fetched_ulid_key not in self._original:
-                    fetched_value = fetched_keydata.value
-                    if isinstance(fetched_value, Deleted):
-                        self._original[fetched_ulid_key] = (
-                            fetched_keydata.last_serial,
-                            fetched_ulid_key,
-                            deleted,
-                        )
-                    else:
-                        self._original[fetched_ulid_key] = (
-                            fetched_keydata.last_serial,
-                            fetched_ulid_key,
-                            cast("KeyFSTypesRO", fetched_keydata.value),
-                        )
-        else:
-            fetched_ulid_key = next(
-                self.conn.iter_ulidkeys_at_serial(
-                    (key,), at_serial=self.at_serial, with_deleted=True
-                ),
-                absent,
-            )
-        self._ulid_keys[key] = fetched_ulid_key
-        if isinstance(fetched_ulid_key, Absent):
+        result = self.resolve_keys((key,), fetch=fetch, new_for_missing=new_for_missing)
+        possible_ulid_key = next(result, None)
+        # exhaust the iterator to let it update its caches
+        if possible_ulid_key is not None and next(result, None) is not None:
+            raise RuntimeError("Got additional keys")
+        (_key, ulid_key) = (
+            (key, absent) if possible_ulid_key is None else possible_ulid_key
+        )
+        if isinstance(ulid_key, (Absent, Deleted)):
             raise KeyError(key)
-        return fetched_ulid_key
+        assert _key == key
+        return ulid_key
 
     def resolve_at(
         self, key: LocatedKey[KeyType, KeyTypeRO], at_serial: int
     ) -> ULIDKey[KeyType, KeyTypeRO]:
-        fetched_ulid_key: ULIDKey | Absent = next(
-            self.conn.iter_ulidkeys_at_serial(
-                (key,), at_serial=at_serial, with_deleted=True
-            ),
-            absent,
+        result = self.conn.iter_ulidkeys_at_serial(
+            (key,), at_serial=at_serial, fill_cache=False, with_deleted=True
         )
+        fetched_ulid_key: ULIDKey | Absent = next(result, absent)
         if isinstance(fetched_ulid_key, Absent):
             raise KeyError(key)
+        # exhaust the iterator to let it update its caches
+        if next(result, absent) is not absent:
+            raise RuntimeError("Got additional keys")
         return fetched_ulid_key
+
+    @overload
+    def resolve_keys(
+        self,
+        keys: Iterable[LocatedKey],
+        *,
+        fetch: bool,
+        fill_cache: bool = False,
+        new_for_missing: Literal[True],
+    ) -> Iterator[tuple[LocatedKey, ULIDKey]]: ...
+
+    @overload
+    def resolve_keys(
+        self,
+        keys: Iterable[LocatedKey],
+        *,
+        fetch: bool,
+        fill_cache: bool = False,
+        new_for_missing: bool,
+    ) -> Iterator[
+        tuple[LocatedKey, ULIDKey]
+        | tuple[LocatedKey, Absent]
+        | tuple[LocatedKey, Deleted]
+    ]: ...
+
+    def resolve_keys(  # noqa: PLR0912
+        self,
+        keys: Iterable[LocatedKey],
+        *,
+        fetch: bool,
+        fill_cache: bool = False,
+        new_for_missing: bool,
+    ) -> Iterator[
+        tuple[LocatedKey, ULIDKey]
+        | tuple[LocatedKey, Absent]
+        | tuple[LocatedKey, Deleted]
+    ]:
+        missing = set()
+        for key in keys:
+            assert isinstance(key, LocatedKey)
+            _ulid_key = self._ulid_keys.get(key, None)
+            if _ulid_key is None:
+                missing.add(key.with_resolved_parent())
+                continue
+            if isinstance(_ulid_key, (Absent, Deleted)):
+                if new_for_missing:
+                    yield (key, self._new_absent_ulidkey(key))
+            else:
+                yield (key, _ulid_key)
+        if not missing:
+            return
+        processed = set()
+        if fetch:
+            for keydata in self.conn.iter_keys_at_serial(
+                missing,
+                at_serial=self.at_serial,
+                fill_cache=fill_cache,
+                with_deleted=True,
+            ):
+                ulid_key = keydata.key
+                _key = getattr(self.keyfs.schema, ulid_key.key_name)
+                if not isinstance(_key, LocatedKey):
+                    _key = _key(**ulid_key.params)
+                if (parent_key := ulid_key.parent_key) is not None and not self.exists(
+                    parent_key
+                ):
+                    # parent was deleted
+                    self._ulid_keys[_key] = deleted
+                else:
+                    self._original[ulid_key] = (
+                        keydata.last_serial,
+                        ulid_key,
+                        keydata.value,
+                    )
+                    self._ulid_keys[_key] = ulid_key
+                processed.add(_key)
+                yield (_key, ulid_key)
+        else:
+            for ulid_key in self.conn.iter_ulidkeys_at_serial(
+                missing,
+                at_serial=self.at_serial,
+                fill_cache=fill_cache,
+                with_deleted=True,
+            ):
+                _key = getattr(self.keyfs.schema, ulid_key.key_name)
+                if not isinstance(_key, LocatedKey):
+                    _key = _key(**ulid_key.params)
+                if (
+                    parent_key := ulid_key.parent_key
+                ) is not None and not parent_key.exists():
+                    # parent was deleted
+                    self._ulid_keys[_key] = deleted
+                    processed.add(_key)
+                    yield (_key, absent)
+                else:
+                    processed.add(_key)
+                    yield (_key, ulid_key)
+        if new_for_missing:
+            for key in missing.difference(processed):
+                new_ulid_key = self._new_absent_ulidkey(key)
+                self._ulid_keys[key] = new_ulid_key
+                yield (key, new_ulid_key)
+        else:
+            for _key in missing.difference(processed):
+                self._ulid_keys[key] = absent
+                yield (_key, absent)
 
     def set(
         self,
@@ -1239,7 +1539,7 @@ class Transaction:
             else:
                 cache_key = old_ulid_key
             self._ulid_keys[key] = cache_key
-        elif old_val in (absent, deleted):
+        elif old_ulid_key is not absent and old_val in (absent, deleted):
             cache_key = key.new_ulidkey()
             for lkey, ulid_key in self._ulid_keys.items():
                 if ulid_key == key:
@@ -1267,6 +1567,7 @@ class Transaction:
             self._run_listeners(self._finished_listeners)
             return result
         # no longer needed
+        self._got_all.clear()
         self._ulid_keys.clear()
         records: list[Record] = []
         seen_relpaths = set()
@@ -1287,6 +1588,8 @@ class Transaction:
             result = self._close()
             self._run_listeners(self._finished_listeners)
             return result
+        # no longer needed
+        self._original.clear()
         with contextlib.ExitStack() as cstack:
             cstack.callback(self._close)
             with self.io_file, self.conn.write_transaction(self.io_file) as writer:
@@ -1320,6 +1623,7 @@ class Transaction:
             return
         try:
             threadlog.debug("closing transaction at %s", self.at_serial)
+            del self._got_all
             del self._model
             del self._original
             del self._ulid_keys

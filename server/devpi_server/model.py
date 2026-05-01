@@ -56,9 +56,11 @@ if TYPE_CHECKING:
     from .keyfs_types import KeyFSTypes
     from .keyfs_types import KeyFSTypesRO
     from .keyfs_types import LocatedKey
+    from .keyfs_types import ULIDKey
     from .main import XOM
     from .markers import Unknown
     from .normalized import NormalizedName
+    from collections.abc import Iterable
     from collections.abc import Sequence
     from devpi_common.metadata import Version
     from typing import Any
@@ -389,11 +391,11 @@ class User:
         self.keyfs = parent.keyfs
         self.xom = parent.xom
         self.name = name
-        self.key = self.keyfs.schema.USER(user=self.name)
-        self.key_indexes = self.keyfs.schema.INDEXLIST(user=self.name)
+        self.key = self.keyfs.schema.USER.locate(user=self.name)
+        self.key_indexes = self.keyfs.schema.INDEXLIST.locate(user=self.name)
 
     def key_index(self, index: str) -> LocatedKey[dict, DictViewReadonly]:
-        return self.keyfs.schema.INDEX(user=self.name, index=index)
+        return self.keyfs.schema.INDEX.locate(user=self.name, index=index)
 
     def get_cleaned_config(self, **kwargs):
         result = {}
@@ -757,8 +759,10 @@ class BaseStage:
         # the following attributes are per-xom singletons
         self.keyfs = xom.keyfs
         self.filestore = xom.filestore
-        self.key_index = self.keyfs.schema.INDEX(user=username, index=index)
-        self.key_projects = self.keyfs.schema.PROJNAMES(user=username, index=index)
+        self.key_index = self.keyfs.schema.INDEX.locate(user=username, index=index)
+        self.key_projects = self.keyfs.schema.PROJNAMES.locate(
+            user=username, index=index
+        )
 
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__} {self.name}>"
@@ -903,7 +907,7 @@ class BaseStage:
         self.model.delete_stage(self.username, self.index)
 
     def key_projsimplelinks(self, project: str) -> LocatedKey[dict, DictViewReadonly]:
-        return self.keyfs.schema.PROJSIMPLELINKS(
+        return self.keyfs.schema.PROJSIMPLELINKS.locate(
             user=self.username, index=self.index, project=normalize_name(project)
         )
 
@@ -942,6 +946,44 @@ class BaseStage:
         if self.customizer.readonly:
             threadlog.warn("index is marked read only")
         return MutableLinkStore(self, name, version)
+
+    def get_keys_for_entrypaths(
+        self, entrypaths: Iterable[str]
+    ) -> list[LocatedKey | None]:
+        return [
+            self.keyfs.match_key(
+                entrypath.rsplit("#", 1)[0],
+                self.keyfs.schema.PYPIFILE_NOMD5,
+                self.keyfs.schema.STAGEFILE,
+            ).with_resolved_parent()
+            for entrypath in entrypaths
+        ]
+
+    def get_entries_for_keys(
+        self, keys: Iterable[LocatedKey | None]
+    ) -> list[FileEntry | None]:
+        key_to_ulidkey: dict[LocatedKey, ULIDKey | Absent | Deleted] = dict(
+            self.keyfs.tx.resolve_keys(
+                (k for k in keys if k is not None),
+                fetch=True,
+                fill_cache=True,
+                new_for_missing=False,
+            )
+        )
+        return [
+            None
+            if key is None
+            or (ulid_key := key_to_ulidkey.get(key)) is None
+            or isinstance(ulid_key, (Absent, Deleted))
+            else FileEntry(ulid_key)
+            for key in keys
+        ]
+
+    def get_entries_for_entrypaths(
+        self, entrypaths: Iterable[str]
+    ) -> list[FileEntry | None]:
+        keys = self.get_keys_for_entrypaths(entrypaths)
+        return self.get_entries_for_keys(keys)
 
     def get_link_from_entrypath(self, entrypath):
         relpath = entrypath.rsplit("#", 1)[0]
@@ -1441,8 +1483,8 @@ class PrivateStage(BaseStage):
 
     def key_projversions(
         self, project: NormalizedName | str
-    ) -> LocatedKey[set, SetViewReadonly[str]]:
-        return self.keyfs.schema.PROJVERSIONS(
+    ) -> LocatedKey[set, SetViewReadonly]:
+        return self.keyfs.schema.PROJVERSIONS.locate(
             user=self.username,
             index=self.index,
             project=normalize_name(project),
@@ -1451,7 +1493,7 @@ class PrivateStage(BaseStage):
     def key_projversion(
         self, project: NormalizedName | str, version: str
     ) -> LocatedKey[dict[str, KeyFSTypes], DictViewReadonly[str, KeyFSTypesRO]]:
-        return self.keyfs.schema.PROJVERSION(
+        return self.keyfs.schema.PROJVERSION.locate(
             user=self.username,
             index=self.index,
             project=normalize_name(project),
@@ -1461,7 +1503,7 @@ class PrivateStage(BaseStage):
     def key_versionfilelist(
         self, project: NormalizedName | str, version: str
     ) -> LocatedKey[set[str], SetViewReadonly[str]]:
-        return self.keyfs.schema.VERSIONFILELIST(
+        return self.keyfs.schema.VERSIONFILELIST.locate(
             user=self.username,
             index=self.index,
             project=normalize_name(project),
@@ -1471,7 +1513,7 @@ class PrivateStage(BaseStage):
     def key_versionfile(
         self, project: NormalizedName | str, version: str, filename: str
     ) -> LocatedKey[dict, DictViewReadonly]:
-        return self.keyfs.schema.VERSIONFILE(
+        return self.keyfs.schema.VERSIONFILE.locate(
             user=self.username,
             index=self.index,
             project=normalize_name(project),
