@@ -538,63 +538,52 @@ class TestExtPYPIDB:
         assert link.yanked == "brownbag"
 
     @pytest.mark.notransaction
-    def test_get_releaselinks_cache_refresh_on_lower_serial(self, pypistage, caplog):
-        pypistage.mock_simple("pytest", text='''
+    def test_get_releaselinks_cache_invalidation_on_url_change(self, pypistage, caplog):
+        pypistage.mock_simple(
+            "pytest",
+            text="""
                 <a href="../../pkg/pytest-1.0.zip#md5={md5}" />
                 <a rel="download" href="https://download.com/index.html" />
-            ''', pypiserial=10)
-
+            """,
+            pypiserial=10,
+        )
+        pypistage.mock_simple(
+            "pytest",
+            text="""
+                <a href="../../pkg/pytest-1.0.zip#md5={md5}" />
+                <a rel="download" href="https://download.com/index.html" />
+            """,
+            pypiserial=1,
+            remoteurl="https://test.pypi.org/simple/",
+        )
         with pypistage.keyfs.read_transaction():
-            assert "remote_ignore_serial_header" not in pypistage.ixconfig
+            assert pypistage.ixconfig["remote_url"] == "https://pypi.org/simple/"
             assert not pypistage.key_remoteprojectinfo("pytest").exists(
                 resolve_parents=True
             )
             assert len(pypistage.get_releaselinks("pytest")) == 1
-            assert (
-                pypistage.key_remoteprojectinfo("pytest")
-                .with_resolved_parent()
-                .get()["serial"]
-                == 10
+            cache_info = (
+                pypistage.key_remoteprojectinfo("pytest").with_resolved_parent().get()
             )
-        pypistage.mock_simple("pytest", text="", pypiserial=9)
-        with pypistage.keyfs.read_transaction():
-            assert "remote_ignore_serial_header" not in pypistage.ixconfig
-            assert (
-                pypistage.key_remoteprojectinfo("pytest")
-                .with_resolved_parent()
-                .get()["serial"]
-                == 10
-            )
-            assert len(pypistage.get_releaselinks("pytest")) == 1
-            assert (
-                pypistage.key_remoteprojectinfo("pytest")
-                .with_resolved_parent()
-                .get()["serial"]
-                == 10
-            )
-        recs = caplog.getrecords(".*serving stale links.*")
-        assert len(recs) >= 1
+            url_key = cache_info["url_key"]
+            assert cache_info["serial"] == 10
+
         with pypistage.keyfs.write_transaction():
-            assert "remote_ignore_serial_header" not in pypistage.ixconfig
-            assert (
-                pypistage.modify(remote_ignore_serial_header=True)[
-                    "remote_ignore_serial_header"
-                ]
-                is True
+            assert pypistage.cache_projectnames.get()
+            assert pypistage.cache_retrieve_times.get_timestamp("pytest") > 0
+            pypistage.modify(remote_url="https://test.pypi.org/simple/")
+            assert not pypistage.cache_projectnames.get()
+            assert pypistage.cache_retrieve_times.get_timestamp("pytest") == -1
+
+        with pypistage.keyfs.read_transaction():
+            assert len(pypistage.get_releaselinks("pytest")) == 1
+            recs = caplog.getrecords(".*serving stale links.*")
+            assert len(recs) == 0
+            cache_info = (
+                pypistage.key_remoteprojectinfo("pytest").with_resolved_parent().get()
             )
-            assert (
-                pypistage.key_remoteprojectinfo("pytest")
-                .with_resolved_parent()
-                .get()["serial"]
-                == 10
-            )
-            assert len(pypistage.get_releaselinks("pytest")) == 0
-            assert (
-                pypistage.key_remoteprojectinfo("pytest")
-                .with_resolved_parent()
-                .get()["serial"]
-                == -1
-            )
+            assert cache_info["url_key"] != url_key
+            assert cache_info["serial"] == 1
 
     def test_get_releaselinks_cache_no_fresh_write(self, pypistage):
         pypistage.mock_simple("pytest", text='''
@@ -643,9 +632,11 @@ class TestExtPYPIDB:
 
     @pytest.mark.asyncio
     async def test_basic_auth_remote(self, pypistage):
+        from devpi_server.model.remote import url_without_auth
+
         pypistage.ixconfig._data["remote_url"] = "https://foo:bar@example.com/simple/"
         pypistage.xom.http.mockresponse(
-            pypistage.remote_url_without_auth,
+            url_without_auth(pypistage.remote_url),
             code=200,
             text="""
             <html><head><title>Simple Index</title>
@@ -788,7 +779,10 @@ class TestExtPYPIDB:
         # make sure an expired ETag exists
         pypistage.cache_retrieve_times.expire("foo", etag='"foo"')
         with pypistage.keyfs.read_transaction():
+            assert pypistage._get_remotedata("foo").get_cache_info()["etag"] == '"foo"'
             pypistage.get_simplelinks_perstage("foo")
+            # the cache info was updated
+            assert pypistage._get_remotedata("foo").get_cache_info()["etag"] == '"bar"'
             # call twice
             pypistage.get_simplelinks_perstage("foo")
         assert len(pypistage.xom.http.call_log) == 1
@@ -800,7 +794,7 @@ class TestExtPYPIDB:
             pypistage.get_simplelinks_perstage("foo")
         assert len(pypistage.xom.http.call_log) == 1
         call = pypistage.xom.http.call_log.pop()
-        assert call["extra_headers"]["If-None-Match"] == '"foo"'
+        assert call["extra_headers"]["If-None-Match"] == '"bar"'
 
     @pytest.mark.notransaction
     def test_stale_nocache(self, pypistage, testapp):
@@ -1472,7 +1466,7 @@ async def test_get_simplelinks_perstage_when_http_error(exc, pypistage, monkeypa
             return True
 
         def get_cache_info(self):
-            return CacheInfo(serial=42, etag='"foo"')
+            return CacheInfo(url_key="example.com", serial=42, etag='"foo"')
 
         def get_links(self) -> SimpleLinks:
             return links

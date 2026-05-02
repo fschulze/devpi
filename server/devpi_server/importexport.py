@@ -485,9 +485,7 @@ class Migrator:
         if "mirror_cache_expiry" in indexconfig:
             indexconfig["remote_refresh_delay"] = indexconfig.pop("mirror_cache_expiry")
         if "mirror_ignore_serial_header" in indexconfig:
-            indexconfig["remote_ignore_serial_header"] = indexconfig.pop(
-                "mirror_ignore_serial_header"
-            )
+            indexconfig.pop("mirror_ignore_serial_header")
         if "mirror_no_project_list" in indexconfig:
             indexconfig["remote_no_project_list"] = indexconfig.pop(
                 "mirror_no_project_list"

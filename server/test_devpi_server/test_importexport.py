@@ -654,7 +654,6 @@ class TestImportExport:
             # the default PyPI settings
             assert stage.ixconfig == dict(
                 remote_refresh_delay=600,
-                remote_ignore_serial_header=True,
                 remote_no_project_list=True,
                 remote_url="https://example.com/simple/",
                 remote_use_external_urls=True,

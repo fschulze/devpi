@@ -46,6 +46,7 @@ from devpi_server.normalized import normalize_name
 from devpi_server.proxy import clean_response_headers
 from devpi_server.readonly import ensure_deeply_readonly
 from functools import partial
+from hashlib import md5
 from pyramid.authentication import b64encode
 from typing import TYPE_CHECKING
 from typing import TypedDict
@@ -91,6 +92,7 @@ class CacheLink(TypedDict):
 
 
 class CacheInfo(TypedDict):
+    url_key: str
     serial: int
     etag: str | None
 
@@ -446,16 +448,22 @@ class RemoteData:
         return True
 
     def get_cache_info(self) -> CacheInfo:
+        index = self.get_index()
         cache_info = (
-            self.get_stage()
-            .key_remoteprojectinfo(self.project)
+            index.key_remoteprojectinfo(self.project)
             .with_resolved_parent()
             .get_mutable()
             if self.key_project.exists(resolve_parents=True)
             else {}
         )
-        cache_info.setdefault("serial", -1)
-        cache_info.setdefault("etag", None)
+        url_key = md5(
+            index.get_remote_project_url(self.project).url.encode(),
+            usedforsecurity=False,
+        ).hexdigest()[:8]
+        if cache_info.get("url_key") != url_key:
+            cache_info["url_key"] = url_key
+            cache_info["serial"] = -1
+            cache_info["etag"] = None
         return cast("CacheInfo", cache_info)
 
     def get_fresh_links(self) -> SimpleLinks | None:
@@ -495,6 +503,11 @@ class RemoteData:
             )
         return links
 
+    def get_index(self) -> RemoteIndex:
+        index = self._stage()
+        assert index is not None
+        return index
+
     def get_links(self) -> SimpleLinks | None:
         # we might implement caching in get_links
         return self.get_fresh_links()
@@ -503,6 +516,12 @@ class RemoteData:
         stage = self._stage()
         assert stage is not None
         return stage
+
+    def save_cache_info(self, cache_info: CacheInfo) -> None:
+        index = self.get_index()
+        index.key_remoteprojectinfo(self.project).with_resolved_parent().set(
+            cast("dict", cache_info)
+        )
 
     def save_links(  # noqa: PLR0912
         self,
@@ -552,9 +571,7 @@ class RemoteData:
         del projectdata
         if cache_info is None:
             cache_info = self.get_cache_info()
-        stage.key_remoteprojectinfo(project).with_resolved_parent().set(
-            cast("dict", cache_info)
-        )
+        self.save_cache_info(cache_info)
         key_remotefile = stage.key_remotefile(project).with_resolved_parent()
         key_simpledata = stage.key_simpledata(project).with_resolved_parent()
         name_key_remotefile_map = {}
@@ -692,6 +709,10 @@ class RemoteData:
             simpledata.update(data)
 
 
+def url_without_auth(url: URL) -> URL:
+    return url.replace(username=None, password=None)
+
+
 class RemoteIndex(BaseIndex):
     _remotedata: dict[NormalizedName, RemoteData]
     _offline_logging: set[str]
@@ -805,21 +826,16 @@ class RemoteIndex(BaseIndex):
             "remote_refresh_delay", self.xom.config.remote_refresh_delay
         )
 
-    @property
-    def ignore_serial_header(self):
-        return self.ixconfig.get("remote_ignore_serial_header", False)
+    def get_remote_project_url(self, project: NormalizedName) -> URL:
+        return self.remote_url.joinpath(project).asdir()
 
     @property
-    def remote_url(self):
+    def remote_url(self) -> URL:
         if self.xom.is_replica():
             url = self.xom.config.primary_url.joinpath(self.name, "+simple")
         else:
             url = URL(self.ixconfig["remote_url"])
         return url.asdir()
-
-    @property
-    def remote_url_without_auth(self):
-        return self.remote_url.replace(username=None, password=None)
 
     @property
     def remote_url_auth(self):
@@ -853,7 +869,6 @@ class RemoteIndex(BaseIndex):
         return [
             ConfigField(name="custom_data"),
             ConfigField(name="description", normalize=str),
-            ConfigField(name="remote_ignore_serial_header", normalize=ensure_boolean),
             ConfigField(name="remote_no_project_list", normalize=ensure_boolean),
             ConfigField(
                 name="remote_refresh_delay",
@@ -1014,7 +1029,7 @@ class RemoteIndex(BaseIndex):
             "fetching remote projects from %r with etag %r", self.remote_url, etag
         )
         (response, text) = await self.http.async_get(
-            self.remote_url_without_auth,
+            url_without_auth(self.remote_url),
             allow_redirects=True,
             extra_headers=headers,
         )
@@ -1160,19 +1175,18 @@ class RemoteIndex(BaseIndex):
     async def _async_fetch_releaselinks(
         self,
         newlinks_future: NewLinksFuture,
-        project: NormalizedName | str,
+        project: NormalizedName,
         cache_info: CacheInfo,
     ) -> None:
         # get the simple page for the project
-        url = self.remote_url.joinpath(project).asdir()
-        get_url = self.remote_url_without_auth.joinpath(project).asdir()
+        url = self.get_remote_project_url(project)
         threadlog.debug("reading index %r", url)
         headers = {"Accept": SIMPLE_API_ACCEPT}
         etag = self.cache_retrieve_times.get_etag(project) or cache_info["etag"]
         if etag is not None:
             headers["If-None-Match"] = etag
         (response, text) = await self.http.async_get(
-            get_url, allow_redirects=True, extra_headers=headers
+            url_without_auth(url), allow_redirects=True, extra_headers=headers
         )
         if response.status_code == 304:
             raise self.UpstreamNotModified(
@@ -1204,14 +1218,11 @@ class RemoteIndex(BaseIndex):
             serial = -1
 
         if serial < (cache_serial := cache_info["serial"]):
-            if not self.ignore_serial_header:
-                msg = (
-                    f"serial mismatch on GET {url!r}, "
-                    f"cache_serial {cache_serial} is newer than returned serial {serial}"
-                )
-                raise self.UpstreamError(msg)
-            # reset serial, so when switching back we get correct data
-            serial = -1
+            msg = (
+                f"serial mismatch on GET {url!r}, "
+                f"cache_serial {cache_serial} is newer than returned serial {serial}"
+            )
+            raise self.UpstreamError(msg)
 
         threadlog.debug("%s: got response with serial %s", project, serial)
 
@@ -1228,7 +1239,11 @@ class RemoteIndex(BaseIndex):
             releaselinks = parse_index(response_url, text).releaselinks
         newlinks_future.set_result(
             NewLinks(
-                cache_info=CacheInfo(serial=serial, etag=response.headers.get("ETag")),
+                cache_info=CacheInfo(
+                    url_key=cache_info["url_key"],
+                    serial=serial,
+                    etag=response.headers.get("ETag"),
+                ),
                 releaselinks=releaselinks,
                 devpi_serial=response.headers.get("X-DEVPI-SERIAL"),
             )
@@ -1239,6 +1254,26 @@ class RemoteIndex(BaseIndex):
         if project not in self._remotedata:
             self._remotedata[project] = RemoteData(self, project)
         return self._remotedata[project]
+
+    def modify(self, **kw):
+        remote_url = (
+            url_without_auth(URL(self.ixconfig["remote_url"]))
+            if "remote_url" in self.ixconfig
+            else None
+        )
+        result = super().modify(**kw)
+        if url_without_auth(self.remote_url) != remote_url:
+            self.cache_projectnames.clear()
+            self.cache_retrieve_times.expire_all()
+        return result
+
+    def _update_cache_info(
+        self, project: NormalizedName, cache_info: CacheInfo
+    ) -> None:
+        if self.xom.is_replica():
+            return
+        with self.keyfs.write_transaction(allow_restart=True):
+            self._get_remotedata(project).save_cache_info(cache_info)
 
     def _update_simplelinks(
         self,
@@ -1367,12 +1402,11 @@ class RemoteIndex(BaseIndex):
                 msg = f"project {project} not found"
                 raise self.UpstreamNotFoundError(msg)
 
+        cache_info = remotedata.get_cache_info()
         newlinks_future = cast("NewLinksFuture", self.xom.create_future())
         try:
             self.xom.run_coroutine_threadsafe(
-                self._async_fetch_releaselinks(
-                    newlinks_future, project, remotedata.get_cache_info()
-                ),
+                self._async_fetch_releaselinks(newlinks_future, project, cache_info),
                 timeout=self.timeout,
             )
         except TimeoutError as e:
@@ -1423,9 +1457,12 @@ class RemoteIndex(BaseIndex):
         info = newlinks_future.result()
 
         newlinks = join_links_data(info.releaselinks, self.key_index)
+        # if links is not None and set(links) == set(newlinks) and cache_info == info.cache_info:
         if links is not None and set(links) == set(newlinks):
             # no changes
             self.cache_retrieve_times.refresh(project, info.cache_info["etag"])
+            if cache_info != info.cache_info:
+                self._update_cache_info(project, info.cache_info)
             return links
 
         return self._update_simplelinks(project, info, links, newlinks)
@@ -1562,6 +1599,12 @@ class ProjectNamesCache:
         self._timestamp = -1
         self._data = set()
         self._etag = None
+
+    def clear(self) -> None:
+        with self._lock:
+            self._data.clear()
+            self._timestamp = 0
+            self._etag = None
 
     def exists(self) -> bool:
         with self._lock:
@@ -1706,6 +1749,9 @@ class ProjectUpdateCache:
             self._project2time.pop(_project, None)
         else:
             self._project2time[_project] = (0, etag)
+
+    def expire_all(self) -> None:
+        self._project2time.clear()
 
     def acquire(
         self, project: NormalizedName, timeout: float = -1
