@@ -82,6 +82,14 @@ class HTTPClient:
             os.environ.get("REQUESTS_CA_BUNDLE")
             or os.environ.get("CURL_CA_BUNDLE")
         )
+        if cafile is None:
+            try:
+                import truststore  # type: ignore[import-not-found]
+            except ImportError:
+                pass
+            else:
+                return truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+
         if cafile and not os.path.exists(cafile):
             threadlog.warning(
                 "Could not find a suitable TLS CA certificate bundle, invalid path: %s",
