@@ -1,0 +1,1 @@
+Fix #1091: Support ``truststore`` as SSL/TLS context provider. The package needs to be installed separately, it is not a default dependency.
