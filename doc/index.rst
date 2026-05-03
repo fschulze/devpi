@@ -17,11 +17,6 @@ Getting Started
 -----------------------------------------
 Getting started with devpi, setting up a client and server, and pushing packages.
 
-.. toctree::
-  :maxdepth: 3
-
-  quickstart/index
-
 Common Terms
 -----------------------------------------
 Lorem Ipsum
@@ -30,12 +25,6 @@ Documentation Overview
 -----------------------------------------
 Lorem Ipsum
 
-.. toctree::
-  :maxdepth: 3
-
-  server/index
-  client/index
-
 Customizing
 -----------------------------------------
 Lorem Ipsum
@@ -43,3 +32,9 @@ Lorem Ipsum
 Contributing
 -----------------------------------------
 Lorem Ipsum
+
+foo
+~~~
+
+bar
++++

@@ -37,7 +37,7 @@ source_suffix = '.rst'
 #source_encoding = 'utf-8-sig'
 
 # The master toctree document.
-master_doc = 'index'
+root_doc = 'toc'
 
 # General information about the project.
 project = 'devpi'
@@ -100,7 +100,12 @@ html_theme = 'devpi'
 # further.  For a list of options available for each theme, see the
 # documentation.
 html_theme_options = {
-   "secondary_sidebar_items": ["sourcelink"],
+    "logo": {
+        "link": "index",
+    },
+    "secondary_sidebar_items": ["edit-this-page", "sourcelink"],
+    "navbar_center": ["top-nav"],
+    "show_prev_next": False,
 }
 
 # Add any paths that contain custom themes here, relative to this directory.
@@ -126,6 +131,10 @@ html_logo = "_static/logo.svg"
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
+
+html_css_files = [
+    'css/custom.css',
+]
 
 # If not '', a 'Last updated on:' timestamp is inserted at every page bottom,
 # using the given strftime format.
