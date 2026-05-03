@@ -41,7 +41,7 @@ root_doc = 'toc'
 
 # General information about the project.
 project = 'devpi'
-copyright = '2023, Florian Schulze, pyfidelity UG, Holger Krekel and merlinux GmbH'
+copyright = '2013-2026, Devpi Community'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
