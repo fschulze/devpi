@@ -1,0 +1,9 @@
+.sidebar-primary-item h3 {
+    margin-top: 0;
+}
+.prev-next-area {
+    display: flex;
+    & > a {
+        max-width: inherit;
+    }
+}
