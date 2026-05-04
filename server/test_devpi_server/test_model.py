@@ -15,6 +15,7 @@ from devpi_server.model.config import ensure_list
 from devpi_server.model.exceptions import InvalidIndexconfig
 from devpi_server.model.local import LocalIndex
 from devpi_server.model.local import LocalIndexCustomizer
+from devpi_server.normalized import normalize_name
 from devpi_server.readonly import ensure_deeply_readonly
 from io import BytesIO
 from lazy import lazy
@@ -237,7 +238,6 @@ class TestIndex:
     @pytest.mark.notransaction
     def test_normalized_project_name(self, xom: XOM) -> None:
         from devpi_server.normalized import NormalizedName
-        from devpi_server.normalized import normalize_name
 
         keyfs = xom.keyfs
         with keyfs.write_transaction():
@@ -383,8 +383,6 @@ class TestIndex:
     def test_inheritance_complex_issue_214_pypi(
         self, pypistage, mock, model, monkeypatch
     ):
-        from devpi_server.normalized import normalize_name
-
         pypi_has_project_perstage = mock.Mock(wraps=pypistage.has_project_perstage)
         monkeypatch.setattr(
             pypistage, "has_project_perstage", pypi_has_project_perstage
@@ -428,16 +426,22 @@ class TestIndex:
         ]
         pypi_has_project_perstage.reset_mock()
         assert prov_a.list_versions('pkg') == set(['1.0'])
+        assert prov_a.has_project("pkg")
         assert not pypi_has_project_perstage.called
         assert prov_b.list_versions('pkg') == set(['1.0'])
+        assert prov_b.has_project("pkg")
         assert not pypi_has_project_perstage.called
         assert aggr_index.list_versions('pkg') == set(['1.0'])
+        assert aggr_index.has_project("pkg")
         assert not pypi_has_project_perstage.called
         assert cons_index.list_versions('pkg') == set(['1.0'])
+        assert cons_index.has_project("pkg")
         assert not pypi_has_project_perstage.called
         assert extagg_index1.list_versions('pkg') == set(['2.0'])
+        assert extagg_index1.has_project("pkg")
         assert not pypi_has_project_perstage.called
         assert extagg_index2.list_versions('pkg') == set(['1.0'])
+        assert extagg_index2.has_project("pkg")
         assert not pypi_has_project_perstage.called
         # reverse order of bases
         extagg_index2.modify(bases=["extagg/index1", "aggregator/index"])
@@ -581,11 +585,17 @@ class TestIndex:
         assert linkdict["entrypath"].endswith("someproject-1.0.zip")
         assert verdata["+shadowing"]
 
-    def test_project_whitelist(self, pypistage, stage):
+    def test_project_whitelist(self, mock, monkeypatch, pypistage, stage):
+        pypi_has_project_perstage = mock.Mock(wraps=pypistage.has_project_perstage)
+        monkeypatch.setattr(
+            pypistage, "has_project_perstage", pypi_has_project_perstage
+        )
         stage.modify(bases=("root/pypi",))
         pypistage.mock_simple("someproject", '<a href="someproject-1.1.zip" />')
         register_and_store(stage, "someproject-1.0.zip", b"123")
+        assert stage.has_project("someproject")
         links = stage.get_releaselinks("someproject")
+        assert not pypi_has_project_perstage.called
         # because the whitelist doesn't include "someproject" we only get
         # our upload
         assert len(links) == 1
@@ -593,7 +603,10 @@ class TestIndex:
         # if we add the project to the whitelist, we also get the release
         # from pypi
         stage.modify_project("someproject", inheritance_rules=["allow all"])
+        assert stage.has_project("someproject")
+        assert not pypi_has_project_perstage.called
         links = stage.get_releaselinks("someproject")
+        assert not pypi_has_project_perstage.called
         assert len(links) == 2
         assert links[0].relpath.endswith("someproject-1.1.zip")
         assert links[1].relpath.endswith("someproject-1.0.zip")
