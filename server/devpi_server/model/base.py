@@ -137,27 +137,24 @@ class BaseIndex:
 
     @overload
     def key_simpledata(
-        self, project: NormalizedName | str, version_filename: tuple[str, str]
+        self, project: NormalizedName | str, filename: str
     ) -> LocatedKey[dict, DictViewReadonly]: ...
 
     @overload
     def key_simpledata(
-        self, project: NormalizedName | str, version_filename: None = None
+        self, project: NormalizedName | str, filename: None = None
     ) -> SearchKey[dict, DictViewReadonly]: ...
 
     def key_simpledata(
         self,
         project: NormalizedName | str,
-        version_filename: tuple[str, str] | None = None,
+        filename: str | None = None,
     ) -> LocatedKey[dict, DictViewReadonly] | SearchKey[dict, DictViewReadonly]:
         key = self.keyfs.schema.SIMPLEDATA
-        (version, filename) = (
-            (None, None) if version_filename is None else version_filename
-        )
         (kw, meth) = (
             ({}, key.search)
-            if version is None or filename is None
-            else (dict(version=version, filename=filename), key.locate)
+            if filename is None
+            else (dict(filename=filename), key.locate)
         )
         return meth(
             user=self.username, index=self.index, project=normalize_name(project), **kw

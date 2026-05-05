@@ -172,7 +172,7 @@ class Schema(KeyFSSchema):
     # project and version related
     SIMPLEDATA = KeyFSSchema.decl_patterned_key(
         "SIMPLEDATA",
-        "{version}/{filename}",
+        "{filename}",
         PROJECT,
         dict,
         DictViewReadonly,
