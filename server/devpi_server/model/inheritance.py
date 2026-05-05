@@ -515,7 +515,7 @@ class IndexBases:
     def _get_project_inheritance_info(
         self, project: NormalizedName
     ) -> ProjectInheritanceInfo:
-        filtered_project = not self.index.filter_projects([project])
+        filtered_project = not self.index.filter_projects({project.original: project})
         policy = InheritancePolicy(index=self.index, project=project)
         traversal_infos: list[tuple[TraversalInfo, bool | NotSet | Unknown]] = []
         for traversal_info in self.traversal_infos:

@@ -59,6 +59,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from collections.abc import Iterable
     from collections.abc import Iterator
+    from collections.abc import Mapping
     from collections.abc import Sequence
     from devpi_server.filestore import BaseFileEntry
     from devpi_server.filestore import Digests
@@ -631,14 +632,17 @@ class BaseIndex:
             blocked_by_mirror_whitelist=project_inheritance_info.blocked_remote_name,
         )
 
-    def filter_projects(self, projects):
+    def filter_projects(
+        self, projects: Mapping[str, NormalizedName | str]
+    ) -> dict[str, NormalizedName | str]:
         iterator = self.customizer.get_projects_filter_iter(projects)
         if iterator is None:
-            return projects
-        return frozenset(apply_filter_iter(projects, iterator))
+            return dict(projects)
+        return dict(apply_filter_iter(projects.items(), iterator))
 
     def has_project(self, project: NormalizedName | str) -> bool | Unknown:
-        if not self.filter_projects([project]):
+        n_project = normalize_name(project)
+        if not self.filter_projects({n_project.original: n_project}):
             return False
         for stage in self.sro():
             res = stage.has_project_perstage(project)
@@ -745,7 +749,7 @@ class BaseIndex:
         )
         if "project" in kw:
             project = normalize_name(kw["project"])
-            if not self.filter_projects([project]):
+            if not self.filter_projects({project.original: project}):
                 return
         for stage in self.sro():
             yield stage, getattr(stage, opname)(**kw)
@@ -758,7 +762,7 @@ class BaseIndex:
             stacklevel=2,
         )
         project = normalize_name(kw["project"])
-        if not self.filter_projects([project]):
+        if not self.filter_projects({project.original: project}):
             return
         for traversed_index in self.index_bases.iter_mergeable_indexes(project, opname):
             index = traversed_index.index
