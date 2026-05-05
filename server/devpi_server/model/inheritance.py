@@ -547,7 +547,7 @@ class IndexBases:
             self._per_project_mergability_cache.put(project, result)
         return result
 
-    def get_mergeable_indexes(
+    def iter_mergeable_indexes(
         self, project: NormalizedName, opname: str
     ) -> Iterable[BaseIndex]:
         return self.get_project_inheritance_info(project).iter_indexes(opname)

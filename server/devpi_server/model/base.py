@@ -527,7 +527,7 @@ class BaseIndex:
     def list_versions(self, project: NormalizedName | str) -> set[str]:
         project = normalize_name(project)
         versions = set()
-        for stage in self.index_bases.get_mergeable_indexes(project, "list_versions"):
+        for stage in self.index_bases.iter_mergeable_indexes(project, "list_versions"):
             with check_upstream_error(self, stage) as checker:
                 res = stage.list_versions_perstage(project)
             if checker.failed:
@@ -555,7 +555,7 @@ class BaseIndex:
         result: dict[str, Any] = {}
         if not self.filter_versions(project, {version}):
             return result
-        for stage in self.index_bases.get_mergeable_indexes(
+        for stage in self.index_bases.iter_mergeable_indexes(
             normalize_name(project), "get_versiondata"
         ):
             with check_upstream_error(self, stage) as checker:
@@ -589,7 +589,9 @@ class BaseIndex:
                     seen.add(key)
                     yield link_info
 
-        for stage in self.index_bases.get_mergeable_indexes(project, "get_simplelinks"):
+        for stage in self.index_bases.iter_mergeable_indexes(
+            project, "get_simplelinks"
+        ):
             with check_upstream_error(self, stage) as checker:
                 res = stage.get_simplelinks_perstage(project)
             if checker.failed:
@@ -746,14 +748,14 @@ class BaseIndex:
     def op_sro_check_mirror_whitelist(self, opname, **kw):
         warnings.warn(
             "The 'op_sro_check_mirror_whitelist' method is deprecated, "
-            "use 'index_bases.get_mergeable_indexes' instead.",
+            "use 'index_bases.iter_mergeable_indexes' instead.",
             DeprecationWarning,
             stacklevel=2,
         )
         project = normalize_name(kw["project"])
         if not self.filter_projects([project]):
             return
-        for stage in self.index_bases.get_mergeable_indexes(project, opname):
+        for stage in self.index_bases.iter_mergeable_indexes(project, opname):
             with check_upstream_error(self, stage) as checker:
                 res = getattr(stage, opname)(**kw)
             if checker.failed:
