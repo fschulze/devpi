@@ -762,8 +762,6 @@ class BaseIndex:
             stacklevel=2,
         )
         project = normalize_name(kw["project"])
-        if not self.filter_projects({project.original: project}):
-            return
         for traversed_index in self.index_bases.iter_mergeable_indexes(project, opname):
             index = traversed_index.index
             with check_upstream_error(self, index) as checker:
