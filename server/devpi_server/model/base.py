@@ -21,6 +21,7 @@ from .exceptions import UpstreamError
 from .exceptions import UpstreamNotFoundError
 from .exceptions import UpstreamNotModified
 from .inheritance import IndexBases
+from .inheritance import apply_filter_iter
 from .inheritance import check_upstream_error
 from .links import ELink
 from .links import LinkStore
@@ -73,12 +74,6 @@ if TYPE_CHECKING:
     from devpi_server.normalized import NormalizedName
     from devpi_server.readonly import DictViewReadonly
     from typing import Any
-
-
-def apply_filter_iter(items, filter_iter):
-    for item in items:
-        if next(filter_iter, True):
-            yield item
 
 
 def run_passwd(root, username):
@@ -527,26 +522,30 @@ class BaseIndex:
 
     def list_versions(self, project: NormalizedName | str) -> set[str]:
         project = normalize_name(project)
-        versions = set()
-        for traversed_index in self.index_bases.iter_mergeable_indexes(
-            project, "list_versions"
-        ):
+        inheritance_info = self.index_bases.get_project_inheritance_info(project)
+        result = []
+        for traversed_index in inheritance_info.iter_indexes("list_versions"):
             index = traversed_index.index
             with check_upstream_error(self, index) as checker:
                 res = index.list_versions_perstage(project)
             if checker.failed:
                 continue
-            versions.update(res)
-        return self.filter_versions(project, versions)
+            result.append((index, res))
+        per_index_result: dict[BaseIndex, list[set[str]]] = (
+            inheritance_info.filter_result("get_versions_filter_iter", result)
+        )
+        versions = set()
+        for results in per_index_result.values():
+            for res in results:
+                versions.update(res)
+        return versions
 
     @abstractmethod
     def list_versions_perstage(self, project: str) -> set:
         raise NotImplementedError
 
     def get_latest_version(self, name, *, stable=False):
-        return get_latest_version(
-            self.filter_versions(name, self.list_versions(name)), stable=stable
-        )
+        return get_latest_version(self.list_versions(name), stable=stable)
 
     def get_latest_version_perstage(self, name, *, stable=False):
         return get_latest_version(
@@ -556,12 +555,26 @@ class BaseIndex:
     def get_versiondata(
         self, project: NormalizedName | str, version: str
     ) -> dict[str, Any]:
+        filtered_by = {}
         result: dict[str, Any] = {}
-        if not self.filter_versions(project, {version}):
-            return result
-        for traversed_index in self.index_bases.iter_mergeable_indexes(
-            normalize_name(project), "get_versiondata"
-        ):
+        version_set = {version}
+        inheritance_info = self.index_bases.get_project_inheritance_info(
+            normalize_name(project)
+        )
+        for traversed_index in inheritance_info.iter_indexes("get_versiondata"):
+            filtered_paths = {}
+            for filter_path in inheritance_info.paths:
+                filtered_paths[filter_path.path_key] = False
+                for filter_index in filter_path:
+                    if filter_index not in filtered_by:
+                        filtered_by[filter_index] = not filter_index.filter_versions(
+                            project, version_set
+                        )
+                    if filtered_by[filter_index]:
+                        filtered_paths[filter_path.path_key] = True
+                        break
+            if all(filtered_paths.values()):
+                return result
             index = traversed_index.index
             with check_upstream_error(self, index) as checker:
                 res = index.get_versiondata_perstage(project, version)
@@ -583,32 +596,34 @@ class BaseIndex:
         and "key" is usually the basename of the link or else
         the egg-ID if the link points to an egg.
         """
-        project = normalize_name(project)
         all_links = self.SimpleLinks([])
+        project = normalize_name(project)
+        inheritance_info = self.index_bases.get_project_inheritance_info(project)
+        result = []
         seen = set()
 
-        def iter_res(res: SimpleLinks) -> Iterator[SimplelinkMeta]:
+        def iter_res(res: list[SimplelinkMeta]) -> Iterator[SimplelinkMeta]:
             for link_info in res:
                 key = link_info.key
                 if key not in seen:
                     seen.add(key)
                     yield link_info
 
-        for traversed_index in self.index_bases.iter_mergeable_indexes(
-            project, "get_simplelinks"
-        ):
+        for traversed_index in inheritance_info.iter_indexes("get_simplelinks"):
             index = traversed_index.index
             with check_upstream_error(self, index) as checker:
                 res = index.get_simplelinks_perstage(project)
             if checker.failed:
                 continue
-            if res is not None:
-                res = self.SimpleLinks(res)
-                all_links.stale = all_links.stale or res.stale
-            iterator = self.customizer.get_simple_links_filter_iter(project, res)
-            if iterator is not None:
-                res = apply_filter_iter(res, iterator)
-            all_links.extend(iter_res(res))
+            all_links.stale = all_links.stale or res.stale
+            result.append((index, list(res)))
+
+        per_index_result: dict[BaseIndex, list[list[SimplelinkMeta]]] = (
+            inheritance_info.filter_result("get_simple_links_filter_iter", result)
+        )
+        for results in per_index_result.values():
+            for r in results:
+                all_links.extend(iter_res(r))
 
         if sorted_links:
             all_links.sort(reverse=True)
@@ -641,11 +656,25 @@ class BaseIndex:
         return dict(apply_filter_iter(projects.items(), iterator))
 
     def has_project(self, project: NormalizedName | str) -> bool | Unknown:
+        filtered_by = {}
         n_project = normalize_name(project)
-        if not self.filter_projects({n_project.original: n_project}):
-            return False
-        for stage in self.sro():
-            res = stage.has_project_perstage(project)
+        inheritance_info = self.index_bases.get_project_inheritance_info(n_project)
+        project_dict = {n_project.original: n_project}
+        for traversed_index in self.index_bases.iter_indexes():
+            filtered_paths = {}
+            for filter_path in inheritance_info.paths:
+                filtered_paths[filter_path.path_key] = False
+                for filter_index in filter_path:
+                    if filter_index not in filtered_by:
+                        filtered_by[filter_index] = not filter_index.filter_projects(
+                            project_dict
+                        )
+                    if filtered_by[filter_index]:
+                        filtered_paths[filter_path.path_key] = True
+                        break
+            if all(filtered_paths.values()):
+                return False
+            res = traversed_index.index.has_project_perstage(project)
             if res is unknown:
                 return res
             if res:
@@ -653,10 +682,21 @@ class BaseIndex:
         return False
 
     def list_projects(self) -> list[tuple[BaseIndex, dict[str, NormalizedName | str]]]:
+        inheritance_info = self.index_bases.inheritance_info
+        raw_result = []
+        for traversed_index in inheritance_info.iter_indexes():
+            index = traversed_index.index
+            projects = index.list_projects_perstage()
+            raw_result.append((index, projects))
+        per_index_result: dict[BaseIndex, list[dict[str, NormalizedName | str]]] = (
+            inheritance_info.filter_result("get_projects_filter_iter", raw_result)
+        )
         result = []
-        for stage in self.sro():
-            projects = stage.list_projects_perstage()
-            result.append((stage, self.filter_projects(projects)))
+        for result_index, _projects in raw_result:
+            projects = {}
+            for result_projects in per_index_result[result_index]:
+                projects.update(result_projects)
+            result.append((result_index, projects))
         return result
 
     def _modify(self, **kw):
@@ -747,11 +787,13 @@ class BaseIndex:
             DeprecationWarning,
             stacklevel=2,
         )
+        project_dict = None
         if "project" in kw:
             project = normalize_name(kw["project"])
-            if not self.filter_projects({project.original: project}):
-                return
+            project_dict = {project.original: project}
         for stage in self.sro():
+            if project_dict and not stage.filter_projects(project_dict):
+                return False
             yield stage, getattr(stage, opname)(**kw)
 
     def op_sro_check_mirror_whitelist(self, opname, **kw):
