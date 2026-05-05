@@ -1,0 +1,1 @@
+Apply project/version filters on all inherited indexes instead of only the current index. This makes devpi-constrained work as a base.
