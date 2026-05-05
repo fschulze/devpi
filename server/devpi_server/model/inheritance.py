@@ -6,12 +6,14 @@ from abc import abstractmethod
 from attrs import define
 from attrs import evolve
 from attrs import field
+from collections import defaultdict
 from devpi_common.types import cached_property
 from devpi_server.log import threadlog
 from devpi_server.markers import NotSet
 from devpi_server.markers import Unknown
 from devpi_server.markers import notset
 from devpi_server.markers import unknown
+from devpi_server.readonly import DictViewReadonly
 from repoze.lru import LRUCache
 from typing import NewType
 from typing import TYPE_CHECKING
@@ -30,6 +32,19 @@ if TYPE_CHECKING:
     from types import TracebackType
     from typing import Literal
     from typing import Self
+    from typing import TypeVar
+
+    FilterItem = TypeVar("FilterItem")
+    FilterResultType = TypeVar("FilterResultType")
+    FilterResult = list[tuple[BaseIndex, FilterResultType]]
+
+
+def apply_filter_iter(
+    items: Iterable[FilterItem], filter_iter: Iterator[bool]
+) -> Iterator[FilterItem]:
+    for item in items:
+        if next(filter_iter, True):
+            yield item
 
 
 class check_upstream_error:
@@ -60,11 +75,65 @@ class check_upstream_error:
         return True
 
 
+def filter_result(
+    filter_name: str,
+    paths: TraversalPaths,
+    project: NormalizedName | None,
+    result: FilterResult,
+) -> dict[BaseIndex, list[FilterResultType]]:
+    per_path_result = {(i, p.path_key): r for p in paths for i, r in result if i in p}
+    for filter_index, path_key, path_index in iter_filter_path_indexes(paths):
+        result_key = (path_index, path_key)
+        data = per_path_result.get(result_key)
+        if not data:
+            continue
+        match filter_name:
+            case "get_projects_filter_iter":
+                iterator = filter_index.customizer.get_projects_filter_iter(data)
+            case "get_simple_links_filter_iter":
+                assert project is not None
+                iterator = filter_index.customizer.get_simple_links_filter_iter(
+                    project, data
+                )
+            case "get_versions_filter_iter":
+                assert project is not None
+                iterator = filter_index.customizer.get_versions_filter_iter(
+                    project, data
+                )
+            case _:
+                raise RuntimeError(f"Invalid filter name {filter_name!r}")
+        if iterator is None:
+            continue
+        if isinstance(data, (DictViewReadonly, dict)):
+            data = dict(apply_filter_iter(data.items(), iterator))
+        else:
+            data = data.__class__(apply_filter_iter(data, iterator))
+        per_path_result[result_key] = data
+    per_index_results = defaultdict(list)
+    for (result_index, _path_key), data in per_path_result.items():
+        per_index_results[result_index].append(data)
+    return per_index_results
+
+
+def iter_filter_path_indexes(
+    paths: TraversalPaths,
+) -> Iterator[tuple[BaseIndex, PathKey, BaseIndex]]:
+    for path in paths:
+        for i, filter_index in enumerate(path):
+            for path_index in path[i:]:
+                yield (filter_index, path.path_key, path_index)
+
+
 @define(kw_only=True, slots=False)
 class IndexInheritanceInfo:
     index_bases_map: dict[str, tuple[str, ...] | None]
     paths: TraversalPaths
     traversal_infos: list[TraversalInfo]
+
+    def filter_result(
+        self, filter_name: str, result: FilterResult
+    ) -> dict[BaseIndex, list[FilterResultType]]:
+        return filter_result(filter_name, self.paths, None, result)
 
     def iter_indexes(self) -> Iterator[TraversedIndex]:
         """Iterates indexes in defined order without loops."""
@@ -115,6 +184,7 @@ has_project_str_map = {
 class ProjectInheritanceInfo:
     index_bases_map: dict[str, tuple[str, ...] | None]
     paths: TraversalPaths
+    project: NormalizedName
     traversal_infos: list[tuple[TraversalInfo, bool | NotSet | Unknown]]
 
     @cached_property
@@ -144,6 +214,11 @@ class ProjectInheritanceInfo:
             if traversal_info.index.index_type != "remote":
                 continue
             yield (traversal_info, has_project)
+
+    def filter_result(
+        self, filter_name: str, result: FilterResult
+    ) -> dict[BaseIndex, list[FilterResultType]]:
+        return filter_result(filter_name, self.paths, self.project, result)
 
     def iter_indexes(self, opname: str) -> Iterator[TraversedIndex]:
         for traversal_info, has_project in self._unique_traversed_indexes:
@@ -618,6 +693,7 @@ class IndexBases:
         return ProjectInheritanceInfo(
             index_bases_map=self._index_bases_map,
             paths=self.traversal_infos.paths,
+            project=project,
             traversal_infos=traversal_infos,
         )
 
