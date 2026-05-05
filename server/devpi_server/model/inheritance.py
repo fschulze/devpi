@@ -62,7 +62,7 @@ class IndexInheritanceInfo:
     index_bases_map: dict[str, tuple[str, ...] | None]
     traversal_infos: list[TraversalInfo]
 
-    def iter_indexes(self) -> Iterator[BaseIndex]:
+    def iter_indexes(self) -> Iterator[TraversedIndex]:
         """Iterates indexes in defined order without loops."""
         for traversal_info in self.traversal_infos:
             match traversal_info:
@@ -84,8 +84,8 @@ class IndexInheritanceInfo:
                         name,
                     )
                     continue
-                case TraversedIndex(index=index, seen=False):
-                    yield index
+                case TraversedIndex(seen=False):
+                    yield traversal_info
                 case _:
                     raise RuntimeError(traversal_info)
 
@@ -140,7 +140,7 @@ class ProjectInheritanceInfo:
                 continue
             yield (traversal_info, has_project)
 
-    def iter_indexes(self, opname: str) -> Iterator[BaseIndex]:
+    def iter_indexes(self, opname: str) -> Iterator[TraversedIndex]:
         for traversal_info, has_project in self._unique_traversed_indexes:
             if isinstance(traversal_info, BlockedTraversal):
                 threadlog.debug("%s: %s", opname, traversal_info.reason)
@@ -153,7 +153,7 @@ class ProjectInheritanceInfo:
                 has_project is unknown
                 and not isinstance(traversal_info, UntrustedTraversal)
             ):
-                yield traversal_info.index
+                yield traversal_info
 
     def jsonable(self) -> dict:
         return dict(
@@ -549,7 +549,7 @@ class IndexBases:
 
     def iter_mergeable_indexes(
         self, project: NormalizedName, opname: str
-    ) -> Iterable[BaseIndex]:
+    ) -> Iterable[TraversedIndex]:
         return self.get_project_inheritance_info(project).iter_indexes(opname)
 
     @cached_property
@@ -558,7 +558,7 @@ class IndexBases:
             index_bases_map=self._index_bases_map, traversal_infos=self.traversal_infos
         )
 
-    def iter_indexes(self) -> Iterator[BaseIndex]:
+    def iter_indexes(self) -> Iterator[TraversedIndex]:
         return self.inheritance_info.iter_indexes()
 
     def is_untrusted(self, index: BaseIndex) -> bool:
