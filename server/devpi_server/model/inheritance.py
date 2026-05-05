@@ -4,6 +4,7 @@ from .exceptions import UpstreamError
 from abc import ABC
 from abc import abstractmethod
 from attrs import define
+from attrs import evolve
 from attrs import field
 from devpi_common.types import cached_property
 from devpi_server.log import threadlog
@@ -12,7 +13,9 @@ from devpi_server.markers import Unknown
 from devpi_server.markers import notset
 from devpi_server.markers import unknown
 from repoze.lru import LRUCache
+from typing import NewType
 from typing import TYPE_CHECKING
+from typing import overload
 
 
 if TYPE_CHECKING:
@@ -60,6 +63,7 @@ class check_upstream_error:
 @define(kw_only=True, slots=False)
 class IndexInheritanceInfo:
     index_bases_map: dict[str, tuple[str, ...] | None]
+    paths: TraversalPaths
     traversal_infos: list[TraversalInfo]
 
     def iter_indexes(self) -> Iterator[TraversedIndex]:
@@ -110,6 +114,7 @@ has_project_str_map = {
 @define(kw_only=True, slots=False)
 class ProjectInheritanceInfo:
     index_bases_map: dict[str, tuple[str, ...] | None]
+    paths: TraversalPaths
     traversal_infos: list[tuple[TraversalInfo, bool | NotSet | Unknown]]
 
     @cached_property
@@ -262,12 +267,14 @@ class PostponedTraversal(TraversalInfo):
 @define(frozen=True, kw_only=True)
 class TraversedIndex(TraversalInfo):
     index: BaseIndex
+    path: TraversalPath
     seen: bool
 
     def allow(self, *, reason: PermissionAllowed) -> AllowedTraversal:
         return AllowedTraversal(
             index=self.index,
             name=self.name,
+            path=self.path,
             reason=reason,
             seen=self.seen,
         )
@@ -276,12 +283,19 @@ class TraversedIndex(TraversalInfo):
         return BlockedTraversal(
             index=self.index,
             name=self.name,
+            path=self.path,
             reason=reason,
             seen=self.seen,
         )
 
     def jsonable(self) -> dict:
         return dict(action="traversed", name=self.name)
+
+    def with_seen(
+        self,
+        seen: bool,  # noqa: FBT001
+    ) -> Self:
+        return evolve(self, seen=seen)
 
 
 @define(frozen=True, kw_only=True)
@@ -313,6 +327,49 @@ class SkippedTraversal(TraversalInfo):
 
     def jsonable(self) -> dict:
         return dict(action="skipped", name=self.name, reason=str(self.reason))
+
+
+def _convert_path(path: Sequence[BaseIndex]) -> tuple[BaseIndex, ...]:
+    return tuple(path)
+
+
+PathKey = NewType("PathKey", tuple[str, ...])
+
+
+@define
+class TraversalPath:
+    _path: tuple[BaseIndex, ...] = field(converter=_convert_path)
+    _path_key: PathKey | NotSet = field(default=notset, init=False)
+
+    @overload
+    def __getitem__(self, index: int) -> BaseIndex: ...
+
+    @overload
+    def __getitem__(self, index: slice) -> tuple[BaseIndex]: ...
+
+    def __getitem__(self, index: int | slice) -> BaseIndex | tuple[BaseIndex, ...]:
+        return self._path[index]
+
+    def __iter__(self) -> Iterator[BaseIndex]:
+        return iter(self._path)
+
+    def join_index(self, index: BaseIndex) -> TraversalPath:
+        return TraversalPath((*self._path, index))
+
+    @property
+    def path_key(self) -> PathKey:
+        if isinstance(self._path_key, NotSet):
+            self._path_key = PathKey(tuple(x.name for x in self))
+        return self._path_key
+
+
+TraversalPaths = NewType("TraversalPaths", tuple["TraversalPath", ...])
+
+
+@define(kw_only=True)
+class TraversalInfos:
+    paths: TraversalPaths
+    steps: list[TraversalInfo]
 
 
 @define
@@ -517,25 +574,38 @@ class IndexBases:
     ) -> ProjectInheritanceInfo:
         filtered_project = not self.index.filter_projects({project.original: project})
         policy = InheritancePolicy(index=self.index, project=project)
+        seen = set()
         traversal_infos: list[tuple[TraversalInfo, bool | NotSet | Unknown]] = []
-        for traversal_info in self.traversal_infos:
+        for traversal_info in self.traversal_infos.steps:
             if filtered_project or not isinstance(traversal_info, TraversedIndex):
                 traversal_infos.append((traversal_info, notset))
                 continue
+            name = traversal_info.name
             (reason, exists) = policy.update(traversal_info)
             match reason:
                 case PermissionDenied():
                     traversal_infos.append(
-                        (traversal_info.block(reason=reason), exists)
+                        (
+                            traversal_info.block(reason=reason).with_seen(name in seen),
+                            exists,
+                        )
                     )
                 case PermissionAllowed():
                     traversal_infos.append(
-                        (traversal_info.allow(reason=reason), exists)
+                        (
+                            traversal_info.allow(reason=reason).with_seen(name in seen),
+                            exists,
+                        )
                     )
                 case _:
-                    traversal_infos.append((traversal_info, exists))
+                    traversal_infos.append(
+                        (traversal_info.with_seen(name in seen), exists)
+                    )
+            seen.add(name)
         return ProjectInheritanceInfo(
-            index_bases_map=self._index_bases_map, traversal_infos=traversal_infos
+            index_bases_map=self._index_bases_map,
+            paths=self.traversal_infos.paths,
+            traversal_infos=traversal_infos,
         )
 
     def get_project_inheritance_info(
@@ -555,7 +625,9 @@ class IndexBases:
     @cached_property
     def inheritance_info(self) -> IndexInheritanceInfo:
         return IndexInheritanceInfo(
-            index_bases_map=self._index_bases_map, traversal_infos=self.traversal_infos
+            index_bases_map=self._index_bases_map,
+            paths=self.traversal_infos.paths,
+            traversal_infos=self.traversal_infos.steps,
         )
 
     def iter_indexes(self) -> Iterator[TraversedIndex]:
@@ -567,20 +639,27 @@ class IndexBases:
         return index.index_type == "remote"
 
     @cached_property
-    def traversal_infos(self) -> list[TraversalInfo]:
+    def traversal_infos(self) -> TraversalInfos:
         """Returns traversal information."""
         devpiserver_sro_skip = self.devpiserver_sro_skip
         getindex = self.model.getstage
         info: list[TraversalInfo] = []
-        postponed: list[tuple[BaseIndex, list[str]]] = []
-        seen = set()
+        paths: list[TraversalPath] = []
+        postponed: list[tuple[BaseIndex, list[str], TraversalPath]] = []
+        seen_indexes: set[str] = set()
+        seen_paths: set[PathKey] = set()
         is_untrusted = self.is_untrusted
         index = self.index
-        todo = [(index, list(reversed(index.index_bases)))]
+        todo: list[tuple[BaseIndex, list[str], TraversalPath | None]] = [
+            (index, list(reversed(index.index_bases)), None)
+        ]
         while todo:
-            (current_index, bases) = todo[-1]
+            (current_index, bases, path) = todo[-1]
+            if path is None:
+                path = TraversalPath([x[0] for x in todo[:-1]])
             current_name = current_index.name
-            if bases or current_name not in seen:
+            path_key = path.join_index(current_index).path_key
+            if bases or path_key not in seen_paths:
                 info.append(
                     (
                         UntrustedTraversal
@@ -589,18 +668,21 @@ class IndexBases:
                     )(
                         index=current_index,
                         name=current_name,
-                        seen=current_name in seen,
+                        path=path,
+                        seen=current_name in seen_indexes,
                     )
                 )
-            seen.add(current_name)
+            seen_indexes.add(current_name)
+            seen_paths.add(path_key)
             if not bases:
+                paths.append(TraversalPath([*path, current_index]))
                 todo.pop()
                 if not todo:
                     todo.extend(postponed)
                     postponed.clear()
                 continue
             next_name = bases.pop()
-            if next_name in seen:
+            if next_name in seen_indexes:
                 info.append(
                     SkippedTraversal(
                         name=next_name,
@@ -618,7 +700,7 @@ class IndexBases:
                         src=current_name,
                     )
                 )
-                seen.add(next_name)
+                seen_indexes.add(next_name)
                 continue
             if devpiserver_sro_skip(stage=index, base_stage=next_index):
                 info.append(
@@ -628,11 +710,27 @@ class IndexBases:
                         src=current_name,
                     )
                 )
-                seen.add(next_name)
+                seen_indexes.add(next_name)
                 continue
             if is_untrusted(next_index):
                 info.append(PostponedTraversal(name=next_name))
-                postponed.append((next_index, list(reversed(next_index.index_bases))))
+                postponed.append(
+                    (
+                        next_index,
+                        list(reversed(next_index.index_bases)),
+                        TraversalPath([x[0] for x in todo]),
+                    )
+                )
             else:
-                todo.append((next_index, list(reversed(next_index.index_bases))))
-        return info
+                todo.append((next_index, list(reversed(next_index.index_bases)), None))
+        path_key_indices = {p.path_key: i for i, p in enumerate(paths)}
+        # filter partial paths caused by postponed checks
+        for path_len, path_key in sorted(
+            ((len(p), p) for p in path_key_indices), reverse=True
+        ):
+            for i in range(path_len):
+                path_key_indices.pop(PathKey(path_key[:i]), None)
+        return TraversalInfos(
+            paths=TraversalPaths(tuple(paths[i] for i in path_key_indices.values())),
+            steps=info,
+        )
