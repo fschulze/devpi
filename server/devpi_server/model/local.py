@@ -646,9 +646,7 @@ class LocalIndex(BaseIndex):
             if version is None
             else self.key_version(project, version).with_resolved_parent().get()
         )
-        key_simpledata = self.key_simpledata(
-            project, (version, filename)
-        ).with_resolved_parent()
+        key_simpledata = self.key_simpledata(project, filename).with_resolved_parent()
         with key_simpledata.update() as simpledata:
             simpledata["relpath"] = link.entry.index_relpath
             if metadata_hashes := get_core_metadata_hashes(

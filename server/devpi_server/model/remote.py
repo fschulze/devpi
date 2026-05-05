@@ -693,13 +693,11 @@ class RemoteData:
     @contextlib.contextmanager
     def link_setter(self, filename: str) -> Iterator[dict]:
         project = self.project
-        (projectname, version, _ext) = splitbasename(filename)
+        (projectname, _version, _ext) = splitbasename(filename)
         assert normalize_name(projectname) == project
         stage = self.get_stage()
         key_remotefile = stage.key_remotefile(project, filename).with_resolved_parent()
-        key_simpledata = stage.key_simpledata(
-            project, (version, filename)
-        ).with_resolved_parent()
+        key_simpledata = stage.key_simpledata(project, filename).with_resolved_parent()
         with (
             key_remotefile.update() as remotefiledata,
             key_simpledata.update() as simpledata,
