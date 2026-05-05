@@ -220,6 +220,12 @@ class RulesAllow(PermissionAllowed):
 
 
 @define(frozen=True, kw_only=True)
+class FilterBlock(PermissionDenied):
+    def __str__(self) -> str:
+        return f"package {str(self.project)!r} was filtered by index {self.name}"
+
+
+@define(frozen=True, kw_only=True)
 class LocalHitBlock(PermissionDenied):
     src_name: str
 
@@ -461,6 +467,7 @@ class InheritancePolicy:
     index: BaseIndex
     local_exists_at: BaseIndex | Literal[False] = field(default=False, init=False)
     project: NormalizedName
+    project_dict: dict[str, NormalizedName] = field(init=False)
     rules: InheritRules = field(init=False)
     trust_from: TrustFromRule = field(init=False)
 
@@ -468,6 +475,7 @@ class InheritancePolicy:
         from .local import LocalIndex
 
         self.LocalIndex = LocalIndex
+        self.project_dict = {self.project.original: self.project}
         self.rules = InheritRules(self._get_rules(self.index))
         self.trust_from = TrustFromRule(
             self.index.ixconfig.get("trust_inheritance_rules_from", "none")
@@ -485,6 +493,8 @@ class InheritancePolicy:
         self, traversed_index: TraversedIndex
     ) -> tuple[PermissionReason | None, bool | NotSet | Unknown]:
         index = traversed_index.index
+        if not index.filter_projects(self.project_dict):
+            return (FilterBlock(name=index.name, project=self.project), notset)
         untrusted = isinstance(traversed_index, UntrustedTraversal)
         if untrusted and self.local_exists_at is not False and self.allowed_by is False:
             return (
@@ -572,18 +582,21 @@ class IndexBases:
     def _get_project_inheritance_info(
         self, project: NormalizedName
     ) -> ProjectInheritanceInfo:
-        filtered_project = not self.index.filter_projects({project.original: project})
+        blocked = set()
         policy = InheritancePolicy(index=self.index, project=project)
         seen = set()
         traversal_infos: list[tuple[TraversalInfo, bool | NotSet | Unknown]] = []
         for traversal_info in self.traversal_infos.steps:
-            if filtered_project or not isinstance(traversal_info, TraversedIndex):
+            if not isinstance(traversal_info, TraversedIndex):
                 traversal_infos.append((traversal_info, notset))
+                continue
+            if any(x in blocked for x in traversal_info.path):
                 continue
             name = traversal_info.name
             (reason, exists) = policy.update(traversal_info)
             match reason:
                 case PermissionDenied():
+                    blocked.add(traversal_info.index)
                     traversal_infos.append(
                         (
                             traversal_info.block(reason=reason).with_seen(name in seen),
