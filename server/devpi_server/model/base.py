@@ -589,23 +589,18 @@ class BaseIndex:
                     seen.add(key)
                     yield link_info
 
-        try:
-            for stage in self.index_bases.get_mergeable_indexes(
-                project, "get_simplelinks"
-            ):
-                with check_upstream_error(self, stage) as checker:
-                    res = stage.get_simplelinks_perstage(project)
-                if checker.failed:
-                    continue
-                if res is not None:
-                    res = self.SimpleLinks(res)
-                    all_links.stale = all_links.stale or res.stale
-                iterator = self.customizer.get_simple_links_filter_iter(project, res)
-                if iterator is not None:
-                    res = apply_filter_iter(res, iterator)
-                all_links.extend(iter_res(res))
-        except self.UpstreamNotFoundError:
-            return self.SimpleLinks([])
+        for stage in self.index_bases.get_mergeable_indexes(project, "get_simplelinks"):
+            with check_upstream_error(self, stage) as checker:
+                res = stage.get_simplelinks_perstage(project)
+            if checker.failed:
+                continue
+            if res is not None:
+                res = self.SimpleLinks(res)
+                all_links.stale = all_links.stale or res.stale
+            iterator = self.customizer.get_simple_links_filter_iter(project, res)
+            if iterator is not None:
+                res = apply_filter_iter(res, iterator)
+            all_links.extend(iter_res(res))
 
         if sorted_links:
             all_links.sort(reverse=True)
