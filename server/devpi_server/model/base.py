@@ -527,9 +527,12 @@ class BaseIndex:
     def list_versions(self, project: NormalizedName | str) -> set[str]:
         project = normalize_name(project)
         versions = set()
-        for stage in self.index_bases.iter_mergeable_indexes(project, "list_versions"):
-            with check_upstream_error(self, stage) as checker:
-                res = stage.list_versions_perstage(project)
+        for traversed_index in self.index_bases.iter_mergeable_indexes(
+            project, "list_versions"
+        ):
+            index = traversed_index.index
+            with check_upstream_error(self, index) as checker:
+                res = index.list_versions_perstage(project)
             if checker.failed:
                 continue
             versions.update(res)
@@ -555,11 +558,12 @@ class BaseIndex:
         result: dict[str, Any] = {}
         if not self.filter_versions(project, {version}):
             return result
-        for stage in self.index_bases.iter_mergeable_indexes(
+        for traversed_index in self.index_bases.iter_mergeable_indexes(
             normalize_name(project), "get_versiondata"
         ):
-            with check_upstream_error(self, stage) as checker:
-                res = stage.get_versiondata_perstage(project, version)
+            index = traversed_index.index
+            with check_upstream_error(self, index) as checker:
+                res = index.get_versiondata_perstage(project, version)
             if checker.failed:
                 continue
             if res:
@@ -589,11 +593,12 @@ class BaseIndex:
                     seen.add(key)
                     yield link_info
 
-        for stage in self.index_bases.iter_mergeable_indexes(
+        for traversed_index in self.index_bases.iter_mergeable_indexes(
             project, "get_simplelinks"
         ):
-            with check_upstream_error(self, stage) as checker:
-                res = stage.get_simplelinks_perstage(project)
+            index = traversed_index.index
+            with check_upstream_error(self, index) as checker:
+                res = index.get_simplelinks_perstage(project)
             if checker.failed:
                 continue
             if res is not None:
@@ -755,16 +760,18 @@ class BaseIndex:
         project = normalize_name(kw["project"])
         if not self.filter_projects([project]):
             return
-        for stage in self.index_bases.iter_mergeable_indexes(project, opname):
-            with check_upstream_error(self, stage) as checker:
-                res = getattr(stage, opname)(**kw)
+        for traversed_index in self.index_bases.iter_mergeable_indexes(project, opname):
+            index = traversed_index.index
+            with check_upstream_error(self, index) as checker:
+                res = getattr(index, opname)(**kw)
             if checker.failed:
                 continue
-            yield stage, res
+            yield index, res
 
     def sro(self) -> Iterator[BaseIndex]:
         """return stage resolution order."""
-        return self.index_bases.iter_indexes()
+        for traversed_index in self.index_bases.iter_indexes():
+            yield traversed_index.index
 
     def __acl__(self):
         permissions = (
