@@ -314,7 +314,7 @@ class TestIndex:
                 reason=InheritanceCycle(name=index_b.name),
                 src=index_a.name,
             )
-            in index_b.get_index_bases().traversal_infos
+            in index_b.get_index_bases().traversal_infos.steps
         )
         assert (
             SkippedTraversal(
@@ -322,7 +322,7 @@ class TestIndex:
                 reason=InheritanceCycle(name=index_a.name),
                 src=index_b.name,
             )
-            in index_a.get_index_bases().traversal_infos
+            in index_a.get_index_bases().traversal_infos.steps
         )
 
     def test_inheritance_simple(self, pypistage, stage):
