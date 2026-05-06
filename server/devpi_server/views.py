@@ -20,6 +20,7 @@ from .model import InvalidUserconfig
 from .model import ReadonlyIndex
 from .model import RemoveValue
 from .normalized import normalize_name
+from .proxy import clean_request_headers
 from .proxy import clean_response_headers
 from .readonly import get_mutable_deepcopy
 from collections import defaultdict
@@ -1585,7 +1586,9 @@ class PyPIView:
                 return apireturn(404, "mirror_provides_core_metadata disabled")
             url = url.replace(path=f"{url.path}.metadata")
             try:
-                app_iter = iter_stream_remote_file(stage, url)
+                app_iter = iter_stream_remote_file(
+                    stage, url, clean_request_headers(request)
+                )
                 headers = next(app_iter)
             except BadGateway as e:
                 if e.code == 404:
@@ -1901,9 +1904,12 @@ class FileStreamer:
                 raise err
 
 
-def iter_stream_remote_file(stage, url):
+def iter_stream_remote_file(stage, url, headers):
     with contextlib.ExitStack() as cstack:
-        r = stage.http.stream(cstack, "GET", url, allow_redirects=True)
+        headers.pop("User-Agent", None)
+        r = stage.http.stream(
+            cstack, "GET", url, allow_redirects=True, extra_headers=headers
+        )
         if r.status_code != 200:
             r.close()
             msg = f"error {r.status_code} getting {url}"
