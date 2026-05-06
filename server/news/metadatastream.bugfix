@@ -1,0 +1,1 @@
+Pass through request headers when streaming .metadata from mirror. Refs #1018
