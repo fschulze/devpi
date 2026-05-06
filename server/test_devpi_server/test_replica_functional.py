@@ -160,7 +160,7 @@ def test_frt_exception_handling(
     with monkeypatch.context() as m:
         streamer_iter_mock = mock.Mock()
         streamer_iter_mock.side_effect = httpx.RemoteProtocolError("foo")
-        m.setattr("devpi_server.views.FileStreamer.__iter__", streamer_iter_mock)
+        m.setattr("devpi_server.mirror.FileStreamer.__iter__", streamer_iter_mock)
         replica_xom.frt.shared_data.process_next(replica_xom.frt.handler)
         assert replica_xom.frt.shared_data.queue.empty()
         assert replica_xom.frt.shared_data.queue.unfinished_tasks == 0
