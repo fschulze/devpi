@@ -1,5 +1,5 @@
 from devpi_server.filestore import get_hashes
-from devpi_server.views import iter_cache_remote_file
+from devpi_server.mirror import iter_cache_remote_file
 from io import BytesIO
 from pathlib import Path
 from webob.headers import ResponseHeaders
