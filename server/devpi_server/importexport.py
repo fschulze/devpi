@@ -803,6 +803,8 @@ class Importer:
                     hashes=hashes,
                     metadata_hashes=versions[version].get("metadata_hashes"),
                     requires_python=versions[version].get("requires_python"),
+                    size=versions[version].get("size"),
+                    upload_time=versions[version].get("upload_time"),
                     url=url.geturl_nofragment(),
                     yanked=versions[version].get("yanked"),
                 ).make_mutable_entry(
