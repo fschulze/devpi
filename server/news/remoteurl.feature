@@ -1,0 +1,1 @@
+When changing the ``remote_url`` any stored remote info like ETAGs or serials is invalidated.
