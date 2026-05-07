@@ -301,26 +301,42 @@ class TestExtPYPIDB:
             link.best_available_hash_spec
             == "sha256=b89846ad42cfee0e44934ef77f28ad44e90b7e744041ace91047dd4c7892cc5e"
         )
+        assert link.metadata_hashes is None
         assert link.yanked is None
         assert link.require_python is None
 
-    def test_parse_pep691_data(self, pypistage):
+    @pytest.mark.parametrize(
+        ("core_metadata", "metadata_hashes"),
+        [
+            (None, None),
+            (True, {}),
+            (dict(sha256="5678"), dict(sha256="5678")),
+        ],
+    )
+    def test_parse_pep691_data(self, core_metadata, metadata_hashes, pypistage):
+        import json
         pypistage.mock_simple_projects(["devpi"])
+        file_data = {
+            "filename": "devpi-0.9.tar.gz",
+            "hashes": {
+                "sha256": "b89846ad42cfee0e44934ef77f28ad44e90b7e744041ace91047dd4c7892cc5e"
+            },
+            "requires-python": ">=3.6",
+            "url": "https://files.pythonhosted.org/packages/40/b6/45e98504eba446c8e97ce946760893072cdf3bf6cdd18c296394a55621f9/devpi-0.9.tar.gz",
+            "yanked": "brownbag",
+        }
+        data = {
+            "meta": {"api-version": "1.0"},
+            "name": "devpi",
+            "files": [file_data],
+        }
+        if core_metadata is not None:
+            file_data["core-metadata"] = core_metadata
         pypistage.xom.http.mockresponse(
             URL(pypistage.remote_url).joinpath("devpi").asdir().url,
             code=200,
             content_type="application/vnd.pypi.simple.v1+json",
-            text="""{
-                "meta": {"api-version": "1.0"},
-                "name": "devpi",
-                "files": [
-                    {
-                        "filename":"devpi-0.9.tar.gz",
-                        "hashes":{
-                            "sha256":"b89846ad42cfee0e44934ef77f28ad44e90b7e744041ace91047dd4c7892cc5e"},
-                        "requires-python": ">=3.6",
-                        "url":"https://files.pythonhosted.org/packages/40/b6/45e98504eba446c8e97ce946760893072cdf3bf6cdd18c296394a55621f9/devpi-0.9.tar.gz",
-                        "yanked": "brownbag"}]}""",
+            text=json.dumps(data),
         )
         links = pypistage.get_releaselinks("devpi")
         link, = links
@@ -328,6 +344,7 @@ class TestExtPYPIDB:
             link.best_available_hash_spec
             == "sha256=b89846ad42cfee0e44934ef77f28ad44e90b7e744041ace91047dd4c7892cc5e"
         )
+        assert link.metadata_hashes == metadata_hashes
         assert link.yanked == "brownbag"
         assert link.require_python == ">=3.6"
 
@@ -857,9 +874,7 @@ class TestExtPYPIDB:
             assert pypistage.list_versions("foo") == {"1.0"}
 
     @pytest.mark.notransaction
-    def test_core_metadata(self, monkeypatch, pypistage, testapp):
-        # the command-line option alone isn't enough for remotes
-        monkeypatch.setattr(pypistage.xom.config.args, "enable_core_metadata", True)
+    def test_core_metadata(self, pypistage, testapp):
         pypistage.mock_simple(
             "foo", text='<a href="foo-1.0-py3-none-any.whl#sha256=1234"></a>'
         )
@@ -875,11 +890,16 @@ class TestExtPYPIDB:
         )
         (file_info,) = r.json["files"]
         assert "core-metadata" not in file_info
-        r = testapp.xget(404, "/root/pypi/+f/123/4/foo-1.0-py3-none-any.whl.metadata")
-        with pypistage.xom.keyfs.write_transaction():
-            pypistage.modify(remote_provides_core_metadata=True)
+        # the remote provides the file even though there is no hash
+        r = testapp.xget(200, "/root/pypi/+f/123/4/foo-1.0-py3-none-any.whl.metadata")
+        assert r.body == b"metadata"
+        # provide an empty metadata attribute
+        pypistage.mock_simple(
+            "foo",
+            text='<a href="foo-1.0-py3-none-any.whl#sha256=1234" data-core-metadata=""></a>',
+        )
         r = testapp.xget(200, "/root/pypi/+simple/foo/")
-        assert "core-metadata" in r.text
+        assert 'core-metadata="true"' in r.text
         r = testapp.xget(
             200,
             "/root/pypi/+simple/foo/",
@@ -887,8 +907,34 @@ class TestExtPYPIDB:
         )
         (file_info,) = r.json["files"]
         assert file_info["core-metadata"] is True
-        r = testapp.xget(200, "/root/pypi/+f/123/4/foo-1.0-py3-none-any.whl.metadata")
-        assert r.body == b"metadata"
+        # provide metadata="true" attribute
+        pypistage.mock_simple(
+            "foo",
+            text='<a href="foo-1.0-py3-none-any.whl#sha256=1234" data-core-metadata="true"></a>',
+        )
+        r = testapp.xget(200, "/root/pypi/+simple/foo/")
+        assert 'core-metadata="true"' in r.text
+        r = testapp.xget(
+            200,
+            "/root/pypi/+simple/foo/",
+            headers={"Accept": "application/vnd.pypi.simple.v1+json"},
+        )
+        (file_info,) = r.json["files"]
+        assert file_info["core-metadata"] is True
+        # provide metadata hash spec attribute
+        pypistage.mock_simple(
+            "foo",
+            text='<a href="foo-1.0-py3-none-any.whl#sha256=1234" data-core-metadata="sha256=5678"></a>',
+        )
+        r = testapp.xget(200, "/root/pypi/+simple/foo/")
+        assert 'core-metadata="sha256=5678"' in r.text
+        r = testapp.xget(
+            200,
+            "/root/pypi/+simple/foo/",
+            headers={"Accept": "application/vnd.pypi.simple.v1+json"},
+        )
+        (file_info,) = r.json["files"]
+        assert file_info["core-metadata"] == dict(sha256="5678")
 
     @pytest.mark.notransaction
     def test_file_server_fresh_instance(self, pypistage, testapp):
@@ -1728,8 +1774,8 @@ def test_elinks(xom: XOM, pypistage: RemoteIndex) -> None:
         '<a href="/pack.age-0.9-1.tar.gz" />\n'
         '<a href="/pack.age-1.0.zip" />\n'
         '<a href="/pack.age-1.1.zip#sha256=a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3" />\n'
-        '<a href="/pack.age-1.2.zip#sha256=b3a8e0e1f9ab1bfe3a36f231f676f78bb30a519d2b21e6c530c0eee8ebb4a5d0" data-yanked="" />\n'
-        '<a href="/pack.age-2.0.zip#sha256=35a9e381b1a27567549b5f8a6f783c167ebf809f1c4d6a9e367240484d8ce281" data-requires-python="&gt;=3.5" />',
+        '<a href="/pack.age-1.2.zip#sha256=b3a8e0e1f9ab1bfe3a36f231f676f78bb30a519d2b21e6c530c0eee8ebb4a5d0" data-yanked="" data-core-metadata="" />\n'
+        '<a href="/pack.age-2.0.zip#sha256=35a9e381b1a27567549b5f8a6f783c167ebf809f1c4d6a9e367240484d8ce281" data-requires-python="&gt;=3.5" data-core-metadata="sha256=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" />',
     )
     with xom.keyfs.read_transaction():
         elinks = {
