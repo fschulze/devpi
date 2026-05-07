@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from attrs import define
 from attrs import field
 from attrs import frozen
 from contextlib import suppress
@@ -26,13 +27,13 @@ if TYPE_CHECKING:
     from .links import Yanked
     from .schema import Schema
     from attrs import Attribute
+    from collections.abc import Iterator
+    from devpi_common.metadata import Version
     from devpi_server.keyfs_types import LocatedKey
     from devpi_server.keyfs_types import ULIDKey
     from devpi_server.normalized import NormalizedName
     from devpi_server.readonly import DictViewReadonly
     from typing import Any
-
-    SimpleInfos = list["SimpleInfo"]
 
 
 SIMPLE_API_V1_JSON = "application/vnd.pypi.simple.v1+json"
@@ -50,6 +51,8 @@ class SimpleInfo:
     hashes: Digests = field()
     metadata_hashes: Digests | None = field()
     requires_python: RequiresPython
+    size: int | None
+    upload_time: str | None
     url: URL = field()
     yanked: Yanked
 
@@ -76,6 +79,8 @@ class SimpleInfo:
             hashes=Digests.from_spec(url.hash_spec) if url.hash_spec else Digests(),
             metadata_hashes=None,
             requires_python=None,
+            size=None,
+            upload_time=None,
             url=url.geturl_nofragment(),
             yanked=None,
         )
@@ -121,6 +126,21 @@ class SimpleInfo:
         if version is not None:
             entry.version = version
         return entry
+
+
+@define(kw_only=True)
+class SimpleInfos:
+    infos: list[SimpleInfo]
+    version: Version
+
+    def __getitem__(self, index: int) -> SimpleInfo:
+        return self.infos[index]
+
+    def __iter__(self) -> Iterator[SimpleInfo]:
+        return iter(self.infos)
+
+    def __len__(self) -> int:
+        return len(self.infos)
 
 
 class ProjectHTMLParser(HTMLParser):
@@ -209,7 +229,10 @@ class IndexParser:
     @property
     def releaselinks(self) -> SimpleInfos:
         # the BasenameMeta wrapping essentially does link validation
-        return [BasenameMeta(x).obj for x in self.basename2link.values()]
+        return SimpleInfos(
+            infos=[BasenameMeta(x).obj for x in self.basename2link.values()],
+            version=SIMPLE_API_V1_0_VERSION,
+        )
 
     def parse_index(self, disturl: URL, html: str) -> None:
         p = HTMLPage(html, disturl.url)
@@ -224,6 +247,8 @@ class IndexParser:
                 if link.metadata_hash_spec is None
                 else Digests.from_metadata_spec(link.metadata_hash_spec),
                 requires_python=link.requires_python,
+                size=None,
+                upload_time=None,
                 url=url.geturl_nofragment(),
                 yanked=link.yanked,
             )
@@ -249,12 +274,18 @@ def parse_index_v1_json(disturl: URL | str, text: str) -> SimpleInfos:
     api_version = parse_version(meta.get("api-version", "1.0"))
     if not (SIMPLE_API_V1_0_VERSION <= api_version < SIMPLE_API_V2_VERSION):
         raise ValueError(f"Wrong API version {api_version!r} in remote json response.")
-    result = []
-    for item in data["files"]:
+    if api_version >= SIMPLE_API_V1_1_VERSION:
+        return parse_index_v1_1_files(disturl, data["files"])
+    return parse_index_v1_0_files(disturl, data["files"])
+
+
+def parse_index_v1_0_files(disturl: URL, files: list[dict[str, Any]]) -> SimpleInfos:
+    result = SimpleInfos(infos=[], version=SIMPLE_API_V1_0_VERSION)
+    for item in files:
         metadata_hashes = item.get("core-metadata")
         url = disturl.joinpath(item["url"])
         # the BasenameMeta wrapping essentially does link validation
-        result.append(
+        result.infos.append(
             BasenameMeta(
                 SimpleInfo(
                     basename=url.basename,
@@ -265,6 +296,35 @@ def parse_index_v1_json(disturl: URL | str, text: str) -> SimpleInfos:
                         else Digests({} if metadata_hashes is True else metadata_hashes)
                     ),
                     requires_python=item.get("requires-python"),
+                    size=None,
+                    upload_time=None,
+                    url=url.geturl_nofragment(),
+                    yanked=item.get("yanked"),
+                )
+            ).obj
+        )
+    return result
+
+
+def parse_index_v1_1_files(disturl: URL, files: list[dict[str, Any]]) -> SimpleInfos:
+    result = SimpleInfos(infos=[], version=SIMPLE_API_V1_1_VERSION)
+    for item in files:
+        metadata_hashes = item.get("core-metadata")
+        url = disturl.joinpath(item["url"])
+        # the BasenameMeta wrapping essentially does link validation
+        result.infos.append(
+            BasenameMeta(
+                SimpleInfo(
+                    basename=url.basename,
+                    hashes=Digests(item["hashes"]),
+                    metadata_hashes=(
+                        None
+                        if metadata_hashes is None or metadata_hashes is False
+                        else Digests({} if metadata_hashes is True else metadata_hashes)
+                    ),
+                    requires_python=item.get("requires-python"),
+                    size=item["size"],
+                    upload_time=item.get("upload-time"),
                     url=url.geturl_nofragment(),
                     yanked=item.get("yanked"),
                 )
