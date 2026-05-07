@@ -1048,7 +1048,7 @@ class PyPIView:
         if 'error_on_noop' in self.request.params and oldconfig == json:
             apireturn(400, message="The requested modifications resulted in no changes")
         try:
-            ixconfig = stage.modify(**json, _keep_unknown=keep_unknown)
+            stage.modify(**json, _keep_unknown=keep_unknown)
         except InvalidIndexconfig as e:
             apireturn(400, message=", ".join(e.messages))
         try:
@@ -1064,7 +1064,7 @@ class PyPIView:
                     "request.apifatal instead.")
             else:
                 raise
-        apireturn(200, type="indexconfig", result=ixconfig)
+        apireturn(200, type="indexconfig", result=stage.ixconfig_mutable)
 
     @view_config(
         route_name="/{user}/{index}", request_method="DELETE",
