@@ -4,6 +4,7 @@ from .base import BaseIndex
 from .config import ACLList
 from .config import ConfigField
 from .config import InvalidIndexconfig
+from .config import UniqueTuple
 from .config import ensure_acl_list
 from .config import ensure_boolean
 from .config import ensure_list
@@ -160,7 +161,7 @@ class LocalIndex(BaseIndex):
                 name="bases",
                 default=(),
                 normalize=partial(normalize_bases, self.xom.model),
-                type=tuple,
+                type=UniqueTuple,
             ),
             ConfigField(name="custom_data", type=None),
             ConfigField(name="description", normalize=str, type=str),
