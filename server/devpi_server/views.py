@@ -792,13 +792,12 @@ class PyPIView:
                     yield f"<li>{escape(traversal_info['action'].title())} {escape(traversal_info['name'])}</li>\n".encode()
             yield b"</ol></traversal-infos>"
 
-        core_metadata = self.xom.config.args.enable_core_metadata
         make_url = self._makeurl_factory()
 
         for link in result:
             index_name = f"{link.user}/{link.index}"
             attribs = [f'href="{make_url(link.href).url}"']
-            if core_metadata and link.core_metadata is not None:
+            if link.core_metadata is not None:
                 metadata_spec = (
                     f"sha256={link.core_metadata['sha256']}"
                     if "sha256" in link.core_metadata
@@ -828,7 +827,6 @@ class PyPIView:
             '"files":['
         ).encode()
 
-        core_metadata = self.xom.config.args.enable_core_metadata
         make_url = self._makeurl_factory()
 
         first = True
@@ -840,7 +838,7 @@ class PyPIView:
                 "filename": link.key,
                 "url": url.url_nofrag,
                 "hashes": {url.hash_type: url.hash_value} if url.hash_type else {}}
-            if core_metadata and link.core_metadata is not None:
+            if link.core_metadata is not None:
                 data["core-metadata"] = link.core_metadata or True
             if link.require_python is not None:
                 data["requires-python"] = link.require_python
@@ -1679,8 +1677,6 @@ class PyPIView:
         file_exists = entry.file_exists()
 
         if is_metadata and stage.ixconfig["type"] == "remote" and not file_exists:
-            if not stage.provides_core_metadata:
-                return apireturn(404, "remote_provides_core_metadata disabled")
             url = url.replace(path=f"{url.path}.metadata")
             try:
                 app_iter = iter_stream_remote_file(
@@ -1760,8 +1756,6 @@ class PyPIView:
         relpath = self._relpath_from_request()
         is_metadata = relpath.endswith(".metadata")
         if is_metadata:
-            if not self.xom.config.args.enable_core_metadata:
-                return apireturn(404, "core-metadata is disabled")
             relpath = relpath.removesuffix(".metadata")
         # when a release is deleted from a remote, we update the metadata,
         # hence the key won't exist anymore, but we don't delete the file.
@@ -1778,8 +1772,6 @@ class PyPIView:
         relpath = self._relpath_from_request()
         is_metadata = relpath.endswith(".metadata")
         if is_metadata:
-            if not self.xom.config.args.enable_core_metadata:
-                return apireturn(404, "core-metadata is disabled")
             relpath = relpath.removesuffix(".metadata")
         entry = self.xom.filestore.get_file_entry(relpath)
         if entry is None:

@@ -52,22 +52,40 @@ class HTMLPage:
             except ValueError:
                 continue
 
+            core_metadata = anchor.get("data-core-metadata")
+            metadata_hash_spec = (
+                anchor.get("data-dist-info-metadata")
+                if core_metadata is None
+                else core_metadata
+            )
             pyrequire = anchor.get("data-requires-python")
             yanked = anchor.get("data-yanked")
-            yield Link(url, self, requires_python=pyrequire, yanked=yanked)
+            yield Link(
+                url,
+                self,
+                metadata_hash_spec=metadata_hash_spec,
+                requires_python=pyrequire,
+                yanked=yanked,
+            )
 
 
 class Link:
-    def __init__(self, url, comes_from=None, *, requires_python, yanked):
+    def __init__(
+        self, url, comes_from=None, *, metadata_hash_spec, requires_python, yanked
+    ):
         self.url = url
         self.comes_from = comes_from
+        self.metadata_hash_spec = metadata_hash_spec
         self.requires_python = requires_python or None
         self.yanked = yanked
 
     def __repr__(self) -> str:
+        metadata_hash_spec = (
+            f" (from {self.metadata_hash_spec})" if self.metadata_hash_spec else ""
+        )
         rp = (
             f" (requires-python:{self.requires_python})" if self.requires_python else ""
         )
         yanked = f" (yanked: {self.yanked})" if self.yanked else ""
         comes_from = f" (from {self.comes_from})" if self.comes_from else ""
-        return f"<Link {self.url}{comes_from}{rp}{yanked}>"
+        return f"<Link {self.url}{comes_from}{metadata_hash_spec}{rp}{yanked}>"
