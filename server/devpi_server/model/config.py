@@ -35,12 +35,16 @@ class ConfigField(Generic[CT]):
         key = self.name
         typ = self.expected_type(ixconfig)
         match typ:
-            case type() if issubclass(typ, list):
+            case type() if issubclass(typ, UniqueList):
                 if value not in ixconfig[key]:
                     ixconfig[key].append(value)
-            case type() if issubclass(typ, tuple):
+            case type() if issubclass(typ, list):
+                ixconfig[key].append(value)
+            case type() if issubclass(typ, UniqueTuple):
                 if value not in ixconfig[key]:
                     ixconfig[key] += (value,)
+            case type() if issubclass(typ, tuple):
+                ixconfig[key] += (value,)
             case _:
                 raise TypeError(f"don't know how to handle type {typ!r}")
 
@@ -184,9 +188,17 @@ class RemoveValue:
     """Marker object for index configuration keys to remove."""
 
 
-class ACLList(list):
+class UniqueList(list):
+    pass
+
+
+class ACLList(UniqueList):
     # marker class for devpiserver_indexconfig_defaults
     pass
+
+
+class UniqueTuple(tuple):
+    __slots__ = ()
 
 
 def ensure_acl_list(data: Any) -> list[str]:
