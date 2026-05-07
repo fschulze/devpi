@@ -128,29 +128,36 @@ devpi install: installing a package
 We can now use the ``devpi`` command line client to trigger a ``pip
 install`` of a pypi package using the index from our already running server::
 
-    $ devpi install pytest==8.3.5 attrs==23.1.0 exceptiongroup==1.3.1 iniconfig==2.0.0 pluggy==1.6.0 py==1.11.0 toml==0.10.2 typing_extensions==4.15.0
+    $ devpi install pytest==8.3.5 attrs==23.1.0 exceptiongroup==1.3.1 iniconfig==2.0.0 packaging==26.2 pluggy==1.6.0 py==1.11.0 toml==0.10.2 typing_extensions==4.15.0
     --> .$ /tmp/docenv/bin/pip --version
-    --> .$ /tmp/docenv/bin/pip install -U pytest==8.3.5 attrs==23.1.0 exceptiongroup==1.3.1 iniconfig==2.0.0 pluggy==1.6.0 py==1.11.0 toml==0.10.2 typing_extensions==4.15.0  [PIP_INDEX_URL=URL('http://****:****@localhost:3141/testuser/dev/+simple/'),PIP_PRE='1',PIP_USE_WHEEL='1']
+    --> .$ /tmp/docenv/bin/pip install -U pytest==8.3.5 attrs==23.1.0 exceptiongroup==1.3.1 iniconfig==2.0.0 packaging==26.2 pluggy==1.6.0 py==1.11.0 toml==0.10.2 typing_extensions==4.15.0  [PIP_INDEX_URL=URL('http://****:****@localhost:3141/testuser/dev/+simple/'),PIP_PRE='1',PIP_USE_WHEEL='1']
     Looking in indexes: http://testuser:****@localhost:3141/testuser/dev/+simple/
     Collecting pytest==8.3.5
-      Downloading pytest-8.3.5-py3-none-any.whl (343 kB)
+      Downloading pytest-8.3.5-py3-none-any.whl.metadata (7.6 kB)
     Collecting attrs==23.1.0
-      Downloading attrs-23.1.0-py3-none-any.whl (61 kB)
+      Downloading attrs-23.1.0-py3-none-any.whl.metadata (11 kB)
     Collecting exceptiongroup==1.3.1
-      Downloading exceptiongroup-1.3.1-py3-none-any.whl (16 kB)
+      Downloading exceptiongroup-1.3.1-py3-none-any.whl.metadata (6.7 kB)
     Collecting iniconfig==2.0.0
-      Downloading iniconfig-2.0.0-py3-none-any.whl (5.9 kB)
+      Downloading iniconfig-2.0.0-py3-none-any.whl.metadata (2.6 kB)
+    Requirement already satisfied: packaging==26.2 in /tmp/docenv/lib/python3.9/site-packages (26.2)
     Collecting pluggy==1.6.0
-      Downloading pluggy-1.6.0-py3-none-any.whl (20 kB)
+      Downloading pluggy-1.6.0-py3-none-any.whl.metadata (4.8 kB)
     Collecting py==1.11.0
-      Downloading py-1.11.0-py2.py3-none-any.whl (98 kB)
+      Downloading py-1.11.0-py2.py3-none-any.whl.metadata (2.8 kB)
     Collecting toml==0.10.2
-      Downloading toml-0.10.2-py2.py3-none-any.whl (16 kB)
+      Downloading toml-0.10.2-py2.py3-none-any.whl.metadata (7.1 kB)
     Collecting typing_extensions==4.15.0
-      Downloading typing_extensions-4.15.0-py3-none-any.whl (44 kB)
-    Requirement already satisfied: packaging in /tmp/docenv/lib/python3.9/site-packages (from pytest==8.3.5) (26.0)
-    Requirement already satisfied: tomli>=1 in /tmp/docenv/lib/python3.9/site-packages (from pytest==8.3.5) (2.4.0)
-    Installing collected packages: typing_extensions, toml, py, pluggy, iniconfig, attrs, exceptiongroup, pytest
+      Downloading typing_extensions-4.15.0-py3-none-any.whl.metadata (3.3 kB)
+    Downloading pytest-8.3.5-py3-none-any.whl (343 kB)
+    Downloading pluggy-1.6.0-py3-none-any.whl (20 kB)
+    Downloading attrs-23.1.0-py3-none-any.whl (61 kB)
+    Downloading exceptiongroup-1.3.1-py3-none-any.whl (16 kB)
+    Downloading iniconfig-2.0.0-py3-none-any.whl (5.9 kB)
+    Downloading py-1.11.0-py2.py3-none-any.whl (98 kB)
+    Downloading toml-0.10.2-py2.py3-none-any.whl (16 kB)
+    Downloading typing_extensions-4.15.0-py3-none-any.whl (44 kB)
+    Installing collected packages: typing_extensions, toml, py, pluggy, iniconfig, attrs, pytest, exceptiongroup
     Successfully installed attrs-23.1.0 exceptiongroup-1.3.1 iniconfig-2.0.0 pluggy-1.6.0 py-1.11.0 pytest-8.3.5 toml-0.10.2 typing_extensions-4.15.0
 
 The ``devpi install`` command configured a pip call, using the
@@ -220,7 +227,8 @@ We can now install the freshly uploaded package::
     --> .$ /tmp/docenv/bin/pip install -U example  [PIP_INDEX_URL=URL('http://****:****@localhost:3141/testuser/dev/+simple/'),PIP_PRE='1',PIP_USE_WHEEL='1']
     Looking in indexes: http://testuser:****@localhost:3141/testuser/dev/+simple/
     Collecting example
-      Downloading example-1.0-py3-none-any.whl (1.4 kB)
+      Downloading example-1.0-py3-none-any.whl.metadata (257 bytes)
+    Downloading example-1.0-py3-none-any.whl (1.4 kB)
     Installing collected packages: example
     Successfully installed example-1.0
 

@@ -1,0 +1,1 @@
+Removed experimental ``--enable-core-metadata`` command line option, the feature is now always enabled.

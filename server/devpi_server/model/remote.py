@@ -83,6 +83,7 @@ if TYPE_CHECKING:
 class CacheLink(TypedDict):
     relpath: str
     hashes: NotRequired[dict[str, str]]
+    metadata_hashes: NotRequired[dict[str, str]]
     requires_python: NotRequired[RequiresPython]
     yanked: NotRequired[Yanked]
 
@@ -307,8 +308,6 @@ def iter_fetch_remote_file(stage, entry, url):
 def join_links_data(
     releaselinks: SimpleInfos,
     key_index: LocatedKey | ULIDKey,
-    *,
-    core_metadata: bool,
 ) -> SimpleLinks:
     index = key_index.params["index"]
     schema = key_index.keyfs.schema
@@ -317,7 +316,7 @@ def join_links_data(
         [
             SimplelinkMeta(
                 basename=releaselink.basename,
-                core_metadata={} if core_metadata else None,
+                core_metadata=releaselink.metadata_hashes,
                 hashes=releaselink.hashes,
                 index=index,
                 relpath=index_relpath(
@@ -464,7 +463,6 @@ class RemoteData:
         if not self.key_project.exists(resolve_parents=True):
             return None
         stage = self.get_stage()
-        core_metadata = stage.provides_core_metadata
         key_simpledata = stage.key_simpledata(
             project=self.project
         ).with_resolved_parent()
@@ -474,7 +472,7 @@ class RemoteData:
             [
                 SimplelinkMeta(
                     basename=k.params["filename"],
-                    core_metadata={} if core_metadata else None,
+                    core_metadata=v.get("metadata_hashes"),
                     hashes=Digests(v["hashes"]) if "hashes" in v else Digests(),
                     index=index,
                     relpath=v["relpath"],
@@ -537,6 +535,8 @@ class RemoteData:
             link_data = data[fn] = CacheLink(relpath=key.name)
             if releaselink.hashes:
                 link_data["hashes"] = releaselink.hashes
+            if releaselink.metadata_hashes is not None:
+                link_data["metadata_hashes"] = releaselink.metadata_hashes
             if rp := releaselink.requires_python:
                 link_data["requires_python"] = rp
             if (
@@ -841,10 +841,6 @@ class RemoteIndex(BaseIndex):
         return None
 
     @property
-    def provides_core_metadata(self) -> bool:
-        return self.ixconfig.get("remote_provides_core_metadata", False)
-
-    @property
     def no_project_list(self) -> bool:
         return self.ixconfig.get("remote_no_project_list", False)
 
@@ -861,11 +857,6 @@ class RemoteIndex(BaseIndex):
             ),
             ConfigField(
                 name="remote_no_project_list", normalize=ensure_boolean, type=bool
-            ),
-            ConfigField(
-                name="remote_provides_core_metadata",
-                normalize=ensure_boolean,
-                type=bool,
             ),
             ConfigField(
                 name="remote_refresh_delay",
@@ -1318,9 +1309,7 @@ class RemoteIndex(BaseIndex):
         info = await newlinks_future
         threadlog.debug("Got simple links for %r", project)
 
-        newlinks = join_links_data(
-            info.releaselinks, self.key_index, core_metadata=self.provides_core_metadata
-        )
+        newlinks = join_links_data(info.releaselinks, self.key_index)
         with self.keyfs.write_transaction():
             self.keyfs.tx.on_finished(lock.release)
             # fetch current links
@@ -1443,9 +1432,7 @@ class RemoteIndex(BaseIndex):
 
         info = newlinks_future.result()
 
-        newlinks = join_links_data(
-            info.releaselinks, self.key_index, core_metadata=self.provides_core_metadata
-        )
+        newlinks = join_links_data(info.releaselinks, self.key_index)
         if links is not None and set(links) == set(newlinks):
             # no changes
             self.cache_retrieve_times.refresh(project, info.cache_info["etag"])
@@ -1509,20 +1496,40 @@ class RemoteIndex(BaseIndex):
             .get("serial")
         )
 
-    def _get_elink_from_entry(self, entry: BaseFileEntry) -> ELink | None:
-        return ELink(
-            entry,
-            dict(
-                rel=Rel.ReleaseFile,
-                entrypath=entry.relpath,
-                relpath=entry.index_relpath,
-                hashes=entry.hashes,
-            ),
+    def _get_elink_dict(
+        self, entry_or_simplelink: BaseFileEntry | SimplelinkMeta
+    ) -> dict:
+        if isinstance(entry_or_simplelink, SimplelinkMeta):
+            entrypath = entry_or_simplelink.path
+            relpath = entry_or_simplelink.relpath
+            metadata_hashes = entry_or_simplelink.core_metadata
+        else:
+            entrypath = entry_or_simplelink.relpath
+            relpath = entry_or_simplelink.index_relpath
+            remotefiledata = (
+                self.key_remotefile(
+                    entry_or_simplelink.project, entry_or_simplelink.basename
+                )
+                .with_resolved_parent()
+                .get()
+            )
+            metadata_hashes = remotefiledata.get("metadata_hashes")
+        elink = dict(
+            rel=Rel.ReleaseFile,
+            entrypath=entrypath,
+            relpath=relpath,
+            hashes=entry_or_simplelink.hashes,
         )
+        if metadata_hashes is not None:
+            elink["metadata_hashes"] = metadata_hashes
+        return elink
+
+    def _get_elink_from_entry(self, entry: BaseFileEntry) -> ELink | None:
+        return ELink(entry, self._get_elink_dict(entry))
 
     def _get_elink_dicts(
         self, project: str, version: str, *, rel: Rel | None = None
-    ) -> list:
+    ) -> list[dict]:
         if rel not in (Rel.ReleaseFile, None):
             return []
         verdata = self.get_versiondata_perstage(project, version, with_elinks=True)
@@ -1561,15 +1568,7 @@ class RemoteIndex(BaseIndex):
                 if sm.yanked is not None and sm.yanked is not False:
                     verdata["yanked"] = sm.yanked
                 if with_elinks:
-                    elinks = verdata.setdefault("+elinks", [])
-                    elinks.append(
-                        dict(
-                            rel=Rel.ReleaseFile,
-                            relpath=sm.relpath,
-                            entrypath=sm.path,
-                            hashes=sm.hashes,
-                        )
-                    )
+                    verdata.setdefault("+elinks", []).append(self._get_elink_dict(sm))
         return ensure_deeply_readonly(verdata)
 
 

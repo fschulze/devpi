@@ -393,6 +393,7 @@ class BaseIndex:
                 dict(
                     relpath=l.relpath,
                     hashes=l.hashes,
+                    metadata_hashes=l.core_metadata,
                     rel=Rel.ReleaseFile,
                     require_python=l.require_python,
                     yanked=l.yanked,
