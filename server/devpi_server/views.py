@@ -964,16 +964,24 @@ class PyPIView:
 
     @view_config(
         route_name="/{user}/{index}/+simple/{project}/refresh", request_method="POST")
-    def simple_refresh(self):
+    def simple_refresh(self) -> HTTPFound:
         context = self.context
-        for stage in context.stage.sro():
-            if stage.index_type != "remote":
-                continue
-            stage.clear_simplelinks_cache(context.project)
-            stage.get_simplelinks_perstage(context.project)
-        return HTTPFound(location=self.request.route_url(
-            "/{user}/{index}/+simple/{project}/",
-            user=context.username, index=context.index, project=context.project))
+        project = context.project
+        inheritance_info = context.stage.index_bases.get_project_inheritance_info(
+            project
+        )
+        for traversed_index in inheritance_info.iter_remotes():
+            remote = traversed_index.index
+            remote.clear_simplelinks_cache(project)
+            remote.get_simplelinks_perstage(project)
+        return HTTPFound(
+            location=self.request.route_url(
+                "/{user}/{index}/+simple/{project}/",
+                user=context.username,
+                index=context.index,
+                project=project,
+            )
+        )
 
     @view_config(
         route_name="/{user}/{index}", request_method="PUT")
