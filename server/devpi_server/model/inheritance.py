@@ -235,6 +235,10 @@ class ProjectInheritanceInfo:
             ):
                 yield traversal_info
 
+    def iter_remotes(self) -> Iterator[TraversedIndex]:
+        for traversal_info, _has_project in self._iter_remotes():
+            yield traversal_info
+
     def jsonable(self) -> dict:
         return dict(
             has_project_from_remote=has_project_str_map[self.has_project_from_remote],
