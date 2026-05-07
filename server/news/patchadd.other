@@ -1,0 +1,1 @@
+Since 6.9.2 only unique values where added when using ``+=`` via PATCH to all list or tuple types. Now this only applies to ACLList and the new UniqueList and UniqueTuple classes, regular list and tuple allow adding duplicate values again. This restores compatibility with devpi-pr.
