@@ -94,7 +94,8 @@ Then we install a package from PyPI::
    --> .$ /tmp/docenv/bin/pip install -U lazy==1.4  [PIP_INDEX_URL=URL('http://****:****@localhost:3141/emilie/dev/+simple/'),PIP_PRE='1',PIP_USE_WHEEL='1']
    Looking in indexes: http://emilie:****@localhost:3141/emilie/dev/+simple/
    Collecting lazy==1.4
-     Downloading lazy-1.4-py2.py3-none-any.whl (6.2 kB)
+     Downloading lazy-1.4-py2.py3-none-any.whl.metadata (2.9 kB)
+   Downloading lazy-1.4-py2.py3-none-any.whl (6.2 kB)
    Installing collected packages: lazy
    Successfully installed lazy-1.4
 
