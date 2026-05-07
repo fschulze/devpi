@@ -55,6 +55,7 @@ class FileLogEntry(TypedDict):
     when: str
     count: NotRequired[int]
     dst: NotRequired[str]
+    message: NotRequired[str]
     src: NotRequired[str]
 
 
@@ -175,6 +176,7 @@ class ELink(Generic[F]):
         *,
         count: int | None = None,
         dst: str | None = None,
+        message: str | None = None,
         src: str | None = None,
         when: str | None = None,
     ) -> None:
@@ -185,6 +187,8 @@ class ELink(Generic[F]):
             d["count"] = count
         if dst is not None:
             d["dst"] = dst
+        if message is not None:
+            d["message"] = message
         if src is not None:
             d["src"] = src
         if when is not None:
