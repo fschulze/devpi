@@ -96,6 +96,7 @@ class ELink(Generic[F]):
     _log: MutableSequence[FileLogEntry] = linkdictprop("log")
     index_relpath = linkdictprop("relpath")
     for_relpath = linkdictprop("for_relpath", default=None)
+    metadata_hashes = linkdictprop("metadata_hashes", default=None)
     rel = linkdictprop("rel", default=None)
     require_python = linkdictprop("require_python")
     yanked = linkdictprop("yanked")
@@ -541,7 +542,9 @@ class SimplelinkMeta:
         return hash(
             (
                 self.basename,
-                self.core_metadata,
+                None
+                if self.core_metadata is None
+                else tuple(sorted(self.core_metadata.items())),
                 tuple(sorted(self.hashes.items())),
                 self.index,
                 self.relpath,
