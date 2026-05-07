@@ -964,6 +964,11 @@ class Writer:
         assert records is not None
         del self.records
         execute(
+            sa.delete(self.conn.crash_actions_table).where(
+                self.conn.crash_actions_table.c.serial < commit_serial
+            )
+        )
+        execute(
             sa.insert(self.conn.crash_actions_table).values(
                 (commit_serial, dumps(self.crash_actions))
             )
