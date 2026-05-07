@@ -52,6 +52,16 @@ def test_index_patch(testapp):
     testapp.patch_json("/foo/dev", ["bases+=root/pypi"])
     r = testapp.get("/foo/dev")
     assert r.json['result']['bases'] == ['root/pypi']
+    # add again to bases
+    testapp.patch_json("/foo/dev", ["bases+=root/pypi"])
+    r = testapp.get("/foo/dev")
+    assert r.json["result"]["bases"] == ["root/pypi"]
+    # add again to bases with error
+    r = testapp.patch_json(
+        "/foo/dev?error_on_noop", ["bases+=root/pypi"], expect_errors=True
+    )
+    assert r.status_code == 400
+    assert r.json["message"] == "The requested modifications resulted in no changes"
     # remove from bases
     testapp.patch_json("/foo/dev", ["bases-=root/pypi"])
     r = testapp.get("/foo/dev")
