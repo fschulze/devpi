@@ -87,6 +87,8 @@ class CacheLink(TypedDict):
     hashes: NotRequired[dict[str, str]]
     metadata_hashes: NotRequired[dict[str, str]]
     requires_python: NotRequired[RequiresPython]
+    size: NotRequired[int]
+    upload_time: NotRequired[str]
     yanked: NotRequired[Yanked]
 
 
@@ -103,6 +105,7 @@ class NewLinks:
 
 
 NewLinksFuture = Future[NewLinks]
+REMOTEFILE_IGNORED_KEYS = frozenset({"hashes", "size"})
 
 
 def _headers_from_response(r):
@@ -334,8 +337,8 @@ def join_links_data(
                     AbsPath(releaselink.make_key(schema, key_index).relpath),
                 ),
                 require_python=releaselink.requires_python,
-                size=None,
-                upload_time=None,
+                size=releaselink.size,
+                upload_time=releaselink.upload_time,
                 user=user,
                 yanked=None if releaselink.yanked is False else releaselink.yanked,
             )
@@ -548,6 +551,10 @@ class RemoteData:
                 link_data["metadata_hashes"] = releaselink.metadata_hashes
             if rp := releaselink.requires_python:
                 link_data["requires_python"] = rp
+            if releaselink.size is not None:
+                link_data["size"] = releaselink.size
+            if releaselink.upload_time is not None:
+                link_data["upload_time"] = releaselink.upload_time
             if (
                 y := None if releaselink.yanked is False else releaselink.yanked
             ) is not None:
@@ -609,6 +616,7 @@ class RemoteData:
                         entry._hashes = hashes
                         del hashes
                     entry.project = project
+                    entry.size = new_value.get("size")
                     entry.version = name_version_map[name]
                     del entry
                     key_simpledata(version=name_version_map[name], filename=name).set(
@@ -624,7 +632,11 @@ class RemoteData:
             ):
                 num_new += 1
                 ulid_key.set(
-                    {k: v for k, v in data[ulid_key.name].items() if k != "hashes"}
+                    {
+                        k: v
+                        for k, v in data[ulid_key.name].items()
+                        if k not in REMOTEFILE_IGNORED_KEYS
+                    }
                 )
                 (projectname, version, _pyver, _ext) = split_name_version_pyversion_ext(
                     project, ulid_key.name
@@ -646,6 +658,7 @@ class RemoteData:
                     entry._hashes = hashes
                     del hashes
                 entry.project = project
+                entry.size = data[name].get("size")
                 entry.version = name_version_map[name]
                 del entry, name
             del new_file_keys
@@ -696,7 +709,9 @@ class RemoteData:
             assert not simpledata
             data: dict = {}
             yield data
-            remotefiledata.update({k: v for k, v in data.items() if k != "hashes"})
+            remotefiledata.update(
+                {k: v for k, v in data.items() if k not in REMOTEFILE_IGNORED_KEYS}
+            )
             simpledata.update(data)
 
 
