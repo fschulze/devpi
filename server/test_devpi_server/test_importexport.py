@@ -13,7 +13,9 @@ from devpi_server.importexport import IndexTree
 from devpi_server.importexport import do_export
 from devpi_server.importexport import do_import
 from devpi_server.main import Fatal
+from devpi_server.model.links import Rel
 from devpi_server.normalized import normalize_name
+from devpi_server.readonly import get_mutable_deepcopy
 from io import BytesIO
 import devpi_server
 import importlib.resources
@@ -591,8 +593,8 @@ class TestImportExport:
             '<a href="/pack.age-0.9-1.tar.gz" />\n'
             '<a href="/pack.age-1.0.zip" />\n'
             '<a href="/pack.age-1.1.zip#sha256=a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3" />\n'
-            '<a href="/pack.age-1.2.zip#sha256=b3a8e0e1f9ab1bfe3a36f231f676f78bb30a519d2b21e6c530c0eee8ebb4a5d0" data-yanked="" />\n'
-            '<a href="/pack.age-2.0.zip#sha256=35a9e381b1a27567549b5f8a6f783c167ebf809f1c4d6a9e367240484d8ce281" data-requires-python="&gt;=3.5" />',
+            '<a href="/pack.age-1.2.zip#sha256=b3a8e0e1f9ab1bfe3a36f231f676f78bb30a519d2b21e6c530c0eee8ebb4a5d0" data-yanked="" data-core-metadata="" />\n'
+            '<a href="/pack.age-2.0.zip#sha256=35a9e381b1a27567549b5f8a6f783c167ebf809f1c4d6a9e367240484d8ce281" data-requires-python="&gt;=3.5" data-core-metadata="sha256=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" />',
         )
         content1 = b"abc"
         hashdir1 = relpath_prefix(content1)
@@ -602,9 +604,11 @@ class TestImportExport:
         pypistage.mock_extfile("/pack.age-1.1.zip", content2)
         content3 = b"456"
         hashdir3 = relpath_prefix(content3)
+        hashes3 = get_hashes(content3, additional_hash_types=("sha256",))
         pypistage.mock_extfile("/pack.age-1.2.zip", content3)
         content4 = b"789"
         hashdir4 = relpath_prefix(content4)
+        hashes4 = get_hashes(content4, additional_hash_types=("sha256",))
         pypistage.mock_extfile("/pack.age-2.0.zip", content4)
         r = testapp.get(api.index + "/+simple/pack-age/")
         assert r.status_code == 200
@@ -630,7 +634,7 @@ class TestImportExport:
             projects = stage.list_projects_perstage()
             assert projects == {normalize_name("pack.age"): "pack-age"}
             links = sorted(
-                (x.key, x.path, x.require_python, x.yanked)
+                (x.key, x.path, x.require_python, x.yanked, x.core_metadata)
                 for x in stage.get_simplelinks_perstage("pack.age")
             )
             assert links == [
@@ -639,10 +643,12 @@ class TestImportExport:
                     f"root/pypi/+f/{hashdir1}/pack.age-0.9-1.tar.gz",
                     None,
                     None,
+                    None,
                 ),
                 (
                     "pack.age-1.1.zip",
                     f"root/pypi/+f/{hashdir2}/pack.age-1.1.zip",
+                    None,
                     None,
                     None,
                 ),
@@ -651,14 +657,52 @@ class TestImportExport:
                     f"root/pypi/+f/{hashdir3}/pack.age-1.2.zip",
                     None,
                     "",
+                    {},
                 ),
                 (
                     "pack.age-2.0.zip",
                     f"root/pypi/+f/{hashdir4}/pack.age-2.0.zip",
                     ">=3.5",
                     None,
+                    dict(
+                        sha256="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                    ),
                 ),
             ]
+            assert get_mutable_deepcopy(
+                stage.get_versiondata_perstage("pack-age", "1.2")
+            ) == {
+                "name": "pack-age",
+                "version": "1.2",
+                "yanked": "",
+                "+elinks": [
+                    {
+                        "entrypath": f"root/pypi/+f/{hashdir3}/pack.age-1.2.zip",
+                        "hashes": hashes3,
+                        "metadata_hashes": {},
+                        "rel": Rel.ReleaseFile,
+                        "relpath": f"+f/{hashdir3}/pack.age-1.2.zip",
+                    }
+                ],
+            }
+            assert get_mutable_deepcopy(
+                stage.get_versiondata_perstage("pack-age", "2.0")
+            ) == {
+                "name": "pack-age",
+                "version": "2.0",
+                "requires_python": ">=3.5",
+                "+elinks": [
+                    {
+                        "entrypath": f"root/pypi/+f/{hashdir4}/pack.age-2.0.zip",
+                        "hashes": hashes4,
+                        "metadata_hashes": dict(
+                            sha256="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                        ),
+                        "rel": Rel.ReleaseFile,
+                        "relpath": f"+f/{hashdir4}/pack.age-2.0.zip",
+                    }
+                ],
+            }
 
     def test_mirrordata(self, impexp):
         hashes = get_hashes(b"content", additional_hash_types=("sha256",))
@@ -688,7 +732,6 @@ class TestImportExport:
                 remote_refresh_delay=600,
                 remote_ignore_serial_header=True,
                 remote_no_project_list=True,
-                remote_provides_core_metadata=True,
                 remote_url="https://example.com/simple/",
                 remote_use_external_urls=True,
                 remote_web_url_fmt="https://example.com/project/{name}/",

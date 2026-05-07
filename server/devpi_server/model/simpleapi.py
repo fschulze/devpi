@@ -48,6 +48,7 @@ SIMPLE_API_ACCEPT = (
 class SimpleInfo:
     basename: str
     hashes: Digests = field()
+    metadata_hashes: Digests | None = field()
     requires_python: RequiresPython
     url: URL = field()
     yanked: Yanked
@@ -55,6 +56,10 @@ class SimpleInfo:
     @hashes.validator
     def _check_hashes(self, _attribute: Attribute, value: Digests) -> None:
         assert isinstance(value, Digests)
+
+    @metadata_hashes.validator
+    def _check_metadata_hashes(self, _attribute: Attribute, value: Digests) -> None:
+        assert value is None or isinstance(value, Digests)
 
     @url.validator
     def _check_url(self, _attribute: Attribute, value: URL) -> None:
@@ -69,6 +74,7 @@ class SimpleInfo:
         return cls(
             basename=url.basename,
             hashes=Digests.from_spec(url.hash_spec) if url.hash_spec else Digests(),
+            metadata_hashes=None,
             requires_python=None,
             url=url.geturl_nofragment(),
             yanked=None,
@@ -214,6 +220,9 @@ class IndexParser:
             newlink = SimpleInfo(
                 basename=url.basename,
                 hashes=Digests.from_spec(url.hash_spec) if url.hash_spec else Digests(),
+                metadata_hashes=None
+                if link.metadata_hash_spec is None
+                else Digests.from_metadata_spec(link.metadata_hash_spec),
                 requires_python=link.requires_python,
                 url=url.geturl_nofragment(),
                 yanked=link.yanked,
@@ -242,6 +251,7 @@ def parse_index_v1_json(disturl: URL | str, text: str) -> SimpleInfos:
         raise ValueError(f"Wrong API version {api_version!r} in remote json response.")
     result = []
     for item in data["files"]:
+        metadata_hashes = item.get("core-metadata")
         url = disturl.joinpath(item["url"])
         # the BasenameMeta wrapping essentially does link validation
         result.append(
@@ -249,6 +259,11 @@ def parse_index_v1_json(disturl: URL | str, text: str) -> SimpleInfos:
                 SimpleInfo(
                     basename=url.basename,
                     hashes=Digests(item["hashes"]),
+                    metadata_hashes=(
+                        None
+                        if metadata_hashes is None or metadata_hashes is False
+                        else Digests({} if metadata_hashes is True else metadata_hashes)
+                    ),
                     requires_python=item.get("requires-python"),
                     url=url.geturl_nofragment(),
                     yanked=item.get("yanked"),
