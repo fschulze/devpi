@@ -1,0 +1,1 @@
+Parse and store PEP 658 metadata hashes if a remote provides them. Refs #1018
