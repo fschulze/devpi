@@ -134,12 +134,23 @@ The title and description are used by ``devpi-web`` in the main overview page.
 
 Deleting a User
 ---------------
-   
+
+..
+
+   $ devpi-passwd root --passwd=''
+   INFO  NOCTX Loading node info from /tmp/home/.devpi/server/.nodeinfo
+   INFO  NOCTX wrote nodeinfo to: /tmp/home/.devpi/server/.nodeinfo
+   INFO  NOCTX serverdir: /tmp/home/.devpi/server
+   INFO  NOCTX uuid: 05a8855dbcf04ff3bbb2354a502e1a12
+   INFO  [Wtx5] setting password for user 'root'
+   INFO  [Wtx5] modified user 'root': *******
+   INFO  [Wtx5] fswriter6: committed at 6
+
 If a user is created by mistake or no longer should have access to the server::
 
    $ devpi user -c mistake password=1234
    user created: mistake
-   
+
 It is possible to delete it, provided the current logged in user as the appropriate 
 credentials::
 

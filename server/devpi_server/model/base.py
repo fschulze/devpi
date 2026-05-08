@@ -76,23 +76,25 @@ if TYPE_CHECKING:
     from typing import Any
 
 
-def run_passwd(root, username):
+def run_passwd(root, username, password=None, pwhash=None):
     user = root.get_user(username)
     log = threadlog
     if user is None:
         log.error("user %r not found", username)
         return 1
-    for _i in range(3):
-        pwd = getpass.getpass("enter password for %s: " % user.name)
-        pwd2 = getpass.getpass("repeat password for %s: " % user.name)
-        if pwd != pwd2:
-            log.error("password don't match")
+    if password is None and pwhash is None:
+        for _i in range(3):
+            pwd = getpass.getpass("enter password for %s: " % user.name)
+            pwd2 = getpass.getpass("repeat password for %s: " % user.name)
+            if pwd != pwd2:
+                log.error("password don't match")
+            else:
+                break
         else:
-            break
-    else:
-        log.error("no password set")
-        return 1
-    user.modify(password=pwd)
+            log.error("no password set")
+            return 1
+        password = pwd
+    user.modify(password=password, pwhash=pwhash)
     return None
 
 
