@@ -88,7 +88,7 @@ class User:
                     # only set modified if not created at the same time
                     modified_ts = strftime("%Y-%m-%dT%H:%M:%SZ", gmtime())
                     if modified_ts != userconfig["created"]:
-                        modified["modified"] = userconfig["modified"] = modified_ts
+                        userconfig["modified"] = modified_ts
             assert "indexes" not in userconfig
         return ["%s=%s" % (k, v) for k, v in sorted(modified.items())]
 

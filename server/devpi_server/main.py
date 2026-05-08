@@ -165,12 +165,12 @@ def xom_from_config(config, *, init=False):
     return XOM(config)
 
 
-def init_default_indexes(xom: XOM) -> None:
+def init_default_indexes(xom: XOM, *, empty_root_passwd: bool = False) -> None:
     # we deliberately call get_current_serial first to establish a connection
     # to the backend and in case of sqlite create the database
     if xom.keyfs.get_current_serial() == -1 and not xom.is_replica():
         with xom.keyfs.write_transaction():
-            set_default_indexes(xom.model)
+            set_default_indexes(xom.model, empty_root_passwd=empty_root_passwd)
 
 
 def _main(pluginmanager, argv=None):
@@ -748,13 +748,16 @@ def apireturn_for_request(request, *args, **kwargs):
     apireturn(*args, **kwargs)
 
 
-def set_default_indexes(model: RootModel) -> None:
+def set_default_indexes(model: RootModel, *, empty_root_passwd: bool = False) -> None:
     root_user = model.get_user("root")
     if not root_user:
-        root_user = model.create_user(
-            "root",
-            model.xom.config.root_passwd,
-            pwhash=model.xom.config.root_passwd_hash)
+        root_passwd = model.xom.config.root_passwd
+        if root_passwd is None and empty_root_passwd:
+            root_passwd = ""
+        root_passwd_hash = model.xom.config.root_passwd_hash
+        if root_passwd_hash is None and root_passwd == "":
+            threadlog.warning("Created root user with empty password!")
+        root_user = model.create_user("root", root_passwd, pwhash=root_passwd_hash)
         threadlog.info("created root user")
     if model.xom.config.no_root_pypi:
         return

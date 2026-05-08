@@ -55,4 +55,5 @@ regendoc \
     --normalize "@\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d+ INFO @INFO @" \
     --normalize "@\.temp/devpi-test-.+/targz/example-1\.0/\.tox/py/\.pytest_cache@.tox/py/.pytest_cache@" \
     --normalize "@^.*WARNING: Retrying.*ReadTimeoutError.*\$@@" \
+    --normalize "@INFO  NOCTX uuid: [a-z0-9]+@INFO  NOCTX uuid: 05a8855dbcf04ff3bbb2354a502e1a12@" \
     $*

@@ -20,6 +20,15 @@ def passwd():
         parser.add_configfile_option()
         parser.add_logging_options()
         parser.add_storage_options()
+        parser.addoption(
+            "--passwd", type=str, default=None, help="password to set for the user."
+        )
+        parser.addoption(
+            "--passwd-hash",
+            type=str,
+            default=None,
+            help="password hash to set for the user.",
+        )
         parser.add_argument("user", nargs='?')
         config = runner.get_config(sys.argv, parser)
         runner.configure_logging(config.args)
@@ -33,4 +42,9 @@ def passwd():
         if not username:
             raise Fatal("No user name provided.")
         with xom.keyfs.write_transaction():
-            return run_passwd(xom.model, username)
+            return run_passwd(
+                xom.model,
+                username,
+                password=xom.config.args.passwd,
+                pwhash=xom.config.args.passwd_hash,
+            )

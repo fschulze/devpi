@@ -349,9 +349,14 @@ def add_init_options(
         help="don't create root/pypi on server initialization.")
 
     parser.addoption(
-        "--root-passwd", type=str, default="",
-        help="initial password for the root user. This option has no "
-             "effect if the user 'root' already exist.")
+        "--root-passwd",
+        type=str,
+        default=None,
+        help=(
+            "initial password for the root user. "
+            "This option has no effect if the user 'root' already exist."
+        ),
+    )
 
     parser.addoption(
         "--root-passwd-hash", type=str, default=None,
@@ -971,7 +976,7 @@ class Config:
 
     @property
     def root_passwd(self):
-        return getattr(self.args, 'root_passwd', "")
+        return getattr(self.args, "root_passwd", None)
 
     @property
     def root_passwd_hash(self):
