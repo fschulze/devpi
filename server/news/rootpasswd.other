@@ -1,0 +1,1 @@
+By default the password of the root user is not set and you have to either use ``devpi-passwd`` after initialization, or one of the ``--root-passwd`` or ``--root-passwd-hash`` options with ``devpi-init``.
