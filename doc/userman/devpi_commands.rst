@@ -757,7 +757,7 @@ devpi command reference (server)
                             [False]
       --root-passwd ROOT_PASSWD
                             initial password for the root user. This option has no
-                            effect if the user 'root' already exist. []
+                            effect if the user 'root' already exist. [None]
       --root-passwd-hash ROOT_PASSWD_HASH
                             initial password hash for the root user. This option
                             has no effect if the user 'root' already exist. [None]
@@ -814,7 +814,7 @@ devpi command reference (server)
                             [False]
       --root-passwd ROOT_PASSWD
                             initial password for the root user. This option has no
-                            effect if the user 'root' already exist. []
+                            effect if the user 'root' already exist. [None]
       --root-passwd-hash ROOT_PASSWD_HASH
                             initial password hash for the root user. This option
                             has no effect if the user 'root' already exist. [None]
@@ -823,7 +823,8 @@ devpi command reference (server)
 
     $ devpi-passwd -h
     usage: devpi-passwd [-h] [-c CONFIGFILE] [--debug] [--logger-cfg LOGGER_CFG]
-                        [--serverdir DIR] [--storage NAME]
+                        [--serverdir DIR] [--storage NAME] [--passwd PASSWD]
+                        [--passwd-hash PASSWD_HASH]
                         [user]
 
     Change password for a user directly in devpi-server database.
@@ -844,6 +845,9 @@ devpi command reference (server)
                             backend using SQLAlchemy with files on the filesystem,
                             "sqla_pg8000": Postgresql backend using SQLAlchemy
                             with files in DB [sqla_lite]
+      --passwd PASSWD       password to set for the user. [None]
+      --passwd-hash PASSWD_HASH
+                            password hash to set for the user. [None]
 
 ::
 

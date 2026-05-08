@@ -392,7 +392,7 @@ def makexom(request, gen_path, http, monkeypatch, storage_args, storage_plugin):
         # initialize default indexes
         from devpi_server.main import init_default_indexes
         if not xom.config.primary_url:
-            init_default_indexes(xom)
+            init_default_indexes(xom, empty_root_passwd=True)
         if request.node.get_closest_marker("start_threads"):
             xom.thread_pool.start()
         elif request.node.get_closest_marker("with_notifier"):
@@ -1404,6 +1404,8 @@ def primary_host_port(primary_server_path, secretfile, storage_args):
                 "devpi-init",
                 "--serverdir",
                 str(primary_server_path),
+                "--root-passwd",
+                "",
                 "--no-root-pypi",
                 *storage_args(primary_server_path),
             ]

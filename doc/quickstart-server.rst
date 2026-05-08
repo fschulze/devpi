@@ -298,7 +298,6 @@ First initialize it::
     INFO  NOCTX Loading node info from /tmp/home/.devpi/server/.nodeinfo
     INFO  NOCTX generated uuid: 446e22e0db5e41a5989fd671e98ec30b
     INFO  NOCTX wrote nodeinfo to: /tmp/home/.devpi/server/.nodeinfo
-    INFO  [Wtx-1] setting password for user 'root'
     INFO  [Wtx-1] created user 'root'
     INFO  [Wtx-1] created root user
     INFO  [Wtx-1] created root/pypi index
@@ -382,17 +381,16 @@ root server.   And we are not logged in.
 setting the root password
 ++++++++++++++++++++++++++++++++++
 
-The first thing to do is to set a password for the ``root`` user.
-For that we first need to login::
+The first thing to do is to set a password for the ``root`` user::
 
-    $ devpi login root --password ''
-    logged in 'root', credentials valid for 10.00 hours
-
-and can then change it::
-
-    $ devpi user -m root password=123
-    /root changing password: ********
-    user modified: root
+    $ devpi-passwd root --passwd=''
+    INFO  NOCTX Loading node info from /tmp/home/.devpi/server/.nodeinfo
+    INFO  NOCTX wrote nodeinfo to: /tmp/home/.devpi/server/.nodeinfo
+    INFO  NOCTX serverdir: /tmp/home/.devpi/server
+    INFO  NOCTX uuid: 05a8855dbcf04ff3bbb2354a502e1a12
+    INFO  [Wtx1] setting password for user 'root'
+    INFO  [Wtx1] modified user 'root': *******
+    INFO  [Wtx1] fswriter2: committed at 2
 
 Let's verify we don't have any other users::
 
@@ -400,10 +398,6 @@ Let's verify we don't have any other users::
     root
 
 The root user can modify any index and any user configuration.
-As we don't plan to work further with the root user, we can log off::
-
-    $ devpi logoff
-    login information deleted
 
 Registering a new user
 ++++++++++++++++++++++++++++++++
