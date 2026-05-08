@@ -355,7 +355,8 @@ def test_serve_max_body(monkeypatch, tmpdir):
 
 def test_root_passwd_option(gen_path, makexom, storage_args):
     from devpi_server.init import init
-    # by default the password is empty
+
+    # by default the password is unset
     serverdir = gen_path()
     argv = [
         "devpi-init",
@@ -365,7 +366,8 @@ def test_root_passwd_option(gen_path, makexom, storage_args):
     xom = makexom(opts=("--serverdir", serverdir))
     with xom.keyfs.read_transaction():
         user = xom.model.get_user('root')
-        assert user.validate("")
+        assert "pwhash" not in user.get(credentials=True)
+        assert not user.validate("")
         assert not user.validate("foobar")
     # the password can be set from the command line
     serverdir = gen_path()
@@ -378,13 +380,15 @@ def test_root_passwd_option(gen_path, makexom, storage_args):
     xom = makexom(opts=("--serverdir", serverdir))
     with xom.keyfs.read_transaction():
         user = xom.model.get_user('root')
+        assert "pwhash" in user.get(credentials=True)
         assert not user.validate("")
         assert user.validate("foobar")
 
 
 def test_root_passwd_hash_option(gen_path, makexom, storage_args):
     from devpi_server.init import init
-    # by default the password is empty
+
+    # by default the password is unset
     serverdir = gen_path()
     argv = [
         "devpi-init",
@@ -394,7 +398,8 @@ def test_root_passwd_hash_option(gen_path, makexom, storage_args):
     xom = makexom(opts=("--serverdir", serverdir))
     with xom.keyfs.read_transaction():
         user = xom.model.get_user('root')
-        assert user.validate("")
+        assert "pwhash" not in user.get(credentials=True)
+        assert not user.validate("")
         assert not user.validate("foobar")
     # the password hash can be directly set from the command line
     serverdir = gen_path()
@@ -409,5 +414,6 @@ def test_root_passwd_hash_option(gen_path, makexom, storage_args):
     # this happened after passlib 1.7.2 made argon2id the default
     with xom.keyfs.write_transaction():
         user = xom.model.get_user('root')
+        assert "pwhash" in user.get(credentials=True)
         assert not user.validate("")
         assert user.validate("foobar")
