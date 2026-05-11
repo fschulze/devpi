@@ -475,7 +475,7 @@ def test_project_pep_691_core_metadata(mapp, testapp):
     with ZipFile(content_io, "w") as zf:
         zf.writestr("Pkg1-2.6.dist-info/METADATA", b"metadata")
     content = content_io.getvalue()
-    mapp.upload_file_pypi("Pkg1-2.6.whl", content, "pkg1", "2.6")
+    mapp.upload_file_pypi("pkg1-2.6-py3-none-any.whl", content, "pkg1", "2.6")
     r = testapp.xget(
         200,
         f"/{api.stagename}/+simple/pkg1",
