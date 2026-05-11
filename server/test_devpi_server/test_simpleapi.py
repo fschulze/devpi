@@ -97,12 +97,21 @@ class TestSimpleInfo:
         ],
     )
     def test_maplink_project_version(self, gen, releasename, project, version, xom):
+        from devpi_server.model.links import split_name_version_pyversion_ext
+        from devpi_server.normalized import normalize_name
+
         link = gen.pypi_package_link(releasename)
         info = SimpleInfo.from_url(link)
         entry = info.make_mutable_entry(xom.keyfs.schema, "root", "pypi", project)
         assert entry.relpath.endswith("/" + releasename)
         assert entry.project == project
         assert entry.version == version
+        if releasename.endswith(".whl"):
+            (p, v, _, _) = split_name_version_pyversion_ext(
+                fn=releasename, project=normalize_name(project)
+            )
+            assert p == project
+            assert v == version
 
     def test_maplink_project_bad_archive(self, gen, xom):
         link = gen.pypi_package_link("pytest-1.0.foo")

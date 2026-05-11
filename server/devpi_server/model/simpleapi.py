@@ -131,6 +131,7 @@ class SimpleInfo:
 @define(kw_only=True)
 class SimpleInfos:
     infos: list[SimpleInfo]
+    project: NormalizedName
     version: Version
 
     def __getitem__(self, index: int) -> SimpleInfo:
@@ -231,6 +232,7 @@ class IndexParser:
         # the BasenameMeta wrapping essentially does link validation
         return SimpleInfos(
             infos=[BasenameMeta(x).obj for x in self.basename2link.values()],
+            project=self.project,
             version=SIMPLE_API_V1_0_VERSION,
         )
 
@@ -266,7 +268,9 @@ def parse_index(disturl: URL | str, html: str) -> IndexParser:
     return parser
 
 
-def parse_index_v1_json(disturl: URL | str, text: str) -> SimpleInfos:
+def parse_index_v1_json(
+    project: NormalizedName, disturl: URL | str, text: str
+) -> SimpleInfos:
     if not isinstance(disturl, URL):
         disturl = URL(disturl)
     data = json.loads(text)
@@ -275,12 +279,14 @@ def parse_index_v1_json(disturl: URL | str, text: str) -> SimpleInfos:
     if not (SIMPLE_API_V1_0_VERSION <= api_version < SIMPLE_API_V2_VERSION):
         raise ValueError(f"Wrong API version {api_version!r} in remote json response.")
     if api_version >= SIMPLE_API_V1_1_VERSION:
-        return parse_index_v1_1_files(disturl, data["files"])
-    return parse_index_v1_0_files(disturl, data["files"])
+        return parse_index_v1_1_files(project, disturl, data["files"])
+    return parse_index_v1_0_files(project, disturl, data["files"])
 
 
-def parse_index_v1_0_files(disturl: URL, files: list[dict[str, Any]]) -> SimpleInfos:
-    result = SimpleInfos(infos=[], version=SIMPLE_API_V1_0_VERSION)
+def parse_index_v1_0_files(
+    project: NormalizedName, disturl: URL, files: list[dict[str, Any]]
+) -> SimpleInfos:
+    result = SimpleInfos(infos=[], project=project, version=SIMPLE_API_V1_0_VERSION)
     for item in files:
         metadata_hashes = item.get("core-metadata")
         url = disturl.joinpath(item["url"])
@@ -306,8 +312,10 @@ def parse_index_v1_0_files(disturl: URL, files: list[dict[str, Any]]) -> SimpleI
     return result
 
 
-def parse_index_v1_1_files(disturl: URL, files: list[dict[str, Any]]) -> SimpleInfos:
-    result = SimpleInfos(infos=[], version=SIMPLE_API_V1_1_VERSION)
+def parse_index_v1_1_files(
+    project: NormalizedName, disturl: URL, files: list[dict[str, Any]]
+) -> SimpleInfos:
+    result = SimpleInfos(infos=[], project=project, version=SIMPLE_API_V1_1_VERSION)
     for item in files:
         metadata_hashes = item.get("core-metadata")
         url = disturl.joinpath(item["url"])
