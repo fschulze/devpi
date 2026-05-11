@@ -5,10 +5,10 @@ from .exceptions import NonVolatile
 from .simpleapi import SIMPLE_API_V1_0_VERSION
 from .simpleapi import SIMPLE_API_V1_1_VERSION
 from devpi_common.metadata import parse_version
-from devpi_common.metadata import splitbasename
 from devpi_server.filestore import AbsPath
 from devpi_server.filestore import FileEntry
 from devpi_server.filestore import MutableFileEntry
+from devpi_server.filestore import split_name_version_pyversion_ext
 from devpi_server.keyfs_types import RelPath
 from devpi_server.log import threadlog
 from devpi_server.markers import NotSet
@@ -498,12 +498,13 @@ class SimplelinkMeta:
     __slots__ = (
         "__cmpval",
         "__ext",
-        "__name",
+        "__pyversion",
         "__version",
         "basename",
         "core_metadata",
         "hashes",
         "index",
+        "project",
         "relpath",
         "require_python",
         "size",
@@ -512,6 +513,9 @@ class SimplelinkMeta:
         "yanked",
     )
     __cmpval: tuple[Version, NormalizedName, str] | NotSet
+    __ext: str | NotSet
+    __pyversion: str | NotSet
+    __version: str | NotSet
 
     def __init__(
         self,
@@ -520,6 +524,7 @@ class SimplelinkMeta:
         core_metadata: dict[str, str] | None = None,
         hashes: Digests,
         index: str,
+        project: NormalizedName,
         relpath: RelPath,
         require_python: RequiresPython,
         size: int | None,
@@ -529,12 +534,13 @@ class SimplelinkMeta:
     ) -> None:
         self.__cmpval = notset
         self.__ext = notset
-        self.__name = notset
+        self.__pyversion = notset
         self.__version = notset
         self.basename = basename
         self.core_metadata = get_mutable_deepcopy(core_metadata)
         self.hashes = hashes
         self.index = index
+        self.project = project
         self.relpath = relpath
         self.require_python = require_python
         self.size = size
@@ -551,6 +557,7 @@ class SimplelinkMeta:
                 else tuple(sorted(self.core_metadata.items())),
                 tuple(sorted(self.hashes.items())),
                 self.index,
+                self.project,
                 self.relpath,
                 self.require_python,
                 self.size,
@@ -570,9 +577,11 @@ class SimplelinkMeta:
             other = other.cmpval
         return self.cmpval < other
 
-    def __splitbasename(self) -> None:
-        (self.__name, self.__version, self.__ext) = splitbasename(
-            self.basename, checkarch=False
+    def __split_name_version_ext(self) -> None:
+        (_name, self.__version, self.__pyversion, self.__ext) = (
+            split_name_version_pyversion_ext(
+                self.project, self.basename, checkarch=False
+            )
         )
 
     @property
@@ -600,16 +609,20 @@ class SimplelinkMeta:
 
     @property
     def name(self) -> str:
-        if self.__name is notset:
-            self.__splitbasename()
+        return self.project.original
+
+    @property
+    def pyversion(self) -> str:
+        if self.__pyversion is notset:
+            self.__split_name_version_ext()
         if TYPE_CHECKING:
-            assert isinstance(self.__name, str)
-        return self.__name
+            assert isinstance(self.__pyversion, str)
+        return self.__pyversion
 
     @property
     def version(self) -> str:
         if self.__version is notset:
-            self.__splitbasename()
+            self.__split_name_version_ext()
         if TYPE_CHECKING:
             assert isinstance(self.__version, str)
         return self.__version
@@ -617,7 +630,7 @@ class SimplelinkMeta:
     @property
     def ext(self) -> str:
         if self.__ext is notset:
-            self.__splitbasename()
+            self.__split_name_version_ext()
         if TYPE_CHECKING:
             assert isinstance(self.__ext, str)
         return self.__ext
@@ -627,7 +640,7 @@ class SimplelinkMeta:
         if self.__cmpval is notset:
             self.__cmpval = (
                 parse_version(self.version),
-                normalize_name(self.name),
+                self.project,
                 self.ext,
             )
         if TYPE_CHECKING:

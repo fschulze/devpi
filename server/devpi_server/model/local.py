@@ -596,6 +596,7 @@ class LocalIndex(BaseIndex):
         username = self.username
         index = self.index
         key_simpledata = self.key_simpledata(project).with_resolved_parent()
+        project = normalize_name(project)
         return self.SimpleLinks(
             [
                 SimplelinkMeta(
@@ -603,6 +604,7 @@ class LocalIndex(BaseIndex):
                     core_metadata=v.get("metadata_hashes"),
                     hashes=Digests(v["hashes"]),
                     index=index,
+                    project=project,
                     relpath=v["relpath"],
                     require_python=v.get("requires_python"),
                     size=v["size"],
