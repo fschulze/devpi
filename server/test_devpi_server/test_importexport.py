@@ -1042,7 +1042,7 @@ class TestImportExport:
         api = mapp1.create_and_use()
         content = b'content'
         mapp1.upload_file_pypi("he-llo-1.0.tar.gz", content, "he_llo", "1.0")
-        mapp1.upload_file_pypi("he_llo-1.1.whl", content, "he-llo", "1.1")
+        mapp1.upload_file_pypi("he_llo-1.1-py3-none-any.whl", content, "he-llo", "1.1")
 
         impexp.export()
 

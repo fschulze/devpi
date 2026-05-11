@@ -1,3 +1,4 @@
+from devpi_common.metadata import parse_version
 from devpi_server.filestore import get_hashes
 from devpi_server.filestore import make_splitdir
 from devpi_server.keyfs_types import FilePathInfo
@@ -7,6 +8,7 @@ from devpi_server.model.remote import ProjectUpdateCache
 from devpi_server.model.remote import URL
 from devpi_server.model.simpleapi import parse_index
 from devpi_server.normalized import normalize_name
+from operator import attrgetter
 from test_devpi_server.simpypi import getmd5
 import httpx
 import json
@@ -83,7 +85,7 @@ class TestIndexParsing:
                 <a rel="download" href="https:/host.com/123" />
         ''')
         assert result.releaselinks == SimpleInfos(
-            infos=[], version=SIMPLE_API_V1_0_VERSION
+            infos=[], project=normalize_name("py"), version=SIMPLE_API_V1_0_VERSION
         )
 
     def test_parse_index_with_wheel(self):
@@ -273,6 +275,24 @@ def test_get_updated(pypistage):
 
 
 class TestExtPYPIDB:
+    def test_parse_post_version_from_tar(self, pypistage):
+        pypistage.mock_simple(
+            "pack-age",
+            text="""
+                <a href="../../pack.age/pack.age-1.0.tar.gz#sha256={sha256}" />
+                <a href="../../pack.age/pack.age-1.0-1.tar.gz#sha256={sha256}" />
+            """,
+        )
+        (link1, link2) = sorted(
+            pypistage.get_releaselinks("pack-age"), key=attrgetter("basename")
+        )
+        version1 = parse_version(link1.version)
+        version2 = parse_version(link2.version)
+        assert version1.release == (1, 0)
+        assert version1.post == 1
+        assert version2.release == (1, 0)
+        assert version2.post is None
+
     def test_parse_pep691(self, pypistage):
         pypistage.mock_simple_projects(["devpi"])
         pypistage.xom.http.mockresponse(
@@ -1488,6 +1508,7 @@ async def test_get_simplelinks_perstage_when_http_error(exc, pypistage, monkeypa
                 core_metadata=None,
                 hashes=Digests(),
                 index="index",
+                project=normalize_name("key"),
                 relpath=RelPath("href"),
                 require_python="req_py",
                 size=None,
