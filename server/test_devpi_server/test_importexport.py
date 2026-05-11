@@ -13,6 +13,7 @@ from devpi_server.importexport import IndexTree
 from devpi_server.importexport import do_export
 from devpi_server.importexport import do_import
 from devpi_server.main import Fatal
+from devpi_server.normalized import normalize_name
 from io import BytesIO
 import devpi_server
 import importlib.resources
@@ -559,32 +560,41 @@ class TestImportExport:
         testapp = maketestapp(mapp1.xom)
         api = mapp1.use('root/pypi')
         pypistage.mock_simple(
-            "package",
-            '<a href="/package-1.0.zip" />\n'
-            '<a href="/package-1.1.zip#sha256=a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3" />\n'
-            '<a href="/package-1.2.zip#sha256=b3a8e0e1f9ab1bfe3a36f231f676f78bb30a519d2b21e6c530c0eee8ebb4a5d0" data-yanked="" />\n'
-            '<a href="/package-2.0.zip#sha256=35a9e381b1a27567549b5f8a6f783c167ebf809f1c4d6a9e367240484d8ce281" data-requires-python="&gt;=3.5" />')
-        content1 = b"123"
+            "pack-age",
+            '<a href="/pack.age-0.9.tar.gz" />\n'
+            '<a href="/pack.age-0.9-1.tar.gz" />\n'
+            '<a href="/pack.age-1.0.zip" />\n'
+            '<a href="/pack.age-1.1.zip#sha256=a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3" />\n'
+            '<a href="/pack.age-1.2.zip#sha256=b3a8e0e1f9ab1bfe3a36f231f676f78bb30a519d2b21e6c530c0eee8ebb4a5d0" data-yanked="" />\n'
+            '<a href="/pack.age-2.0.zip#sha256=35a9e381b1a27567549b5f8a6f783c167ebf809f1c4d6a9e367240484d8ce281" data-requires-python="&gt;=3.5" />',
+        )
+        content1 = b"abc"
         hashdir1 = relpath_prefix(content1)
-        pypistage.mock_extfile("/package-1.1.zip", content1)
-        content2 = b"456"
+        pypistage.mock_extfile("/pack.age-0.9-1.tar.gz", content1)
+        content2 = b"123"
         hashdir2 = relpath_prefix(content2)
-        pypistage.mock_extfile("/package-1.2.zip", content2)
-        content3 = b"789"
+        pypistage.mock_extfile("/pack.age-1.1.zip", content2)
+        content3 = b"456"
         hashdir3 = relpath_prefix(content3)
-        pypistage.mock_extfile("/package-2.0.zip", content3)
-        r = testapp.get(api.index + "/+simple/package/")
+        pypistage.mock_extfile("/pack.age-1.2.zip", content3)
+        content4 = b"789"
+        hashdir4 = relpath_prefix(content4)
+        pypistage.mock_extfile("/pack.age-2.0.zip", content4)
+        r = testapp.get(api.index + "/+simple/pack-age/")
         assert r.status_code == 200
         # fetch some files, so they are included in the dump
-        (_, link1, link2, link3) = sorted(
-            (x.attrs['href'] for x in r.html.select('a')),
-            key=lambda x: x.split('/')[-1])
+        (link1, _, _, link2, link3, link4) = sorted(
+            (x.attrs["href"] for x in r.html.select("a")),
+            key=lambda x: x.split("/")[-1],
+        )
         baseurl = URL(r.request.url)
         r = testapp.get(baseurl.joinpath(link1).url)
-        assert r.body == b"123"
+        assert r.body == b"abc"
         r = testapp.get(baseurl.joinpath(link2).url)
-        assert r.body == b"456"
+        assert r.body == b"123"
         r = testapp.get(baseurl.joinpath(link3).url)
+        assert r.body == b"456"
+        r = testapp.get(baseurl.joinpath(link4).url)
         assert r.body == b"789"
         impexp.export()
         mapp2 = impexp.new_import()
@@ -592,15 +602,37 @@ class TestImportExport:
             stage = mapp2.xom.model.getstage(api.stagename)
             stage.offline = True
             projects = stage.list_projects_perstage()
-            assert projects == {'package': 'package'}
+            assert projects == {normalize_name("pack.age"): "pack-age"}
             links = sorted(
                 (x.key, x.path, x.require_python, x.yanked)
-                for x in stage.get_simplelinks_perstage("package")
+                for x in stage.get_simplelinks_perstage("pack.age")
             )
             assert links == [
-                ('package-1.1.zip', f'root/pypi/+f/{hashdir1}/package-1.1.zip', None, None),
-                ('package-1.2.zip', f'root/pypi/+f/{hashdir2}/package-1.2.zip', None, ""),
-                ('package-2.0.zip', f'root/pypi/+f/{hashdir3}/package-2.0.zip', '>=3.5', None)]
+                (
+                    "pack.age-0.9-1.tar.gz",
+                    f"root/pypi/+f/{hashdir1}/pack.age-0.9-1.tar.gz",
+                    None,
+                    None,
+                ),
+                (
+                    "pack.age-1.1.zip",
+                    f"root/pypi/+f/{hashdir2}/pack.age-1.1.zip",
+                    None,
+                    None,
+                ),
+                (
+                    "pack.age-1.2.zip",
+                    f"root/pypi/+f/{hashdir3}/pack.age-1.2.zip",
+                    None,
+                    "",
+                ),
+                (
+                    "pack.age-2.0.zip",
+                    f"root/pypi/+f/{hashdir4}/pack.age-2.0.zip",
+                    ">=3.5",
+                    None,
+                ),
+            ]
 
     def test_mirrordata(self, impexp):
         hashes = get_hashes(b"content", additional_hash_types=("sha256",))
