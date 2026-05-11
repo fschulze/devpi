@@ -15,6 +15,7 @@ from .links import ELink
 from .links import Rel
 from .links import SimpleLinks
 from .links import SimplelinkMeta
+from .links import split_name_version_pyversion_ext
 from .simpleapi import ProjectHTMLParser
 from .simpleapi import ProjectJSONv1Parser
 from .simpleapi import SIMPLE_API_ACCEPT
@@ -24,7 +25,6 @@ from .simpleapi import parse_index_v1_json
 from asyncio import Future
 from attrs import frozen
 from contextlib import ExitStack
-from devpi_common.metadata import splitbasename
 from devpi_common.types import cached_property
 from devpi_common.url import URL
 from devpi_server.config import hookimpl
@@ -314,6 +314,7 @@ def join_links_data(
     key_index: LocatedKey | ULIDKey,
 ) -> SimpleLinks:
     index = key_index.params["index"]
+    project = releaselinks.project
     schema = key_index.keyfs.schema
     user = key_index.params["user"]
     return SimpleLinks(
@@ -323,6 +324,7 @@ def join_links_data(
                 core_metadata=releaselink.metadata_hashes,
                 hashes=releaselink.hashes,
                 index=index,
+                project=project,
                 relpath=index_relpath(
                     user,
                     index,
@@ -478,6 +480,7 @@ class RemoteData:
         ).with_resolved_parent()
         username = stage.username
         index = stage.index
+        project = self.project
         links = SimpleLinks(
             [
                 SimplelinkMeta(
@@ -485,6 +488,7 @@ class RemoteData:
                     core_metadata=v.get("metadata_hashes"),
                     hashes=Digests(v["hashes"]) if "hashes" in v else Digests(),
                     index=index,
+                    project=project,
                     relpath=v["relpath"],
                     require_python=v.get("requires_python"),
                     size=v.get("size"),
@@ -544,7 +548,9 @@ class RemoteData:
         seen_names = set()
         for releaselink in releaselinks:
             fn = releaselink.basename
-            (projectname, version, _ext) = splitbasename(fn)
+            (projectname, version, _pyversion, _ext) = split_name_version_pyversion_ext(
+                project, fn
+            )
             if projectname not in seen_names:
                 assert normalize_name(projectname) == project
                 seen_names.add(projectname)
@@ -583,7 +589,9 @@ class RemoteData:
         for k, v in key_remotefile.iter_ulidkey_values():
             name_key_remotefile_map[k.name] = k
             if k.name not in name_version_map:
-                (projectname, version, _ext) = splitbasename(k.name)
+                (projectname, version, _pyversion, _ext) = (
+                    split_name_version_pyversion_ext(project, k.name)
+                )
                 if projectname not in seen_names:
                     assert normalize_name(projectname) == project
                     seen_names.add(projectname)
@@ -641,7 +649,9 @@ class RemoteData:
                         if k not in {"hashes", "size"}
                     }
                 )
-                (projectname, version, _ext) = splitbasename(ulid_key.name)
+                (projectname, version, _pyversion, _ext) = (
+                    split_name_version_pyversion_ext(project, ulid_key.name)
+                )
                 if projectname not in seen_names:
                     assert normalize_name(projectname) == project
                     seen_names.add(projectname)
@@ -693,7 +703,9 @@ class RemoteData:
     @contextlib.contextmanager
     def link_setter(self, filename: str) -> Iterator[dict]:
         project = self.project
-        (projectname, _version, _ext) = splitbasename(filename)
+        (projectname, _version, _pyversion, _ext) = split_name_version_pyversion_ext(
+            project, filename
+        )
         assert normalize_name(projectname) == project
         stage = self.get_stage()
         key_remotefile = stage.key_remotefile(project, filename).with_resolved_parent()
@@ -1244,7 +1256,7 @@ class RemoteIndex(BaseIndex):
         response_url = URL(str(response.url)).replace(username=None, password=None)
         # parse simple index's link
         if response.headers.get("content-type") == SIMPLE_API_V1_JSON:
-            releaselinks = parse_index_v1_json(response_url, text)
+            releaselinks = parse_index_v1_json(project, response_url, text)
         else:
             releaselinks = parse_index(response_url, text).releaselinks
         newlinks_future.set_result(
