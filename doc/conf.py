@@ -105,7 +105,6 @@ html_theme_options = {
     },
     "secondary_sidebar_items": ["edit-this-page", "sourcelink"],
     "navbar_center": ["top-nav"],
-    "show_prev_next": False,
 }
 
 # Add any paths that contain custom themes here, relative to this directory.
