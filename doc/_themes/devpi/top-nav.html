@@ -12,6 +12,14 @@
             <p class="prev-next-title">{{ prev_title or prev.title }}</p>
         </div>
     </a>
+    {%- else %}
+    <a
+        class="col-lg-4 left-prev"
+        href="{{ prev.link|e }}"
+        title="{{ _('previous page') }}"
+    >
+        <div class="prev-next-info"></div>
+    </a>
     {%- endif %}
     <div class="col-lg-4 toc-container">
         <a
@@ -33,6 +41,14 @@
             <p class="prev-next-title">{{ next_title or next.title }}</p>
         </div>
         <i class="fa-solid fa-angle-right"></i>
+    </a>
+    {%- else %}
+    <a
+        class="col-lg-4 right-next"
+        href="{{ next.link|e }}"
+        title="{{ _('next page') }}"
+    >
+        <div class="prev-next-info"></div>
     </a>
     {%- endif %}
 </div>
