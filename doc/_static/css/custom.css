@@ -1,5 +1,5 @@
 html {
-    scrollbar-gutter: stable both-edges;
+    scrollbar-gutter: stable;
 }
 .sidebar-primary-item h3 {
     margin-top: 0;
