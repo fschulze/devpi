@@ -6,6 +6,9 @@ html {
 }
 .prev-next-area {
     display: flex;
+    a.right-next {
+        justify-content: end;
+    }
     .toc-container {
         display: flex;
         align-items: center;
