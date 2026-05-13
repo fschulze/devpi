@@ -1,3 +1,6 @@
+html {
+    scrollbar-gutter: stable both-edges;
+}
 .sidebar-primary-item h3 {
     margin-top: 0;
 }
