@@ -4,6 +4,10 @@ html {
 .sidebar-primary-item h3 {
     margin-top: 0;
 }
+.bd-header .navbar-item {
+    height: 6em;
+    max-height: 6em;
+}
 .prev-next-area {
     display: flex;
     a.right-next {
@@ -15,6 +19,7 @@ html {
         justify-content: center;
         .toc-text {
             margin: 0 0.5em;
+            text-align: center;
             width: 100%;
             max-width: none;
             color: var(--pst-color-link);
