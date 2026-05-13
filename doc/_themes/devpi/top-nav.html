@@ -1,26 +1,38 @@
 {# Displays links to the previous and next page in the TOCtree order. #}
 <div class="prev-next-area">
-  {%- if prev %}
-    <a class="left-prev"
-       href="{{ prev.link|e }}"
-       title="{{ _('previous page') }}">
-      <i class="fa-solid fa-angle-left"></i>
-      <div class="prev-next-info">
-        <p class="prev-next-subtitle">{{ _("previous") }}</p>
-        <p class="prev-next-title">{{ prev_title or prev.title }}</p>
-      </div>
+    {%- if prev %}
+    <a
+        class="col-lg-4 left-prev"
+        href="{{ prev.link|e }}"
+        title="{{ _('previous page') }}"
+    >
+        <i class="fa-solid fa-angle-left"></i>
+        <div class="prev-next-info">
+            <p class="prev-next-subtitle">{{ _("previous") }}</p>
+            <p class="prev-next-title">{{ prev_title or prev.title }}</p>
+        </div>
     </a>
-  {%- endif %}
-  ToC
-  {%- if next %}
-    <a class="right-next"
-       href="{{ next.link|e }}"
-       title="{{ _('next page') }}">
-      <div class="prev-next-info">
-        <p class="prev-next-subtitle">{{ _("next") }}</p>
-        <p class="prev-next-title">{{ next_title or next.title }}</p>
-      </div>
-      <i class="fa-solid fa-angle-right"></i>
+    {%- endif %}
+    <div class="col-lg-4 toc-container">
+        <a
+            class="toc-text"
+            href="{{ pathto(root_doc) }}"
+            aria-label="{{ _('Table of Contents') }}"
+        >
+            Table of Contents
+        </a>
+    </div>
+    {%- if next %}
+    <a
+        class="col-lg-4 right-next"
+        href="{{ next.link|e }}"
+        title="{{ _('next page') }}"
+    >
+        <div class="prev-next-info">
+            <p class="prev-next-subtitle">{{ _("next") }}</p>
+            <p class="prev-next-title">{{ next_title or next.title }}</p>
+        </div>
+        <i class="fa-solid fa-angle-right"></i>
     </a>
-  {%- endif %}
+    {%- endif %}
 </div>
