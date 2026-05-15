@@ -1,4 +1,0 @@
-Client operations
------------------------------------------
-
-Lorem Ipsum

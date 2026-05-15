@@ -1,4 +1,4 @@
-devpi: PyPI server and packaging/testing/release tool
+Preface
 =================================================================
 
 .. include:: links.rst

@@ -6,6 +6,10 @@ Table of contents
   :maxdepth: 3
 
   index
-  quickstart/index
-  server/index
-  client/index
+  tutorial/index
+  usage/index
+  server-admin/index
+  customizing/index
+  reference/index
+  developing/index
+  appendix/index

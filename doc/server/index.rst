@@ -1,4 +1,0 @@
-Server Operations
------------------------------------------
-
-Lorem Ipsum
