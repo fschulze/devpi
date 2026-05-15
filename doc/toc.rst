@@ -12,4 +12,5 @@ Table of contents
   customizing/index
   reference/index
   developing/index
+  contribution/index
   appendix/index

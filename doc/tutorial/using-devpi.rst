@@ -14,10 +14,10 @@ We want to run the full devpi system on our laptop::
     pip install -U devpi-web devpi-client
 
 Note that the ``devpi-web`` package will pull in the core
-``devpi-server`` package.  If you don't want a web interface you 
+``devpi-server`` package.  If you don't want a web interface you
 can just install the latter only.
 
-initializing a basic server and index
+Initializing a basic server and index
 +++++++++++++++++++++++++++++++++++++
 
 ..
@@ -31,7 +31,7 @@ where we can upload and test packages:
 - configure the client-side tool ``devpi`` to connect to the newly
   started server
 
-- create and login a user, using as defaults your current login name 
+- create and login a user, using as defaults your current login name
   and an empty password.
 
 - create an index and directly use it.
@@ -171,8 +171,8 @@ even work when you have no network.
 devpi upload: uploading one or more packages
 ++++++++++++++++++++++++++++++++++++++++++++
 
-We are going to use ``devpi`` command line tool facilities for 
-performing uploads (you can also 
+We are going to use ``devpi`` command line tool facilities for
+performing uploads (you can also
 :ref:`use plain setup.py <configure pypirc>`).
 
 Let's verify we are logged in to the correct index::
@@ -186,7 +186,7 @@ Let's verify we are logged in to the correct index::
     /tmp/docenv/uv.toml: no config file exists
     always-set-cfg: no
 
-Now go to the directory of a ``setup.py`` file of one of your projects  
+Now go to the directory of a ``setup.py`` file of one of your projects
 (we assume it is named ``example``) to build and upload your package
 to our ``testuser/dev`` index::
 
@@ -206,7 +206,7 @@ There are three triggered actions:
   the copy-step is skipped and the upload operates directly on your source
   tree.
 
-- registering the ``example`` release as defined in ``setup.py`` to 
+- registering the ``example`` release as defined in ``setup.py`` to
   our current index
 
 - building and uploading a ``gztar`` formatted release file from the
@@ -229,7 +229,7 @@ index where we previously uploaded the package.
 
 .. note::
 
-    ``devpi upload`` allows to simultaneously upload multiple different 
+    ``devpi upload`` allows to simultaneously upload multiple different
     formats of your release files such as ``sdist.zip`` or ``bdist_egg``.
     The default is ``sdist.tgz``.
 
@@ -273,7 +273,7 @@ Here is what happened:
 
 - after all tests ran, we send the ``toxreport.json`` to the devpi server
   where it will be attached precisely to our release file.
- 
+
 We can verify that the test status was recorded via::
 
     $ devpi list example
@@ -310,7 +310,7 @@ Let's create another ``staging`` index::
       mirror_whitelist=
       mirror_whitelist_inheritance=intersection
 
-We created a non-volatile index which means that one can not 
+We created a non-volatile index which means that one can not
 overwrite or delete release files. See :ref:`non_volatile_indexes` for more info
 on this setting.
 
@@ -325,7 +325,7 @@ our ``staging`` index::
 
 This will determine all files on our ``testuser/dev`` index belonging to
 the specified ``example==1.0`` release and copy them to the
-``testuser/staging`` index. 
+``testuser/staging`` index.
 
 devpi push: releasing to an external index
 ++++++++++++++++++++++++++++++++++++++++++
@@ -372,13 +372,13 @@ to the external ``testrun`` index server, using credentials
 and the URL found in the ``pypi`` section in your
 ``.pypirc``.
 
-index inheritance re-configuration
+Index inheritance re-configuration
 ++++++++++++++++++++++++++++++++++
 
 At this point we have the ``example-1.0`` release and release file
 on both the ``testuser/dev`` and ``testuser/staging`` indices.
 If we rather want to always use staging packages in our development
-index, we can reconfigure the inheritance 
+index, we can reconfigure the inheritance
 ``bases`` for ``testuser/dev``::
 
     $ devpi index testuser/dev bases=testuser/staging
@@ -437,10 +437,8 @@ Now shutdown supervisord which was started at the beginning of this tutorial::
     $ supervisorctl -c gen-config/supervisord.conf shutdown
     Shut down
 
-running devpi-server permanently
+Running devpi-server permanently
 +++++++++++++++++++++++++++++++++
 
 If you want to configure a permanent devpi-server install,
 you can go to :ref:`quickstart-server` to get some help.
-
-
