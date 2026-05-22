@@ -3,6 +3,27 @@
 }
 .prev-next-area {
     display: flex;
+    .toc-container {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        .toc-text {
+            margin: 0 0.5em;
+            width: 100%;
+            max-width: none;
+            color: var(--pst-color-link);
+            font-weight: var(--pst-admonition-font-weight-heading);
+            font-size: 1.1em;
+            text-decoration: underline;
+            text-decoration-thickness: max(1px, 0.0625rem);
+            text-underline-offset: 0.1578em;
+            &:hover {
+                color: var(--pst-color-link-hover);
+                text-decoration-skip-ink: none;
+                text-decoration-thickness: max(3px, 0.1875rem, 0.12em);
+            }
+        }
+    }
     & > a {
         max-width: inherit;
     }
