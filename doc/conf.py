@@ -100,7 +100,7 @@ html_theme = 'devpi'
 # further.  For a list of options available for each theme, see the
 # documentation.
 html_theme_options = {
-    'index_logo': None
+   "secondary_sidebar_items": ["sourcelink"],
 }
 
 # Add any paths that contain custom themes here, relative to this directory.
@@ -136,7 +136,11 @@ html_static_path = ['_static']
 #html_use_smartypants = True
 
 # Custom sidebar templates, maps document names to template names.
-#html_sidebars = {}
+html_sidebars = {
+   "**": [
+      "page-toc"
+   ]
+}
 
 # Additional templates that should be rendered to pages, maps page names to
 # template names.

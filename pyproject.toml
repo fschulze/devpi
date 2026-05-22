@@ -8,8 +8,8 @@ dev = [
 ]
 docs = [
     "Sphinx",
-    "furo",
     "mr.laforge",
+    "pydata-sphinx-theme",
     "regendoc",
     "supervisor",
     "tox",
