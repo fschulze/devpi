@@ -251,10 +251,8 @@ class PrimaryChangelogRequest:
                 "expected %s as primary_uuid, replica sent %s" %
                 (primary_uuid, expected_uuid))
 
-        identity = self.request.identity
-        if identity is not None and not isinstance(identity, ReplicaIdentity):
-            raise HTTPForbidden(
-                "Authenticated identity '%r' isn't from replica." % identity)
+        if not isinstance(self.request.identity, ReplicaIdentity):
+            raise HTTPForbidden("Replication endpoint requires a replica identity.")
 
     @view_config(route_name="/+changelog/{serial}")
     def get_changes(self):
