@@ -71,19 +71,54 @@ class TestChangelog:
         r = testapp.get("/+api", expect_errors=False)
         return int(r.headers["X-DEVPI-SERIAL"])
 
-    def test_accept_header(self, testapp):
+    def test_accept_header(self, auth_serializer, testapp):
         from devpi_server.replica import REPLICA_ACCEPT_STREAMING
         from devpi_server.replica import REPLICA_CONTENT_TYPE
 
-        r = testapp.get("/+changelog/0")
+        token = auth_serializer.dumps(self.replica_uuid)
+        r = testapp.get(
+            "/+changelog/0",
+            headers={
+                H_REPLICA_UUID: self.replica_uuid,
+                "Authorization": "Bearer %s" % token,
+            },
+        )
         assert r.content_type == "application/octet-stream"
-        r = testapp.get("/+changelog/0", headers={"Accept": "foo"})
+        r = testapp.get(
+            "/+changelog/0",
+            headers={
+                "Accept": "foo",
+                H_REPLICA_UUID: self.replica_uuid,
+                "Authorization": "Bearer %s" % token,
+            },
+        )
         assert r.content_type == "application/octet-stream"
-        r = testapp.get("/+changelog/0", headers={"Accept": "foo/bar"})
+        r = testapp.get(
+            "/+changelog/0",
+            headers={
+                "Accept": "foo/bar",
+                H_REPLICA_UUID: self.replica_uuid,
+                "Authorization": "Bearer %s" % token,
+            },
+        )
         assert r.content_type == "application/octet-stream"
-        r = testapp.get("/+changelog/0", headers={"Accept": REPLICA_CONTENT_TYPE})
+        r = testapp.get(
+            "/+changelog/0",
+            headers={
+                "Accept": REPLICA_CONTENT_TYPE,
+                H_REPLICA_UUID: self.replica_uuid,
+                "Authorization": "Bearer %s" % token,
+            },
+        )
         assert r.content_type == "application/octet-stream"
-        r = testapp.get("/+changelog/0", headers={"Accept": REPLICA_ACCEPT_STREAMING})
+        r = testapp.get(
+            "/+changelog/0",
+            headers={
+                "Accept": REPLICA_ACCEPT_STREAMING,
+                H_REPLICA_UUID: self.replica_uuid,
+                "Authorization": "Bearer %s" % token,
+            },
+        )
         assert r.content_type == "application/octet-stream"
 
     def test_get_latest_serial(self, testapp, mapp):
@@ -121,6 +156,24 @@ class TestChangelog:
                 mcr._wait_for_serial(xom.keyfs.get_current_serial() + 10)
             serial = mcr._wait_for_serial(xom.keyfs.get_current_serial())
         assert serial == 1
+
+    def test_anonymous_access(self, testapp):
+        r = testapp.xget(
+            403,
+            "/+changelog/0",
+            headers={
+                H_EXPECTED_MASTER_ID: "",
+            },
+        )
+        assert "Replication endpoint requires a replica identity." in r.text
+        r = testapp.xget(
+            403,
+            "/+changelog/0",
+            headers={
+                H_EXPECTED_PRIMARY_ID: "",
+            },
+        )
+        assert "Replication endpoint requires a replica identity." in r.text
 
     def test_primary_id_mismatch(self, auth_serializer, testapp):
         token = auth_serializer.dumps(self.replica_uuid)
@@ -160,19 +213,54 @@ class TestMultiChangelog:
         r = testapp.get("/+api", expect_errors=False)
         return int(r.headers["X-DEVPI-SERIAL"])
 
-    def test_accept_header(self, testapp):
+    def test_accept_header(self, auth_serializer, testapp):
         from devpi_server.replica import REPLICA_ACCEPT_STREAMING
         from devpi_server.replica import REPLICA_CONTENT_TYPE
 
-        r = testapp.get("/+changelog/0-")
+        token = auth_serializer.dumps(self.replica_uuid)
+        r = testapp.get(
+            "/+changelog/0-",
+            headers={
+                H_REPLICA_UUID: self.replica_uuid,
+                "Authorization": "Bearer %s" % token,
+            },
+        )
         assert r.content_type == "application/octet-stream"
-        r = testapp.get("/+changelog/0-", headers={"Accept": "foo"})
+        r = testapp.get(
+            "/+changelog/0-",
+            headers={
+                "Accept": "foo",
+                H_REPLICA_UUID: self.replica_uuid,
+                "Authorization": "Bearer %s" % token,
+            },
+        )
         assert r.content_type == "application/octet-stream"
-        r = testapp.get("/+changelog/0-", headers={"Accept": "foo/bar"})
+        r = testapp.get(
+            "/+changelog/0-",
+            headers={
+                "Accept": "foo/bar",
+                H_REPLICA_UUID: self.replica_uuid,
+                "Authorization": "Bearer %s" % token,
+            },
+        )
         assert r.content_type == "application/octet-stream"
-        r = testapp.get("/+changelog/0-", headers={"Accept": REPLICA_CONTENT_TYPE})
+        r = testapp.get(
+            "/+changelog/0-",
+            headers={
+                "Accept": REPLICA_CONTENT_TYPE,
+                H_REPLICA_UUID: self.replica_uuid,
+                "Authorization": "Bearer %s" % token,
+            },
+        )
         assert r.content_type == REPLICA_CONTENT_TYPE
-        r = testapp.get("/+changelog/0-", headers={"Accept": REPLICA_ACCEPT_STREAMING})
+        r = testapp.get(
+            "/+changelog/0-",
+            headers={
+                "Accept": REPLICA_ACCEPT_STREAMING,
+                H_REPLICA_UUID: self.replica_uuid,
+                "Authorization": "Bearer %s" % token,
+            },
+        )
         assert r.content_type == REPLICA_CONTENT_TYPE
 
     @pytest.mark.usefixtures("noiter")
