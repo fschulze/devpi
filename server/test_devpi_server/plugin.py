@@ -1689,7 +1689,7 @@ def simpypiserver():
     thread.start()
     wait_for_port(host, port, 5)
     (server_host, server_port) = server.server_address  # type: ignore[misc]
-    print(f"Started simpypi server {ensure_unicode(server_host)}:{server_port}")
+    print(f"Started simpypi server {ensure_unicode(server_host)}:{server_port}")  # type: ignore[arg-type]
     return server
 
 

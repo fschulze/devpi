@@ -315,7 +315,7 @@ def verify_connection_interface(obj: Any) -> None:
     verifyObject(IStorageConnection4, unwrap_connection_obj(obj))
 
 
-_adapters = {}
+_adapters: dict = {}
 
 
 def _register_adapter(func: Callable) -> None:
