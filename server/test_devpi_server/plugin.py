@@ -4,6 +4,7 @@ from .functional import MappMixin
 from _pytest import capture
 from bs4 import BeautifulSoup
 from contextlib import closing
+from devpi_common.metadata import parse_version
 from devpi_common.terminal import TerminalWriter
 from devpi_common.url import URL
 from devpi_server import mirror
@@ -76,7 +77,6 @@ def pytest_configure(config):
 
 @pytest.fixture(scope="session")
 def server_version():
-    from devpi_common.metadata import parse_version
     from devpi_server import __version__
     return parse_version(__version__)
 
@@ -164,10 +164,13 @@ def caplog(caplog):
 
 @pytest.fixture
 def gen_path(request, tmp_path_factory):
+    from _pytest import __version__
     from _pytest.pathlib import LOCK_TIMEOUT
     from _pytest.pathlib import make_numbered_dir_with_cleanup
 
     cache: list[str] = []
+    pytest_910 = parse_version("9.1.0")
+    pytest_version = parse_version(__version__)
 
     def gen_path(name=None):
         if not cache:
@@ -180,8 +183,15 @@ def gen_path(request, tmp_path_factory):
             path = basedir / name
             path.mkdir()
             return path
+        kw = {} if pytest_version < pytest_910 else dict(register=lambda *_: None)
         return make_numbered_dir_with_cleanup(
-            prefix="gentmp", keep=0, root=basedir, lock_timeout=LOCK_TIMEOUT, mode=0o700)
+            prefix="gentmp",
+            keep=0,
+            root=basedir,
+            lock_timeout=LOCK_TIMEOUT,
+            mode=0o700,
+            **kw,
+        )
 
     return gen_path
 
