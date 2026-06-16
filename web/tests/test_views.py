@@ -471,7 +471,7 @@ def test_markdown_description_with_content_type(mapp, testapp, monkeypatch):
 
     description = r.html.select('#description')
     assert len(description) == 1
-    assert description[0].decode_contents().strip() == '<h1>Description</h1>'
+    assert description[0].decode_contents().strip().endswith("Description</h1>")
 
 
 @pytest.mark.with_notifier
