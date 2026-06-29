@@ -6,6 +6,7 @@ from .config import hookimpl
 from .exceptions import lazy_format_exception_only
 from .filestore import BadGateway
 from .filestore import RunningHashes
+from .filestore import get_core_metadata
 from .filestore import get_hashes
 from .filestore import get_seekable_content_or_file
 from .fileutil import buffered_iterator
@@ -61,7 +62,6 @@ from time import time
 from typing import TYPE_CHECKING
 from typing import cast
 from urllib.parse import urlparse
-from zipfile import ZipFile
 import attrs
 import contextlib
 import devpi_server
@@ -1634,11 +1634,12 @@ class PyPIView:
             return apireturn(502, e.args[0])
 
         if is_metadata:
-            metadata_filename = (
-                f"{entry.project.replace('-', '_')}-{entry.version}.dist-info/METADATA"
-            )
-            with entry.file_open_read() as f, ZipFile(f) as zf:
-                wheel_metadata_contents = zf.read(metadata_filename)
+            with entry.file_open_read() as f:
+                wheel_metadata_contents = get_core_metadata(
+                    f, entry.project, entry.version
+                )
+            if wheel_metadata_contents is None:
+                abort(self.request, 404, f"no metadata found in {entry.relpath}")
             return Response(
                 body=wheel_metadata_contents,
                 content_type="application/octet-stream",

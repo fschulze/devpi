@@ -13,6 +13,7 @@ from devpi_server.log import thread_clear_log
 from devpi_server.log import threadlog
 from devpi_server.main import XOM
 from devpi_server.main import parseoptions
+from devpi_server.markers import NotSet
 from devpi_server.markers import notset
 from devpi_server.normalized import normalize_name
 from io import BytesIO
@@ -41,7 +42,6 @@ import webtest
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from devpi_server.markers import NotSet
 
 
 pytest_plugins = ["test_devpi_server.reqmock"]
@@ -1755,7 +1755,7 @@ class Gen:
             raise TypeError
         assert md5 is notset
         if hash_spec is notset or hash_spec is True:
-            if hash_type is notset:
+            if isinstance(hash_type, NotSet):
                 hash_type = self.DEFAULT_HASH_TYPE
             hash_spec = self.get_hashes(
                 link.encode(),

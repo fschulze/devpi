@@ -17,11 +17,14 @@ from devpi_common.types import parse_hash_spec
 from devpi_server.log import threadlog
 from devpi_server.markers import absent
 from inspect import currentframe
+from io import BytesIO
 from typing import TYPE_CHECKING
 from typing import cast
 from typing import overload
 from urllib.parse import unquote
 from wsgiref.handlers import format_date_time
+from zipfile import BadZipFile
+from zipfile import ZipFile
 import hashlib
 import mimetypes
 import re
@@ -35,6 +38,8 @@ if TYPE_CHECKING:
     from .keyfs_types import RelPath
     from .keyfs_types import TypedKey
     from .markers import Absent
+    from .normalized import NormalizedName
+    from collections.abc import Iterable
     from devpi_common.url import URL
     from typing import Any
 
@@ -78,7 +83,7 @@ class RunningHashes:
             self._types.append(hash_type)
 
     @property
-    def digests(self):
+    def digests(self) -> Digests:
         if not self._digests:
             if not self._running_hashes:
                 msg = f"{self.__class__.__name__} was not started."
@@ -283,12 +288,44 @@ def get_file_hash(fp, hash_type):
     return get_hashes(fp, hash_types=(hash_type,))[hash_type]
 
 
-def get_hashes(content_or_file, *, hash_types=absent, additional_hash_types=None):
+def get_core_metadata(
+    content_or_file: ContentOrFile, project: NormalizedName, version: str
+) -> bytes | None:
+    zip_file = (
+        BytesIO(content_or_file)
+        if isinstance(content_or_file, bytes)
+        else content_or_file
+    )
+    try:
+        with ZipFile(zip_file) as zf:
+            fn = metadata_filename(project, version)
+            return zf.read(fn)
+    except (BadZipFile, KeyError):
+        return None
+    finally:
+        zip_file.seek(0)
+
+
+def get_core_metadata_hashes(
+    content_or_file: ContentOrFile, project: NormalizedName, version: str
+) -> Digests | None:
+    contents = get_core_metadata(content_or_file, project, version)
+    if contents is None:
+        return None
+    return get_hashes(contents, hash_types=("sha256",))
+
+
+def get_hashes(
+    content_or_file: ContentOrFile,
+    *,
+    hash_types: Iterable[str] | Absent = absent,
+    additional_hash_types: Iterable[str] | None = None,
+) -> Digests:
     if hash_types is absent:
         # in tests this is overwritten and fails if used as default in kwarg
         hash_types = DEFAULT_HASH_TYPES
     if not hash_types:
-        return {}
+        return Digests()
     if additional_hash_types:
         hash_types = (*hash_types, *additional_hash_types)
     running_hashes = RunningHashes(*hash_types)
@@ -336,6 +373,10 @@ def make_splitdir(hash_spec):
     assert len(parts) == 2
     hash_value = parts[1]
     return hash_value[:3], hash_value[3:16]
+
+
+def metadata_filename(project: NormalizedName, version: str) -> str:
+    return f"{project.replace('-', '_')}-{version}.dist-info/METADATA"
 
 
 def relpath_prefix(content_or_file, hash_type=absent):
