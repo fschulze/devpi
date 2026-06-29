@@ -529,6 +529,25 @@ class TestExtPYPIDB:
         assert ret == ret2
         assert commit_serial == pypistage.keyfs.get_current_serial()
 
+    @pytest.mark.notransaction
+    @pytest.mark.parametrize("no_project_list", [False, True])
+    def test_get_simplelinks_perstage_cache_not_found(self, pypistage, no_project_list):
+        with pypistage.keyfs.write_transaction():
+            pypistage.modify(mirror_no_project_list=no_project_list)
+        with pypistage.keyfs.read_transaction():
+            msg = (
+                "not found on GET URL"
+                if no_project_list
+                else "project pytest not found"
+            )
+            with pytest.raises(pypistage.UpstreamNotFoundError, match=msg):
+                pypistage.get_simplelinks_perstage("pytest")
+            with pytest.raises(
+                pypistage.UpstreamNotFoundError,
+                match="cached not found for project pytest",
+            ):
+                pypistage.get_simplelinks_perstage("pytest")
+
     @pytest.mark.parametrize("errorcode", [404, -1, -2])
     def test_parse_and_scrape_error(self, pypistage, errorcode):
         pypistage.mock_simple("pytest", text='''
