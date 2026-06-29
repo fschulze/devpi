@@ -9,15 +9,20 @@ from .keyfs_types import FilePathInfo
 from .markers import Deleted
 from .markers import NoDefault
 from .markers import nodefault as _nodefault
+from .normalized import normalize_name
 from .readonly import DictViewReadonly
 from .readonly import ensure_deeply_readonly
 from .readonly import get_mutable_deepcopy
+from contextlib import suppress
+from devpi_common.metadata import ALLOWED_ARCHIVE_EXTS
 from devpi_common.metadata import splitbasename
+from devpi_common.metadata import splitext_archive
 from devpi_common.types import parse_hash_spec
 from devpi_server.log import threadlog
 from devpi_server.markers import absent
 from inspect import currentframe
 from io import BytesIO
+from pathlib import Path
 from typing import TYPE_CHECKING
 from typing import cast
 from typing import overload
@@ -244,6 +249,23 @@ def best_available_hash_type(hashes: Digests) -> str | None:
     return next(iter(hashes))
 
 
+def core_metadata_filenames(
+    project: NormalizedName, version: str, basename: str | None = None
+) -> list[str]:
+    results = [
+        f"{project.replace('-', '_')}-{version}.dist-info/METADATA",
+    ]
+    if hasattr(project, "original"):
+        results.append(f"{project.original}-{version}.dist-info/METADATA")
+    if basename is not None:
+        with suppress(ValueError):
+            (projectname, version, _pyver, _ext) = split_name_version_pyversion_ext(
+                project, basename
+            )
+            results.append(f"{projectname}-{version}.dist-info/METADATA")
+    return results
+
+
 def get_default_hash_algo():
     warnings.warn(
         "The get_default_hash_algo function is deprecated",
@@ -289,27 +311,35 @@ def get_file_hash(fp, hash_type):
 
 
 def get_core_metadata(
-    content_or_file: ContentOrFile, project: NormalizedName, version: str
+    content_or_file: ContentOrFile,
+    project: NormalizedName,
+    version: str,
+    basename: str | None = None,
 ) -> bytes | None:
     zip_file = (
         BytesIO(content_or_file)
         if isinstance(content_or_file, bytes)
         else content_or_file
     )
-    try:
-        with ZipFile(zip_file) as zf:
-            fn = metadata_filename(project, version)
-            return zf.read(fn)
-    except (BadZipFile, KeyError):
-        return None
-    finally:
-        zip_file.seek(0)
+    with suppress(BadZipFile), ZipFile(zip_file) as zf:
+        for fn in core_metadata_filenames(project, version, basename=basename):
+            with suppress(KeyError):
+                return zf.read(fn)
+        for info in zf.infolist():
+            if info.is_dir() or Path(info.filename).name != "METADATA":
+                continue
+            return zf.read(info)
+    zip_file.seek(0)
+    return None
 
 
 def get_core_metadata_hashes(
-    content_or_file: ContentOrFile, project: NormalizedName, version: str
+    content_or_file: ContentOrFile,
+    project: NormalizedName,
+    version: str,
+    basename: str | None = None,
 ) -> Digests | None:
-    contents = get_core_metadata(content_or_file, project, version)
+    contents = get_core_metadata(content_or_file, project, version, basename=basename)
     if contents is None:
         return None
     return get_hashes(contents, hash_types=("sha256",))
@@ -375,10 +405,6 @@ def make_splitdir(hash_spec):
     return hash_value[:3], hash_value[3:16]
 
 
-def metadata_filename(project: NormalizedName, version: str) -> str:
-    return f"{project.replace('-', '_')}-{version}.dist-info/METADATA"
-
-
 def relpath_prefix(content_or_file, hash_type=absent):
     if hash_type is absent:
         # in tests this is overwritten and fails if used as default in kwarg
@@ -404,6 +430,52 @@ def key_from_link(keyfs: KeyFS, link: URL, user: str, index: str) -> TypedKey[di
         return cast("PTypedKey[dict]", keyfs.PYPIFILE_NOMD5)(
             user=user, index=index, dirname=unquote(dirname), basename=link.basename
         )
+
+
+def _split_wheel_filename(
+    project: NormalizedName, nameversion: str, ext: str
+) -> tuple[str, str, str, str]:
+    filename = f"{nameversion}{ext}"
+    if ext != ".whl":
+        raise ValueError(
+            f"Invalid wheel filename (extension must be '.whl'): {filename!r}"
+        )
+    dashes = filename.count("-")
+    if dashes not in (4, 5):
+        raise ValueError(
+            f"Invalid wheel filename (wrong number of parts): {filename!r}"
+        )
+    parts = filename.split("-", dashes - 2)
+    name_part = parts[0]
+    if normalize_name(name_part) != project:
+        raise ValueError(f"{filename!r} does not match {project}")
+    return (parts[0], parts[1], "", ext)
+
+
+def split_name_version_pyversion_ext(
+    project: NormalizedName, fn: str, *, checkarch: bool = True
+) -> tuple[str, str, str, str]:
+    (nameversion, ext) = splitext_archive(fn)
+    if checkarch and ext.lower() not in ALLOWED_ARCHIVE_EXTS:
+        raise ValueError(f"invalid archive type {ext!r} in: {fn!r}")
+    if ext == ".whl":
+        return _split_wheel_filename(project, nameversion, ext)
+    start = fn.find("-")
+    start = len(project) if start < 0 else min(len(project), start)
+    if start >= len(nameversion) and normalize_name(nameversion) == project:
+        return (nameversion, "", "", ext)
+    for i in range(start, len(nameversion)):
+        if nameversion[i] != "-":
+            continue
+        if normalize_name(nameversion[:i]) == project:
+            version = nameversion[i + 1 :]
+            if (pystart := version.find("-py")) < 0:
+                pyversion = ""
+            else:
+                pyversion = version[pystart + 1 :]
+                version = version[:pystart]
+            return (nameversion[:i], version, pyversion, ext)
+    raise ValueError(f"{fn!r} does not match {project}")
 
 
 def unicode_if_bytes(val):

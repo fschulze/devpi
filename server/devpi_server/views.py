@@ -1636,7 +1636,7 @@ class PyPIView:
         if is_metadata:
             with entry.file_open_read() as f:
                 wheel_metadata_contents = get_core_metadata(
-                    f, entry.project, entry.version
+                    f, entry.project, entry.version, basename=entry.basename
                 )
             if wheel_metadata_contents is None:
                 abort(self.request, 404, f"no metadata found in {entry.relpath}")

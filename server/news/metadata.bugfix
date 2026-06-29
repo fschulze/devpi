@@ -1,0 +1,1 @@
+Search for METADATA file if the generated name with normalized project and version doesn't match. This fixes serving core metadata for older wheels.
