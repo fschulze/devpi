@@ -13,6 +13,7 @@ from .keyfs import KeyfsTimeoutError
 from .log import thread_pop_log
 from .log import thread_push_log
 from .log import threadlog
+from .markers import Unknown
 from .model import InvalidIndex
 from .model import InvalidIndexconfig
 from .model import InvalidUser
@@ -25,6 +26,7 @@ from .proxy import clean_response_headers
 from .readonly import get_mutable_deepcopy
 from collections import defaultdict
 from devpi_common.metadata import get_pyversion_filetype
+from devpi_common.metadata import splitbasename
 from devpi_common.types import ensure_unicode
 from devpi_common.url import URL
 from devpi_common.validation import is_valid_archive_name
@@ -32,6 +34,7 @@ from html import escape
 from http import HTTPStatus
 from lazy import lazy
 from operator import attrgetter
+from pathlib import Path
 from pluggy import HookimplMarker
 from pyramid.authentication import b64encode
 from pyramid.httpexceptions import HTTPException
@@ -1681,6 +1684,24 @@ class PyPIView:
                 return apireturn(404, "core-metadata is disabled")
             relpath = relpath.removesuffix(".metadata")
         entry = self.xom.filestore.get_file_entry(relpath)
+        if entry is None:
+            try:
+                project = splitbasename(Path(relpath).name)[0]
+            except ValueError:
+                abort(self.request, 404, "no such file")
+            stage = self.context.stage
+            project_exists = stage.has_project_perstage(project)
+            if project_exists or (
+                isinstance(project_exists, Unknown) and stage.no_project_list
+            ):
+                # force a fetch of the project as it is very unlikely
+                # that the URL is from an internal project name unless
+                # it was edited by hand or the index was changed from a mirror
+                # to a private stage with the same name
+                stage.list_versions_perstage(project)
+                project_exists = stage.has_project_perstage(project)
+            if project_exists:
+                entry = self.xom.filestore.get_file_entry(relpath)
         if entry is None:
             abort(self.request, 404, "no such file")
         return self._pkgserv(entry, is_metadata=is_metadata)

@@ -1,0 +1,1 @@
+Fix fetching files from re-created mirrors (for example after import or delete and create) without fetching simple project page first. This happens when uv uses a package URL directly from a lock file.

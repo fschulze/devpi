@@ -1,3 +1,5 @@
+from devpi_server.filestore import get_hashes
+from devpi_server.filestore import make_splitdir
 from devpi_server.keyfs_types import FilePathInfo
 from devpi_server.keyfs_types import RelPath
 from devpi_server.mirror import ProjectNamesCache
@@ -843,6 +845,25 @@ class TestExtPYPIDB:
         assert file_info["core-metadata"] is True
         r = testapp.xget(200, "/root/pypi/+f/123/4/foo-1.0-py3-none-any.whl.metadata")
         assert r.body == b"metadata"
+
+    @pytest.mark.notransaction
+    def test_file_server_fresh_instance(self, pypistage, testapp):
+        # uv doesn't load the simple project page if the package URL
+        # is stored in a lock file, on a fresh instance this failed,
+        # because the entry data didn't exist
+        content = b"content"
+        hash_spec = get_hashes(content).get_default_spec()
+        pypistage.mock_simple("foo", pkgver=f"foo-1.0-py3-none-any.whl#{hash_spec}")
+        pypistage.url2response["https://pypi.org/foo/foo-1.0-py3-none-any.whl"] = dict(
+            status_code=200, content=b"content"
+        )
+        with pypistage.keyfs.read_transaction():
+            assert not pypistage.is_project_cached("foo")
+        hash_dir = "/".join(make_splitdir(hash_spec))
+        r = testapp.xget(200, f"/root/pypi/+f/{hash_dir}/foo-1.0-py3-none-any.whl")
+        assert r.body == b"content"
+        with pypistage.keyfs.read_transaction():
+            assert pypistage.is_project_cached("foo")
 
 
 class TestMirrorStageprojects:
