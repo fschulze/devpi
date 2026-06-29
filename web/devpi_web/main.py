@@ -372,10 +372,19 @@ def devpiserver_on_remove_file(stage, relpath):
 
 
 @devpiserver_hookimpl(optionalhook=True)
-def devpiserver_on_replicated_file(stage, project, version, link, serial, back_serial, is_from_mirror):
-    if is_from_mirror:
+def devpiserver_on_replicated_file(
+    stage,
+    project,
+    version,  # noqa: ARG001 - API
+    link,
+    serial,  # noqa: ARG001 - API
+    back_serial,  # noqa: ARG001 - API
+    is_from_mirror=None,
+    is_from_remote=None,
+):
+    if is_from_mirror or is_from_remote:
         return
-    elif link.rel == "doczip":
+    if link.rel == "doczip":
         index_project(stage, project)
 
 
