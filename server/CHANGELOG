@@ -2,6 +2,17 @@
 
 .. towncrier release notes start
 
+6.20.3 (2026-06-30)
+===================
+
+Bug Fixes
+---------
+
+- Fix fetching files from re-created mirrors (for example after import or delete and create) without fetching simple project page first. This happens when uv uses a package URL directly from a lock file.
+
+- Search for METADATA file if the generated name with normalized project and version doesn't match. This fixes serving core metadata for older wheels.
+
+
 6.20.2 (2026-06-11)
 ===================
 
