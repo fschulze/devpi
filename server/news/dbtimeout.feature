@@ -1,0 +1,1 @@
+When opening a write transaction times out, print a stacktrace of the thread currently holding the lock.
