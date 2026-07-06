@@ -246,6 +246,7 @@ class Storage(BaseStorage):
 
     def _execute_conn_pragmas(self, conn: sa.Connection) -> None:
         c = conn.connection.cursor()
+        c.execute("PRAGMA busy_timeout=1000")
         c.execute("PRAGMA cache_size = 200000")
         c.close()
 
