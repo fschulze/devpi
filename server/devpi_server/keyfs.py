@@ -1540,17 +1540,17 @@ class Transaction:
         self._dirty[cache_key] = val
 
     def commit(self) -> int:
+        if self.doomed:
+            threadlog.debug("closing doomed transaction")
+            result = self._close()
+            self._run_listeners(self._finished_listeners)
+            return result
         threadlog.debug(
             "_original %s, _dirty %s, _ulid_keys %s",
             len(self._original),
             len(self._dirty),
             len(self._ulid_keys),
         )
-        if self.doomed:
-            threadlog.debug("closing doomed transaction")
-            result = self._close()
-            self._run_listeners(self._finished_listeners)
-            return result
         if not self.write:
             result = self._close()
             self._run_listeners(self._finished_listeners)
