@@ -16,7 +16,9 @@ from typing import overload
 from zope.interface import implementer
 import contextlib
 import sqlalchemy as sa
+import sys
 import time
+import traceback
 import weakref
 
 
@@ -28,6 +30,9 @@ if TYPE_CHECKING:
     from pyramid.request import Request
     from typing import Any
     from typing import Literal
+
+
+_write_thread: Any = None
 
 
 @implementer(IStorageConnection)
@@ -107,6 +112,7 @@ class Storage(BaseStorage):
         sqlaconn = engine.connect()
         self._execute_conn_pragmas(sqlaconn)
         if write:
+            global _write_thread  # noqa: PLW0603 - for debugging only
             start_time = time.monotonic()
             log_delay: float = 2
             thread = current_thread()
@@ -128,7 +134,19 @@ class Storage(BaseStorage):
                     if elapsed > timeout:
                         # if it takes this long, something is wrong
                         msg = f"Timeout after {int(elapsed)} seconds."
+                        with contextlib.suppress(Exception):
+                            if _write_thread is not None:
+                                st = "".join(
+                                    traceback.format_stack(
+                                        sys._current_frames()[_write_thread.ident]
+                                    )
+                                )
+                                threadlog.error(
+                                    "Timeout while waiting for write transaction, currently writing thread trace:\n%s",
+                                    st,
+                                )
                         raise KeyfsTimeoutError(msg) from e
+            _write_thread = thread
         conn = Connection(sqlaconn, self)
         if closing:
             return contextlib.closing(conn)
