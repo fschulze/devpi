@@ -1378,7 +1378,11 @@ class RemoteIndex(BaseIndex):
         exist.
         """
         project = normalize_name(project)
-        lock = self.cache_retrieve_times.acquire(project, self.timeout)
+        remaining_timeout = self.timeout
+        lock_begin = time.monotonic()
+        lock = self.cache_retrieve_times.acquire(project, remaining_timeout)
+        lock_delta = time.monotonic() - lock_begin
+        remaining_timeout = max(0, remaining_timeout - lock_delta)
         if lock is not None:
             self.keyfs.tx.on_finished(lock.release)
         remotedata = self._get_remotedata(project)
@@ -1429,7 +1433,7 @@ class RemoteIndex(BaseIndex):
         try:
             self.xom.run_coroutine_threadsafe(
                 self._async_fetch_releaselinks(newlinks_future, project, cache_info),
-                timeout=self.timeout,
+                timeout=remaining_timeout,
             )
         except TimeoutError as e:
             if not self.xom.is_replica():
@@ -1710,7 +1714,16 @@ class ProjectUpdateLock:
             timeout,
         )
         assert self.lock is not None
-        return self.lock.acquire(timeout=timeout)
+        result = self.lock.acquire(timeout=timeout)
+        if result:
+            threadlog.debug("Acquired lock (%r) for %r", self.lock, self.project)
+        else:
+            threadlog.debug(
+                "Acquiring lock (%r) for %r failed with timeout",
+                self.lock,
+                self.project,
+            )
+        return result
 
     def defer(self) -> ProjectUpdateInnerLock | None:
         lock = self.lock

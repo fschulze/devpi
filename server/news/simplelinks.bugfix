@@ -1,0 +1,1 @@
+When fetching simple links the time taken to acquire the project lock is now subtracted from the total timeout to prevent taking twice the time.
