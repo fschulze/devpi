@@ -35,6 +35,30 @@ if TYPE_CHECKING:
 _write_thread: Any = None
 
 
+def log_write_thread_trace() -> None:
+    if _write_thread is None:
+        return
+    frame = sys._current_frames()[_write_thread.ident]
+    st = "".join(traceback.format_stack(frame))
+    request_log_frame = frame
+    request_info = ""
+    request_tag = "[unknown request]"
+    request = None
+    while request_log_frame.f_back:
+        if "request_log_handler" in request_log_frame.f_code.co_name:
+            request_tag = str(request_log_frame.f_locals.get("tag"))
+            request = request_log_frame.f_locals.get("request")
+        request_log_frame = request_log_frame.f_back
+    if request is not None:
+        request_info = f" in {request_tag} {request.method} {request.url}"
+    threadlog.error(
+        "Timeout while waiting for write transaction%s, currently writing thread (%s) trace:\n%s",
+        request_info,
+        _write_thread.name,
+        st,
+    )
+
+
 @implementer(IStorageConnection)
 class Connection(BaseConnection):
     storage: Storage
@@ -135,16 +159,7 @@ class Storage(BaseStorage):
                         # if it takes this long, something is wrong
                         msg = f"Timeout after {int(elapsed)} seconds."
                         with contextlib.suppress(Exception):
-                            if _write_thread is not None:
-                                st = "".join(
-                                    traceback.format_stack(
-                                        sys._current_frames()[_write_thread.ident]
-                                    )
-                                )
-                                threadlog.error(
-                                    "Timeout while waiting for write transaction, currently writing thread trace:\n%s",
-                                    st,
-                                )
+                            log_write_thread_trace()
                         raise KeyfsTimeoutError(msg) from e
             _write_thread = thread
         conn = Connection(sqlaconn, self)
