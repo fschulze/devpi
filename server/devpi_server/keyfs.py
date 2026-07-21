@@ -1133,7 +1133,9 @@ class Transaction:
         return (data.last_serial, data.key, val)
 
     def get_value_at(
-        self, key: LocatedKey[KeyType, KeyTypeRO], at_serial: int
+        self,
+        key: LocatedKey[KeyType, KeyTypeRO] | ULIDKey[KeyType, KeyTypeRO],
+        at_serial: int,
     ) -> KeyTypeRO:
         return cast(
             "tuple[int, KeyTypeRO]", self.last_serial_and_value_at(key, at_serial)
