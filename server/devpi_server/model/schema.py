@@ -7,6 +7,7 @@ from devpi_server.markers import deleted
 from devpi_server.normalized import normalize_name
 from devpi_server.readonly import DictViewReadonly
 from devpi_server.readonly import SetViewReadonly
+from repoze.lru import LRUCache
 from typing import TYPE_CHECKING
 
 
@@ -19,7 +20,8 @@ if TYPE_CHECKING:
 class EventSubscribers:
     """the 'on_' functions are called within in the notifier thread."""
 
-    def __init__(self, xom):
+    def __init__(self, xom: XOM) -> None:
+        self.index_types = LRUCache(100)
         self.xom = xom
 
     def on_changed_version_config(self, ev: KeyChangeEvent) -> None:
@@ -54,12 +56,18 @@ class EventSubscribers:
     def on_changed_file_entry(self, ev: KeyChangeEvent) -> None:
         """when a file entry is modified."""
         params = ev.data.key.params
-        user = params.get("user")
-        index = params.get("index")
+        index_name = f"{params['user']}/{params['index']}"
+        index_type_key = (ev.at_serial, index_name)
+        index_type = self.index_types.get(index_type_key)
+        if index_type == "remote":
+            return  # we don't trigger on file changes of a remote index
         keyfs = self.xom.keyfs
         with keyfs.read_transaction(at_serial=ev.at_serial):
-            stage = self.xom.model.getstage(user, index)
-            if stage is not None and stage.index_type == "remote":
+            stage = self.xom.model.getstage(index_name)
+            if stage is not None:
+                index_type = stage.index_type
+                self.index_types.put(index_type_key, index_type)
+            if index_type == "remote":
                 return  # we don't trigger on file changes of a remote index
             assert is_dict_key(ev.data.key)
             entry = FileEntry(ev.data.key, meta=ev.data.value)
@@ -72,18 +80,19 @@ class EventSubscribers:
                 return
             name = entry.project
             assert name == normalize_name(name)
-            linkstore = stage.get_linkstore_perstage(name, entry.version)
-            links = linkstore.get_links(basename=entry.basename)
-            if len(links) == 1:
-                self.xom.config.hook.devpiserver_on_upload(
-                    stage=stage, project=name, version=entry.version, link=links[0]
-                )
+            if stage is not None:
+                linkstore = stage.get_linkstore_perstage(name, entry.version)
+                links = linkstore.get_links(basename=entry.basename)
+                if len(links) == 1:
+                    self.xom.config.hook.devpiserver_on_upload(
+                        stage=stage, project=name, version=entry.version, link=links[0]
+                    )
 
     def on_remote_initialnames(self, ev: KeyChangeEvent) -> None:
         """when projectnames are first loaded into a remote index."""
         params = ev.data.key.params
-        user = params.get("user")
-        index = params.get("index")
+        user = params["user"]
+        index = params["index"]
         keyfs = self.xom.keyfs
         with keyfs.read_transaction(at_serial=ev.at_serial):
             stage = self.xom.model.getstage(user, index)
@@ -95,8 +104,8 @@ class EventSubscribers:
     def on_changed_index(self, ev: KeyChangeEvent) -> None:
         """when index data changes."""
         params = ev.data.key.params
-        username = params.get("user")
-        indexname = params.get("index")
+        username = params["user"]
+        indexname = params["index"]
         keyfs = self.xom.keyfs
         with keyfs.read_transaction(at_serial=ev.at_serial) as tx:
             if ev.data.back_serial > -1:
