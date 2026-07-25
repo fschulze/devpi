@@ -36,6 +36,7 @@ from devpi_server.filestore import RunningHashes
 from devpi_server.filestore import index_relpath
 from devpi_server.filestore import split_name_version_pyversion_ext
 from devpi_server.httpclient import FatalResponse
+from devpi_server.log import _thread_current_log
 from devpi_server.log import threadlog
 from devpi_server.markers import Absent
 from devpi_server.markers import absent
@@ -166,6 +167,13 @@ class FileStreamer:
             err = self.hashes.exception_for(self._hashes, self.relpath)
             if err is not None:
                 raise err
+
+
+def async_log_prefix() -> str:
+    current_log = _thread_current_log()
+    if current_log is None or current_log.last is None:
+        return ""
+    return current_log.last._prefix
 
 
 def iter_stream_remote_file(stage, url, headers):
@@ -1044,14 +1052,17 @@ class RemoteIndex(BaseIndex):
         return self.projects_timeout if timeout is None else timeout
 
     async def _get_remote_projects(
-        self, projects_future: asyncio.Future[ProjectsResult]
+        self, log_prefix: str, projects_future: asyncio.Future[ProjectsResult]
     ) -> None:
         headers = {"Accept": SIMPLE_API_ACCEPT}
         etag = self.cache_projectnames.get_etag()
         if etag is not None:
             headers["If-None-Match"] = etag
         threadlog.debug(
-            "fetching remote projects from %r with etag %r", self.remote_url, etag
+            "%sfetching remote projects from %r with etag %r",
+            log_prefix,
+            self.remote_url,
+            etag,
         )
         (response, text) = await self.http.async_get(
             url_without_auth(self.remote_url),
@@ -1099,7 +1110,7 @@ class RemoteIndex(BaseIndex):
         )
         try:
             self.xom.run_coroutine_threadsafe(
-                self._get_remote_projects(projects_future),
+                self._get_remote_projects(async_log_prefix(), projects_future),
                 timeout=projects_timeout,
             )
         except TimeoutError:
@@ -1199,13 +1210,14 @@ class RemoteIndex(BaseIndex):
 
     async def _async_fetch_releaselinks(
         self,
+        log_prefix: str,
         newlinks_future: NewLinksFuture,
         project: NormalizedName,
         cache_info: CacheInfo,
     ) -> None:
         # get the simple page for the project
         url = self.get_remote_project_url(project)
-        threadlog.debug("reading index %r", url)
+        threadlog.debug("%sreading index %r", log_prefix, url)
         headers = {"Accept": SIMPLE_API_ACCEPT}
         etag = self.cache_retrieve_times.get_etag(project) or cache_info["etag"]
         if etag is not None:
@@ -1249,7 +1261,9 @@ class RemoteIndex(BaseIndex):
             )
             raise self.UpstreamError(msg)
 
-        threadlog.debug("%s: got response with serial %s", project, serial)
+        threadlog.debug(
+            "%s%s: got response with serial %s", log_prefix, project, serial
+        )
 
         # check returned url has the same normalized name
         assert project == normalize_name(url.asfile().basename)
@@ -1435,7 +1449,9 @@ class RemoteIndex(BaseIndex):
         newlinks_future = cast("NewLinksFuture", self.xom.create_future())
         try:
             self.xom.run_coroutine_threadsafe(
-                self._async_fetch_releaselinks(newlinks_future, project, cache_info),
+                self._async_fetch_releaselinks(
+                    async_log_prefix(), newlinks_future, project, cache_info
+                ),
                 timeout=remaining_timeout,
             )
         except TimeoutError as e:

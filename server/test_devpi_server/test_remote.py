@@ -697,7 +697,7 @@ class TestExtPYPIDB:
             </body></html>""",
         )
         projects_future = pypistage.xom.create_future()
-        await pypistage._get_remote_projects(projects_future)
+        await pypistage._get_remote_projects("", projects_future)
         assert projects_future.result() == ({normalize_name("Pkg")}, None)
 
     def test_pypi_remote_redirect_to_canonical_issue139(self, pypistage):
@@ -1031,7 +1031,7 @@ class TestRemoteIndexProjects:
             </body></html>""",
         )
         projects_future = pypistage.xom.create_future()
-        await pypistage._get_remote_projects(projects_future)
+        await pypistage._get_remote_projects("", projects_future)
         (projects, etag) = projects_future.result()
         assert projects == {
             normalize_name("ploy_ansible"),
@@ -1063,7 +1063,7 @@ class TestRemoteIndexProjects:
                 ]}""",
         )
         projects_future = pypistage.xom.create_future()
-        await pypistage._get_remote_projects(projects_future)
+        await pypistage._get_remote_projects("", projects_future)
         (projects, etag) = projects_future.result()
         assert projects == {
             normalize_name("ploy_ansible"),
@@ -1090,7 +1090,7 @@ class TestRemoteIndexProjects:
             </body></html>""",
         )
         projects_future = pypistage.xom.create_future()
-        await pypistage._get_remote_projects(projects_future)
+        await pypistage._get_remote_projects("", projects_future)
         (projects, etag) = projects_future.result()
         assert projects == {normalize_name("devpi-server")}
 
@@ -1128,7 +1128,7 @@ class TestRemoteIndexProjects:
             headers={"ETag": changed_etag},
         )
         projects_future = pypistage.xom.create_future()
-        await pypistage._get_remote_projects(projects_future)
+        await pypistage._get_remote_projects("", projects_future)
         (projects, etag) = projects_future.result()
         pypistage.cache_projectnames.mark_current(etag)
         assert etag == orig_etag
@@ -1141,13 +1141,13 @@ class TestRemoteIndexProjects:
         assert 'If-None-Match' not in call['extra_headers']
         projects_future = pypistage.xom.create_future()
         with pytest.raises(pypistage.UpstreamNotModified) as e:
-            await pypistage._get_remote_projects(projects_future)
+            await pypistage._get_remote_projects("", projects_future)
         pypistage.cache_projectnames.mark_current(e.value.etag)
         assert etag == orig_etag
         call = pypistage.xom.http.call_log.pop()
         assert call['extra_headers']['If-None-Match'] == orig_etag
         projects_future = pypistage.xom.create_future()
-        await pypistage._get_remote_projects(projects_future)
+        await pypistage._get_remote_projects("", projects_future)
         (projects, etag) = projects_future.result()
         pypistage.cache_projectnames.mark_current(etag)
         assert etag == changed_etag
