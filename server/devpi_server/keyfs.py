@@ -1635,16 +1635,19 @@ class Transaction:
         self._run_listeners(self._finished_listeners)
         return result
 
-    def restart(self, write=False):
+    def restart(self, *, write=False):
         if self.write:
             raise RuntimeError("Can't restart a write transaction.")
-        self.commit()
         threadlog.debug(
             "restarting %s transaction afresh as %s transaction",
             "write" if self.write else "read",
             "write" if write else "read")
         try:
             newtx = self.__class__(self.keyfs, write=write)
+            newtx._finished_listeners = self._finished_listeners
+            newtx._success_listeners = self._success_listeners
+            self._finished_listeners = []
+            self._success_listeners = []
         except BaseException:
             self.doomed = True
             raise
