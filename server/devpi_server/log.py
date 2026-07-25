@@ -143,10 +143,13 @@ def thread_pop_log(prefix: str) -> None:
 
 
 def thread_change_log_prefix(prefix: str, old_prefix: str) -> None:
-    if old_prefix and not threadlocal.taglogger._prefix.rstrip().endswith(old_prefix):
-        raise ValueError("Wrong thread log order, expected %r, saw %r" %
-                         (old_prefix, threadlocal.taglogger._prefix))
-    threadlocal.taglogger._prefix = prefix.rstrip() + " "
+    existing_prefix = threadlocal.taglogger._prefix.rstrip()
+    if old_prefix and not existing_prefix.endswith(old_prefix):
+        msg = "Wrong thread log order, expected {old_prefix!r}, saw {existing_prefix!r}"
+        raise ValueError(msg)
+    threadlocal.taglogger._prefix = (
+        f"{existing_prefix.removesuffix(old_prefix)}{prefix.rstrip()} "
+    )
 
 
 def thread_clear_log() -> None:
