@@ -201,6 +201,7 @@ extend-ignore = [
     "RET507", # maybe cleanup later - unnecessary elif after continue
     "RUF005", # cleanup later
     "RUF012", # cleanup later
+    "RUF036", # cleanup later - None not at the end of the type union
     "RUF043", # cleanup later - pytest.raises match regexp
     "RUF059", # cleanup later - unpacked variable unused
     "RSE102", # maybe cleanup later

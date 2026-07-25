@@ -17,7 +17,7 @@ docs = [
 ]
 lint = [
     "flake8",
-    "lint-roller",
+    "lint-roller>=0.2.0",
     "ruff",
     "zizmor",
 ]

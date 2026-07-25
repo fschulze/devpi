@@ -11,6 +11,7 @@ ignore = [
     "C408", # ignore - dict call
     "C901", # ignore - complex structure
     "COM812", # ignore - ruff format
+    "CPY001", # ignore - missing copyright notice
     "D", # ignore - docstrings
     "E501", # ignore - line too long
     "E741", # ignore - ambiguous variable name
@@ -21,6 +22,7 @@ ignore = [
     "PLC0415", # ignore - import at top-level of file
     "PLR0913", # ignore - too many arguments
     "PLR0915", # ignore - too many statements
+    "PLR0917", # ignore - too many positional arguments
     "PLR2004", # ignore - magic value comparison
     "PTH", # ignore - pathlib
     "Q", # ignore - quotes style
