@@ -1,0 +1,1 @@
+Move event handlers to new transaction when restarting read transaction as write transaction.
