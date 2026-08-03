@@ -30,6 +30,7 @@ from itertools import islice
 from repoze.lru import LRUCache
 from sqlalchemy.ext.compiler import compiles
 from typing import TYPE_CHECKING
+from typing import TypeVar
 from zope.interface import implementer
 import inspect
 import sqlalchemy as sa
@@ -53,6 +54,13 @@ if TYPE_CHECKING:
     from typing import IO
     from typing import Self
 
+    CacheKey = (
+        tuple[int, ULID]
+        | tuple[int, str]
+        | tuple[int, str, str]
+        | tuple[int, str, str, str]
+    )
+
 
 INSERT_BATCH_SIZE = 10000
 MAX_SQL_VARIABLES = 100
@@ -62,51 +70,74 @@ warnings.simplefilter("error", sa.exc.SADeprecationWarning)
 warnings.simplefilter("error", sa.exc.SAWarning)
 
 
+DEFAULT_TYPE = TypeVar("DEFAULT_TYPE")
+
+
 class Cache:
     def __init__(self, large_cache_size: int, small_cache_size: int) -> None:
         self._large_cache = LRUCache(large_cache_size)
         self._small_cache = LRUCache(small_cache_size)
 
     def add_key(self, serial: int, key: ULIDKey) -> None:
-        existing = self.get((serial, key.ulid), absent)
+        cache_key = (serial, key.ulid)
+        existing = self._get(cache_key)
         if isinstance(existing, KeyData):
             return
-        self._small_cache.put((serial, key.ulid), key)
+        self._small_cache.put(cache_key, key)
 
     def add_keydata(self, serial: int, keydata: KeyData) -> None:
-        cache_key = keydata.key.ulid
+        cache_key = (serial, keydata.key.ulid)
         if (
             keydata.value is not deleted
             and gettotalsizeof(keydata.value, maxlen=100000) is None
         ):
             # keydata.value is big, put it in the large cache,
             # which has fewer entries to preserve memory
-            self._large_cache.put((serial, cache_key), keydata)
+            self._large_cache.put(cache_key, keydata)
         else:
             # keydata is small
-            self._small_cache.put((serial, cache_key), keydata)
+            self._small_cache.put(cache_key, keydata)
 
-    def get(self, key: Any, default: Any = None) -> Any:
+    def add_ulids(self, cache_key: CacheKey, ulids: frozenset[ULID]) -> None:
+        if isinstance(cache_key[1], ULID):
+            # do not overwrite ULIDKey or KeyData in cache
+            return
+        if len(ulids) > 10000:
+            self._large_cache.put(cache_key, ulids)
+        else:
+            self._small_cache.put(cache_key, ulids)
+
+    def _get(self, key: CacheKey) -> KeyData | ULIDKey | frozenset[ULID] | Absent:
         result = self._small_cache.get(key, absent)
-        if result is absent:
+        if isinstance(result, Absent):
             result = self._large_cache.get(key, absent)
-        if result is absent:
-            return default
         return result
 
-    def get_keydata(self, key: Any, default: Any = None) -> Any:
+    def get_key(self, cache_key: tuple[int, ULID]) -> ULIDKey | Absent:
+        result = self._small_cache.get(cache_key, absent)
+        if isinstance(result, KeyData):
+            return result.key
+        if isinstance(result, ULIDKey):
+            return result
+        return absent
+
+    def get_keydata(self, key: tuple[int, ULID]) -> KeyData | Absent:
         result = self._small_cache.get(key, absent)
         if isinstance(result, (Absent, ULIDKey)):
             result = self._large_cache.get(key, absent)
-        if isinstance(result, (Absent, ULIDKey)):
-            return default
-        return result
+        if isinstance(result, KeyData):
+            return result
+        return absent
 
-    def put(self, key: Any, value: Any) -> None:
-        self._small_cache.put(key, value)
-
-    def put_large(self, key: Any, value: Any) -> None:
-        self._large_cache.put(key, value)
+    def get_ulids(self, cache_key: CacheKey) -> frozenset[ULID] | Absent:
+        cached_ulids = self._get(cache_key)
+        if isinstance(cached_ulids, KeyData):
+            cached_ulids = frozenset({cached_ulids.key.ulid})
+        if isinstance(cached_ulids, ULIDKey):
+            cached_ulids = frozenset({cached_ulids.ulid})
+        if isinstance(cached_ulids, frozenset):
+            return cached_ulids
+        return absent
 
 
 class ULIDKeyChecker:
@@ -122,7 +153,7 @@ class ULIDKeyChecker:
     ):
         self.at_serial = at_serial
         self.cache = cache
-        cache_keys: dict[LocatedKey | PatternedKey | SearchKey | ULIDKey, tuple] = {}
+        cache_keys: dict[LocatedKey | PatternedKey | SearchKey | ULIDKey, CacheKey] = {}
         key_names: dict[str, PatternedKey] = {
             k.key_name: k for k in keys if isinstance(k, PatternedKey)
         }
@@ -174,10 +205,8 @@ class ULIDKeyChecker:
     def iter_keydata(self) -> Iterator[KeyData]:
         with_deleted = self.with_deleted
         for cache_key in self.cache_keys.values():
-            cached_ulids = self.cache.get(cache_key, absent)
-            if isinstance(cached_ulids, KeyData):
-                cached_ulids = {cached_ulids.key.ulid}
-            if cached_ulids is absent:
+            cached_ulids = self.cache.get_ulids(cache_key)
+            if isinstance(cached_ulids, Absent):
                 continue
             skip_ulids = self.ulids_by_cache_key[cache_key]
             at_serial = cache_key[0]
@@ -185,8 +214,8 @@ class ULIDKeyChecker:
             for ulid in cached_ulids:
                 if ulid in skip_ulids:
                     continue
-                keydata = self.cache.get_keydata((at_serial, ulid), absent)
-                if keydata is absent:
+                keydata = self.cache.get_keydata((at_serial, ulid))
+                if isinstance(keydata, Absent):
                     got_all = False
                     continue
                 if not with_deleted and keydata.value is deleted:
@@ -198,8 +227,8 @@ class ULIDKeyChecker:
 
     def iter_keys(self) -> Iterator[ULIDKey]:
         for cache_key in self.cache_keys.values():
-            cached_ulids = self.cache.get(cache_key, absent)
-            if cached_ulids is absent:
+            cached_ulids = self.cache.get_ulids(cache_key)
+            if isinstance(cached_ulids, Absent):
                 continue
             skip_ulids = self.ulids_by_cache_key[cache_key]
             at_serial = cache_key[0]
@@ -207,14 +236,11 @@ class ULIDKeyChecker:
             for ulid in cached_ulids:
                 if ulid in skip_ulids:
                     continue
-                result = self.cache.get((at_serial, ulid), absent)
-                if result is absent:
+                result = self.cache.get_key((at_serial, ulid))
+                if isinstance(result, Absent):
                     got_all = False
                     continue
-                if isinstance(result, ULIDKey):
-                    yield result
-                else:
-                    yield result.key
+                yield result
                 skip_ulids.add(ulid)
             self.got_all_by_cache_key[cache_key] = got_all
 
@@ -232,11 +258,9 @@ class ULIDKeyChecker:
         for key, cache_key in self.cache_keys.items():
             if isinstance(key, ULIDKey):
                 continue
-            ulids = self.ulids_by_cache_key[cache_key]
-            if len(ulids) > 10000:
-                self.cache.put_large(cache_key, frozenset(ulids))
-            else:
-                self.cache.put(cache_key, frozenset(ulids))
+            self.cache.add_ulids(
+                cache_key, frozenset(self.ulids_by_cache_key[cache_key])
+            )
 
 
 class explain(sa.Executable, sa.ClauseElement):
@@ -641,10 +665,10 @@ class BaseConnection:
     ) -> KeyData:
         assert isinstance(ulid, ULID)
         cache_key = ulid
-        result = self._cache.get_keydata((serial, cache_key), absent)
-        if result is absent and parent_serial >= 0:
-            result = self._cache.get_keydata((parent_serial, cache_key), absent)
-        if result is absent:
+        result = self._cache.get_keydata((serial, cache_key))
+        if isinstance(result, Absent) and parent_serial >= 0:
+            result = self._cache.get_keydata((parent_serial, cache_key))
+        if isinstance(result, Absent):
             fetch_serial = parent_serial if parent_serial >= 0 else serial
             if fetch_serial < 0:
                 raise KeyError(ulid)
@@ -659,10 +683,10 @@ class BaseConnection:
             result = next(results, absent)
             if isinstance(result, Absent):
                 raise KeyError(ulid)
-            # exhaust the iterator to make sure we go no more results
-            if next(results, absent) is not absent:
+            # exhaust the iterator to make sure we got no more results
+            if not isinstance(next(results, absent), Absent):
                 msg = f"Got additional results for {ulid} at {serial}"
-                raise RuntimeError(msg)
+                raise TypeError(msg)
             self._cache.add_keydata(fetch_serial, result)
         return result
 
