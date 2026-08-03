@@ -456,7 +456,7 @@ def test_markdown_description_without_content_type(mapp, testapp, monkeypatch):
 
 
 @pytest.mark.with_notifier
-def test_markdown_description_with_content_type(mapp, testapp, monkeypatch):
+def test_markdown_description_with_content_type(mapp, testapp):
     api = mapp.create_and_use()
     mapp.upload_file_pypi(
         "pkg1-2.6.tar.gz", b"content", "pkg1", "2.6")
@@ -469,9 +469,10 @@ def test_markdown_description_with_content_type(mapp, testapp, monkeypatch):
         waithooks=True)
     r = testapp.get(api.index + '/pkg1/2.6', headers=dict(accept="text/html"))
 
-    description = r.html.select('#description')
-    assert len(description) == 1
-    assert description[0].decode_contents().strip().endswith("Description</h1>")
+    (description,) = r.html.select("#description")
+    assert description.text.strip() == "Description"
+    (elem,) = description.select("& > *")
+    assert elem.name == "h1"
 
 
 @pytest.mark.with_notifier
