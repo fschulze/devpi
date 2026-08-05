@@ -449,7 +449,6 @@ def initproj(tmpdir):
                     description= "{name} project"
                     version = "{version}"
                     license = {{text="MIT"}}
-                    packages = "find:"
                 """.format(**locals())})
         if not _filedefs_contains(base, filedefs, src_root_path.join(name)):
             create_files(
@@ -575,7 +574,9 @@ def cmd_devpi(tmpdir, monkeypatch):
             method(hub, hub.args)
         except SystemExit as sysex:
             hub.sysex = sysex
-            if expected is None or expected < 0 or expected >= 400:
+            if expected is None or (
+                isinstance(expected, int) and (expected < 0 or expected >= 400)
+            ):
                 # we expected an error or nothing, don't raise
                 pass
             else:
