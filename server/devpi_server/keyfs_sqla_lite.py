@@ -83,7 +83,9 @@ class Storage(BaseStorage):
     ) -> None:
         super().__init__(basedir, notify_on_commit=notify_on_commit, settings=settings)
         self.sqlpath = self.basedir / self.db_filename
-        self.ro_engine = sa.create_engine(self._url(mode="ro"), echo=False)
+        self.ro_engine = sa.create_engine(
+            self._url(mode="ro"), echo=False, poolclass=sa.NullPool
+        )
         weakref.finalize(self, self.ro_engine.dispose)
         self.rw_engine = sa.create_engine(
             self._url(mode="rw"), echo=False, poolclass=sa.NullPool
