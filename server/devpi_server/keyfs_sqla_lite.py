@@ -134,12 +134,12 @@ class Storage(BaseStorage):
     def get_connection(
         self, *, closing: bool = True, write: bool = False, timeout: float = 30
     ) -> IStorageConnection | AbstractContextManager[IStorageConnection]:
+        start_time = time.monotonic()
         engine = self.rw_engine if write else self.ro_engine
         sqlaconn = engine.connect()
         self._execute_conn_pragmas(sqlaconn)
         if write:
             global _write_thread  # noqa: PLW0603 - for debugging only
-            start_time = time.monotonic()
             log_delay: float = 2
             thread = current_thread()
             while 1:
@@ -154,7 +154,7 @@ class Storage(BaseStorage):
                     elapsed = time.monotonic() - start_time
                     if elapsed >= log_delay:
                         threadlog.warn(
-                            "Waiting on database connection for %s seconds", log_delay
+                            "Waiting on database connection for %.6f seconds", log_delay
                         )
                         log_delay = log_delay * 1.5
                     if elapsed > timeout:
@@ -164,6 +164,12 @@ class Storage(BaseStorage):
                             log_write_thread_trace()
                         raise KeyfsTimeoutError(msg) from e
             _write_thread = thread
+        elapsed = time.monotonic() - start_time
+        threadlog.debug(
+            "Got %s transaction after %.6f seconds",
+            "write" if write else "read",
+            elapsed,
+        )
         conn = Connection(sqlaconn, self)
         if closing:
             return contextlib.closing(conn)
