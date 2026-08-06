@@ -1636,6 +1636,7 @@ class Transaction:
         return result
 
     def restart(self, *, write=False):
+        self._close()
         if self.write:
             raise RuntimeError("Can't restart a write transaction.")
         threadlog.debug(
@@ -1651,7 +1652,6 @@ class Transaction:
         except BaseException:
             self.doomed = True
             raise
-        self._close()
         self.__dict__ = newtx.__dict__
 
     def doom(self) -> None:
