@@ -4,6 +4,7 @@ from . import mythread
 from .config import hookimpl
 from .exceptions import format_exception_only
 from .exceptions import lazy_format_exception
+from .filestore import AbsPath
 from .filestore import ChecksumError
 from .filestore import FileEntry
 from .fileutil import buffered_iterator
@@ -15,6 +16,7 @@ from .fileutil import load_iter
 from .httpclient import FatalResponse
 from .keyfs_types import KeyData
 from .keyfs_types import ULID
+from .keyfs_types import is_dict_key
 from .log import TimeDeltaChecker
 from .log import thread_push_log
 from .log import threadlog
@@ -59,15 +61,20 @@ if TYPE_CHECKING:
     from .httpclient import HTTPClient
     from .keyfs import KeyChangeEvent
     from .keyfs_types import KeyFSTypesRO
-    from .keyfs_types import RelPath
+    from .keyfs_types import LocatedKey
     from .keyfs_types import ULIDKey
     from .log import TagLogger
     from .main import XOM
     from .model.remote import RemoteIndex
+    from collections.abc import Callable
     from collections.abc import Iterable
     from collections.abc import Iterator
     from collections.abc import Sequence
     from contextlib import ExitStack
+
+    FileReplicationSharedDataHandler = Callable[
+        ["IndexType", int, AbsPath, str, DictViewReadonly | Deleted, int], None
+    ]
 
 
 devpiweb_hookimpl = HookimplMarker("devpiweb")
@@ -830,10 +837,19 @@ class FileReplicationSharedData:
         self.Empty = Empty
         self.xom = xom
         self.queue: PriorityQueue[
-            tuple[IndexType, int, RelPath, str, KeyFSTypesRO, int]
+            tuple[IndexType, int, AbsPath, str, DictViewReadonly | Deleted, int]
         ] = PriorityQueue()
         self.error_queue: PriorityQueue[
-            tuple[int, int, str, int, None, str, KeyFSTypesRO, int]
+            tuple[
+                float,
+                float,
+                IndexType,
+                int,
+                AbsPath,
+                str,
+                DictViewReadonly | Deleted,
+                int,
+            ]
         ] = PriorityQueue()
         self.deleted = LRUCache(100)
         self.index_types = LRUCache(1000)
@@ -849,11 +865,15 @@ class FileReplicationSharedData:
         self.last_processed = None
         self.skip_indexes = set()
 
-    def on_import(self, serial, changes):
+    def on_import(
+        self, serial: int, changes: dict[ULIDKey, tuple[KeyFSTypesRO | Deleted, int]]
+    ) -> None:
         keyfs = self.xom.keyfs
         index_keyname = keyfs.schema.INDEX.key_name
         for key, (val, _back_serial) in changes.items():
-            if key.key_name == index_keyname:
+            if key.key_name == index_keyname and isinstance(
+                val, (Deleted, DictViewReadonly)
+            ):
                 index_type = None if isinstance(val, Deleted) else val["type"]
                 username = key.params["user"]
                 indexname = key.params["index"]
@@ -862,10 +882,18 @@ class FileReplicationSharedData:
             (keyfs.schema.FILE.key_name, keyfs.schema.FILE_NOHASH.key_name)
         )
         for key, (val, back_serial) in changes.items():
-            if key.key_name in file_keynames:
-                self.on_import_file(keyfs, serial, key, val, back_serial)
+            if key.key_name in file_keynames and isinstance(
+                val, (Deleted, DictViewReadonly)
+            ):
+                self.on_import_file(serial, key, val, back_serial)
 
-    def on_import_file(self, keyfs, serial, key, val, back_serial):
+    def on_import_file(
+        self,
+        serial: int,
+        key: ULIDKey,
+        val: DictViewReadonly | Deleted,
+        back_serial: int,
+    ) -> None:
         skip_indexes = self.skip_indexes
         if "all" in skip_indexes:
             threadlog.debug("Skipping %s because 'all' in %s.", key, skip_indexes)
@@ -905,14 +933,24 @@ class FileReplicationSharedData:
 
         # note the negated serial for the PriorityQueue
         self.queue.put(
-            (index_type, -serial, key.relpath, key.key_name, val, back_serial)
+            (index_type, -serial, AbsPath(key.relpath), key.key_name, val, back_serial)
         )
         self.last_added = time.time()
 
-    def next_ts(self, delay):
+    def next_ts(self, delay: float) -> float:
         return time.time() + delay
 
-    def add_errored(self, index_type, serial, key, keyname, value, back_serial, ts=None, delay=11):
+    def add_errored(
+        self,
+        index_type: IndexType,
+        serial: int,
+        key: AbsPath,
+        keyname: str,
+        value: DictViewReadonly | Deleted,
+        back_serial: int,
+        ts: float | None = None,
+        delay: float = 11,
+    ) -> None:
         if ts is None:
             ts = self.next_ts(min(delay, self.ERROR_QUEUE_MAX_DELAY))
         # this priority queue is ordered by time stamp
@@ -931,15 +969,21 @@ class FileReplicationSharedData:
             if isinstance(default, Absent):
                 raise KeyError
             return IndexType(default)
+        if not isinstance(result, IndexType):
+            raise TypeError
         return result
 
-    def set_index_type_for(self, stagename, index_type):
+    def set_index_type_for(
+        self, stagename: str, index_type: IndexType | str | None
+    ) -> None:
+        if not (index_type is None or isinstance(index_type, (IndexType, str))):
+            raise TypeError
         self.index_types.put(stagename, IndexType(index_type))
 
-    def is_in_future(self, ts):
+    def is_in_future(self, ts: float) -> bool:
         return ts > time.time()
 
-    def process_next_errored(self, handler):
+    def process_next_errored(self, handler: FileReplicationSharedDataHandler) -> None:
         try:
             # it seems like without the timeout this isn't triggered frequent
             # enough, the thread was waiting a long time even though there
@@ -970,7 +1014,7 @@ class FileReplicationSharedData:
             self.error_queue.task_done()
             self.last_processed = time.time()
 
-    def process_next(self, handler):
+    def process_next(self, handler: FileReplicationSharedDataHandler) -> None:
         try:
             # it seems like without the timeout this isn't triggered frequent
             # enough, the thread was waiting a long time even though there
@@ -993,7 +1037,7 @@ class FileReplicationSharedData:
             self.queue.task_done()
             self.last_processed = time.time()
 
-    def wait(self, error_queue=False):
+    def wait(self, *, error_queue: bool = False) -> None:
         self.queue.join()
         if error_queue:
             self.error_queue.join()
@@ -1180,7 +1224,13 @@ class FileReplicationThread:
             f.devpi_srcpath = path  # type: ignore[attr-defined]
         return (f, entry.hashes)
 
-    def importer(self, serial, key, val, back_serial):  # noqa: PLR0911, PLR0912
+    def importer(  # noqa: PLR0911, PLR0912
+        self,
+        serial: int,
+        key: LocatedKey[dict, DictViewReadonly],
+        val: DictViewReadonly | Deleted,
+        back_serial: int,
+    ) -> MutableFileEntry | None:
         threadlog.debug("FileReplicationThread.importer for %s, %s", key, val)
         keyfs = self.xom.keyfs
         relpath = key.relpath
@@ -1188,7 +1238,7 @@ class FileReplicationThread:
         if isinstance(val, Deleted) and back_serial >= 0:
             # check for existence with metadata from old serial
             with keyfs.read_transaction(at_serial=back_serial):
-                entry = self.xom.filestore.get_file_entry(relpath)
+                entry = self.xom.filestore.get_file_entry(AbsPath(relpath))
                 assert entry is not None
                 key_digestulids = entry.key_digestulids
                 file_exists = entry.file_exists()
@@ -1204,17 +1254,17 @@ class FileReplicationThread:
                     )
                     entry.file_delete(is_last_of_hash=is_last_of_hash)
             self.shared_data.errors.remove(entry)
-            return
+            return None
         entry = self.xom.filestore.get_file_entry_from_key(key, meta=val)
         if entry.deleted_or_never_fetched:
             # there is no remote file
             self.shared_data.errors.remove(entry)
-            return
+            return None
         with keyfs.filestore_transaction():
             if entry.file_exists():
                 # we already have a file
                 self.shared_data.errors.remove(entry)
-                return
+                return None
 
         (f, hashes) = self.find_pre_existing_file(entry)
         if f is not None:
@@ -1226,7 +1276,7 @@ class FileReplicationThread:
                 # before the transaction closes
                 f.close()
             self.shared_data.errors.remove(entry)
-            return
+            return None
         del f, hashes
 
         threadlog.info(
@@ -1258,13 +1308,13 @@ class FileReplicationThread:
                     "ignoring because of redirection to external URL: %s", relpath
                 )
                 self.shared_data.errors.remove(entry)
-                return
+                return None
             if r.status_code == 410:
                 # primary indicates Gone for files which were later deleted
                 r.close()
                 threadlog.info("ignoring because of later deletion: %s", relpath)
                 self.shared_data.errors.remove(entry)
-                return
+                return None
 
             if r.status_code in (404, 502):
                 r.close()
@@ -1278,7 +1328,7 @@ class FileReplicationThread:
                         relpath,
                     )
                     self.shared_data.errors.remove(entry)
-                    return
+                    return None
                 if stage.index_type == "remote":
                     threadlog.warn(
                         "ignoring file which couldn't be retrieved from remote index '%s': %s",
@@ -1286,7 +1336,7 @@ class FileReplicationThread:
                         relpath,
                     )
                     self.shared_data.errors.remove(entry)
-                    return
+                    return None
 
             if r.status_code != 200:
                 r.close()
@@ -1332,8 +1382,17 @@ class FileReplicationThread:
                 # on Windows we need to close the file
                 # before the transaction closes
                 f.close()
+        return entry
 
-    def handler(self, index_type, serial, key, keyname, value, back_serial):
+    def handler(
+        self,
+        index_type: IndexType,
+        serial: int,
+        key: AbsPath,
+        keyname: str,
+        value: DictViewReadonly | Deleted,
+        back_serial: int,
+    ) -> None:
         keyfs = self.xom.keyfs
         if isinstance(value, Deleted):
             self.shared_data.deleted.put(key, serial)
@@ -1342,12 +1401,12 @@ class FileReplicationThread:
             if deleted_serial is not None:
                 if serial <= deleted_serial:
                     return
-                else:
-                    self.shared_data.deleted.invalidate(key)
+                self.shared_data.deleted.invalidate(key)
         typedkey = keyfs.get_key_instance(keyname, key)
-        self.importer(serial, typedkey, value, back_serial)
-        entry = self.xom.filestore.get_file_entry_from_key(typedkey, meta=value)
-        if not entry.project or not entry.version:
+        if not is_dict_key(typedkey):
+            return
+        entry = self.importer(serial, typedkey, value, back_serial)
+        if entry is None or not entry.project or not entry.version:
             return
         # run hook
         with keyfs.read_transaction(at_serial=serial):
@@ -1454,7 +1513,7 @@ class InitialQueueThread:
                     (
                         index_type,
                         -key.last_serial,
-                        key.relpath,
+                        AbsPath(key.relpath),
                         key.key_name,
                         key.get(),
                         key.back_serial,
