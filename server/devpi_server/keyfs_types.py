@@ -939,6 +939,18 @@ class ULIDKey(Generic[KeyType, KeyTypeRO]):
         return self
 
 
+@overload
+def is_dict_key(
+    key: LocatedKey,
+) -> TypeGuard[LocatedKey[dict, DictViewReadonly]]: ...
+
+
+@overload
+def is_dict_key(
+    key: ULIDKey,
+) -> TypeGuard[ULIDKey[dict, DictViewReadonly]]: ...
+
+
 def is_dict_key(
     key: LocatedKey | ULIDKey,
 ) -> TypeGuard[LocatedKey[dict, DictViewReadonly] | ULIDKey[dict, DictViewReadonly]]:
