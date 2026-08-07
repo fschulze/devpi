@@ -1564,9 +1564,9 @@ class TestFileReplicationSharedData:
             key1 = shared_data.xom.keyfs.get_key_instance("FILE", relpath1)
             key2 = shared_data.xom.keyfs.get_key_instance("FILE", relpath2)
             key3 = shared_data.xom.keyfs.get_key_instance("FILE", relpath3)
-            shared_data.on_import_file(None, serial1, key1, None, -1)
-            shared_data.on_import_file(None, serial2, key2, None, -1)
-            shared_data.on_import_file(None, serial3, key3, None, -1)
+            shared_data.on_import_file(serial1, key1, None, -1)
+            shared_data.on_import_file(serial2, key2, None, -1)
+            shared_data.on_import_file(serial3, key3, None, -1)
             assert shared_data.queue.qsize() == 3
             shared_data.process_next(handler)
             shared_data.process_next(handler)
@@ -1586,9 +1586,9 @@ class TestFileReplicationSharedData:
             result.append(serial)
 
         # Later serials come first
-        shared_data.on_import_file(None, 1, key, None, -1)
-        shared_data.on_import_file(None, 100, key, None, -1)
-        shared_data.on_import_file(None, 10, key, None, -1)
+        shared_data.on_import_file(1, key, None, -1)
+        shared_data.on_import_file(100, key, None, -1)
+        shared_data.on_import_file(10, key, None, -1)
         assert shared_data.queue.qsize() == 3
         shared_data.process_next(handler)
         shared_data.process_next(handler)
@@ -1616,7 +1616,7 @@ class TestFileReplicationSharedData:
             handler_result.append(key)
             raise ValueError
 
-        shared_data.on_import_file(None, 0, key, None, -1)
+        shared_data.on_import_file(0, key, None, -1)
         assert shared_data.queue.qsize() == 1
         assert shared_data.error_queue.qsize() == 0
         assert next_ts_result == []
@@ -1687,7 +1687,7 @@ class TestFileReplicationSharedData:
             shared_data.xom.keyfs._threadlocal,
             "tx", Transaction(), raising=False)
 
-        shared_data.on_import_file(None, 1, key, None, -1)
+        shared_data.on_import_file(1, key, None, -1)
         # it should still be queued to check primary and get a 410 for sure
         assert shared_data.queue.qsize() == 1
         shared_data.process_next(handler)
