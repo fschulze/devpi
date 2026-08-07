@@ -319,7 +319,9 @@ class KeyFS(Generic[Schema]):
     class ReadOnly(Exception):
         """ attempt to open write transaction while in readonly mode. """
 
-    _import_subscriber: Callable | None
+    _import_subscriber: (
+        Callable[[int, dict[ULIDKey, tuple[KeyFSTypesRO | Deleted, int]]], None] | None
+    )
     notifier: TxNotificationThread[Schema]
     schema: Schema
 
