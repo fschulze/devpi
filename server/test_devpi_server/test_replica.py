@@ -1644,27 +1644,31 @@ class TestFileReplicationSharedData:
         assert index_type == IndexType(None)
         assert key == relpath
 
-    def test_recreated_index(self, monkeypatch, shared_data):
+    def test_recreated_index(self, mapp, monkeypatch, replica_xom, shared_data, xom):
         from devpi_server.replica import IndexType
-        relpath = "root/dev/+f/274/e88b0b3d028fe/pytest-2.1.0.zip"
-        key = shared_data.xom.keyfs.get_key_instance("STAGEFILE", relpath)
-        userkey = shared_data.xom.keyfs.get_key_instance("USER", "root/.config")
+
+        mapp.create_and_use("user/dev")
+        mapp.upload_file_pypi(
+            "hello-1.0.zip", b"foo", "hello", "1.0", set_whitelist=False
+        )
+        mapp.delete_index("dev")
+        mapp.create_index("dev", indexconfig=dict(type="mirror"))
+        mapp.delete_user("user")
+
+        changes: dict[int, dict] = {}
+
+        with xom.keyfs._storage.get_connection() as conn:
+            for serial in range(xom.keyfs.get_next_serial()):
+                changes[serial] = {}
+                change_entry = conn.get_changes(serial)
+                for relpath, (key_name, back_serial, val) in change_entry.items():
+                    key = replica_xom.keyfs.get_key_instance(key_name, relpath)
+                    changes[serial][key] = (val, back_serial)
 
         result = []
 
         def handler(index_type, serial, key, keyname, value, back_serial):
             result.append(index_type)
-
-        changes: dict[int, dict] = {
-            0: {userkey: ({"indexes": {"dev": {"type": "stage"}}}, -1)},
-            1: {key: (None, -1)},
-            2: {userkey: ({}, 0)},
-            3: {key: (None, -1)},
-            4: {userkey: ({"indexes": {"dev": {"type": "mirror"}}}, 2)},
-            5: {key: (None, -1)},
-            6: {userkey: (None, 4)},
-            7: {key: (None, -1)},
-        }
 
         class Tx:
             def get_value_at(self, key, serial):
@@ -1672,38 +1676,58 @@ class TestFileReplicationSharedData:
 
         monkeypatch.setattr("devpi_server.keyfs.KeyFS.tx", Tx())
 
-        # simulate index creation
-        shared_data.on_import(0, changes[0])
-        # import the file
-        shared_data.on_import(1, changes[1])
+        assert len(changes) == 8
+        serial = 0
+        assert shared_data.index_types.get("root/pypi") is None
+        assert shared_data.index_types.get("user/dev") is None
+        # root/pypi creation
+        shared_data.on_import(serial, changes[serial])
+        serial += 1
+        assert shared_data.index_types.get("root/pypi") == IndexType("mirror")
+        assert shared_data.index_types.get("user/dev") is None
+        # user creation
+        shared_data.on_import(serial, changes[serial])
+        serial += 1
+        assert shared_data.index_types.get("root/pypi") == IndexType("mirror")
+        assert shared_data.index_types.get("user/dev") is None
+        # index creation
+        shared_data.on_import(serial, changes[serial])
+        serial += 1
+        assert shared_data.index_types.get("root/pypi") == IndexType("mirror")
+        assert shared_data.index_types.get("user/dev") == IndexType("stage")
+        # project registration
+        shared_data.on_import(serial, changes[serial])
+        serial += 1
+        assert shared_data.index_types.get("root/pypi") == IndexType("mirror")
+        assert shared_data.index_types.get("user/dev") == IndexType("stage")
+        # file upload
+        shared_data.on_import(serial, changes[serial])
+        serial += 1
+        assert shared_data.index_types.get("root/pypi") == IndexType("mirror")
+        assert shared_data.index_types.get("user/dev") == IndexType("stage")
         assert shared_data.queue.qsize() == 1
         shared_data.process_next(handler)
         (index_type,) = result
         assert index_type == IndexType("stage")
         result.clear()
-        # simulate index deletion
-        shared_data.on_import(2, changes[2])
-        # import the file
-        shared_data.on_import(3, changes[3])
+        # index deletion
+        shared_data.on_import(serial, changes[serial])
+        serial += 1
+        assert shared_data.index_types.get("root/pypi") == IndexType("mirror")
+        assert shared_data.index_types.get("user/dev") == IndexType(None)
         assert shared_data.queue.qsize() == 1
         shared_data.process_next(handler)
         (index_type,) = result
         assert index_type == IndexType(None)
         result.clear()
-        # simulate index recreation
-        shared_data.on_import(4, changes[4])
-        # import the file
-        shared_data.on_import(5, changes[5])
-        assert shared_data.queue.qsize() == 1
-        shared_data.process_next(handler)
-        (index_type,) = result
-        assert index_type == IndexType("mirror")
-        result.clear()
-        # simulate user deletion
-        shared_data.on_import(6, changes[6])
-        # import the file
-        shared_data.on_import(7, changes[7])
-        assert shared_data.queue.qsize() == 1
-        shared_data.process_next(handler)
-        (index_type,) = result
-        assert index_type == IndexType(None)
+        # index recreation with different type
+        shared_data.on_import(serial, changes[serial])
+        serial += 1
+        assert shared_data.index_types.get("root/pypi") == IndexType("mirror")
+        assert shared_data.index_types.get("user/dev") == IndexType("mirror")
+        # user deletion
+        shared_data.on_import(serial, changes[serial])
+        serial += 1
+        assert shared_data.index_types.get("root/pypi") == IndexType("mirror")
+        assert shared_data.index_types.get("user/dev") == IndexType(None)
+        assert serial == len(changes)
