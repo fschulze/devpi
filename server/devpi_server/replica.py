@@ -91,26 +91,30 @@ class IndexType:
     def __str__(self) -> str:
         return str(self._index_type)
 
-    def __lt__(self, other):
-        if self._index_type == other._index_type:
+    def __lt__(self, other: object) -> bool:
+        other_type = other._index_type if isinstance(other, IndexType) else other
+        if self._index_type == other_type:
             return False
         if self._index_type is None:
             # deleted are lowest priority, so come last
             return False
-        if other._index_type is None:
+        if other_type is None:
             # the other is deleted, so we come first
             return True
         if self._index_type == "mirror":
             # mirrors are just before deleted
             return False
-        if other._index_type == "mirror":
+        if other_type == "mirror":
             # the other is a mirror, so we come before
             return True
+        if not isinstance(other_type, str):
+            raise NotImplementedError
         # everything else is by alphabet
-        return self._index_type < other._index_type
+        return self._index_type < other_type
 
-    def __eq__(self, other):
-        return self._index_type == other._index_type
+    def __eq__(self, other: object) -> bool:
+        other_type = other._index_type if isinstance(other, IndexType) else other
+        return self._index_type == other_type
 
 
 def get_auth_serializer(config):
