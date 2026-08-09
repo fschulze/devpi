@@ -1340,15 +1340,19 @@ class RemoteIndex(BaseIndex):
                 self.keyfs.restart_read_transaction()
                 remotedata = self._get_remotedata(project)
                 links = remotedata.get_fresh_links()
-            if links is not None:
-                self.keyfs.tx.on_commit_success(
-                    partial(
-                        self.cache_retrieve_times.refresh,
-                        project,
-                        info.cache_info["etag"],
-                    )
+            self.keyfs.tx.on_commit_success(
+                partial(
+                    self.cache_retrieve_times.refresh,
+                    project,
+                    info.cache_info["etag"],
                 )
+            )
+            if links is not None:
+                # return current links
                 return self.SimpleLinks(links)
+            if newlinks is not None:
+                # return possibly stale links from primary if they exist
+                return self.SimpleLinks(newlinks, stale=True)
             raise self.UpstreamError("no cache links from primary for %s" % project)
 
         with self.keyfs.write_transaction(allow_restart=True):
@@ -1558,12 +1562,15 @@ class RemoteIndex(BaseIndex):
         return last_serial
 
     def get_remoteprojectserial(self, project: NormalizedName) -> int | None:
-        return (
-            self.key_remoteprojectinfo(project)
-            .with_resolved_parent()
-            .get()
-            .get("serial")
-        )
+        try:
+            return (
+                self.key_remoteprojectinfo(project)
+                .with_resolved_parent()
+                .get()
+                .get("serial")
+            )
+        except KeyError:
+            return None
 
     def _get_elink_from_entry(self, entry: BaseFileEntry) -> ELink | None:
         return ELink(
