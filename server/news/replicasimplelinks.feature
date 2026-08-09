@@ -1,0 +1,1 @@
+Return the possibly stale links returned by the primary when waiting for replicated data times out upon refreshing expired remote links.
