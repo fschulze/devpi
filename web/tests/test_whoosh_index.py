@@ -5,29 +5,6 @@ import pytest
 pytestmark = [pytest.mark.notransaction]
 
 
-@pytest.fixture
-def remote_index_info(server_version):
-    from devpi_common.metadata import parse_version
-
-    if server_version < parse_version("7.0.0.dev2"):
-
-        class MirrorInfo:
-            refresh_option = "mirror_cache_expiry"
-            type = "mirror"
-            url_fmt_option = "mirror_web_url_fmt"
-            url_option = "mirror_url"
-
-        return MirrorInfo()
-
-    class RemoteInfo:
-        refresh_option = "remote_refresh_delay"
-        type = "remote"
-        url_fmt_option = "remote_web_url_fmt"
-        url_option = "remote_url"
-
-    return RemoteInfo()
-
-
 @pytest.mark.parametrize("input, expected", [
     ("Foo", [(0, 0, 3, "Foo")]),
     ("Foo Bar", [(0, 0, 3, "Foo"), (1, 4, 7, "Bar")]),
@@ -165,14 +142,14 @@ def test_dont_index_deleted_mirror(
     simpypi.add_release("pkg", pkgver="pkg-1.0.zip")
     mapp.login("root", "")
     api = mapp.use("root/pypi")
-    r = mapp.modify_index(
-        "root/pypi",
-        indexconfig={
-            "type": remote_index_info.type,
-            remote_index_info.url_option: simpypi.simpleurl,
-            "volatile": True,
-        },
-    )
+    indexconfig = {
+        "type": remote_index_info.type,
+        remote_index_info.url_option: simpypi.simpleurl,
+        "volatile": True,
+    }
+    if remote_index_info.remote_search_option:
+        indexconfig[remote_index_info.remote_search_option] = True
+    r = mapp.modify_index("root/pypi", indexconfig=indexconfig)
     # fetching the index json triggers project names loading patched above
     r = testapp.get_json(api.index)
     assert r.status_code == 200
