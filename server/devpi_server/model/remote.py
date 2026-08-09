@@ -1550,16 +1550,12 @@ class RemoteIndex(BaseIndex):
         if projectname in (absent, deleted):
             # the whole project never existed or was deleted
             return last_serial
-        for remotefile_key in tx.conn.iter_ulidkeys_at_serial(
-            (self.key_remotefile(project).with_resolved_parent(),),
-            at_serial=at_serial,
-            fill_cache=False,
-            with_deleted=True,
-        ):
-            last_serial = max(last_serial, remotefile_key.last_serial)
-            if last_serial >= at_serial:
-                return last_serial
-        return last_serial
+        (info_last_serial, _remoteprojectinfo_ulid, _remoteprojectinfo) = (
+            tx.get_last_serial_and_value_at(
+                self.key_remoteprojectinfo(project).with_resolved_parent(), at_serial
+            )
+        )
+        return max(last_serial, info_last_serial)
 
     def get_remoteprojectserial(self, project: NormalizedName) -> int | None:
         try:
