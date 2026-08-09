@@ -588,22 +588,23 @@ class KeyFS(Generic[Schema]):
         # won't cause much pressure on the database.  If that assumption
         # is wrong we have to install a thread which does the
         # db-querying and sets the local condition.
-        time_spent = 0
+        start_time = time.monotonic()
 
         # recheck time should never be higher than the timeout
         if timeout is not None and recheck > timeout:
             recheck = timeout
-        with threadlog.around("debug", "waiting for tx-serial %s", serial):
-            with self._cv_new_transaction:
-                with self.get_connection() as conn:
-                    while serial > conn.db_read_last_changelog_serial():
-                        if timeout is not None and time_spent >= timeout:
-                            return False
-                        self._cv_new_transaction.wait(timeout=recheck)
-                        time_spent += recheck
-                        if recheck_callback is not None:
-                            recheck_callback()
-                    return True
+        with (
+            threadlog.around("debug", "waiting for tx-serial %s", serial),
+            self._cv_new_transaction,
+            self.get_connection() as conn,
+        ):
+            while serial > conn.db_read_last_changelog_serial():
+                if timeout is not None and (time.monotonic() - start_time) >= timeout:
+                    return False
+                self._cv_new_transaction.wait(timeout=recheck)
+                if recheck_callback is not None:
+                    recheck_callback()
+            return True
 
     def get_next_serial(self):
         return self.get_current_serial() + 1
