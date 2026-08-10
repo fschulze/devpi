@@ -111,7 +111,6 @@ def iter_projects(xom, *, offline=True):
         stage = xom.model.getstage(username, index)
         if stage is None:  # this is async, so the stage may be gone
             continue
-        names = stage.list_projects_perstage()
         index_type = stage.ixconfig["type"]
         # only go offline after we got the projects list
         if index_type in {"mirror", "remote"}:
@@ -124,6 +123,7 @@ def iter_projects(xom, *, offline=True):
                 stage.name,
             )
             return
+        names = stage.list_projects_perstage()
         if isinstance(names, Mapping):
             # since devpi-server 6.6.0 mirrors return a mapping where
             # the un-normalized names are in the values
