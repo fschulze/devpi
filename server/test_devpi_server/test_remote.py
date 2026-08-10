@@ -838,28 +838,24 @@ class TestExtPYPIDB:
         assert call["extra_headers"]["If-None-Match"] == '"bar"'
 
     @pytest.mark.notransaction
-    def test_stale_nocache(self, pypistage, testapp):
+    @pytest.mark.parametrize("inherit", [False, True])
+    def test_stale_nocache(self, inherit, mapp, pypistage, testapp):
+        if inherit:
+            api = mapp.create_and_use(indexconfig=dict(bases="root/pypi"))
+            index_prefix = api.index
+        else:
+            index_prefix = "/root/pypi"
         pypistage.mock_simple("foo", text='<a href="foo-1.0.tar.gz"</a>')
-        r = testapp.xget(200, '/root/pypi/+simple/foo/')
+        r = testapp.xget(200, f"{index_prefix}/+simple/foo/")
+        assert "Cache-Control" not in r.headers
+        assert "Expires" not in r.headers
+        assert "Pragma" not in r.headers
+        r = testapp.xget(200, f"{index_prefix}/+simple/foo/")
         assert 'Cache-Control' not in r.headers
         assert 'Expires' not in r.headers
         assert 'Pragma' not in r.headers
         pypistage.mock_simple("foo", status_code=502)
-        r = testapp.xget(200, '/root/pypi/+simple/foo/')
-        assert 'max-age=0' in r.headers['Cache-Control']
-        assert 'Expires' in r.headers
-        assert r.headers['Pragma'] == 'no-cache'
-
-    @pytest.mark.notransaction
-    def test_stale_nocache_inherit(self, mapp, pypistage, testapp):
-        api = mapp.create_and_use(indexconfig=dict(bases='root/pypi'))
-        pypistage.mock_simple("foo", text='<a href="foo-1.0.tar.gz"</a>')
-        r = testapp.xget(200, f'{api.index}/+simple/foo/')
-        assert 'Cache-Control' not in r.headers
-        assert 'Expires' not in r.headers
-        assert 'Pragma' not in r.headers
-        pypistage.mock_simple("foo", status_code=502)
-        r = testapp.xget(200, f'{api.index}/+simple/foo/')
+        r = testapp.xget(200, f"{index_prefix}/+simple/foo/")
         assert 'max-age=0' in r.headers['Cache-Control']
         assert 'Expires' in r.headers
         assert r.headers['Pragma'] == 'no-cache'

@@ -1431,7 +1431,8 @@ class RemoteIndex(BaseIndex):
             if self.offline and project not in self._offline_logging:
                 threadlog.debug("using stale links for %r due to offline mode", project)
                 self._offline_logging.add(project)
-            return self.SimpleLinks(links, stale=True)
+                return self.SimpleLinks(links, stale=True)
+            return self.SimpleLinks(links, stale=False)
 
         if links is None:
             is_retrieval_expired = self.cache_retrieve_times.is_expired(
