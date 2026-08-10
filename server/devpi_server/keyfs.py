@@ -174,8 +174,8 @@ class TxNotificationThread(Generic[Schema]):
             if event_serial == serial:
                 self.event_serial_in_sync_at = time.time()
             self.keyfs.wait_tx_serial(
-                serial + 1,
-                recheck_callback=self.thread.exit_if_shutdown)
+                serial + 1, recheck=1, recheck_callback=self.thread.exit_if_shutdown
+            )
 
     def thread_run(self) -> None:
         self.log = thread_push_log("[NOTI]")
