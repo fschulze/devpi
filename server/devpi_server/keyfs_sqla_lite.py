@@ -16,6 +16,7 @@ from typing import overload
 from zope.interface import implementer
 import contextlib
 import sqlalchemy as sa
+import sqlite3
 import sys
 import time
 import traceback
@@ -84,11 +85,17 @@ class Storage(BaseStorage):
         super().__init__(basedir, notify_on_commit=notify_on_commit, settings=settings)
         self.sqlpath = self.basedir / self.db_filename
         self.ro_engine = sa.create_engine(
-            self._url(mode="ro"), echo=False, poolclass=sa.NullPool
+            self._url(mode="ro"),
+            echo=False,
+            connect_args={"isolation_level": None},
+            poolclass=sa.NullPool,
         )
         weakref.finalize(self, self.ro_engine.dispose)
         self.rw_engine = sa.create_engine(
-            self._url(mode="rw"), echo=False, poolclass=sa.NullPool
+            self._url(mode="rw"),
+            echo=False,
+            connect_args={"isolation_level": None},
+            poolclass=sa.NullPool,
         )
         weakref.finalize(self, self.rw_engine.dispose)
         self.ensure_tables_exist()
@@ -147,6 +154,11 @@ class Storage(BaseStorage):
                     sqlaconn.execute(sa.text("begin immediate"))
                     break
                 except sa.exc.OperationalError as e:
+                    sqlite_errorcode = (
+                        e.orig.sqlite_errorcode
+                        if isinstance(e.orig, sqlite3.OperationalError)
+                        else None
+                    )
                     # another thread may be writing, give it a chance to finish
                     time.sleep(0.1)
                     if hasattr(thread, "exit_if_shutdown"):
@@ -154,12 +166,14 @@ class Storage(BaseStorage):
                     elapsed = time.monotonic() - start_time
                     if elapsed >= log_delay:
                         threadlog.warn(
-                            "Waiting on database connection for %.6f seconds", log_delay
+                            "Waiting on database connection for %.6f seconds (SQLite error code: %s)",
+                            log_delay,
+                            sqlite_errorcode,
                         )
                         log_delay = log_delay * 1.5
                     if elapsed > timeout:
                         # if it takes this long, something is wrong
-                        msg = f"Timeout after {int(elapsed)} seconds."
+                        msg = f"Timeout after {int(elapsed)} seconds (SQLite error code: {sqlite_errorcode})."
                         with contextlib.suppress(Exception):
                             log_write_thread_trace()
                         raise KeyfsTimeoutError(msg) from e
