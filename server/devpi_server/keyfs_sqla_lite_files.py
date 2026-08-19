@@ -5,39 +5,29 @@ from .filestore_fs_base import LazyChangesFormatter
 from .interfaces import IDBIOFileConnection
 from .interfaces import IStorage
 from .interfaces import IStorageConnection
-from .keyfs import KeyfsTimeoutError
 from .keyfs_sqla_base import BaseConnection
-from .keyfs_sqla_base import BaseStorage
 from .keyfs_sqla_base import Writer
 from .keyfs_sqla_base import cache_metrics
+from .keyfs_sqla_lite_base import LiteBaseStorage
 from .keyfs_types import StorageInfo
 from .log import threadlog
 from .markers import Absent
 from .markers import absent
-from .mythread import current_thread
 from io import BytesIO
 from tempfile import SpooledTemporaryFile
 from typing import TYPE_CHECKING
-from typing import overload
 from zope.interface import implementer
-import contextlib
 import os
 import shutil
 import sqlalchemy as sa
-import time
-import weakref
 
 
 if TYPE_CHECKING:
     from .keyfs_types import FilePathInfo
-    from collections.abc import Callable
     from collections.abc import Sequence
-    from contextlib import AbstractContextManager
-    from pathlib import Path
     from pyramid.request import Request
     from sqlalchemy.types import _Binary
     from typing import IO
-    from typing import Literal
 
 
 @implementer(IDBIOFileConnection)
@@ -194,21 +184,9 @@ class Connection(BaseConnection):
 
 
 @implementer(IStorage)
-class Storage(BaseStorage):
+class Storage(LiteBaseStorage):
+    Connection = Connection
     db_filename = ".sqlite_alchemy_files"
-
-    def __init__(
-        self, basedir: Path, *, notify_on_commit: Callable, settings: dict
-    ) -> None:
-        super().__init__(basedir, notify_on_commit=notify_on_commit, settings=settings)
-        self.sqlpath = self.basedir / self.db_filename
-        self.ro_engine = sa.create_engine(self._url(mode="ro"), echo=False)
-        weakref.finalize(self, self.ro_engine.dispose)
-        self.rw_engine = sa.create_engine(
-            self._url(mode="rw"), echo=False, poolclass=sa.NullPool
-        )
-        weakref.finalize(self, self.rw_engine.dispose)
-        self.ensure_tables_exist()
 
     def define_tables(
         self, metadata_obj: sa.MetaData, binary_type: type[_Binary]
@@ -224,14 +202,6 @@ class Storage(BaseStorage):
         )
         return tables
 
-    @classmethod
-    def exists(cls, basedir: Path, settings: dict) -> bool:  # noqa: ARG003
-        sqlpath = basedir / cls.db_filename
-        return sqlpath.exists()
-
-    def _url(self, *, mode: str) -> str:
-        return f"sqlite+pysqlite:///file:{self.sqlpath}?mode={mode}&timeout=30&uri=true"
-
     def ensure_tables_exist(self) -> None:
         metadata_obj = sa.MetaData()
         tables = self.define_tables(metadata_obj, sa.BINARY)
@@ -243,52 +213,6 @@ class Storage(BaseStorage):
             )
             metadata_obj.create_all(engine)
             engine.dispose()
-
-    def _execute_conn_pragmas(self, conn: sa.Connection) -> None:
-        c = conn.connection.cursor()
-        c.execute("PRAGMA busy_timeout=1000")
-        c.execute("PRAGMA cache_size = 200000")
-        c.close()
-
-    @overload
-    def get_connection(
-        self, *, closing: Literal[True], write: bool = False, timeout: float = 30
-    ) -> AbstractContextManager[IStorageConnection]:
-        pass
-
-    @overload
-    def get_connection(
-        self, *, closing: Literal[False], write: bool = False, timeout: float = 30
-    ) -> IStorageConnection:
-        pass
-
-    def get_connection(
-        self, *, closing: bool = True, write: bool = False, timeout: float = 30
-    ) -> IStorageConnection | AbstractContextManager[IStorageConnection]:
-        engine = self.rw_engine if write else self.ro_engine
-        sqlaconn = engine.connect()
-        self._execute_conn_pragmas(sqlaconn)
-        if write:
-            start_time = time.monotonic()
-            thread = current_thread()
-            while 1:
-                try:
-                    sqlaconn.execute(sa.text("begin immediate"))
-                    break
-                except sa.exc.OperationalError as e:
-                    # another thread may be writing, give it a chance to finish
-                    time.sleep(0.1)
-                    if hasattr(thread, "exit_if_shutdown"):
-                        thread.exit_if_shutdown()
-                    elapsed = time.monotonic() - start_time
-                    if elapsed > timeout:
-                        # if it takes this long, something is wrong
-                        msg = f"Timeout after {int(elapsed)} seconds."
-                        raise KeyfsTimeoutError(msg) from e
-        conn = Connection(sqlaconn, self)
-        if closing:
-            return contextlib.closing(conn)
-        return conn
 
     def perform_crash_recovery(self) -> None:
         pass
