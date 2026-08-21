@@ -40,7 +40,6 @@ from devpi_server.readonly import ensure_deeply_readonly
 from devpi_server.readonly import get_mutable_deepcopy
 from functools import partial
 from lazy import lazy
-from pathlib import Path
 from typing import TYPE_CHECKING
 from typing import cast
 from typing import overload
@@ -458,24 +457,11 @@ class LocalIndex(BaseIndex):
             self.key_toxresult(project, version, basename).with_resolved_parent(),
             self.key_versionfile(project, version, basename).with_resolved_parent(),
         ]
-        key_name_rel_map = self._key_name_rel_map
-        username = self.username
-        index = self.index
-        result = []
-        for k, v in self.keyfs.tx.iter_ulidkey_values_for(keys):
-            assert isinstance(v, DictViewReadonly)
-            if Path(v["relpath"]).name != basename:
-                continue
-            data = dict((*v.items(), ("rel", key_name_rel_map[k.key_name])))
-            data["entrypath"] = f"{username}/{index}/{data['relpath']}"
-            if "for_relpath" in data:
-                data["for_entrypath"] = f"{username}/{index}/{data['for_relpath']}"
-            data["hashes"] = entry.hashes
-            result.append(data)
+        result = self._get_elinks_from_keys(*keys)
         if not result:
             return None
-        (data,) = result
-        return ELink(entry, data)
+        (elink,) = result
+        return elink
 
     def _get_elink_dicts(
         self, project: str, version: str, *, rel: Rel | None = None
@@ -495,6 +481,25 @@ class LocalIndex(BaseIndex):
             keys.append(self.key_toxresult(project, version).with_resolved_parent())
         if Rel.ReleaseFile in rels:
             keys.append(self.key_versionfile(project, version).with_resolved_parent())
+        return self._get_elinks_from_keys(*keys)
+
+    def _get_elinks_from_dicts(self, *keys_data: dict) -> list[ELink]:
+        index_name = self.name
+        entries = {
+            e.index_relpath: e
+            for e in self.get_entries_for_entrypaths(
+                f"{index_name}/{l['relpath']}" for l in keys_data
+            )
+            if e is not None
+        }
+        elinks = []
+        for l in keys_data:
+            entry = entries[l["relpath"]]
+            l["hashes"] = entry.hashes
+            elinks.append(ELink(entry, l))
+        return elinks
+
+    def _get_elinks_from_keys(self, *keys: LocatedKey | SearchKey) -> list[ELink]:
         username = self.username
         index = self.index
         key_name_rel_map = self._key_name_rel_map
@@ -506,17 +511,7 @@ class LocalIndex(BaseIndex):
             if "for_relpath" in data:
                 data["for_entrypath"] = f"{username}/{index}/{data['for_relpath']}"
             result.append(data)
-        entries = {
-            e.abspath: e
-            for e in self.get_entries_for_entrypaths(l["entrypath"] for l in result)
-            if e is not None
-        }
-        elinks = []
-        for l in result:
-            entry = entries[l["entrypath"]]
-            l["hashes"] = entry.hashes
-            elinks.append(ELink(entry, l))
-        return elinks
+        return self._get_elinks_from_dicts(*result)
 
     def get_last_project_change_serial_perstage(self, project, at_serial=None):
         project = normalize_name(project)
@@ -612,7 +607,7 @@ class LocalIndex(BaseIndex):
                     size=v["size"],
                     upload_time=v["upload_time"],
                     user=username,
-                    yanked=None,
+                    yanked=v.get("yanked"),
                 )
                 for k, v in key_simpledata.iter_ulidkey_values()
             ],
@@ -813,6 +808,78 @@ class LocalIndex(BaseIndex):
         if last_serial >= index_serial:
             return last_serial
         return index_serial
+
+    def _yank_simpledata(
+        self, reason: Literal[False] | str, project: NormalizedName, *basenames: str
+    ) -> None:
+        key_simpledata = self.key_simpledata(project).with_resolved_parent()
+        tx = self.keyfs.tx
+        for _k, ulid_key in tx.resolve_keys(
+            [key_simpledata(basename) for basename in basenames],
+            fetch=True,
+            fill_cache=True,
+            new_for_missing=False,
+        ):
+            if isinstance(ulid_key, (Absent, Deleted)):
+                continue
+            with ulid_key.update() as simpledata:
+                if reason is False:
+                    simpledata.pop("yanked", None)
+                else:
+                    simpledata["yanked"] = reason
+
+    def _yank_versionfile(
+        self,
+        reason: Literal[False] | str,
+        project: NormalizedName,
+        version: str,
+        *basenames: str,
+    ) -> list[dict]:
+        key_versionfile = self.key_versionfile(project, version).with_resolved_parent()
+        tx = self.keyfs.tx
+        keys_data = []
+        for _k, ulid_key in tx.resolve_keys(
+            [key_versionfile(basename) for basename in basenames],
+            fetch=True,
+            fill_cache=True,
+            new_for_missing=False,
+        ):
+            if isinstance(ulid_key, (Absent, Deleted)):
+                continue
+            with ulid_key.update() as versionfile:
+                if reason is False:
+                    versionfile.pop("yanked", None)
+                else:
+                    versionfile["yanked"] = reason
+                keys_data.append(versionfile)
+        return keys_data
+
+    def yank_releasefile(
+        self, link: ELink, reason: Literal[False] | str
+    ) -> ELink | None:
+        basename = link.basename
+        project = link.project
+        version = link.version
+        self._yank_simpledata(reason, project, basename)
+        keys_data = self._yank_versionfile(reason, project, version, basename)
+        self.set_simpledatatag(project)
+        (link,) = self._get_elinks_from_dicts(*keys_data)
+        return link
+
+    def yank_version(
+        self, project: NormalizedName, version: str, reason: Literal[False] | str
+    ) -> list[ELink]:
+        project = normalize_name(project)
+        key_versionfile = self.key_versionfile(project, version).with_resolved_parent()
+        abspaths = set()
+        basenames = set()
+        for k, v in key_versionfile.iter_ulidkey_values():
+            basenames.add(k.name)
+            abspaths.add(AbsPath(f"{self.name}/{v['relpath']}"))
+        self._yank_simpledata(reason, project, *basenames)
+        keys_data = self._yank_versionfile(reason, project, version, *basenames)
+        self.set_simpledatatag(project)
+        return self._get_elinks_from_dicts(*keys_data)
 
 
 class LocalIndexCustomizer(BaseIndexCustomizer):

@@ -858,18 +858,18 @@ class TestExtPYPIDB:
         pypistage.mock_simple("foo", text='<a href="foo-1.0.tar.gz"</a>')
         r = testapp.xget(200, f"{index_prefix}/+simple/foo/")
         etag = r.headers["ETag"]
-        assert r.headers['Cache-Control'] == "must-revalidate"
+        assert r.headers["Cache-Control"] == "must-revalidate"
         assert "Expires" not in r.headers
         assert "Pragma" not in r.headers
         r = testapp.xget(200, f"{index_prefix}/+simple/foo/")
-        assert r.headers['Cache-Control'] == "must-revalidate"
-        assert r.headers['ETag'] == etag
+        assert r.headers["Cache-Control"] == "must-revalidate"
+        assert r.headers["ETag"] == etag
         assert 'Expires' not in r.headers
         assert 'Pragma' not in r.headers
         pypistage.mock_simple("foo", status_code=502)
         r = testapp.xget(200, f"{index_prefix}/+simple/foo/")
-        assert r.headers['Cache-Control'] == "must-revalidate"
-        assert r.headers['ETag'] == etag
+        assert r.headers["Cache-Control"] == "must-revalidate"
+        assert r.headers["ETag"] == etag
         assert 'Expires' not in r.headers
         assert 'Pragma' not in r.headers
 

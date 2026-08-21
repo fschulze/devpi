@@ -72,6 +72,8 @@ class BaseIndexCustomizer:
     ):
         return self.stage.ixconfig.get("acl_upload", [])
 
+    get_principals_for_yank = get_principals_for_upload
+
     def get_principals_for_toxresult_upload(
         self,
         restrict_modify=None,  # noqa: ARG002 - API
