@@ -205,10 +205,10 @@ class RootFactory:
         return name
 
     @cached_property
-    def version(self):
+    def version(self) -> str | None:
         version = self.matchdict.get('version')
         if version is None:
-            return
+            return None
         return ensure_unicode(version)
 
     @cached_property
