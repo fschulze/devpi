@@ -395,6 +395,7 @@ class XOM:
             "push-only-docs",
             "push-register-project",
             "server-keyvalue-parsing",
+            "yank",
         }
         for features in self.config.hook.devpiserver_get_features():
             results.update(features)

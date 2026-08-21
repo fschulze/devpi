@@ -1,0 +1,1 @@
+Fix #1098: implemented yanking for releases on local indexes.

@@ -1915,6 +1915,10 @@ def test_get_indexconfig_values(xom, input, expected):
 
 def test_elinks(stage: LocalIndex) -> None:
     register_and_store(stage, "some-1.0.zip")
+    link = register_and_store(stage, "some-1.1.zip")
+    register_and_store(stage, "some-1.2.zip")
+    stage.yank_version(normalize_name("some"), "1.0", "brownbag")
+    stage.yank_releasefile(link, "brownbag")
     elinks = {
         version: sorted(
             get_mutable_deepcopy(
@@ -1929,6 +1933,7 @@ def test_elinks(stage: LocalIndex) -> None:
     assert all(
         el["rel"] == "releasefile" for velinks in elinks.values() for el in velinks
     )
+    assert any("yanked" in el for velinks in elinks.values() for el in velinks)
     entries = {
         version: sorted(
             (
