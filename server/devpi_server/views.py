@@ -40,10 +40,13 @@ from operator import attrgetter
 from pathlib import Path
 from pluggy import HookimplMarker
 from pyramid.authentication import b64encode
+from pyramid.httpexceptions import HTTPBadRequest
 from pyramid.httpexceptions import HTTPException
 from pyramid.httpexceptions import HTTPForbidden
 from pyramid.httpexceptions import HTTPFound
 from pyramid.httpexceptions import HTTPInternalServerError
+from pyramid.httpexceptions import HTTPNotAcceptable
+from pyramid.httpexceptions import HTTPNotFound
 from pyramid.httpexceptions import HTTPNotModified
 from pyramid.httpexceptions import HTTPOk
 from pyramid.httpexceptions import HTTPSuccessful
@@ -78,7 +81,9 @@ if TYPE_CHECKING:
     from .model.base import BaseIndex
     from .model.links import ELink
     from .model.local import LocalIndex
+    from .view_auth import RootFactory
     from collections.abc import Iterator
+    from typing import Any
     from typing import NoReturn
 
 
@@ -127,6 +132,8 @@ def abort(request: Request, code: int, body: str) -> NoReturn:
     request.headers.setdefault("Accept", "*/*")
     if "application/json" in request.headers.get("Accept", ""):
         apireturn(code, body)
+    if getattr(request, "content_type", None) == "application/json":
+        apireturn(code, body)
     threadlog.error("while handling %s:\n%s" % (request.url, body))
     raise exception_response(code, explanation=body, headers=meta_headers)
 
@@ -171,13 +178,23 @@ class HTTPResponse(HTTPSuccessful):
 
 
 def apiresult(
-    code: int,
+    code_or_http_exception: HTTPException | int,
     message: str | None = None,
     *,
     result: dict | list | None = None,
     type: str | None = None,  # noqa: A002
     warnings: list | None = None,
 ) -> HTTPResponse:
+    if isinstance(code_or_http_exception, int):
+        code = code_or_http_exception
+    elif isinstance(code_or_http_exception, HTTPException) or issubclass(
+        code_or_http_exception, HTTPException
+    ):
+        code = code_or_http_exception.code
+        if message is None:
+            message = code_or_http_exception.title
+    else:
+        raise TypeError
     d: dict[str, dict | list | str] = {}
     if result is not None:
         assert type is not None
@@ -193,14 +210,20 @@ def apiresult(
 
 
 def apireturn(
-    code: int,
+    code_or_http_exception: HTTPException | int,
     message: str | None = None,
     *,
     result: dict | list | None = None,
     type: str | None = None,  # noqa: A002
     warnings: list | None = None,
 ) -> NoReturn:
-    raise apiresult(code, message=message, result=result, type=type, warnings=warnings)
+    raise apiresult(
+        code_or_http_exception,
+        message=message,
+        result=result,
+        type=type,
+        warnings=warnings,
+    )
 
 
 def json_preferred(request):
@@ -339,7 +362,10 @@ def readonly_index_view(exc, request):
 
 
 class StatusView:
-    def __init__(self, request):
+    request: Request
+    xom: XOM
+
+    def __init__(self, request: Request) -> None:
         self.request = request
         self.xom = request.registry["xom"]
 
@@ -528,9 +554,11 @@ def version_in_filename(version, filename):
 
 
 class PyPIView:
+    context: RootFactory
+    request: Request
     xom: XOM
 
-    def __init__(self, request):
+    def __init__(self, request: Request) -> None:
         self.request = request
         self.context = request.context
         xom = request.registry['xom']
@@ -634,14 +662,8 @@ class PyPIView:
         with RequestContext(orig_request):
             return self._auth_check_request(orig_request)
 
-    #
-    # attach test results to release files
-    #
-
-    @view_config(
-        route_name="/{user}/{index}/+f/{relpath:.*}",
-        request_method="POST")
     def post_toxresult(self) -> None:
+        """attach test results to release files"""
         if not self.request.has_permission("toxresult_upload"):
             default_tox_result_handling = ToxResultHandling().block(TOXRESULT_UPLOAD_FORBIDDEN)
             tox_result_handling = self.xom.config.hook.devpiserver_on_toxresult_upload_forbidden(
@@ -1574,6 +1596,7 @@ class PyPIView:
     )
     def project_modify(self) -> HTTPResponse:
         json = getjson(self.request)
+        assert self.context.project is not None
         project = normalize_name(self.context.project)
         stage = cast("BaseIndex", self.context.stage)
         if isinstance(json, list):
@@ -1632,6 +1655,42 @@ class PyPIView:
         verdata = self.context.get_versiondata(perstage=False)
         view_verdata = self._make_view_verdata(verdata)
         apireturn(200, type="versiondata", result=view_verdata)
+
+    @view_config(
+        route_name="/{user}/{index}/{project}/{version}", request_method="POST"
+    )
+    def version_post(self) -> Response:
+        request = self.request
+        if request.content_type != "application/json":
+            return apiresult(HTTPNotAcceptable)
+        json = getjson_dict(self.request)
+        match json_type := json.get("type"):
+            case "yank":
+                return self.version_yank(json)
+            case _:
+                return apiresult(
+                    HTTPBadRequest,
+                    f"Bad request: unrecognized 'type' in json: {json_type!r}",
+                )
+
+    def version_yank(self, json: dict) -> Response:
+        request = self.request
+        if not request.has_permission("yank"):
+            return apiresult(HTTPForbidden, "no permission to yank")
+        reason = json.get("reason")
+        if reason is not False and not isinstance(reason, str):
+            return apiresult(
+                HTTPBadRequest, "Bad request: yank 'reason' must be a string or False"
+            )
+        stage = cast("BaseIndex", self.context.stage)
+        project = self.context.project
+        assert project is not None
+        version = self.context.version
+        assert version is not None
+        stage.yank_version(project, version, reason)
+        if reason is False:
+            return apiresult(HTTPOk, "version unyanked")
+        return apiresult(HTTPOk, "version yanked")
 
     def _make_view_verdata(self, verdata):
         view_verdata = get_mutable_deepcopy(verdata)
@@ -1884,6 +1943,43 @@ class PyPIView:
                 200, "login successful", type="proxyauth", result=proxyauth)
         apireturn(401, "user %r could not be authenticated" % user)
 
+    @view_config(route_name="/{user}/{index}/+f/{relpath:.*}", request_method="POST")
+    def releasefile_post(self) -> Response:
+        request = self.request
+        content_type = request.content_type
+        if content_type == "application/x-www-form-urlencoded":
+            return self.post_toxresult()
+        if content_type != "application/json":
+            return apiresult(HTTPNotAcceptable)
+        json = getjson_dict(request)
+        match json_type := json.get("type"):
+            case "yank":
+                return self.releasefile_yank(json)
+            case _:
+                return apiresult(
+                    HTTPBadRequest,
+                    f"Bad request: unrecognized 'type' in json: {json_type!r}",
+                )
+
+    def releasefile_yank(self, json: dict) -> Response:
+        request = self.request
+        if not request.has_permission("yank"):
+            return apiresult(HTTPForbidden, "no permission to yank")
+        reason = json.get("reason")
+        if reason is not False and not isinstance(reason, str):
+            return apiresult(
+                HTTPBadRequest, "Bad request: yank 'reason' must be a string or False"
+            )
+        relpath = request.path_info.strip("/")
+        stage = cast("BaseIndex", self.context.stage)
+        (entry,) = stage.get_mutable_entries_for_entrypaths([relpath])
+        if entry is None:
+            return apiresult(HTTPNotFound)
+        stage.yank_entry(entry, reason)
+        if reason is False:
+            return apiresult(HTTPOk, "release unyanked")
+        return apiresult(HTTPOk, "release yanked")
+
     @view_config(route_name="/{user}", request_method="PATCH")
     @view_config(route_name="/{user}/", request_method="PATCH")
     def user_patch(self):
@@ -1988,12 +2084,19 @@ def url_for_entrypath(request, entrypath):
         route_name, user=user, index=index, relpath=relpath)
 
 
-def getjson(request):
+def getjson(request: Request) -> Any:
     try:
         d = request.json_body
     except ValueError:
         abort(request, 400, "Bad request: could not decode json")
     return d
+
+
+def getjson_dict(request: Request) -> dict:
+    json = getjson(request)
+    if not isinstance(json, dict):
+        abort(request, 400, "Bad request: json is not a dict")
+    return json
 
 
 def abort_if_invalid_filename(request, name, filename):

@@ -2285,6 +2285,9 @@ def test_delete_package(mapp, testapp):
     mapp.create_index("test")
     mapp.use("root/test")
     mapp.upload_file_pypi("pkg5-2.6.tgz", b"123", "pkg5", "2.6")
+    simple_text = mapp.get_simple("pkg5").text
+    assert "pkg5-2.6.tgz" in simple_text
+    assert "pkg5-2.6.zip" not in simple_text
     vv = get_view_version_links(testapp, "/root/test", "pkg5", "2.6")
     # store the link of the tarball
     (link,) = vv.get_links()
@@ -2292,6 +2295,9 @@ def test_delete_package(mapp, testapp):
     with testapp.xom.keyfs.read_transaction():
         assert getentry(testapp, path).file_exists()
     mapp.upload_file_pypi("pkg5-2.6.zip", b"456", "pkg5", "2.6")
+    simple_text = mapp.get_simple("pkg5").text
+    assert "pkg5-2.6.tgz" in simple_text
+    assert "pkg5-2.6.zip" in simple_text
     vv = get_view_version_links(testapp, "/root/test", "pkg5", "2.6")
     assert len(vv.get_links()) == 2
     # now delete the tarball link from above
@@ -2304,6 +2310,9 @@ def test_delete_package(mapp, testapp):
     # the zip file should still be there
     (link,) = vv.get_links()
     assert link.href.endswith(".zip")
+    simple_text = mapp.get_simple("pkg5").text
+    assert "pkg5-2.6.tgz" not in simple_text
+    assert "pkg5-2.6.zip" in simple_text
 
 
 def test_delete_package_with_doczip(mapp, testapp):

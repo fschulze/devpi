@@ -547,6 +547,10 @@ class FileStore:
 
 
 def metaprop(name):
+    def fdel(self):
+        if name in self.meta:
+            del self.meta[name]
+
     def fget(self):
         return None if self.meta is None else self.meta.get(name)
 
@@ -556,7 +560,7 @@ def metaprop(name):
             self.meta[name] = val
             self.key.set(self.meta)
 
-    return property(fget, fset)
+    return property(fget, fset, fdel)
 
 
 class BadGateway(Exception):

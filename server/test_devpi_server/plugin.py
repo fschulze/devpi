@@ -17,6 +17,7 @@ from devpi_server.markers import NotSet
 from devpi_server.markers import notset
 from devpi_server.model import remote
 from devpi_server.model.config import ensure_list
+from devpi_server.model.simpleapi import SIMPLE_API_V1_JSON
 from devpi_server.normalized import normalize_name
 from io import BytesIO
 from pathlib import Path
@@ -1114,10 +1115,16 @@ class Mapp(MappMixin):
             self._wait_for_serial_in_result(r)
         return r
 
-    def get_simple(self, project, code=200):
-        r = self.testapp.get(self.api.simpleindex + project + '/',
-                             expect_errors=True)
+    def get_simple(self, project, *, code=200, use_json=False):
+        headers = {}
+        if use_json:
+            headers["Accept"] = SIMPLE_API_V1_JSON
+        r = self.testapp.get(
+            self.api.simpleindex + project + "/", expect_errors=True, headers=headers
+        )
         assert r.status_code == code
+        if use_json:
+            assert "json" in r.content_type
         return r
 
 

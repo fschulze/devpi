@@ -77,6 +77,7 @@ if TYPE_CHECKING:
     from devpi_server.normalized import NormalizedName
     from devpi_server.readonly import DictViewReadonly
     from typing import Any
+    from typing import Literal
 
 
 def run_passwd(root, username, password=None, pwhash=None):
@@ -854,16 +855,25 @@ class BaseIndex:
         for traversed_index in self.index_bases.iter_indexes():
             yield traversed_index.index
 
+    def yank_entry(self, entry: MutableFileEntry, reason: Literal[False] | str) -> None:
+        raise NotImplementedError
+
+    def yank_version(
+        self, project: NormalizedName, version: str, reason: Literal[False] | str
+    ) -> None:
+        raise NotImplementedError
+
     def __acl__(self):
         permissions = (
-            "pkg_read",
-            "toxresult_upload",
-            "upload",
-            "index_delete",
-            "index_modify",
             "del_entry",
             "del_project",
             "del_verdata",
+            "index_delete",
+            "index_modify",
+            "pkg_read",
+            "toxresult_upload",
+            "upload",
+            "yank",
         )
         restrict_modify = self.xom.config.restrict_modify
         acl: list[tuple] = []

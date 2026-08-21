@@ -596,7 +596,7 @@ class LocalIndex(BaseIndex):
                     size=v["size"],
                     upload_time=v["upload_time"],
                     user=username,
-                    yanked=None,
+                    yanked=v.get("yanked"),
                 )
                 for k, v in key_simpledata.iter_ulidkey_values()
             ],
@@ -797,6 +797,56 @@ class LocalIndex(BaseIndex):
         if last_serial >= index_serial:
             return last_serial
         return index_serial
+
+    def yank_entry(self, entry: MutableFileEntry, reason: Literal[False] | str) -> None:
+        if reason is False:
+            del entry.yanked
+        else:
+            entry.yanked = reason
+        key_simpledata = self.key_simpledata(
+            entry.project, entry.basename
+        ).with_resolved_parent()
+        with key_simpledata.update() as simpledata:
+            simpledata["yanked"] = entry.yanked
+            if simpledata["yanked"] is None:
+                del simpledata["yanked"]
+        key_versionfile = self.key_versionfile(
+            entry.project, entry.version, entry.basename
+        ).with_resolved_parent()
+        with key_versionfile.update() as versionfile:
+            versionfile["yanked"] = entry.yanked
+            if versionfile["yanked"] is None:
+                del versionfile["yanked"]
+        self.set_simpledatatag(entry.project)
+
+    def yank_version(
+        self, project: NormalizedName, version: str, reason: Literal[False] | str
+    ) -> None:
+        project = normalize_name(project)
+        key_simpledata = self.key_simpledata(project).with_resolved_parent()
+        key_versionfile = self.key_versionfile(project, version).with_resolved_parent()
+        abspaths = set()
+        for k in key_simpledata.iter_ulidkeys():
+            with k.update() as v:
+                if reason is False:
+                    v.pop("yanked", None)
+                else:
+                    v["yanked"] = reason
+        for k in key_versionfile.iter_ulidkeys():
+            with k.update() as v:
+                abspaths.add(f"{self.name}/{v['relpath']}")
+                if reason is False:
+                    v.pop("yanked", None)
+                else:
+                    v["yanked"] = reason
+        for entry in self.get_mutable_entries_for_entrypaths(abspaths):
+            if entry is None:
+                continue
+            if reason is False:
+                del entry.yanked
+            else:
+                entry.yanked = reason
+        self.set_simpledatatag(project)
 
 
 class LocalIndexCustomizer(BaseIndexCustomizer):
