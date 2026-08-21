@@ -38,6 +38,7 @@ LOWER_ARGON2_TIME_COST = 1
 
 
 class API:
+    features: list[str]
     index: str
     login: str
     user: str
