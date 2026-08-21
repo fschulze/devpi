@@ -828,18 +828,17 @@ class BaseIndex:
             "del_verdata",
         )
         restrict_modify = self.xom.config.restrict_modify
-        acl = []
+        acl: list[tuple] = []
         for permission in permissions:
             method_name = "get_principals_for_%s" % permission
             method = getattr(self.customizer, method_name, None)
             if not callable(method):
                 msg = f"The attribute {method_name} with value {method!r} of {self.customizer!r} is not callable."
                 raise AttributeError(msg)  # noqa: TRY004
-            for principal in get_principals(method(restrict_modify=restrict_modify)):
-                acl.append((Allow, principal, permission))
-                if permission == "upload":
-                    # add pypi_submit alias for BBB
-                    acl.append((Allow, principal, "pypi_submit"))
+            acl.extend(
+                (Allow, principal, permission)
+                for principal in get_principals(method(restrict_modify=restrict_modify))
+            )
         return acl
 
     InvalidIndex = InvalidIndex
