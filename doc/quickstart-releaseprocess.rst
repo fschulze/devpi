@@ -110,7 +110,7 @@ Finally we use the new index::
 
     $ devpi use testuser/dev
     current devpi index: http://localhost:3141/testuser/dev (logged in as testuser)
-    supported features: projectconfig-v2, push-no-docs, push-only-docs, push-register-project, server-keyvalue-parsing
+    supported features: projectconfig-v2, push-no-docs, push-only-docs, push-register-project, server-keyvalue-parsing, yank
     venv for install/set commands: /tmp/docenv
     only setting venv pip/uv config, no global configuration changed
     /tmp/docenv/pip.conf: no config file exists
@@ -185,7 +185,7 @@ Let's verify we are logged in to the correct index::
 
     $ devpi use
     current devpi index: http://localhost:3141/testuser/dev (logged in as testuser)
-    supported features: projectconfig-v2, push-no-docs, push-only-docs, push-register-project, server-keyvalue-parsing
+    supported features: projectconfig-v2, push-no-docs, push-only-docs, push-register-project, server-keyvalue-parsing, yank
     venv for install/set commands: /tmp/docenv
     only setting venv pip/uv config, no global configuration changed
     /tmp/docenv/pip.conf: no config file exists
@@ -340,7 +340,7 @@ Let's check again our current index::
 
     $ devpi use
     current devpi index: http://localhost:3141/testuser/dev (logged in as testuser)
-    supported features: projectconfig-v2, push-no-docs, push-only-docs, push-register-project, server-keyvalue-parsing
+    supported features: projectconfig-v2, push-no-docs, push-only-docs, push-register-project, server-keyvalue-parsing, yank
     venv for install/set commands: /tmp/docenv
     only setting venv pip/uv config, no global configuration changed
     /tmp/docenv/pip.conf: no config file exists
@@ -351,7 +351,7 @@ Let's now use our ``testuser/staging`` index::
 
     $ devpi use testuser/staging
     current devpi index: http://localhost:3141/testuser/staging (logged in as testuser)
-    supported features: projectconfig-v2, push-no-docs, push-only-docs, push-register-project, server-keyvalue-parsing
+    supported features: projectconfig-v2, push-no-docs, push-only-docs, push-register-project, server-keyvalue-parsing, yank
     venv for install/set commands: /tmp/docenv
     only setting venv pip/uv config, no global configuration changed
     /tmp/docenv/pip.conf: no config file exists
@@ -401,7 +401,7 @@ If we now switch back to using ``testuser/dev``::
 
     $ devpi use testuser/dev
     current devpi index: http://localhost:3141/testuser/dev (logged in as testuser)
-    supported features: projectconfig-v2, push-no-docs, push-only-docs, push-register-project, server-keyvalue-parsing
+    supported features: projectconfig-v2, push-no-docs, push-only-docs, push-register-project, server-keyvalue-parsing, yank
     venv for install/set commands: /tmp/docenv
     only setting venv pip/uv config, no global configuration changed
     /tmp/docenv/pip.conf: no config file exists
