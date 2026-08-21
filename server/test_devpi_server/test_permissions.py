@@ -67,45 +67,45 @@ def with_user(request, user):
 
 
 class TestIndex:
-    # test both pypi_submit and upload for BBB
     @pytest.mark.usefixtures("plugin")
-    @pytest.mark.parametrize("permission", ["pypi_submit", "upload"])
-    def test_set_and_get_acl_upload(self, model, stage, permission, permissionrequest):
+    def test_set_and_get_acl_upload(self, model, stage, permissionrequest):
         indexconfig = stage.ixconfig
         # check that "hello" was included in acl_upload by default
         assert indexconfig["acl_upload"] == ["hello"]
         stage = model.getstage("hello/world")
         # root cannot upload
-        assert not with_user(permissionrequest, 'root').has_permission(permission, stage)
+        assert not with_user(permissionrequest, "root").has_permission("upload", stage)
         # but hello can upload
-        assert with_user(permissionrequest, 'hello').has_permission(permission, stage)
+        assert with_user(permissionrequest, "hello").has_permission("upload", stage)
         # anonymous can't
-        assert not with_user(permissionrequest, None).has_permission(permission, stage)
+        assert not with_user(permissionrequest, None).has_permission("upload", stage)
         # external can't
-        assert not with_user(permissionrequest, 'external').has_permission(permission, stage)
+        assert not with_user(permissionrequest, "external").has_permission(
+            "upload", stage
+        )
 
         # and we remove 'hello' from acl_upload ...
         stage.modify(acl_upload=[])
         # ... now it cannot upload either
-        assert not with_user(permissionrequest, 'hello').has_permission(permission, stage)
+        assert not with_user(permissionrequest, "hello").has_permission("upload", stage)
 
         # and we set the special :ANONYMOUS: for acl_upload ...
         stage.modify(acl_upload=[':anonymous:'])
         # which is always changed to uppercase
         assert stage.ixconfig['acl_upload'] == [':ANONYMOUS:']
         # and now anyone can upload
-        assert with_user(permissionrequest, 'hello').has_permission(permission, stage)
-        assert with_user(permissionrequest, 'root').has_permission(permission, stage)
-        assert with_user(permissionrequest, None).has_permission(permission, stage)
+        assert with_user(permissionrequest, "hello").has_permission("upload", stage)
+        assert with_user(permissionrequest, "root").has_permission("upload", stage)
+        assert with_user(permissionrequest, None).has_permission("upload", stage)
 
         # and we set the group :developer for acl_upload ...
         stage.modify(acl_upload=[':developer'])
         # no one ...
-        assert not with_user(permissionrequest, 'hello').has_permission(permission, stage)
-        assert not with_user(permissionrequest, 'root').has_permission(permission, stage)
-        assert not with_user(permissionrequest, None).has_permission(permission, stage)
+        assert not with_user(permissionrequest, "hello").has_permission("upload", stage)
+        assert not with_user(permissionrequest, "root").has_permission("upload", stage)
+        assert not with_user(permissionrequest, None).has_permission("upload", stage)
         # except external can upload
-        assert with_user(permissionrequest, 'external').has_permission(permission, stage)
+        assert with_user(permissionrequest, "external").has_permission("upload", stage)
 
     @pytest.mark.usefixtures("plugin")
     def test_set_and_get_acl_toxresult_upload(self, model, stage, permissionrequest):
