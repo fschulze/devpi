@@ -427,7 +427,7 @@ and use it ::
 
     $ devpi use alice/dev
     current devpi index: http://localhost:4040/alice/dev (logged in as alice)
-    supported features: projectconfig-v2, push-no-docs, push-only-docs, push-register-project, server-keyvalue-parsing
+    supported features: projectconfig-v2, push-no-docs, push-only-docs, push-register-project, server-keyvalue-parsing, yank
     venv for install/set commands: /tmp/docenv
     only setting venv pip/uv config, no global configuration changed
     /tmp/docenv/pip.conf: no config file exists
@@ -446,7 +446,7 @@ cause ``pip`` and ``easy_install`` to use our in-use index server::
 
     $ devpi use --set-cfg alice/dev
     current devpi index: http://localhost:4040/alice/dev (logged in as alice)
-    supported features: projectconfig-v2, push-no-docs, push-only-docs, push-register-project, server-keyvalue-parsing
+    supported features: projectconfig-v2, push-no-docs, push-only-docs, push-register-project, server-keyvalue-parsing, yank
     venv for install/set commands: /tmp/docenv
     only setting venv pip/uv config, no global configuration changed
     /tmp/docenv/pip.conf: http://localhost:4040/alice/dev/+simple/
@@ -460,7 +460,7 @@ this configuration modification::
 
     $ devpi use --always-set-cfg=yes
     current devpi index: http://localhost:4040/alice/dev (logged in as alice)
-    supported features: projectconfig-v2, push-no-docs, push-only-docs, push-register-project, server-keyvalue-parsing
+    supported features: projectconfig-v2, push-no-docs, push-only-docs, push-register-project, server-keyvalue-parsing, yank
     venv for install/set commands: /tmp/docenv
     only setting venv pip/uv config, no global configuration changed
     /tmp/docenv/pip.conf: http://localhost:4040/alice/dev/+simple/
