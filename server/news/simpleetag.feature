@@ -1,0 +1,1 @@
+Simple API pages now return etags and return 304 Not Modified if a request contains a matching one.
