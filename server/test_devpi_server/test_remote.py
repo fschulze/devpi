@@ -907,7 +907,8 @@ class TestExtPYPIDB:
         with pypistage.keyfs.read_transaction():
             versiondata = pypistage.get_versiondata("foo", "1.0")
             assert "yanked" not in versiondata
-            assert len(versiondata["+elinks"]) == 1
+            (elink,) = versiondata["+elinks"]
+            assert "yanked" not in elink
             assert len(pypistage.get_releaselinks("foo")) == 1
             assert pypistage.list_versions("foo") == {"1.0"}
         pypistage.mock_simple(
@@ -917,7 +918,9 @@ class TestExtPYPIDB:
         assert "yanked" in r.text
         with pypistage.keyfs.read_transaction():
             versiondata = pypistage.get_versiondata("foo", "1.0")
-            assert versiondata["yanked"] == "brownbag"
+            assert "yanked" not in versiondata
+            (elink,) = versiondata["+elinks"]
+            assert elink["yanked"] == "brownbag"
             assert len(versiondata["+elinks"]) == 1
             assert len(pypistage.get_releaselinks("foo")) == 1
             assert pypistage.list_versions("foo") == {"1.0"}

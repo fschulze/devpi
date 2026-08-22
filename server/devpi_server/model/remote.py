@@ -106,6 +106,7 @@ class NewLinks:
 
 
 NewLinksFuture = Future[NewLinks]
+REMOTEFILE_IGNORED_KEYS = frozenset({"hashes", "size", "yanked"})
 
 
 def _headers_from_response(r):
@@ -654,7 +655,7 @@ class RemoteData:
                     {
                         k: v
                         for k, v in data[ulid_key.name].items()
-                        if k not in {"hashes", "size"}
+                        if k not in REMOTEFILE_IGNORED_KEYS
                     }
                 )
                 (projectname, version, _pyver, _ext) = split_name_version_pyversion_ext(
@@ -679,6 +680,7 @@ class RemoteData:
                 entry.project = project
                 entry.size = data[name].get("size")
                 entry.version = name_version_map[name]
+                entry.yanked = data[name].get("yanked")
                 del entry, name
             del new_file_keys
             for _k, ulid_key in tx.resolve_keys(
@@ -726,7 +728,9 @@ class RemoteData:
             assert not simpledata
             data: dict = {}
             yield data
-            remotefiledata.update({k: v for k, v in data.items() if k != "hashes"})
+            remotefiledata.update(
+                {k: v for k, v in data.items() if k not in REMOTEFILE_IGNORED_KEYS}
+            )
             simpledata.update(data)
 
 
@@ -1606,18 +1610,17 @@ class RemoteIndex(BaseIndex):
                     verdata["version"] = version
                 if sm.require_python is not None:
                     verdata["requires_python"] = sm.require_python
-                if sm.yanked is not None and sm.yanked is not False:
-                    verdata["yanked"] = sm.yanked
                 if with_elinks:
                     elinks = verdata.setdefault("+elinks", [])
-                    elinks.append(
-                        dict(
-                            rel=Rel.ReleaseFile,
-                            relpath=sm.relpath,
-                            entrypath=sm.path,
-                            hashes=sm.hashes,
-                        )
+                    elink = dict(
+                        rel=Rel.ReleaseFile,
+                        relpath=sm.relpath,
+                        entrypath=sm.path,
+                        hashes=sm.hashes,
                     )
+                    if sm.yanked is not None:
+                        elink["yanked"] = sm.yanked
+                    elinks.append(elink)
         return ensure_deeply_readonly(verdata)
 
 

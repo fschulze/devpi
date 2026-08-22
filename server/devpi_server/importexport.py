@@ -796,6 +796,8 @@ class Importer:
                 stage = cast("RemoteIndex", stage)
                 link = None
                 url = URL(mapping["url"])
+                # get "yanked" from versions as fallback for older exports
+                yanked = mapping.get("yanked", versions[version].get("yanked"))
                 entry = SimpleInfo(
                     basename=url.basename,
                     hashes=hashes,
@@ -804,7 +806,7 @@ class Importer:
                     size=versions[version].get("size"),
                     upload_time=versions[version].get("upload_time"),
                     url=url.geturl_nofragment(),
-                    yanked=versions[version].get("yanked"),
+                    yanked=yanked,
                 ).make_mutable_entry(
                     self.xom.keyfs.schema, stage.username, stage.index, project
                 )
@@ -820,7 +822,7 @@ class Importer:
                         requires_python := versions[version].get("requires_python")
                     ) is not None:
                         linkdata["requires_python"] = requires_python
-                    if (yanked := versions[version].get("yanked")) is not None:
+                    if yanked is not None:
                         linkdata["yanked"] = yanked
                 threadlog.info("added remote file %s", entry.relpath)
         elif filedesc["type"] == Rel.DocZip:

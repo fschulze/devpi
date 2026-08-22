@@ -578,6 +578,7 @@ class BaseFileEntry:
     project = metaprop("project")
     size: int | None = metaprop("size")
     version = metaprop("version")
+    yanked = metaprop("yanked")
 
     def __init__(
         self,
