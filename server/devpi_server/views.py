@@ -44,6 +44,7 @@ from pyramid.httpexceptions import HTTPException
 from pyramid.httpexceptions import HTTPForbidden
 from pyramid.httpexceptions import HTTPFound
 from pyramid.httpexceptions import HTTPInternalServerError
+from pyramid.httpexceptions import HTTPNotModified
 from pyramid.httpexceptions import HTTPOk
 from pyramid.httpexceptions import HTTPSuccessful
 from pyramid.httpexceptions import HTTPUnauthorized
@@ -707,8 +708,16 @@ class PyPIView:
         request = self.request
         abort_if_invalid_project(request, request.matchdict["project"])
         project = self.context.project
-        # we only serve absolute links so we don't care about the route's slash
         stage = self.context.stage
+        if (
+            request.if_none_match
+            and (etag := stage.get_simplelinks_etag(project, ignore_expiration=False))
+            in request.if_none_match.etags
+        ):
+            response = HTTPNotModified()
+            response.etag = etag
+            response.cache_control.must_revalidate = True
+            return response
         requested_by_installer = is_simple_json_or_requested_by_installer(request)
         try:
             result = stage.SimpleLinks(
@@ -750,8 +759,10 @@ class PyPIView:
             serial = stage.get_remoteprojectserial(project)
             if serial is not None and serial > 0:
                 response.headers["X-PYPI-LAST-SERIAL"] = str(serial)
-        if result.stale:
-            response.cache_expires()
+        etag = stage.get_simplelinks_etag(project, ignore_expiration=True)
+        if etag is not None:
+            response.etag = etag
+            response.cache_control.must_revalidate = True
         return response
 
     def _makeurl_factory(self):

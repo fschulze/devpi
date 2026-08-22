@@ -28,7 +28,9 @@ from .links import LinkStore
 from .links import MutableLinkStore
 from .links import Rel
 from .links import SimpleLinks
+from .simpleapi import serial_to_bytes
 from abc import abstractmethod
+from base64 import b64encode
 from devpi_common.metadata import get_latest_version
 from devpi_common.types import cached_property
 from devpi_server.config import traced_pluggy_call
@@ -42,6 +44,7 @@ from devpi_server.markers import unknown
 from devpi_server.normalized import normalize_name
 from devpi_server.readonly import ensure_deeply_readonly
 from devpi_server.readonly import get_mutable_deepcopy
+from hashlib import sha256
 from lazy import lazy
 from pyramid.authorization import Allow
 from typing import TYPE_CHECKING
@@ -160,6 +163,13 @@ class BaseIndex:
         )
         return meth(
             user=self.username, index=self.index, project=normalize_name(project), **kw
+        )
+
+    def key_simpledatatag(
+        self, project: NormalizedName | str
+    ) -> LocatedKey[bytes, bytes]:
+        return self.keyfs.schema.SIMPLEDATATAG.locate(
+            user=self.username, index=self.index, project=normalize_name(project)
         )
 
     @overload
@@ -479,6 +489,13 @@ class BaseIndex:
     def get_simplelinks_perstage(self, project: NormalizedName | str) -> SimpleLinks:
         raise NotImplementedError
 
+    def get_simplelinks_tag_perstage(
+        self, project: NormalizedName, *, ignore_expiration: bool
+    ) -> bytes | None:
+        return self.customizer.get_simplelinks_tag(
+            project, ignore_expiration=ignore_expiration
+        )
+
     def store_toxresult(
         self,
         link: ELink,
@@ -627,6 +644,20 @@ class BaseIndex:
         if sorted_links:
             all_links.sort(reverse=True)
         return all_links
+
+    def get_simplelinks_etag(
+        self, project: NormalizedName, *, ignore_expiration: bool
+    ) -> str | None:
+        inheritance_info = self.index_bases.get_project_inheritance_info(project)
+        result = sha256()
+        for traversed_index in inheritance_info.iter_indexes("get_simplelinks_tag"):
+            res = traversed_index.index.get_simplelinks_tag_perstage(
+                project, ignore_expiration=ignore_expiration
+            )
+            if res is None:
+                return None
+            result.update(res)
+        return b64encode(result.digest()).rstrip(b"=").decode()
 
     def get_mirror_whitelist_info(
         self, project: NormalizedName | str
@@ -810,6 +841,13 @@ class BaseIndex:
             if checker.failed:
                 continue
             yield index, res
+
+    def set_simpledatatag(
+        self, project: NormalizedName, tag: bytes | None = None
+    ) -> None:
+        if tag is None:
+            tag = serial_to_bytes(self.keyfs.tx.at_serial)
+        self.key_simpledatatag(project).with_resolved_parent().set(tag)
 
     def sro(self) -> Iterator[BaseIndex]:
         """return stage resolution order."""
