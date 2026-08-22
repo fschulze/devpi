@@ -4,6 +4,7 @@ from .config import ConfigField
 from .exceptions import InvalidIndex
 from .exceptions import InvalidIndexconfig
 from .exceptions import ReadonlyIndex
+from .simpleapi import serial_to_bytes
 from devpi_server.log import threadlog
 from devpi_server.markers import notset
 from functools import partial
@@ -16,6 +17,7 @@ import warnings
 if TYPE_CHECKING:
     from .local import BaseIndex
     from collections.abc import Sequence
+    from devpi_server.normalized import NormalizedName
 
 
 def get_stage_customizer_classes(xom):
@@ -204,6 +206,23 @@ class BaseIndexCustomizer:
         True for items to keep and False for items to remove.
         The size of the tuples in links might grow, develop defensively."""
         return
+
+    def get_simplelinks_tag(
+        self,
+        project: NormalizedName,  # noqa: ARG002 - API
+        *,
+        ignore_expiration: bool,  # noqa: ARG002 - API
+    ) -> bytes | None:
+        """Called to get a change tag for simple links.
+
+        Returns an opaque bytes value or None if there is no valid one (expired remote data for example).
+
+        The default implementation is based on the current serial,
+        which provides some basic caching for infrequently updated devpi instances.
+        Custom implementations can use the serial of a relevant change or something similar to drastically improve the cache-ability.
+        This method should provide a value as quickly and efficiently as possible.
+        """
+        return serial_to_bytes(self.stage.keyfs.tx.at_serial)
 
 
 class UnknownCustomizer(BaseIndexCustomizer):

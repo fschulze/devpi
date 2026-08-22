@@ -339,3 +339,7 @@ def parse_index_v1_1_files(
             ).obj
         )
     return result
+
+
+def serial_to_bytes(serial: int) -> bytes:
+    return serial.to_bytes((serial.bit_length() + 7) // 8)
