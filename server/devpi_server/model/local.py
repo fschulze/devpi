@@ -799,6 +799,7 @@ class LocalIndex(BaseIndex):
         return index_serial
 
     def yank_entry(self, entry: MutableFileEntry, reason: Literal[False] | str) -> None:
+        add_log
         if reason is False:
             del entry.yanked
         else:
