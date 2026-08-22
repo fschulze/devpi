@@ -839,7 +839,7 @@ class TestExtPYPIDB:
 
     @pytest.mark.notransaction
     @pytest.mark.parametrize("inherit", [False, True])
-    def test_stale_nocache(self, inherit, mapp, pypistage, testapp):
+    def test_stale_cache_headers(self, inherit, mapp, pypistage, testapp):
         if inherit:
             api = mapp.create_and_use(indexconfig=dict(bases="root/pypi"))
             index_prefix = api.index
@@ -847,18 +847,21 @@ class TestExtPYPIDB:
             index_prefix = "/root/pypi"
         pypistage.mock_simple("foo", text='<a href="foo-1.0.tar.gz"</a>')
         r = testapp.xget(200, f"{index_prefix}/+simple/foo/")
-        assert "Cache-Control" not in r.headers
+        etag = r.headers["ETag"]
+        assert r.headers['Cache-Control'] == "must-revalidate"
         assert "Expires" not in r.headers
         assert "Pragma" not in r.headers
         r = testapp.xget(200, f"{index_prefix}/+simple/foo/")
-        assert 'Cache-Control' not in r.headers
+        assert r.headers['Cache-Control'] == "must-revalidate"
+        assert r.headers['ETag'] == etag
         assert 'Expires' not in r.headers
         assert 'Pragma' not in r.headers
         pypistage.mock_simple("foo", status_code=502)
         r = testapp.xget(200, f"{index_prefix}/+simple/foo/")
-        assert 'max-age=0' in r.headers['Cache-Control']
-        assert 'Expires' in r.headers
-        assert r.headers['Pragma'] == 'no-cache'
+        assert r.headers['Cache-Control'] == "must-revalidate"
+        assert r.headers['ETag'] == etag
+        assert 'Expires' not in r.headers
+        assert 'Pragma' not in r.headers
 
     @pytest.mark.notransaction
     def test_removed_release_for_version(self, pypistage, testapp):

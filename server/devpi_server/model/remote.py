@@ -21,9 +21,11 @@ from .simpleapi import SIMPLE_API_ACCEPT
 from .simpleapi import SIMPLE_API_V1_JSON
 from .simpleapi import parse_index
 from .simpleapi import parse_index_v1_json
+from .simpleapi import serial_to_bytes
 from asyncio import Future
 from attrs import frozen
 from contextlib import ExitStack
+from contextlib import suppress
 from devpi_common.types import cached_property
 from devpi_common.url import URL
 from devpi_server.config import hookimpl
@@ -697,6 +699,7 @@ class RemoteData:
                 project,
                 stage.index,
             )
+            stage.set_simpledatatag(project)
             # maintain list of currently cached project names to enable
             # deletion and offline mode
             stage.add_project_name(project)
@@ -1626,7 +1629,19 @@ class RemoteIndex(BaseIndex):
 
 
 class RemoteIndexCustomizer(BaseIndexCustomizer):
-    pass
+    def get_simplelinks_tag(
+        self, project: NormalizedName, *, ignore_expiration: bool
+    ) -> bytes | None:
+        stage = cast("RemoteIndex", self.stage)
+        # default to current serial as fallback
+        result = serial_to_bytes(stage.keyfs.tx.at_serial)
+        if not ignore_expiration:
+            remotedata = stage._get_remotedata(project)
+            if remotedata.is_expired():
+                return None
+        with suppress(KeyError):
+            result = stage.key_simpledatatag(project).with_resolved_parent().get()
+        return result
 
 
 @hookimpl

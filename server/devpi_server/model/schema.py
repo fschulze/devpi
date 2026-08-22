@@ -186,6 +186,12 @@ class Schema(KeyFSSchema):
         dict,
         DictViewReadonly,
     )
+    SIMPLEDATATAG = KeyFSSchema.decl_anonymous_key(
+        "SIMPLEDATATAG",
+        PROJECT,
+        bytes,
+        bytes,
+    )
     VERSION = KeyFSSchema.decl_patterned_key(
         "VERSION",
         "{version}",

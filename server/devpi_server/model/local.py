@@ -18,6 +18,7 @@ from .links import ELink
 from .links import Rel
 from .links import SimplelinkMeta
 from .simpleapi import SIMPLE_API_V1_1_VERSION
+from .simpleapi import serial_to_bytes
 from contextlib import suppress
 from devpi_common.types import cached_property
 from devpi_common.types import ensure_unicode
@@ -41,6 +42,7 @@ from functools import partial
 from lazy import lazy
 from pathlib import Path
 from typing import TYPE_CHECKING
+from typing import cast
 from typing import overload
 
 
@@ -661,6 +663,7 @@ class LocalIndex(BaseIndex):
                 simpledata["requires_python"] = rp
             simpledata["size"] = link.entry.size
             simpledata["upload_time"] = link.entry.last_modified
+        self.set_simpledatatag(project)
         return link
 
     def store_doczip(
@@ -797,7 +800,18 @@ class LocalIndex(BaseIndex):
 
 
 class LocalIndexCustomizer(BaseIndexCustomizer):
-    pass
+    def get_simplelinks_tag(
+        self,
+        project: NormalizedName,
+        *,
+        ignore_expiration: bool,  # noqa: ARG002 - API
+    ) -> bytes | None:
+        stage = cast("LocalIndex", self.stage)
+        # default to current serial as fallback
+        result = serial_to_bytes(stage.keyfs.tx.at_serial)
+        with suppress(KeyError):
+            result = stage.key_simpledatatag(project).with_resolved_parent().get()
+        return result
 
 
 @hookimpl
