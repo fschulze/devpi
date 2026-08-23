@@ -328,6 +328,7 @@ class IndexDump:
                 entrymapping=entry.meta,
                 log=link.get_logs(),
                 metadata_hashes=link.metadata_hashes,
+                yanked=link.yanked,
             )
 
     def dump_toxresults(self, linkstore):
@@ -798,6 +799,8 @@ class Importer:
                 link = None
                 url = URL(mapping["url"])
                 metadata_hashes = filedesc.get("metadata_hashes")
+                # get "yanked" from versions as fallback for older exports
+                yanked = filedesc.get("yanked", versions[version].get("yanked"))
                 entry = SimpleInfo(
                     basename=url.basename,
                     hashes=hashes,
@@ -806,7 +809,7 @@ class Importer:
                     size=versions[version].get("size"),
                     upload_time=versions[version].get("upload_time"),
                     url=url.geturl_nofragment(),
-                    yanked=versions[version].get("yanked"),
+                    yanked=yanked,
                 ).make_mutable_entry(
                     self.xom.keyfs.schema, stage.username, stage.index, project
                 )
@@ -822,7 +825,7 @@ class Importer:
                         requires_python := versions[version].get("requires_python")
                     ) is not None:
                         linkdata["requires_python"] = requires_python
-                    if (yanked := versions[version].get("yanked")) is not None:
+                    if yanked is not None:
                         linkdata["yanked"] = yanked
                     if metadata_hashes is not None:
                         linkdata["metadata_hashes"] = metadata_hashes
