@@ -101,7 +101,7 @@ class ELink(Generic[F]):
     rel = linkdictprop("rel", default=None)
     require_python = linkdictprop("require_python")
     upload_time = linkdictprop("upload_time")
-    yanked = linkdictprop("yanked")
+    yanked = linkdictprop("yanked", default=None)
 
     def __init__(self, entry: F, linkdict: dict) -> None:
         assert "hash_spec" not in linkdict

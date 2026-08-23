@@ -1578,6 +1578,7 @@ class RemoteIndex(BaseIndex):
             entrypath = entry_or_simplelink.path
             relpath = entry_or_simplelink.relpath
             metadata_hashes = entry_or_simplelink.core_metadata
+            yanked = entry_or_simplelink.yanked
         else:
             entrypath = entry_or_simplelink.relpath
             relpath = entry_or_simplelink.index_relpath
@@ -1589,7 +1590,8 @@ class RemoteIndex(BaseIndex):
                 .get()
             )
             metadata_hashes = remotefiledata.get("metadata_hashes")
-        elink = dict(
+            yanked = remotefiledata.get("yanked")
+        elink: dict[str, object] = dict(
             rel=Rel.ReleaseFile,
             entrypath=entrypath,
             relpath=relpath,
@@ -1597,6 +1599,8 @@ class RemoteIndex(BaseIndex):
         )
         if metadata_hashes is not None:
             elink["metadata_hashes"] = metadata_hashes
+        if yanked is not None:
+            elink["yanked"] = yanked
         return elink
 
     def _get_elink_from_entry(self, entry: BaseFileEntry) -> ELink | None:
@@ -1640,8 +1644,6 @@ class RemoteIndex(BaseIndex):
                     verdata["version"] = version
                 if sm.require_python is not None:
                     verdata["requires_python"] = sm.require_python
-                if sm.yanked is not None and sm.yanked is not False:
-                    verdata["yanked"] = sm.yanked
                 if with_elinks:
                     verdata.setdefault("+elinks", []).append(self._get_elink_dict(sm))
         return ensure_deeply_readonly(verdata)

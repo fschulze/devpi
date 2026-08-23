@@ -917,7 +917,8 @@ class TestExtPYPIDB:
         with pypistage.keyfs.read_transaction():
             versiondata = pypistage.get_versiondata("foo", "1.0")
             assert "yanked" not in versiondata
-            assert len(versiondata["+elinks"]) == 1
+            (elink,) = versiondata["+elinks"]
+            assert "yanked" not in elink
             assert len(pypistage.get_releaselinks("foo")) == 1
             assert pypistage.list_versions("foo") == {"1.0"}
         pypistage.mock_simple(
@@ -927,7 +928,9 @@ class TestExtPYPIDB:
         assert "yanked" in r.text
         with pypistage.keyfs.read_transaction():
             versiondata = pypistage.get_versiondata("foo", "1.0")
-            assert versiondata["yanked"] == "brownbag"
+            assert "yanked" not in versiondata
+            (elink,) = versiondata["+elinks"]
+            assert elink["yanked"] == "brownbag"
             assert len(versiondata["+elinks"]) == 1
             assert len(pypistage.get_releaselinks("foo")) == 1
             assert pypistage.list_versions("foo") == {"1.0"}
@@ -1852,6 +1855,7 @@ def test_elinks(xom: XOM, pypistage: RemoteIndex) -> None:
         assert all(
             el["rel"] == "releasefile" for velinks in elinks.values() for el in velinks
         )
+        assert any("yanked" in el for velinks in elinks.values() for el in velinks)
         entries = {
             version: sorted(
                 (

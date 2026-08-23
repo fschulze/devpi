@@ -674,7 +674,6 @@ class TestImportExport:
             ) == {
                 "name": "pack-age",
                 "version": "1.2",
-                "yanked": "",
                 "+elinks": [
                     {
                         "entrypath": f"root/pypi/+f/{hashdir3}/pack.age-1.2.zip",
@@ -682,6 +681,7 @@ class TestImportExport:
                         "metadata_hashes": {},
                         "rel": Rel.ReleaseFile,
                         "relpath": f"+f/{hashdir3}/pack.age-1.2.zip",
+                        "yanked": "",
                     }
                 ],
             }
