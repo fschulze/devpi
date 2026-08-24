@@ -1,11 +1,11 @@
 from _pytest.outcomes import Failed
+from devpi.list import out_index
+from devpi.list import out_project
+from devpi.list import show_commands
+from devpi.remove import confirm_delete
+from devpi.remove import get_versions_to_delete
 from devpi_common.metadata import parse_requirement
 from devpi_common.metadata import parse_version
-from devpi.list_remove import get_versions_to_delete
-from devpi.list_remove import confirm_delete
-from devpi.list_remove import out_index
-from devpi.list_remove import out_project
-from devpi.list_remove import show_commands
 from pathlib import Path
 import pytest
 
@@ -34,7 +34,6 @@ def test_out_index(loghub, input, output):
      ["*p1-1.1.tar.gz*", "*p1-1.0.tar.gz*"]),
 ])
 def test_out_project(loghub, input, output, monkeypatch):
-    from devpi import list_remove
     loghub.current.reconfigure(dict(
         simpleindex="/index",
         index="/root/dev/",
@@ -44,7 +43,7 @@ def test_out_project(loghub, input, output, monkeypatch):
     loghub.args.all = True
     loghub.args.failures = None
     loghub.args.toxresults = None
-    monkeypatch.setattr(list_remove, "show_test_status", lambda *args: None)
+    monkeypatch.setattr("devpi.list.show_test_status", lambda *_a: None)
 
     class reply:
         url = ""
