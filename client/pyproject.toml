@@ -70,7 +70,6 @@ target-version = "py37"
 exclude = [
     "devpi/index.py",
     "devpi/install.py",
-    "devpi/list_remove.py",
     "devpi/main.py",
     "devpi/push.py",
     "devpi/refresh.py",
@@ -84,7 +83,6 @@ exclude = [
     "testing/test_functional.py",
     "testing/test_index.py",
     "testing/test_install.py",
-    "testing/test_list_remove.py",
     "testing/test_login.py",
     "testing/test_main.py",
     "testing/test_push.py",
@@ -132,9 +130,6 @@ extend-ignore = [
 
 
 [tool.ruff.lint.extend-per-file-ignores]
-"devpi/list_remove.py" = [
-    "I001", # maybe cleanup later - import block unsorted
-]
 "devpi/main.py" = [
     "I001", # maybe cleanup later - import block unsorted
 ]
@@ -148,9 +143,6 @@ extend-ignore = [
     "I001", # maybe cleanup later - import block unsorted
 ]
 "testing/test_index.py" = [
-    "I001", # maybe cleanup later - import block unsorted
-]
-"testing/test_list_remove.py" = [
     "I001", # maybe cleanup later - import block unsorted
 ]
 "testing/test_login.py" = [
