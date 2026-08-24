@@ -872,7 +872,7 @@ def patchjson(parser):
     )
 
 
-@subcommand("devpi.list_remove:main_list", "list")
+@subcommand("devpi.list:main_list", "list")
 def list_(parser):
     """ list project versions and files for the current index.
 
@@ -907,7 +907,7 @@ def list_(parser):
              " (Quotes are needed to prevent shell redirection)")
 
 
-@subcommand("devpi.list_remove:main_remove")
+@subcommand("devpi.remove:main_remove")
 def remove(parser):
     """\
     removes project info/files from current index.
