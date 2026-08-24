@@ -3,7 +3,7 @@ from devpi.list import out_index
 from devpi.list import out_project
 from devpi.list import show_commands
 from devpi.remove import confirm_delete
-from devpi.remove import get_versions_to_delete
+from devpi.remove import get_versions_to_process
 from devpi_common.metadata import parse_requirement
 from devpi_common.metadata import parse_version
 from pathlib import Path
@@ -74,7 +74,7 @@ def test_confirm_delete(loghub, monkeypatch):
         type = "projectconfig"
 
     req = parse_requirement("x>=1.1")
-    ver_to_delete = get_versions_to_delete(loghub.current.get_index_url(), r, req)
+    ver_to_delete = get_versions_to_process(loghub, r.result, req)
     assert confirm_delete(loghub, ver_to_delete)
     m = loghub._getmatcher()
     m.fnmatch_lines("""

@@ -1,0 +1,1 @@
+Add ``yank`` and ``unyank`` commands for devpi-server 7.0.0.

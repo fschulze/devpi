@@ -1,8 +1,6 @@
-from devpi_common.metadata import Version
+from .common import get_versions_to_process
 from devpi_common.metadata import parse_requirement
 from devpi_common.url import URL
-from devpi_common.viewhelp import ViewLinkStore
-from operator import attrgetter
 
 
 def add_force_flag(url):
@@ -27,14 +25,13 @@ def main_remove(hub, args):
     req = parse_requirement(args.spec_or_url)
     if args.index and args.index.count("/") > 1:
         hub.fatal("index %r not of form USER/NAME or NAME" % args.index)
-    index_url = hub.current.get_index_url(indexname=args.index)
     proj_url = hub.current.get_project_url(req.project_name, indexname=args.index)
     if args.force:
         proj_url = add_force_flag(proj_url)
     reply = hub.http_api(
         "get", proj_url.replace(query=dict(ignore_bases="")), type="projectconfig"
     )
-    ver_to_delete = get_versions_to_delete(index_url, reply, req)
+    ver_to_delete = get_versions_to_process(hub, reply.result, req)
     if not ver_to_delete:
         hub.error(
             "No releases or distributions found matching '%s'." % args.spec_or_url
@@ -58,25 +55,6 @@ def confirm_delete_file(hub, url):
     hub.info("About to remove the following file:")
     hub.info(url)
     return hub.ask_confirm("Are you sure")
-
-
-def get_versions_to_delete(index_url, response, requirement):
-    basepath = index_url.path.lstrip("/")
-    ver_to_delete = []
-    for version, verdata in response.result.items():
-        if version in requirement:
-            vv = ViewLinkStore(basepath, verdata)
-            files_to_delete = sorted(
-                (
-                    link
-                    for link in vv.get_links()
-                    if link.href.startswith(index_url.url)
-                ),
-                key=attrgetter("basename"),
-            )
-            ver_to_delete.append((version, files_to_delete))
-    # filter versions with no releases and sort by version
-    return sorted((x for x in ver_to_delete if x[1]), key=lambda x: Version(x[0]))
 
 
 def confirm_delete(hub, ver_to_delete):

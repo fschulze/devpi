@@ -1,4 +1,6 @@
 # PYTHON_ARGCOMPLETE_OK
+from __future__ import annotations
+
 import functools
 import os
 import sys
@@ -26,8 +28,15 @@ from pluggy import PluginManager
 from shutil import rmtree
 import stat
 from tempfile import mkdtemp
+from typing import TYPE_CHECKING
 import json
 import locale
+
+
+if TYPE_CHECKING:
+    from typing import NoReturn
+
+
 subcommand = lazydecorator()
 
 main_description = """
@@ -463,7 +472,7 @@ class Hub:
         msg = " ".join(map(str, msgs))
         self._tw.line(msg, **kwargs)
 
-    def ask_confirm(self, msg):
+    def ask_confirm(self, msg: str) -> bool:
         got = None
         choices = ("yes", "no")
         choicestr = "/".join(choices)
@@ -536,9 +545,8 @@ class Hub:
         self._tw.line(msg, red=True)
         raise SystemExit(code)
 
-    def fatal(self, *msg):
-        msg = " ".join(map(str, msg))
-        self._tw.line(msg, red=True)
+    def fatal(self, *msg: object) -> NoReturn:
+        self._tw.line(" ".join(map(str, msg)), red=True)
         raise SystemExit(1)
 
     def info(self, *msg):
@@ -1251,3 +1259,64 @@ def verify_reply_version(hub, reply):
     hub.fatal("devpi-client-%s got a reply with API-VERSION %s, "
               "acceptable are: %s" %(client_version, version,
                                      ",".join(acceptable_api_version)))
+
+
+@subcommand("devpi.yank:main_unyank")
+def unyank(parser):
+    """\
+    unyanks version from current index or a specific file.
+
+    This command allows to unyank projects or releases from your current index
+    (see "devpi use").
+    It will ask interactively for confirmation before performing the actual unyanks.
+    """
+    parser.add_argument(
+        "--index", default=None, help="index to unyank from (defaults to current index)"
+    )
+    parser.add_argument(
+        "spec_or_url",
+        help="""\
+        describes version/release file(s) to unyank from the current index.
+        If the spec starts with 'http://' or 'https://',
+        it is considered as a request to unyank a single file.""",
+    )
+    parser.formatter_class = argparse.RawDescriptionHelpFormatter
+    parser.description = textwrap.dedent(remove.__doc__)
+    parser.epilog = textwrap.dedent(
+        """\
+        examples:
+          devpi unyank pytest==2.3.5
+
+          devpi unyank https://mydevpi.org/dev/+f/1cf/3d6eaa6cbc5fa/pytest-1.0.zip"""
+    )
+
+
+@subcommand("devpi.yank:main_yank")
+def yank(parser):
+    """\
+    yanks version from current index or a specific file.
+
+    This command allows to yank versions or releases from your current index
+    (see "devpi use").
+    It will ask interactively for confirmation before performing the actual yanks.
+    """
+    parser.add_argument(
+        "--index", default=None, help="index to yank from (defaults to current index)"
+    )
+    parser.add_argument("-r", "--reason", default="", help="the reason for yanking")
+    parser.add_argument(
+        "spec_or_url",
+        help="""\
+        describes version/release file(s) to yank from the current index.
+        If the spec starts with 'http://' or 'https://',
+        it is considered as a request to yank a single file.""",
+    )
+    parser.formatter_class = argparse.RawDescriptionHelpFormatter
+    parser.description = textwrap.dedent(remove.__doc__)
+    parser.epilog = textwrap.dedent(
+        """\
+        examples:
+          devpi yank pytest==2.3.5
+
+          devpi yank -r "brownbag" https://mydevpi.org/dev/+f/1cf/3d6eaa6cbc5fa/pytest-1.0.zip"""
+    )
