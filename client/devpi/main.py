@@ -920,11 +920,13 @@ def remove(parser):
         help="index to remove from (defaults to current index)")
     parser.add_argument("-f", "--force", action="store_true", default=False,
         help="remove even on non-volatile index (with devpi-server >= 6.0.0)")
-    parser.add_argument("spec_or_url",
+    parser.add_argument(
+        "spec_or_url",
         help="""\
-        describes project/version/release file(s) to release from the current index.
+        describes project/version/release file(s) to remove from the current index.
         If the spec starts with 'http://' or 'https://',
-        it is considered as a request to delete a single file.""")
+        it is considered as a request to delete a single file.""",
+    )
     parser.formatter_class = argparse.RawDescriptionHelpFormatter
     parser.description = textwrap.dedent(remove.__doc__)
     parser.epilog = textwrap.dedent("""\

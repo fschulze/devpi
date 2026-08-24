@@ -265,7 +265,7 @@ remove
     It will ask interactively for confirmation before performing the actual removals.
 
     positional arguments:
-      spec_or_url      describes project/version/release file(s) to release from
+      spec_or_url      describes project/version/release file(s) to remove from
                        the current index. If the spec starts with 'http://' or
                        'https://', it is considered as a request to delete a
                        single file.
