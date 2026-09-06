@@ -13,7 +13,7 @@ dependencies = [
     "defusedxml",
     "devpi_common<5,>3.6.0",
     "httpdate",
-    "httpx<1",
+    "httpx2",
     "itsdangerous>=0.24",
     "lazy",
     "legacy-cgi;python_version>='3.13'",

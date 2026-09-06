@@ -15,7 +15,7 @@ from operator import attrgetter
 from operator import itemgetter
 from test_devpi_server.simpypi import getmd5
 from typing import TYPE_CHECKING
-import httpx
+import httpx2 as httpx
 import json
 import pytest
 import time
