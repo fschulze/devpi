@@ -142,7 +142,7 @@ def test_frt_exception_handling(
     primary_host_port,
     secretfile,
 ):
-    import httpx
+    import httpx2
 
     replica_xom = makexom(
         [
@@ -175,7 +175,7 @@ def test_frt_exception_handling(
         from devpi_server.httpclient import HTTPClient
 
         stream_mock = mock.Mock()
-        stream_mock.side_effect = httpx.RemoteProtocolError("foo")
+        stream_mock.side_effect = httpx2.RemoteProtocolError("foo")
         m.setattr(HTTPClient, "stream", stream_mock)
         assert not replica_xom.frt.shared_data.queue.empty()
         assert replica_xom.frt.shared_data.error_queue.empty()
@@ -192,7 +192,7 @@ def test_frt_exception_handling(
     # test exception during streaming
     with monkeypatch.context() as m:
         streamer_iter_mock = mock.Mock()
-        streamer_iter_mock.side_effect = httpx.RemoteProtocolError("foo")
+        streamer_iter_mock.side_effect = httpx2.RemoteProtocolError("foo")
         m.setattr("devpi_server.model.remote.FileStreamer.__iter__", streamer_iter_mock)
         replica_xom.frt.shared_data.process_next(replica_xom.frt.handler)
         assert replica_xom.frt.shared_data.queue.empty()

@@ -1249,7 +1249,7 @@ class RemoteIndex(BaseIndex):
         # provide earlier versions of easy_install/pip to request the full
         # simple page.
         try:
-            serial = int(response.headers.get("X-PYPI-LAST-SERIAL"))
+            serial = int(response.headers.get("X-PYPI-LAST-SERIAL", -1))
         except (TypeError, ValueError):
             # handle missing or invalid X-PYPI-LAST-SERIAL header
             serial = -1
