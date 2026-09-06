@@ -8,7 +8,7 @@ dynamic = ["version", "readme"]
 name = "devpi-postgresql"
 description = "devpi-postgresql: a PostgreSQL storage backend for devpi-server"
 dependencies = [
-    'devpi-server>=6.8.0',
+    'devpi-server>=7dev',
     'pg8000>=1.17.0',
 ]
 license = "MIT"
@@ -16,7 +16,7 @@ license-files = ["LICENSE"]
 maintainers = [
     {name = "Florian Schulze", email = "mail@pyfidelity.com"}
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Environment :: Web Environment",
@@ -24,8 +24,6 @@ classifiers = [
     "Intended Audience :: System Administrators",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -50,7 +48,7 @@ devpi-postgresql = "devpi_postgresql.main"
 
 [tool.ruff]
 extend = "../pyproject.toml"
-target-version = "py39"
+target-version = "py311"
 
 
 [tool.ruff.format]
@@ -65,19 +63,9 @@ extend-ignore = [
     "FLY002", # maybe cleanup later - f-string instead of join
     "PLR0912", # maybe cleanup later
     "PLW2901", # maybe cleanup later
-    "RET504", # maybe cleanup later - unnecessary assignment before return
-    "RET506", # maybe cleanup later - unnecessary elif after raise
     "RUF012", # cleanup later
     "RUF059", # cleanup later - unpacked variable unused
-    "RSE102", # maybe cleanup later
-    "UP024", # maybe cleanup later - aliased errors
     "UP032", # cleanup later - f-string instead of format
-]
-
-
-[tool.ruff.lint.extend-per-file-ignores]
-"pytest_devpi_postgresql/__init__.py" = [
-    "I001", # maybe cleanup later - import block unsorted
 ]
 
 

@@ -1,18 +1,18 @@
 from __future__ import annotations
 
+from certauth.certauth import CertificateAuthority
 from devpi_postgresql import main
 from pathlib import Path
 from pluggy import HookimplMarker
-from certauth.certauth import CertificateAuthority
 from shutil import rmtree
 from typing import TYPE_CHECKING
 import contextlib
-import sys
-import os
 import getpass
+import os
 import pytest
 import socket
 import subprocess
+import sys
 import tempfile
 import time
 
@@ -27,8 +27,7 @@ def get_open_port(host):
     with contextlib.closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
         s.bind((host, 0))
         s.listen(1)
-        port = s.getsockname()[1]
-    return port
+        return s.getsockname()[1]
 
 
 def wait_for_port(host, port, timeout=60):
@@ -156,6 +155,10 @@ class Storage(main.Storage):
     def database(self):
         return self._get_test_db(self.basedir)
 
+    @database.setter
+    def database(self, value):
+        pass
+
     def get_connection(self, *, closing=True, write=False, timeout=30):
         conn = main.Storage.get_connection(
             self, closing=False, write=write, timeout=timeout
@@ -194,23 +197,29 @@ def _devpipostgresql_db_cleanup():
 
 
 @pytest.fixture(autouse=True, scope="session")
-def devpipostgresql_devpiserver_storage_backend_mock(request, server_version):
-    from devpi_common.metadata import parse_version
-    if server_version < parse_version("6.11.0dev"):
-        backend = getattr(request.config.option, 'backend', None)
-    else:
-        backend = getattr(request.config.option, 'devpi_server_storage_backend', None)
+def _devpipostgresql_devpiserver_describe_storage_backend_mock(request):
+    backend = getattr(request.config.option, "devpi_server_storage_backend", None)
     if backend is None:
         return
-    old = main.devpiserver_storage_backend
+    old = main.devpiserver_describe_storage_backend
 
     @devpiserver_hookimpl
-    def devpiserver_storage_backend(settings):
+    def devpiserver_describe_storage_backend(settings):
+        from devpi_server.keyfs_types import StorageInfo
+
         result = old(settings)
         postgresql = request.getfixturevalue("devpipostgresql_postgresql")
         for k, v in postgresql.items():
             setattr(Storage, k, v)
-        result['storage'] = Storage
-        return result
+        return StorageInfo(
+            name=result.name,
+            description=result.description,
+            exists=Storage.exists,
+            storage_cls=Storage,
+            connection_cls=result.connection_cls,
+            writer_cls=result.writer_cls,
+            storage_factory=Storage,
+            settings=result.settings,
+        )
 
-    main.devpiserver_storage_backend = devpiserver_storage_backend
+    main.devpiserver_describe_storage_backend = devpiserver_describe_storage_backend
