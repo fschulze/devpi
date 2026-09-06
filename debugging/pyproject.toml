@@ -14,7 +14,7 @@ dependencies = [
     'pyramid-debugtoolbar',
 ]
 license = {file = "LICENSE"}
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 
 
 [project.entry-points.devpi_server]
@@ -23,7 +23,7 @@ devpi-debugging = "devpi_debugging.main"
 
 [tool.ruff]
 extend = "../pyproject.toml"
-target-version = "py39"
+target-version = "py311"
 
 
 [tool.ruff.format]

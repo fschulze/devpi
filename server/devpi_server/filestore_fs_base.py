@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from .compat import SpooledTemporaryFile
 from .interfaces import IIOFile
 from .keyfs_types import RelPath
 from .log import threadlog
@@ -9,6 +8,7 @@ from .markers import deleted
 from collections import defaultdict
 from contextlib import suppress
 from pathlib import Path
+from tempfile import SpooledTemporaryFile
 from typing import TYPE_CHECKING
 from zope.interface import Attribute
 from zope.interface import Interface
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from types import TracebackType
     from typing import IO
     from typing import Literal
-    from typing_extensions import Self
+    from typing import Self
 
 
 class IFile(Interface):
