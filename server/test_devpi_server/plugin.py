@@ -28,7 +28,7 @@ from webtest import TestApp as TApp
 from webtest import TestResponse
 from webtest.forms import Upload
 import httpdate
-import httpx
+import httpx2 as httpx
 import json
 import mimetypes
 import pytest
@@ -450,7 +450,6 @@ def makemapp(maketestapp: Callable, makexom: Callable) -> Callable:
 @pytest.fixture
 def http(pypiurls):
     from .simpypi import make_simple_pkg_info
-    import httpx
 
     class MockHTTPClient:
         def __init__(self):

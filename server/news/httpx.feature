@@ -1,1 +1,1 @@
-Completely switch from ``requests`` to ``httpx``.
+Completely switch from ``requests`` and ``httpx`` to ``httpx2``.
