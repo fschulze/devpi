@@ -27,9 +27,8 @@ if TYPE_CHECKING:
     from typing import Any
     from typing import IO
     from typing import Literal
-    from typing import Union
 
-    ContentOrFile = Union[IO[bytes], bytes]
+    ContentOrFile = IO[bytes] | bytes
 
 
 class IDBIOFileConnection(Interface):
@@ -203,7 +202,9 @@ class IStorageConnection2(IStorageConnection):
             at given serial.
             Raises KeyError if not found. """
 
-    def iter_relpaths_at(typedkeys: Iterable[Union[PTypedKey, TypedKey]], at_serial: int) -> Iterator[RelpathInfo]:
+    def iter_relpaths_at(
+        typedkeys: Iterable[PTypedKey | TypedKey], at_serial: int
+    ) -> Iterator[RelpathInfo]:
         """ Iterate over all relpaths of the given typed keys starting
             from at_serial until the first serial in the database. """
 
@@ -248,7 +249,7 @@ class IStorageConnection4(Interface):
         Raises KeyError if not found."""
 
     def iter_relpaths_at(
-        typedkeys: Iterable[Union[PTypedKey, TypedKey]], at_serial: int
+        typedkeys: Iterable[PTypedKey | TypedKey], at_serial: int
     ) -> Iterator[RelpathInfo]:
         """Iterate over all relpaths of the given typed keys starting
         from at_serial until the first serial in the database."""
@@ -272,7 +273,7 @@ class IWriter(Interface):
         pass
 
     def record_set(
-        typedkey: Union[PTypedKey, TypedKey], value: Any, back_serial: int
+        typedkey: PTypedKey | TypedKey, value: Any, back_serial: int
     ) -> None:
         pass
 
@@ -418,7 +419,9 @@ def adapt_istorageconnection2(iface: IStorageConnection2, obj: Any) -> Any:
     _obj = unwrap_connection_obj(obj)
     cls = get_connection_class(_obj)
 
-    def iter_relpaths_at(self: Any, typedkeys: Iterable[Union[PTypedKey, TypedKey]], at_serial: int) -> Iterator[RelpathInfo]:
+    def iter_relpaths_at(
+        self: Any, typedkeys: Iterable[PTypedKey | TypedKey], at_serial: int
+    ) -> Iterator[RelpathInfo]:
         keynames = frozenset(k.name for k in typedkeys)
         seen = set()
         for serial in range(at_serial, -1, -1):
