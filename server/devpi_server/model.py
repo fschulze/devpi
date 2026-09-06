@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from .auth import hash_password
 from .auth import verify_and_update_password_hash
-from .compat import StrEnum
 from .config import hookimpl
 from .filestore import Digests
 from .filestore import FileEntry
@@ -35,6 +34,7 @@ from time import gmtime
 from time import strftime
 from typing import TYPE_CHECKING
 from typing import cast
+import enum
 import functools
 import getpass
 import json
@@ -58,18 +58,17 @@ if TYPE_CHECKING:
     from devpi_common.metadata import Version
     from typing import Any
     from typing import Literal
-    from typing import Union
 
     LinksList = list[tuple[str, str]]
-    RequiresPython = Union[str, None]
+    RequiresPython = str | None
     RequiresPythonList = list[RequiresPython]
-    Yanked = Union[Literal[True], str, None]
+    Yanked = Literal[True] | str | None
     YankedList = list[Yanked]
     JoinedLink = tuple[str, str, RequiresPython, Yanked]
     JoinedLinkList = list[JoinedLink]
 
 
-class Rel(StrEnum):
+class Rel(enum.StrEnum):
     DocZip = "doczip"
     ReleaseFile = "releasefile"
     ToxResult = "toxresult"
