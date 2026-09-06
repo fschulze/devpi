@@ -6,7 +6,7 @@ from webob.headers import ResponseHeaders
 
 
 if TYPE_CHECKING:
-    from httpx import Response
+    from httpx2 import Response
     from pyramid.request import Request
 
 
