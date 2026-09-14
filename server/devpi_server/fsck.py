@@ -10,14 +10,14 @@ import sys
 
 
 if TYPE_CHECKING:
-    from .config import MyArgumentParser
+    from .config import DevpiArgumentParser
     from .main import XOM
     from .model.base import BaseIndex
     from pluggy import PluginManager
 
 
 def add_fsck_options(
-    parser: MyArgumentParser,
+    parser: DevpiArgumentParser,
     pluginmanager: PluginManager,  # noqa: ARG001 - API
 ) -> None:
     parser.addoption(
