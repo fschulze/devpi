@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from . import __version__ as server_version
 from . import mythread
-from .config import MyArgumentParser
+from .config import DevpiArgumentParser
 from .config import get_pluginmanager
 from .config import parseoptions
 from .filestore import FileStore
@@ -79,11 +79,10 @@ class CommandRunner:
     def configure_logging(self, args: argparse.Namespace) -> None:
         configure_cli_logging(args)
 
-    def create_parser(self, *, add_help: bool, description: str) -> MyArgumentParser:
-        return MyArgumentParser(
-            add_help=add_help,
-            description=description,
-            pluginmanager=self.pluginmanager)
+    def create_parser(self, *, add_help: bool, description: str) -> DevpiArgumentParser:
+        return DevpiArgumentParser(
+            add_help=add_help, description=description, pluginmanager=self.pluginmanager
+        )
 
     def get_config(self, argv, parser):
         return parseoptions(self.pluginmanager, argv=argv, parser=parser)

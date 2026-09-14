@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 from .log import threadlog
+from typing import TYPE_CHECKING
 import contextlib
 import threading
 import time
 import types
+
+
+if TYPE_CHECKING:
+    from typing import Any
 
 
 try:
@@ -86,7 +91,9 @@ class ThreadPool:
         self._shutdown_funcs = []
         self._started = []
 
-    def register(self, obj, kwargs=None, daemon=True):
+    def register(
+        self, obj: Any, kwargs: dict | None = None, *, daemon: bool = True
+    ) -> None:
         assert not isinstance(obj, threading.Thread)
         assert hasattr(obj, "thread_run")
         assert not hasattr(obj, "thread")
