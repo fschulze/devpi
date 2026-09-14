@@ -1,10 +1,16 @@
 from __future__ import annotations
 
 from .log import threadlog
+from typing import TYPE_CHECKING
 import contextlib
 import threading
 import time
 import types
+
+
+if TYPE_CHECKING:
+    from threading import Thread
+    from typing import Any
 
 
 try:
@@ -21,7 +27,7 @@ class Shutdown(Exception):
     """ this thread is shutting down. """
 
 
-def current_thread():
+def current_thread() -> MyThread | Thread:
     systhread = threading.current_thread()
     target = systhread._target  # type: ignore[attr-defined]
     if not isinstance(target, types.MethodType):
@@ -86,7 +92,9 @@ class ThreadPool:
         self._shutdown_funcs = []
         self._started = []
 
-    def register(self, obj, kwargs=None, daemon=True):
+    def register(
+        self, obj: Any, kwargs: dict | None = None, *, daemon: bool = True
+    ) -> None:
         assert not isinstance(obj, threading.Thread)
         assert hasattr(obj, "thread_run")
         assert not hasattr(obj, "thread")
