@@ -18,6 +18,8 @@ from devpi_server.markers import notset
 from devpi_server.model import remote
 from devpi_server.model.config import ensure_list
 from devpi_server.normalized import normalize_name
+from importlib import import_module
+from importlib.util import resolve_name
 from io import BytesIO
 from pathlib import Path
 from pyramid.authentication import b64encode
@@ -38,11 +40,53 @@ import socket
 import subprocess
 import sys
 import time
+import warnings
 import webtest
 
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from collections.abc import Iterable
+    from typing import Any
+    from typing import Protocol
+
+    class GenPath(Protocol):
+        def __call__(self, name: str | None = None) -> Path: ...
+
+    class HTTPClient(Protocol):
+        pass
+
+    class MakeXOM(Protocol):
+        def __call__(
+            self,
+            opts: Iterable = (),
+            *,
+            http: HTTPClient | None = None,
+            plugins: Iterable = (),
+        ) -> XOM: ...
+
+
+deprecated_names = dict(
+    MyFunctionalTestApp="FunctionalTestApp",
+    MyTestApp="TestApp",
+)
+
+
+def __getattr__(name: str) -> Any:
+    if name in deprecated_names:
+        (new_module_name, _sep, new_name) = resolve_name(
+            deprecated_names[name], __spec__.parent
+        ).rpartition(".")
+        warnings.warn(
+            f"{__name__}.{name} is deprecated, use {new_module_name}.{new_name} instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        if new_module_name:
+            new_module = import_module(new_module_name)
+            return getattr(new_module, new_name)
+        return globals()[new_name]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def pytest_configure(config):
@@ -312,8 +356,15 @@ def storage_io_file_factory(storage_info):
 
 
 @pytest.fixture
-def makexom(request, gen_path, http, monkeypatch, storage_args, storage_plugin):
-    def makexom(opts=(), http=http, plugins=()):  # noqa: PLR0912
+def makexom(
+    request: pytest.FixtureRequest,
+    gen_path: GenPath,
+    http: HTTPClient,
+    monkeypatch: pytest.MonkeyPatch,
+    storage_args: Callable[[Path], list],
+    storage_plugin: Any,
+) -> MakeXOM:
+    def makexom(opts=(), *, http=http, plugins=()):  # noqa: PLR0912
         from devpi_server import auth_basic
         from devpi_server import auth_devpi
         from devpi_server import replica
@@ -420,16 +471,16 @@ def replica_xom(makexom, secretfile):
 
 @pytest.fixture
 def makefunctionaltestapp():
-    def makefunctionaltestapp(host_port):
-        return MyFunctionalTestApp(host_port)
+    def makefunctionaltestapp(host_port: tuple[str, str | int]) -> FunctionalTestApp:
+        return FunctionalTestApp(host_port)
     return makefunctionaltestapp
 
 
 @pytest.fixture
 def maketestapp() -> Callable:
-    def maketestapp(xom: XOM) -> MyTestApp:
+    def maketestapp(xom: XOM) -> TestApp:
         app = xom.create_app()
-        mt = MyTestApp(app)
+        mt = TestApp(app)
         mt.xom = xom
         return mt
     return maketestapp
@@ -437,7 +488,7 @@ def maketestapp() -> Callable:
 
 @pytest.fixture
 def makemapp(maketestapp: Callable, makexom: Callable) -> Callable:
-    def makemapp(testapp: MyTestApp | None = None, options: tuple = ()) -> Mapp:
+    def makemapp(testapp: TestApp | None = None, options: tuple = ()) -> Mapp:
         if testapp is None:
             testapp = maketestapp(makexom(options))
         m = Mapp(testapp)
@@ -448,7 +499,7 @@ def makemapp(maketestapp: Callable, makexom: Callable) -> Callable:
 
 
 @pytest.fixture
-def http(pypiurls):
+def http(pypiurls: RemoteURL) -> HTTPClient:
     from .simpypi import make_simple_pkg_info
 
     class MockHTTPClient:
@@ -737,15 +788,16 @@ def add_pypistage_mocks(monkeypatch, http):
     monkeypatch.setattr(remote.RemoteIndex, "mock_extfile", mock_extfile, raising=False)
 
 
+class RemoteURL:
+    def __init__(self, *, simple):
+        self.simple = simple
+
+
 @pytest.fixture
-def pypiurls():
+def pypiurls() -> RemoteURL:
     from devpi_server.main import _pypi_ixconfig_default
 
-    class RemoteURL:
-        def __init__(self):
-            self.simple = _pypi_ixconfig_default["remote_url"]
-
-    return RemoteURL()
+    return RemoteURL(simple=_pypi_ixconfig_default["remote_url"])
 
 
 @pytest.fixture
@@ -1047,10 +1099,19 @@ class Mapp(MappMixin):
             self._wait_for_serial_in_result(r)
         return r
 
-    def upload_file_pypi(self, basename, content,
-                         name=None, version=None, indexname=None,
-                         register=True, code=200, waithooks=False,
-                         set_whitelist=True):
+    def upload_file_pypi(
+        self,
+        basename: str,
+        content: bytes,
+        name: str | None = None,
+        version: str | None = None,
+        indexname: str | None = None,
+        *,
+        register: bool = True,
+        code: int = 200,
+        waithooks: bool = False,
+        set_whitelist: bool = True,
+    ) -> TestResponse:
         assert isinstance(content, bytes)
         indexname = self._getindexname(indexname)
         if register and code == 200:
@@ -1079,7 +1140,7 @@ class Mapp(MappMixin):
         assert r.status_code == code
         return r
 
-    def get_release_paths(self, project):
+    def get_release_paths(self, project: str) -> list[str]:
         r = self.get_simple(project)
         pkg_url = URL(r.request.url)
         paths = [pkg_url.joinpath(link["href"]).path
@@ -1106,7 +1167,14 @@ class Mapp(MappMixin):
 
         return r
 
-    def upload_toxresult(self, path, content, code=200, waithooks=False):
+    def upload_toxresult(
+        self,
+        path: str,
+        content: bytes | str,
+        code: int = 200,
+        *,
+        waithooks: bool = False,
+    ) -> TestResponse:
         r = self.testapp.post(path, content, expect_errors=True)
         assert r.status_code == code
         if waithooks:
@@ -1139,7 +1207,7 @@ def noiter(monkeypatch):
         x.close()
 
 
-class MyTestApp(TApp):
+class TestApp(TApp):
     auth: tuple[str, str] | None = None
     xom: XOM
 
@@ -1182,7 +1250,7 @@ class MyTestApp(TApp):
         kw.setdefault("expect_errors", True)
         return self._gen_request("POST", url, params=params, **kw)
 
-    def get(self, *args, **kwargs):
+    def get(self, *args: Any, **kwargs: Any) -> TestResponse:
         kwargs.setdefault("expect_errors", True)
         accept = kwargs.pop("accept", None)
         if accept is not None:
@@ -1231,7 +1299,7 @@ class FunctionalResponseWrapper(object):
         return self.res.json()
 
 
-class MyFunctionalTestApp(MyTestApp):
+class FunctionalTestApp(TestApp):
     def __init__(self, host_port):
         import json
 

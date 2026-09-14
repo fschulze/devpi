@@ -6,12 +6,15 @@ from .interfaces import IIOFileFactory
 from .log import threadlog
 from devpi_common.types import cached_property
 from devpi_common.url import URL
+from importlib import import_module
+from importlib.util import resolve_name
 from operator import attrgetter
 from pathlib import Path
 from pluggy import HookimplMarker
 from pluggy import PluginManager
 from tempfile import NamedTemporaryFile
 from typing import TYPE_CHECKING
+from typing import cast
 import argon2
 import argparse
 import base64
@@ -21,6 +24,7 @@ import os.path
 import secrets
 import sys
 import uuid
+import warnings
 
 
 if TYPE_CHECKING:
@@ -44,6 +48,28 @@ DEFAULT_FILE_REPLICATION_THREADS = 5
 DEFAULT_ARGON2_MEMORY_COST = 524288
 DEFAULT_ARGON2_PARALLELISM = 8
 DEFAULT_ARGON2_TIME_COST = 16
+
+
+deprecated_names = dict(
+    MyArgumentParser="DevpiArgumentParser",
+)
+
+
+def __getattr__(name: str) -> Any:
+    if name in deprecated_names:
+        (new_module_name, _sep, new_name) = resolve_name(
+            deprecated_names[name], __spec__.parent
+        ).rpartition(".")
+        warnings.warn(
+            f"{__name__}.{name} is deprecated, use {new_module_name}.{new_name} instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        if new_module_name:
+            new_module = import_module(new_module_name)
+            return getattr(new_module, new_name)
+        return globals()[new_name]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def strtobool(val: str) -> bool:
@@ -88,7 +114,7 @@ def traced_pluggy_call(hook, **caller_kwargs):
 
 
 def add_help_option(
-    parser: MyArgumentParser,
+    parser: DevpiArgumentGroup | DevpiArgumentParser,
     pluginmanager: PluginManager,  # noqa: ARG001 - call convention
 ) -> None:
     parser.addoption(
@@ -98,7 +124,7 @@ def add_help_option(
 
 
 def add_configfile_option(
-    parser: MyArgumentParser,
+    parser: DevpiArgumentGroup | DevpiArgumentParser,
     pluginmanager: PluginManager,  # noqa: ARG001 - call convention
 ) -> None:
     parser.addoption(
@@ -108,7 +134,7 @@ def add_configfile_option(
 
 
 def add_role_option(
-    parser: MyArgumentParser,
+    parser: DevpiArgumentGroup | DevpiArgumentParser,
     pluginmanager: PluginManager,  # noqa: ARG001 - call convention
 ) -> None:
     parser.addoption(
@@ -127,7 +153,7 @@ def add_role_option(
 
 
 def add_primary_url_option(
-    parser: MyArgumentParser,
+    parser: DevpiArgumentGroup | DevpiArgumentParser,
     pluginmanager: PluginManager,  # noqa: ARG001 - call convention
 ) -> None:  # noqa: ARG001
     parser.addoption(
@@ -137,7 +163,7 @@ def add_primary_url_option(
 
 
 def add_hard_links_option(
-    parser: MyArgumentParser,
+    parser: DevpiArgumentGroup | DevpiArgumentParser,
     pluginmanager: PluginManager,  # noqa: ARG001 - call convention
 ) -> None:
     parser.addoption(
@@ -150,7 +176,7 @@ def add_hard_links_option(
 
 
 def add_logging_options(
-    parser: MyArgumentParser,
+    parser: DevpiArgumentGroup | DevpiArgumentParser,
     pluginmanager: PluginManager,  # noqa: ARG001 - call convention
 ) -> None:
     parser.addoption(
@@ -164,7 +190,7 @@ def add_logging_options(
 
 
 def add_web_options(
-    parser: MyArgumentParser,
+    parser: DevpiArgumentGroup | DevpiArgumentParser,
     pluginmanager: PluginManager,  # noqa: ARG001 - call convention
 ) -> None:
     parser.addoption(
@@ -245,7 +271,7 @@ def add_web_options(
 
 
 def add_remote_options(
-    parser: MyArgumentParser,
+    parser: DevpiArgumentGroup | DevpiArgumentParser,
     pluginmanager: PluginManager,  # noqa: ARG001 - call convention
 ) -> None:
     parser.addoption(
@@ -260,7 +286,9 @@ def add_remote_options(
     )
 
 
-def add_replica_options(parser: MyArgumentParser, pluginmanager: PluginManager) -> None:
+def add_replica_options(
+    parser: DevpiArgumentGroup | DevpiArgumentParser, pluginmanager: PluginManager
+) -> None:
     add_primary_url_option(parser, pluginmanager)
 
     parser.addoption(
@@ -305,7 +333,7 @@ def add_replica_options(parser: MyArgumentParser, pluginmanager: PluginManager) 
 
 
 def add_request_options(
-    parser: MyArgumentParser,
+    parser: DevpiArgumentGroup | DevpiArgumentParser,
     pluginmanager: PluginManager,  # noqa: ARG001 - call convention
 ) -> None:
     parser.addoption(
@@ -321,7 +349,9 @@ def add_request_options(
              "simple index used by pip.")
 
 
-def add_storage_options(parser: MyArgumentParser, pluginmanager: PluginManager) -> None:
+def add_storage_options(
+    parser: DevpiArgumentGroup | DevpiArgumentParser, pluginmanager: PluginManager
+) -> None:
     parser.addoption(
         "--serverdir", type=str, metavar="DIR", action="store",
         default='~/.devpi/server',
@@ -341,7 +371,7 @@ def add_storage_options(parser: MyArgumentParser, pluginmanager: PluginManager) 
 
 
 def add_init_options(
-    parser: MyArgumentParser,
+    parser: DevpiArgumentGroup | DevpiArgumentParser,
     pluginmanager: PluginManager,  # noqa: ARG001 - call convention
 ) -> None:
     parser.addoption(
@@ -366,7 +396,7 @@ def add_init_options(
 
 
 def add_export_options(
-    parser: MyArgumentParser,
+    parser: DevpiArgumentGroup | DevpiArgumentParser,
     pluginmanager: PluginManager,  # noqa: ARG001 - call convention
 ) -> None:
     parser.addoption(
@@ -377,7 +407,7 @@ def add_export_options(
 
 
 def add_import_options(
-    parser: MyArgumentParser,
+    parser: DevpiArgumentGroup | DevpiArgumentParser,
     pluginmanager: PluginManager,  # noqa: ARG001 - call convention
 ) -> None:
     parser.addoption(
@@ -397,7 +427,7 @@ def add_import_options(
 
 
 def add_secretfile_option(
-    parser: MyArgumentParser,
+    parser: DevpiArgumentGroup | DevpiArgumentParser,
     pluginmanager: PluginManager,  # noqa: ARG001 - call convention
 ) -> None:
     parser.addoption(
@@ -419,7 +449,9 @@ def add_secretfile_option(
         help=argparse.SUPPRESS)
 
 
-def add_deploy_options(parser: MyArgumentParser, pluginmanager: PluginManager) -> None:
+def add_deploy_options(
+    parser: DevpiArgumentGroup | DevpiArgumentParser, pluginmanager: PluginManager
+) -> None:
     add_secretfile_option(parser, pluginmanager)
 
     parser.addoption(
@@ -429,7 +461,7 @@ def add_deploy_options(parser: MyArgumentParser, pluginmanager: PluginManager) -
 
 
 def add_permission_options(
-    parser: MyArgumentParser,
+    parser: DevpiArgumentGroup | DevpiArgumentParser,
     pluginmanager: PluginManager,  # noqa: ARG001 - call convention
 ) -> None:
     parser.addoption(
@@ -447,7 +479,7 @@ def add_permission_options(
 
 
 def add_autocreate_users_options(
-    parser: MyArgumentParser,
+    parser: DevpiArgumentGroup | DevpiArgumentParser,
     pluginmanager: PluginManager,  # noqa: ARG001 - call convention
 ) -> None:
     parser.addoption(
@@ -461,7 +493,7 @@ def add_autocreate_users_options(
 
 
 def addoptions(
-    parser: MyArgumentParser,
+    parser: DevpiArgumentParser,
     pluginmanager: PluginManager,
 ) -> None:
     add_help_option(parser, pluginmanager)
@@ -504,7 +536,7 @@ def addoptions(
     )
 
 
-def try_argcomplete(parser: MyArgumentParser) -> None:
+def try_argcomplete(parser: DevpiArgumentGroup | DevpiArgumentParser) -> None:
     try:
         import argcomplete
     except ImportError:
@@ -513,8 +545,8 @@ def try_argcomplete(parser: MyArgumentParser) -> None:
         argcomplete.autocomplete(parser)
 
 
-def get_parser(pluginmanager: PluginManager) -> MyArgumentParser:
-    parser = MyArgumentParser(
+def get_parser(pluginmanager: PluginManager) -> DevpiArgumentParser:
+    parser = DevpiArgumentParser(
         description="Start a server which serves multiple users and "
         "indices. The special root/pypi index is an on-demand "
         "mirror of pypi.org and is created by default. "
@@ -601,7 +633,7 @@ class ArgumentDefaultGetter:
 def parseoptions(
     pluginmanager: PluginManager,
     argv: list[str],
-    parser: MyArgumentParser | None = None,
+    parser: DevpiArgumentParser | None = None,
 ) -> Config:
     if parser is None:
         parser = get_parser(pluginmanager)
@@ -660,7 +692,11 @@ def get_action_long_option_string(action):
     return None
 
 
-class MyArgumentParser(argparse.ArgumentParser):
+class DevpiArgumentGroup(argparse._ArgumentGroup):
+    addoption = argparse._ArgumentGroup.add_argument
+
+
+class DevpiArgumentParser(argparse.ArgumentParser):
     def __init__(self, *args, pluginmanager=None, **kwargs):
         self.addoption = self.add_argument
         self.pluginmanager = pluginmanager
@@ -702,10 +738,10 @@ class MyArgumentParser(argparse.ArgumentParser):
             if action.help and argparse.SUPPRESS not in (action.help, default):
                 action.help += " [%s]" % default
 
-    def addgroup(self, *args, **kwargs):
+    def addgroup(self, *args: Any, **kwargs: Any) -> DevpiArgumentGroup:
         grp = super().add_argument_group(*args, **kwargs)
         grp.addoption = grp.add_argument  # type: ignore[attr-defined]
-        return grp
+        return cast("DevpiArgumentGroup", grp)
 
     def add_all_options(self) -> None:
         addoptions(self, self.pluginmanager)
