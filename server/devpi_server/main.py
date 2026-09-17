@@ -21,6 +21,7 @@ from .log import threadlog
 from .model.base import BaseIndex
 from .model.root import RootModel
 from .model.schema import Schema
+from .timeout import Timeout
 from .views import apireturn
 from collections import defaultdict
 from devpi_common.terminal import TerminalWriter
@@ -467,7 +468,7 @@ class XOM:
             return OfflineHTTPClient()
         return HTTPClient(
             component_name=component_name,
-            timeout=getattr(self.config.args, "request_timeout", None),
+            timeout=self.config.request_timeout,
         )
 
     @cached_property
@@ -622,6 +623,7 @@ class XOM:
             under="devpi_server.views.tween_request_logging")
         if self.config.args.profile_requests:
             pyramid_config.add_tween("devpi_server.main.tween_request_profiling")
+        pyramid_config.add_request_method(devpi_timeout, reify=True)
         pyramid_config.add_request_method(get_remote_ip)
         pyramid_config.add_request_method(index_url)
         pyramid_config.add_request_method(stage_url)
@@ -641,6 +643,11 @@ class XOM:
 
     def is_replica(self):
         return self.config.role == "replica"
+
+
+def devpi_timeout(request):
+    xom = request.registry["xom"]
+    return Timeout(xom.config.request_timeout)
 
 
 def get_remote_ip(request):
