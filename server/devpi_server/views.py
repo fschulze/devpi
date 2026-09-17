@@ -266,6 +266,7 @@ def tween_keyfs_transaction(handler, registry):
     is_replica = registry["xom"].is_replica()
 
     def request_tx_handler(request):
+        request.devpi_timeout.start()
         write = is_mutating_http_method(request.method) and not is_replica
         transaction_method = (
             keyfs.write_transaction
@@ -713,7 +714,11 @@ class PyPIView:
         try:
             result = stage.SimpleLinks(
                 stage.get_simplelinks(
-                    project, sorted_links=not requested_by_installer))
+                    project,
+                    sorted_links=not requested_by_installer,
+                    timeout=request.devpi_timeout,
+                )
+            )
         except stage.UpstreamError as e:
             threadlog.error(e.msg)
             abort(request, 502, e.msg)
@@ -893,12 +898,18 @@ class PyPIView:
 
     @view_config(request_method="GET", route_name="/{user}/{index}/+simple/")
     def simple_list_all(self) -> Response:
+        # use a minimum of 30 seconds as timeout for remote server and
+        # 60 seconds when running as replica, because the list can be
+        # quite large and the primary might take a while to process it
+        self.request.devpi_timeout.limit = 60 if self.xom.is_replica() else 30
         self.log.info("starting +simple")
         stage = self.context.stage
         try:
             # list is called to force iteration over all results in this
             # try/except block
-            stage_results = list(stage.list_projects())
+            stage_results = list(
+                stage.list_projects(timeout=self.request.devpi_timeout)
+            )
         except stage.UpstreamError as e:
             threadlog.error(e.msg)
             abort(self.request, 502, e.msg)

@@ -42,6 +42,7 @@ from devpi_server.markers import unknown
 from devpi_server.normalized import normalize_name
 from devpi_server.readonly import ensure_deeply_readonly
 from devpi_server.readonly import get_mutable_deepcopy
+from devpi_server.timeout import Timeout
 from lazy import lazy
 from pyramid.authorization import Allow
 from typing import TYPE_CHECKING
@@ -333,7 +334,9 @@ class BaseIndex:
         raise NotImplementedError
 
     @abstractmethod
-    def list_projects_perstage(self) -> dict[str, NormalizedName | str]:
+    def list_projects_perstage(
+        self, *, timeout: Timeout | None = None
+    ) -> dict[str, NormalizedName | str]:
         raise NotImplementedError
 
     @abstractmethod
@@ -363,11 +366,16 @@ class BaseIndex:
     def del_entry(self, entry: MutableFileEntry, *, cleanup: bool = True) -> None:
         raise NotImplementedError
 
-    def get_releaselinks(self, project):
+    def get_releaselinks(
+        self, project: NormalizedName | str, *, timeout: Timeout | None = None
+    ) -> list[ELink]:
         # compatibility access method used by devpi-web and tests
+        if timeout is None:
+            timeout = Timeout(self.xom.config.request_timeout)
+            timeout.start()
         project = normalize_name(project)
         try:
-            return self._make_elinks(self.get_simplelinks(project))
+            return self._make_elinks(self.get_simplelinks(project, timeout=timeout))
         except self.UpstreamNotFoundError:
             return []
 
@@ -476,7 +484,9 @@ class BaseIndex:
         return self.key_project(project).with_resolved_parent().get_mutable()
 
     @abstractmethod
-    def get_simplelinks_perstage(self, project: NormalizedName | str) -> SimpleLinks:
+    def get_simplelinks_perstage(
+        self, project: NormalizedName | str, *, timeout: Timeout | None = None
+    ) -> SimpleLinks:
         raise NotImplementedError
 
     def store_toxresult(
@@ -588,7 +598,11 @@ class BaseIndex:
         return result
 
     def get_simplelinks(
-        self, project: NormalizedName | str, *, sorted_links: bool = True
+        self,
+        project: NormalizedName | str,
+        *,
+        sorted_links: bool = True,
+        timeout: Timeout | None = None,
     ) -> SimpleLinks:
         """Return list of (key, href) tuples where "href" is a path
         to a file entry with "#" appended hash-specs or egg-ids
@@ -611,7 +625,7 @@ class BaseIndex:
         for traversed_index in inheritance_info.iter_indexes("get_simplelinks"):
             index = traversed_index.index
             with check_upstream_error(self, index) as checker:
-                res = index.get_simplelinks_perstage(project)
+                res = index.get_simplelinks_perstage(project, timeout=timeout)
             if checker.failed:
                 continue
             all_links.stale = all_links.stale or res.stale
@@ -680,12 +694,14 @@ class BaseIndex:
                 return True
         return False
 
-    def list_projects(self) -> list[tuple[BaseIndex, dict[str, NormalizedName | str]]]:
+    def list_projects(
+        self, *, timeout: Timeout | None = None
+    ) -> list[tuple[BaseIndex, dict[str, NormalizedName | str]]]:
         inheritance_info = self.index_bases.inheritance_info
         raw_result = []
         for traversed_index in inheritance_info.iter_indexes():
             index = traversed_index.index
-            projects = index.list_projects_perstage()
+            projects = index.list_projects_perstage(timeout=timeout)
             raw_result.append((index, projects))
         per_index_result: dict[BaseIndex, list[dict[str, NormalizedName | str]]] = (
             inheritance_info.filter_result("get_projects_filter_iter", raw_result)
