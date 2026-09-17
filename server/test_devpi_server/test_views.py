@@ -610,9 +610,11 @@ def test_simple_project_plain_info_for_installers(monkeypatch, pypistage, testap
     orig_get_simplelinks = BaseIndex.get_simplelinks
     calls = []
 
-    def get_simplelinks(self, project, sorted_links=True):
+    def get_simplelinks(self, project, *, sorted_links=True, timeout=None):
         calls.append((self, project, sorted_links))
-        return orig_get_simplelinks(self, project, sorted_links=sorted_links)
+        return orig_get_simplelinks(
+            self, project, sorted_links=sorted_links, timeout=timeout
+        )
 
     # let original be called, but we can inspect the call now
     monkeypatch.setattr(BaseIndex, "get_simplelinks", get_simplelinks)
@@ -2794,7 +2796,7 @@ class TestTweenKeyfsTransaction:
             return Response("")
 
         handler = tween_keyfs_transaction(wrapped_handler, {"xom": xom})
-        response = handler(blank_request())
+        response = handler(blank_request(start_timeout=False))
         assert response.headers.get("X-DEVPI-SERIAL") == str(cur_serial)
 
     def test_write(self, xom, blank_request):
@@ -2806,7 +2808,7 @@ class TestTweenKeyfsTransaction:
             return Response("")
 
         handler = tween_keyfs_transaction(wrapped_handler, {"xom": xom})
-        response = handler(blank_request(method="PUT"))
+        response = handler(blank_request(method="PUT", start_timeout=False))
         assert response.headers.get("X-DEVPI-SERIAL") == str(cur_serial + 1)
 
     def test_restart(self, xom, blank_request):
@@ -2819,7 +2821,7 @@ class TestTweenKeyfsTransaction:
             return Response("")
 
         handler = tween_keyfs_transaction(wrapped_handler, {"xom": xom})
-        response = handler(blank_request())
+        response = handler(blank_request(start_timeout=False))
         assert response.headers.get("X-DEVPI-SERIAL") == str(cur_serial + 1)
 
 

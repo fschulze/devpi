@@ -1292,7 +1292,7 @@ class FileReplicationThread:
                     url,
                     allow_redirects=False,
                     extra_headers={H_REPLICA_FILEREPL: "YES"},
-                    timeout=self.xom.config.args.request_timeout,
+                    timeout=self.xom.config.request_timeout,
                 )
             except Exception as err:
                 msg = f"error on connection: {format_exception_only(err)}"
@@ -1568,6 +1568,7 @@ class BodyFileWrapper:
 
 
 def proxy_request_to_primary(xom, request, cstack):
+    request.devpi_timeout.limit = xom.config.args.proxy_timeout
     primary_url = xom.config.primary_url
     request_url = URL(request.url)
     url = (
@@ -1597,7 +1598,7 @@ def proxy_request_to_primary(xom, request, cstack):
             content=body(),
             extra_headers=headers,
             allow_redirects=False,
-            timeout=xom.config.args.proxy_timeout,
+            timeout=request.devpi_timeout.remaining,
             raise_on_error=True,
         )
     except http.Errors as e:

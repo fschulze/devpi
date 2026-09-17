@@ -46,6 +46,7 @@ from devpi_server.normalized import NormalizedName
 from devpi_server.normalized import normalize_name
 from devpi_server.proxy import clean_response_headers
 from devpi_server.readonly import ensure_deeply_readonly
+from devpi_server.timeout import Timeout
 from functools import partial
 from hashlib import md5
 from pyramid.authentication import b64encode
@@ -752,11 +753,6 @@ class RemoteIndex(BaseIndex):
         super().__init__(xom, username, index, ixconfig, customizer_cls)
         self.xom = xom
         self.offline = self.xom.config.offline_mode
-        self.timeout = xom.config.request_timeout
-        # use a minimum of 30 seconds as timeout for remote server and
-        # 60 seconds when running as replica, because the list can be
-        # quite large and the primary might take a while to process it
-        self.projects_timeout = max(self.timeout, 60 if self.xom.is_replica() else 30)
         # used to log about stale projects only once
         self._offline_logging = set()
         self._remotedata = {}
@@ -1048,9 +1044,6 @@ class RemoteIndex(BaseIndex):
             self.name, "project_retrieve_times", factory=ProjectUpdateCache
         )
 
-    def get_projects_timeout(self, timeout: float | None) -> float:
-        return self.projects_timeout if timeout is None else timeout
-
     async def _get_remote_projects(
         self, log_prefix: str, projects_future: asyncio.Future[ProjectsResult]
     ) -> None:
@@ -1101,23 +1094,20 @@ class RemoteIndex(BaseIndex):
             for k, v in key_project.iter_ulidkey_values(fill_cache=False)
         }
 
-    def _update_projects(
-        self, timeout: float | None = None
-    ) -> tuple[set[NormalizedName], bool]:
-        projects_timeout = self.get_projects_timeout(timeout)
+    def _update_projects(self, timeout: Timeout) -> tuple[set[NormalizedName], bool]:
         projects_future = cast(
             "asyncio.Future[ProjectsResult]", self.xom.create_future()
         )
         try:
             self.xom.run_coroutine_threadsafe(
                 self._get_remote_projects(async_log_prefix(), projects_future),
-                timeout=projects_timeout,
+                timeout=timeout.remaining,
             )
         except TimeoutError:
             threadlog.warn(
                 "serving stale projects for %r, getting data timed out after %s seconds",
                 self.index,
-                projects_timeout,
+                timeout.limit,
             )
             return (self._stale_list_projects_perstage(), True)
         except self.UpstreamNotModified as e:
@@ -1153,7 +1143,7 @@ class RemoteIndex(BaseIndex):
         return (projects, False)
 
     def _list_projects_perstage(
-        self, *, timeout: float | None = None
+        self, *, timeout: Timeout
     ) -> tuple[set[NormalizedName], bool]:
         """Return the cached project names.
 
@@ -1170,11 +1160,10 @@ class RemoteIndex(BaseIndex):
         if not self.cache_projectnames.is_expired(self.cache_expiry):
             return (self.cache_projectnames.get(), False)
         lock = self._list_projects_perstage_lock
-        projects_timeout = self.get_projects_timeout(timeout)
         threadlog.debug(
-            "Acquiring projects list lock (%r) with timeout %s", lock, timeout
+            "Acquiring projects list lock (%r) with timeout %s", lock, timeout.limit
         )
-        if lock.acquire(timeout=projects_timeout):
+        if lock.acquire(timeout=timeout.remaining):
             try:
                 # retry in case it was updated in another thread
                 if not self.cache_projectnames.is_expired(self.cache_expiry):
@@ -1186,11 +1175,20 @@ class RemoteIndex(BaseIndex):
                 threadlog.debug("Released projects list lock (%r)", lock)
         return (self._stale_list_projects_perstage(), True)
 
-    def list_projects_perstage(self) -> dict[str, NormalizedName | str]:
+    def list_projects_perstage(
+        self, *, timeout: Timeout | None = None
+    ) -> dict[str, NormalizedName | str]:
         """Return the project names."""
         # return a read-only version of the cached data,
         # so it can't be modified accidentally and we avoid a copy
-        (projects, _stale) = self._list_projects_perstage()
+        if timeout is None:
+            timeout = Timeout(
+                max(
+                    self.xom.config.request_timeout, 60 if self.xom.is_replica() else 30
+                )
+            )
+            timeout.start()
+        (projects, _stale) = self._list_projects_perstage(timeout=timeout)
         return ensure_deeply_readonly({v: v.original for v in projects})
 
     def is_project_cached(self, project: NormalizedName | str) -> bool:
@@ -1320,8 +1318,10 @@ class RemoteIndex(BaseIndex):
         info: NewLinks,
         links: SimpleLinks | None,
         newlinks: SimpleLinks,
+        timeout: Timeout | None,
     ) -> SimpleLinks:
         if self.xom.is_replica():
+            assert isinstance(timeout, Timeout)
             # on the replica we wait for the changes to arrive (changes were
             # triggered by our http request above) because we have no direct
             # writeaccess to the db other than through the replication thread
@@ -1335,7 +1335,7 @@ class RemoteIndex(BaseIndex):
                 "get_simplelinks pypi: waiting for devpi_serial %r", devpi_serial
             )
             links = None
-            if self.keyfs.wait_tx_serial(devpi_serial, timeout=self.timeout):
+            if self.keyfs.wait_tx_serial(devpi_serial, timeout=timeout.remaining):
                 threadlog.debug(
                     "get_simplelinks pypi: finished waiting for devpi_serial %r",
                     devpi_serial,
@@ -1385,12 +1385,14 @@ class RemoteIndex(BaseIndex):
             links = remotedata.get_fresh_links()
             if links is None or set(links) != set(newlinks):
                 # we got changes, so store them
-                self._update_simplelinks(project, info, links, newlinks)
+                self._update_simplelinks(project, info, links, newlinks, None)
                 threadlog.debug("Updated simplelinks for %r in background", project)
             else:
                 threadlog.debug("Unchanged simplelinks for %r", project)
 
-    def get_simplelinks_perstage(self, project: NormalizedName | str) -> SimpleLinks:  # noqa: PLR0911, PLR0912
+    def get_simplelinks_perstage(  # noqa: PLR0911, PLR0912
+        self, project: NormalizedName | str, *, timeout: Timeout | None = None
+    ) -> SimpleLinks:
         """return all releaselinks from the index, returning cached entries
         if we have a recent enough request stored locally.
 
@@ -1398,12 +1400,11 @@ class RemoteIndex(BaseIndex):
         does not return a fresh enough page although we know it must
         exist.
         """
+        if timeout is None:
+            timeout = Timeout(self.xom.config.request_timeout)
+            timeout.start()
         project = normalize_name(project)
-        remaining_timeout = self.timeout
-        lock_begin = time.monotonic()
-        lock = self.cache_retrieve_times.acquire(project, remaining_timeout)
-        lock_delta = time.monotonic() - lock_begin
-        remaining_timeout = max(0, remaining_timeout - lock_delta)
+        lock = self.cache_retrieve_times.acquire(project, timeout.remaining)
         if lock is not None:
             self.keyfs.tx.on_finished(lock.release)
         remotedata = self._get_remotedata(project)
@@ -1417,11 +1418,11 @@ class RemoteIndex(BaseIndex):
                 threadlog.warn(
                     "serving stale links for %r, waiting for existing request timed out after %s seconds",
                     project,
-                    self.timeout,
+                    timeout.limit,
                 )
                 return self.SimpleLinks(links, stale=True)
             raise self.UpstreamError(
-                f"timeout after {self.timeout} seconds while getting data for {project!r}"
+                f"timeout after {timeout.limit} seconds while getting data for {project!r}"
             )
 
         if self.offline and links is None:
@@ -1457,7 +1458,7 @@ class RemoteIndex(BaseIndex):
                 self._async_fetch_releaselinks(
                     async_log_prefix(), newlinks_future, project, cache_info
                 ),
-                timeout=remaining_timeout,
+                timeout=timeout.remaining,
             )
         except TimeoutError as e:
             if not self.xom.is_replica():
@@ -1473,11 +1474,11 @@ class RemoteIndex(BaseIndex):
                 threadlog.warn(
                     "serving stale links for %r, getting data timed out after %s seconds",
                     project,
-                    self.timeout,
+                    timeout.limit,
                 )
                 return self.SimpleLinks(links, stale=True)
             raise self.UpstreamError(
-                f"timeout after {self.timeout} seconds while getting data for {project!r}"
+                f"timeout after {timeout.limit} seconds while getting data for {project!r}"
             ) from e
         except self.UpstreamNotModified as e:
             if links is not None:
@@ -1515,9 +1516,14 @@ class RemoteIndex(BaseIndex):
                 self._update_cache_info(project, info.cache_info)
             return links
 
-        return self._update_simplelinks(project, info, links, newlinks)
+        return self._update_simplelinks(project, info, links, newlinks, timeout)
 
-    def has_project_perstage(self, project: NormalizedName | str) -> bool | Unknown:
+    def has_project_perstage(
+        self, project: NormalizedName | str, *, timeout: Timeout | None = None
+    ) -> bool | Unknown:
+        if timeout is None:
+            timeout = Timeout(self.xom.config.request_timeout)
+            timeout.start()
         project = normalize_name(project)
         if self.key_project(project).exists(resolve_parents=True):
             return True
@@ -1527,7 +1533,7 @@ class RemoteIndex(BaseIndex):
         # use the internal method to avoid a copy
         if self.offline:
             return unknown
-        (projects, stale) = self._list_projects_perstage(timeout=self.timeout)
+        (projects, stale) = self._list_projects_perstage(timeout=timeout)
         if project in projects:
             return True
         if stale:
