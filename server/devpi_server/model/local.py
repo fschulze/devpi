@@ -55,6 +55,7 @@ if TYPE_CHECKING:
     from devpi_server.main import XOM
     from devpi_server.markers import Unknown
     from devpi_server.normalized import NormalizedName
+    from devpi_server.timeout import Timeout
     from typing import Any
     from typing import Literal
 
@@ -592,7 +593,12 @@ class LocalIndex(BaseIndex):
                 verdata["+elinks"] = elinks
         return ensure_deeply_readonly(verdata)
 
-    def get_simplelinks_perstage(self, project: NormalizedName | str) -> SimpleLinks:
+    def get_simplelinks_perstage(
+        self,
+        project: NormalizedName | str,
+        *,
+        timeout: Timeout | None = None,  # noqa: ARG002 - API
+    ) -> SimpleLinks:
         username = self.username
         index = self.index
         key_simpledata = self.key_simpledata(project).with_resolved_parent()
@@ -617,7 +623,10 @@ class LocalIndex(BaseIndex):
             version=SIMPLE_API_V1_1_VERSION,
         )
 
-    def list_projects_perstage(self) -> dict[str, NormalizedName | str]:
+    def list_projects_perstage(
+        self,
+        timeout: Timeout | None = None,  # noqa: ARG002 - API
+    ) -> dict[str, NormalizedName | str]:
         key_project = self.key_project.with_resolved_parent()
         return {k.name: v["name"] for k, v in key_project.iter_ulidkey_values()}
 

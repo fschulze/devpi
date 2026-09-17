@@ -1635,10 +1635,16 @@ def dummyrequest(pyramidconfig):
 
 @pytest.fixture
 def blank_request():
+    from devpi_server.timeout import Timeout
     from pyramid.request import Request
 
     def blank_request(*args, **kwargs):
-        return Request.blank("/blankpath", *args, **kwargs)
+        start_timeout = kwargs.pop("start_timeout", True)
+        request = Request.blank("/blankpath", *args, **kwargs)
+        request.devpi_timeout = Timeout(5)
+        if start_timeout:
+            request.devpi_timeout.start()
+        return request
 
     return blank_request
 
