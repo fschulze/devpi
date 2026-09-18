@@ -197,19 +197,12 @@ def test_skip_remote_index_by_default(
     )
     calls = []
     orig_list_projects_perstage = pypistage.__class__.list_projects_perstage
-    list_projects_perstage = mock.Mock(spec=orig_list_projects_perstage)
 
-    def get_list_project_perstage(_m, i, o):
-        new_list_projects_perstage = orig_list_projects_perstage.__get__(i, o)
+    def list_projects_perstage(self, *args, **kwargs):
+        result = orig_list_projects_perstage(self, *args, **kwargs)
+        calls.append("list_projects_perstage")
+        return result
 
-        def instance_list_project_perstage():
-            result = new_list_projects_perstage()
-            calls.append("list_projects_perstage")
-            return result
-
-        return mock.Mock(side_effect=instance_list_project_perstage)
-
-    list_projects_perstage.__get__ = mock.Mock(side_effect=get_list_project_perstage)
     monkeypatch.setattr(
         pypistage.__class__, "list_projects_perstage", list_projects_perstage
     )
