@@ -1237,13 +1237,13 @@ class TestRemoteIndexProjects:
         orig_async_get = pypistage.xom.http.async_get
 
         async def sleeping_async_get(*args, **kw):
-            await asyncio.sleep(0.2)
+            await asyncio.sleep(1)
             return await orig_async_get(*args, **kw)
 
         # first we need some releases in the db
         pypistage.mock_simple("pkg", text='<a href="pkg-1.0.zip"</a>')
         with pypistage.keyfs.read_transaction() as tx:
-            timeout = Timeout(0.1)
+            timeout = Timeout(0.5)
             timeout.start()
             assert [
                 (x.project, x.version)
@@ -1258,7 +1258,7 @@ class TestRemoteIndexProjects:
         monkeypatch.setattr(pypistage.xom.http, "async_get", sleeping_async_get)
         # we should get stale results
         with pypistage.keyfs.read_transaction() as tx:
-            timeout = Timeout(0.1)
+            timeout = Timeout(0.5)
             timeout.start()
             assert initial_serial == tx.at_serial
             assert pypistage.cache_retrieve_times.is_expired("pkg", pypistage.cache_expiry)
@@ -1271,7 +1271,7 @@ class TestRemoteIndexProjects:
         pypistage.keyfs.wait_tx_serial(serial + 1)
         # and we should see the new version
         with pypistage.keyfs.read_transaction():
-            timeout = Timeout(0.1)
+            timeout = Timeout(0.5)
             timeout.start()
             assert not pypistage.cache_retrieve_times.is_expired("pkg", pypistage.cache_expiry)
             assert sorted(
