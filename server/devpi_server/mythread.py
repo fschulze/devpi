@@ -9,6 +9,7 @@ import types
 
 
 if TYPE_CHECKING:
+    from threading import Thread
     from typing import Any
 
 
@@ -26,7 +27,7 @@ class Shutdown(Exception):
     """ this thread is shutting down. """
 
 
-def current_thread():
+def current_thread() -> MyThread | Thread:
     systhread = threading.current_thread()
     target = systhread._target  # type: ignore[attr-defined]
     if not isinstance(target, types.MethodType):

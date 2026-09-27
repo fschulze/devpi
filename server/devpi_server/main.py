@@ -636,10 +636,10 @@ class XOM:
         app = pyramid_config.make_wsgi_app()
         return OutsideURLMiddleware(app, self)
 
-    def is_primary(self):
+    def is_primary(self) -> bool:
         return self.config.role == "primary"
 
-    def is_replica(self):
+    def is_replica(self) -> bool:
         return self.config.role == "replica"
 
 
