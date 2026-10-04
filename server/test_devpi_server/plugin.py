@@ -56,8 +56,8 @@ if TYPE_CHECKING:
     class MakeXOM(Protocol):
         def __call__(
             self,
-            *,
             opts: Iterable = (),
+            *,
             http: HTTPClient | None = None,
             plugins: Iterable = (),
         ) -> XOM: ...
@@ -338,7 +338,7 @@ def makexom(
     storage_args: Callable[[Path], list],
     storage_plugin: Any,
 ) -> MakeXOM:
-    def makexom(*, opts=(), http=http, plugins=()):  # noqa: PLR0912
+    def makexom(opts=(), *, http=http, plugins=()):  # noqa: PLR0912
         from devpi_server import auth_basic
         from devpi_server import auth_devpi
         from devpi_server import replica
