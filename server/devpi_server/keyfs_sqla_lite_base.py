@@ -142,6 +142,7 @@ class LiteBaseStorage(BaseStorage):
                         msg = f"Timeout after {int(elapsed)} seconds (SQLite error code: {sqlite_errorcode})."
                         with contextlib.suppress(Exception):
                             log_write_thread_trace()
+                        sqlaconn.close()
                         raise KeyfsTimeoutError(msg) from e
             _write_thread = thread
         elapsed = time.monotonic() - start_time
