@@ -1,4 +1,3 @@
-from devpi_server import mythread
 from devpi_server.config import get_pluginmanager
 from devpi_server.config import hookimpl
 from devpi_server.config import parseoptions
@@ -7,6 +6,7 @@ from devpi_server.main import XOM
 from devpi_server.main import check_compatible_version
 from devpi_server.main import main
 from devpi_server.main import tween_request_profiling
+from devpi_server.thread import ThreadPool
 import devpi_server
 import os
 import pytest
@@ -14,7 +14,7 @@ import pytest
 
 @pytest.fixture
 def ground_wsgi_run(monkeypatch):
-    monkeypatch.setattr(mythread.ThreadPool, "run", lambda *args: 0 / 0)
+    monkeypatch.setattr(ThreadPool, "run", lambda *_: 0 / 0)
 
 
 wsgi_run_throws = pytest.mark.usefixtures("ground_wsgi_run")

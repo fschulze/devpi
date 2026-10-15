@@ -5,11 +5,11 @@ from devpi_server.keyfs import Transaction
 from devpi_server.keyfs_schema import KeyFSSchema
 from devpi_server.keyfs_types import FilePathInfo
 from devpi_server.keyfs_types import RelPath
-from devpi_server.mythread import ThreadPool
 from devpi_server.readonly import DictViewReadonly
 from devpi_server.readonly import ListViewReadonly
 from devpi_server.readonly import SetViewReadonly
 from devpi_server.readonly import is_deeply_readonly
+from devpi_server.thread import ThreadPool
 from functools import partial
 from typing import TYPE_CHECKING
 import contextlib
