@@ -110,7 +110,6 @@ exclude = [
     "devpi_server/log.py",
     "devpi_server/main.py",
     "devpi_server/markers.py",
-    "devpi_server/mythread.py",
     "devpi_server/passwd.py",
     "devpi_server/replica.py",
     "devpi_server/view_auth.py",

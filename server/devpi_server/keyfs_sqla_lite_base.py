@@ -3,7 +3,7 @@ from __future__ import annotations
 from .keyfs import KeyfsTimeoutError
 from .keyfs_sqla_base import BaseStorage
 from .log import threadlog
-from .mythread import current_thread
+from .thread import current_thread
 from abc import abstractmethod
 from typing import TYPE_CHECKING
 from typing import overload

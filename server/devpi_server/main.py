@@ -6,7 +6,6 @@ recursive cache of pypi.org packages.
 from __future__ import annotations
 
 from . import __version__ as server_version
-from . import mythread
 from .config import DevpiArgumentParser
 from .config import get_pluginmanager
 from .config import parseoptions
@@ -21,6 +20,7 @@ from .log import threadlog
 from .model.base import BaseIndex
 from .model.root import RootModel
 from .model.schema import Schema
+from .thread import ThreadPool
 from .views import apireturn
 from collections import defaultdict
 from devpi_common.terminal import TerminalWriter
@@ -285,7 +285,7 @@ class XOM:
 
     def __init__(self, config: Config, http: Any = None) -> None:
         self.config = config
-        self.thread_pool = mythread.ThreadPool()
+        self.thread_pool = ThreadPool()
         self.async_thread = AsyncioLoopThread(self)
         self.async_tasks = set()
         self.thread_pool.register(self.async_thread)

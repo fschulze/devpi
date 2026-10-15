@@ -8,7 +8,6 @@ independent from any future changes.
 """
 from __future__ import annotations
 
-from . import mythread
 from .filestore import Digests
 from .filestore import FileEntry
 from .filestore import FilePathInfo
@@ -43,6 +42,8 @@ from .readonly import DictViewReadonly
 from .readonly import ensure_deeply_readonly
 from .readonly import get_mutable_deepcopy
 from .readonly import is_deeply_readonly
+from .thread import Shutdown
+from .thread import has_active_thread
 from attrs import frozen
 from devpi_common.types import cached_property
 from inspect import get_annotations
@@ -54,6 +55,7 @@ from typing import cast
 from typing import overload
 import contextlib
 import errno
+import threading
 import time
 
 
@@ -64,7 +66,7 @@ if TYPE_CHECKING:
     from .log import TagLogger
     from .main import XOM
     from .model.schema import Schema as ModelSchema
-    from .mythread import MyThread
+    from .thread import DevpiThread
     from collections.abc import Callable
     from collections.abc import Iterable
     from collections.abc import Iterator
@@ -98,11 +100,11 @@ class TxNotificationThread(Generic[Schema]):
     _on_key_change: dict[str, list[Callable]]
     event_serial_in_sync_at: float | None
     log: TagLogger
-    thread: MyThread
+    thread: DevpiThread
 
     def __init__(self, keyfs: KeyFS[Schema]) -> None:
         self.keyfs = keyfs
-        self.cv_new_event_serial = mythread.threading.Condition()
+        self.cv_new_event_serial = threading.Condition()
         self.event_serial_path = str(self.keyfs.base_path / ".event_serial")
         self.event_serial_in_sync_at = None
         self._on_key_change = {}
@@ -110,7 +112,7 @@ class TxNotificationThread(Generic[Schema]):
     def on_key_change(
         self, key: LocatedKey | PatternedKey | str, subscriber: Callable
     ) -> None:
-        if mythread.has_active_thread(self):
+        if has_active_thread(self):
             raise RuntimeError(
                 "cannot register handlers after thread has started")
         key_name = key if isinstance(key, str) else key.key_name
@@ -182,7 +184,7 @@ class TxNotificationThread(Generic[Schema]):
         while 1:
             try:
                 self.tick()
-            except mythread.Shutdown:
+            except Shutdown:
                 raise
             except MissingFileException as e:
                 self.log.warning(
@@ -190,8 +192,7 @@ class TxNotificationThread(Generic[Schema]):
                 )
                 self.thread.sleep(5)
             except Exception:
-                self.log.exception(
-                    "Unhandled exception in notification thread.")
+                self.log.exception("Unhandled exception in notification thread.")
                 self.thread.sleep(1.0)
 
     def get_ixconfig(
@@ -336,8 +337,8 @@ class KeyFS(Generic[Schema]):
     ) -> None:
         self.base_path = Path(basedir)
         self.base_path.mkdir(parents=True, exist_ok=True)
-        self._threadlocal = mythread.threading.local()
-        self._cv_new_transaction = mythread.threading.Condition()
+        self._threadlocal = threading.local()
+        self._cv_new_transaction = threading.Condition()
         self._import_subscriber = None
         self.notifier = TxNotificationThread(self)
         _self = cast("KeyFS[KeyFSSchema]", self)

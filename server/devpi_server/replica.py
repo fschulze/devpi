@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from . import mythread
 from .config import hookimpl
 from .exceptions import format_exception_only
 from .exceptions import lazy_format_exception
@@ -31,6 +30,7 @@ from .normalized import normalize_name
 from .proxy import clean_request_headers
 from .proxy import clean_response_headers
 from .readonly import DictViewReadonly
+from .thread import Shutdown
 from .views import H_PRIMARY_UUID
 from devpi_common.types import cached_property
 from devpi_common.url import URL
@@ -67,6 +67,7 @@ if TYPE_CHECKING:
     from .log import TagLogger
     from .main import XOM
     from .model.remote import RemoteIndex
+    from .thread import DevpiThread
     from collections.abc import Callable
     from collections.abc import Iterable
     from collections.abc import Iterator
@@ -592,7 +593,7 @@ class ReplicaConnection:
                 self.update_primary_serial(remote_serial)
                 try:
                     handler(r, import_changes)
-                except mythread.Shutdown:
+                except Shutdown:
                     raise
                 except Exception as e:
                     log.exception("could not process: %s", r.url)
@@ -666,7 +667,7 @@ class ReplicaThread:
     primary_contacted_at: float | None
     replica_metadata_in_sync_at: float | None
     started_at: float | None
-    thread: mythread.MyThread
+    thread: DevpiThread
     update_from_primary_at: float | None
 
     def __init__(self, xom: XOM) -> None:
@@ -800,11 +801,10 @@ class ReplicaThread:
                     qsize = self.shared_data.queue.qsize()
                     if qsize:
                         threadlog.info("File download queue size ~ %s", qsize)
-            except mythread.Shutdown:
+            except Shutdown:
                 raise
             except BaseException:
-                self.log.exception(
-                    "Unhandled exception in replica thread.")
+                self.log.exception("Unhandled exception in replica thread.")
                 self.thread.sleep(1.0)
 
     def thread_shutdown(self) -> None:
@@ -1173,7 +1173,7 @@ def devpiweb_get_status_info(request):
 
 
 class FileReplicationThread:
-    thread: mythread.MyThread
+    thread: DevpiThread
 
     def __init__(self, xom: XOM, shared_data: FileReplicationSharedData) -> None:
         self.xom = xom
@@ -1448,7 +1448,7 @@ class FileReplicationThread:
         while 1:
             try:
                 self.tick()
-            except mythread.Shutdown:
+            except Shutdown:
                 raise
             except Exception:  # noqa: BLE001
                 threadlog.exception("Unhandled exception in file replication thread.")
@@ -1456,7 +1456,7 @@ class FileReplicationThread:
 
 
 class InitialQueueThread:
-    thread: mythread.MyThread
+    thread: DevpiThread
 
     def __init__(self, xom: XOM, shared_data: FileReplicationSharedData) -> None:
         self.xom = xom
