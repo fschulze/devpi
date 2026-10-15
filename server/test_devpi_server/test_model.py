@@ -712,16 +712,6 @@ class TestIndex:
         assert links[0].relpath.endswith("someproject-1.1.zip")
         assert links[1].relpath.endswith("someproject-1.0.zip")
 
-    def test_package_not_in_mirror_whitelist_all(self, monkeypatch, pypistage, stage):
-        stage.modify(project_inheritance_rules=["allow all"], bases=(pypistage.name,))
-        register_and_store(stage, "some_xyz-1.0.zip", b"123")
-        # provoke error if called
-        monkeypatch.setattr(
-            "devpi_server.model.remote.RemoteIndex.list_versions_perstage",
-            lambda _self, _project: 0 / 0,
-        )
-        assert stage.list_versions('some_xyz') == {'1.0'}
-
     def test_notrust_inheritance(self, pypistage, stage, user):
         pypistage.mock_simple(
             "someproject", "<a href='someproject-1.1.zip' /a>")

@@ -15,7 +15,7 @@ import time
 
 
 if TYPE_CHECKING:
-    from devpi_server.mythread import MyThread
+    from devpi_server.thread import DevpiThread
 
 
 hookimpl = HookimplMarker("devpiserver")
@@ -115,8 +115,12 @@ def iter_current_threads(skip_thread_ids):  # noqa: PLR0912
                 name == "db_read_last_changelog_serial" and basename == "devpi_server"
             ):
                 continue
-            elif name == "sleep" and filename == "mythread.py" and basename == "devpi_server":
-                yield (thread_id, frame, "known_waiting", "mythread sleeping")
+            elif (
+                name == "sleep"
+                and filename == "thread.py"
+                and basename == "devpi_server"
+            ):
+                yield (thread_id, frame, "known_waiting", "thread sleeping")
             elif name == "wait_tx_serial" and filename == "keyfs.py" and basename == "devpi_server":
                 yield (thread_id, frame, "known_waiting", "keyfs wait_tx_serial")
             elif name == "_run_once" and filename == "base_events.py" and basename == "asyncio":
@@ -176,7 +180,7 @@ def show_stacks(signal, stack):  # noqa: ARG001, PLR0912
 
 
 class PokingThread:
-    thread: MyThread
+    thread: DevpiThread
 
     def __init__(self, xom):
         self.xom = xom
