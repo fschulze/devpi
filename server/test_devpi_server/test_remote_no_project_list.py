@@ -3,6 +3,8 @@ from devpi_common.metadata import splitbasename
 from devpi_server.filestore import get_hashes
 from devpi_server.filestore import get_size
 from devpi_server.markers import unknown
+from devpi_server.normalized import normalize_name
+from operator import attrgetter
 import pytest
 
 
@@ -184,6 +186,54 @@ def test_get_mirror_whitelist_info_with_unfetched_upstream(simpypi, stage):
 
 @pytest.mark.nomocking
 @pytest.mark.writetransaction
+@pytest.mark.usefixtures("remoteindex")
+def test_allowed_inheritance_with_unfetched_upstream(simpypi, stage):
+    stage.modify(project_inheritance_rules=["allow all"])
+    register_and_store(stage, "pkg-1.2.zip")
+    simpypi.add_release("pkg", pkgver="pkg-1.0.zip")
+    info = stage.index_bases.get_project_inheritance_info(
+        normalize_name("pkg")
+    ).jsonable()
+    assert info["has_project_from_remote"] == "unknown"
+    assert [
+        reason for ti in info["traversal_infos"] if (reason := ti.get("reason"))
+    ] == [
+        "package 'pkg' index rule 'allow all' from hello/world allows merging releases from index root/pypi"
+    ]
+    assert simpypi.log == []
+    assert simpypi.requests == []
+    assert stage.has_project("pkg") is True
+    info = stage.index_bases.get_project_inheritance_info(
+        normalize_name("pkg")
+    ).jsonable()
+    assert info["has_project_from_remote"] == "unknown"
+    assert [
+        reason for ti in info["traversal_infos"] if (reason := ti.get("reason"))
+    ] == [
+        "package 'pkg' index rule 'allow all' from hello/world allows merging releases from index root/pypi"
+    ]
+    assert simpypi.log == []
+    assert simpypi.requests == []
+    (link1, link2) = sorted(stage.get_releaselinks("pkg"), key=attrgetter("basename"))
+    assert link1.basename == "pkg-1.0.zip"
+    assert link2.basename == "pkg-1.2.zip"
+    assert simpypi.log
+    assert simpypi.requests
+    # call modify again to clear index_bases cache
+    stage.modify(project_inheritance_rules=["allow all"])
+    info = stage.index_bases.get_project_inheritance_info(
+        normalize_name("pkg")
+    ).jsonable()
+    assert info["has_project_from_remote"] == "true"
+    assert [
+        reason for ti in info["traversal_infos"] if (reason := ti.get("reason"))
+    ] == [
+        "package 'pkg' index rule 'allow all' from hello/world allows merging releases from index root/pypi"
+    ]
+
+
+@pytest.mark.nomocking
+@pytest.mark.writetransaction
 def test_get_mirror_whitelist_info_with_fetched_upstream(remoteindex, simpypi, stage):
     simpypi.add_release("pkg", pkgver="pkg-1.0.zip")
     (link,) = remoteindex.get_releaselinks_perstage("pkg")
@@ -214,7 +264,7 @@ def test_get_mirror_whitelist_info_with_fetched_upstream(remoteindex, simpypi, s
 @pytest.mark.writetransaction
 @pytest.mark.usefixtures("remoteindex")
 def test_whitelisted_with_unfetched_upstream(simpypi, stage):
-    stage.ixconfig._data["project_inheritance_rules"] = ["allow all"]
+    stage.modify(project_inheritance_rules=["allow all"])
     simpypi.add_release("pkg", pkgver="pkg-1.0.zip")
     assert stage.has_project("pkg") is unknown
     with pytest.deprecated_call():
@@ -223,7 +273,7 @@ def test_whitelisted_with_unfetched_upstream(simpypi, stage):
     assert info["blocked_by_mirror_whitelist"] is None
     assert simpypi.log == []
     assert simpypi.requests == []
-    register_and_store(stage, "pkg-1.0.zip")
+    register_and_store(stage, "pkg-1.2.zip")
     assert stage.has_project("pkg") is True
     with pytest.deprecated_call():
         info = stage.get_mirror_whitelist_info("pkg")
@@ -231,8 +281,9 @@ def test_whitelisted_with_unfetched_upstream(simpypi, stage):
     assert info["blocked_by_mirror_whitelist"] is None
     assert simpypi.log == []
     assert simpypi.requests == []
-    (link,) = stage.get_releaselinks("pkg")
-    assert link.basename == "pkg-1.0.zip"
+    (link1, link2) = sorted(stage.get_releaselinks("pkg"), key=attrgetter("basename"))
+    assert link1.basename == "pkg-1.0.zip"
+    assert link2.basename == "pkg-1.2.zip"
     assert simpypi.log
     assert set(x[0] for x in simpypi.requests) == {"/simple/pkg/"}
 

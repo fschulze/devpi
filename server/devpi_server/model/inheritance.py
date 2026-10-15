@@ -282,9 +282,9 @@ class PermissionDenied(PermissionReason):
 
 
 @define(frozen=True, kw_only=True)
-class DirectAccess(PermissionAllowed):
+class NoProjectListAccess(PermissionAllowed):
     def __str__(self) -> str:
-        return f"Direct access to package {str(self.project)!r}, allowing {self.name}"
+        return f"No project list on {self.name}, allowing direct access to package {str(self.project)!r}"
 
 
 @define(frozen=True, kw_only=True)
@@ -602,10 +602,11 @@ class InheritancePolicy:
             self.local_exists_at is False
             and exists is unknown
             and index.no_project_list
+            and self.allowed_by is False
         ):
             # direct fetching is allowed
-            return (DirectAccess(name=index.name, project=self.project), exists)
-        if not exists or not untrusted or self.allowed_by is False:
+            return (NoProjectListAccess(name=index.name, project=self.project), exists)
+        if exists is False or not untrusted or self.allowed_by is False:
             return (None, exists)
         return (
             RulesAllow(
