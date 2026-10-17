@@ -88,9 +88,7 @@ def join_links_data(
 
 
 def apply_filter_iter(items, filter_iter):
-    for item in items:
-        if next(filter_iter, True):
-            yield item
+    yield from (item for item, passes in zip(items, filter_iter, strict=True) if passes)
 
 
 def run_passwd(root, username):
