@@ -1,8 +1,9 @@
 <metal:block use-macro="main_template" tal:define="main_class 'status'">
     <metal:title fill-slot="title">devpi - Status</metal:title>
+    <metal:contentheader fill-slot="content_header">
+        <h1 class="title">Status</h1>
+    </metal:contentheader>
     <metal:content fill-slot="content">
-        <h1>Status</h1>
-
         <tal:msgs condition="msgs">
             <h2>Status messages</h2>
             <ul>

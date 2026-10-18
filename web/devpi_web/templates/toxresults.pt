@@ -1,10 +1,11 @@
 <metal:block use-macro="main_template" tal:define="main_class 'toxresults'">
     <metal:title fill-slot="title">devpi - ${title}</metal:title>
-    <metal:content fill-slot="content">
+    <metal:contentheader fill-slot="content_header">
         <h1>${title}</h1>
-
+    </metal:contentheader>
+    <metal:content fill-slot="content">
+        <h2>Toxresults</h2>
         <table class="main toxresults">
-            <caption>Toxresults</caption>
             <thead>
                 <tr>
                     <th>#</th>
