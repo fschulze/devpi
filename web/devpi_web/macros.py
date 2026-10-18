@@ -119,7 +119,10 @@ def logo(request):  # noqa: ARG001
 
 @macro_config(
     template="templates/merge_info.pt",
-    groups=GroupDef("project", after="subnavigation"),
+    groups=(
+        GroupDef("project", after="subnavigation"),
+        GroupDef("version", after="version_metadata"),
+    ),
 )
 def merge_info(request):  # noqa: ARG001
     return dict()
@@ -169,13 +172,17 @@ def status_badge(request):
 
 @macro_config(
     template="templates/subnavigation.pt",
-    groups=(GroupDef("index", after="title"), GroupDef("project", after="title")),
+    groups=(
+        GroupDef("index", after="title"),
+        GroupDef("project", after="title"),
+        GroupDef("version", after="title"),
+    ),
 )
 def subnavigation(request):  # noqa: ARG001
     return dict()
 
 
-@macro_config(template="templates/title.pt", groups=("index", "project"))
+@macro_config(template="templates/title.pt", groups=("index", "project", "version"))
 def title(request):  # noqa: ARG001
     return dict()
 
@@ -188,3 +195,43 @@ def user_index_list(request):  # noqa: ARG001
 @macro_config(template="templates/user_index_list_item.pt")
 def user_index_list_item(request, user, *, show_user_link=True):  # noqa: ARG001
     return dict(user, show_user_link=show_user_link)
+
+
+@macro_config(
+    template="templates/version_description.pt",
+    groups=GroupDef("version", after="version_files"),
+)
+def version_description(request):  # noqa: ARG001
+    return dict()
+
+
+@macro_config(
+    template="templates/version_docs.pt",
+    groups=GroupDef("version", after="version_description"),
+)
+def version_docs(request):  # noqa: ARG001
+    return dict()
+
+
+@macro_config(
+    template="templates/version_files.pt",
+    groups=GroupDef("version", after="merge_info"),
+)
+def version_files(request):  # noqa: ARG001
+    return dict()
+
+
+@macro_config(
+    template="templates/version_metadata.pt",
+    groups=GroupDef("version", after="version_summary"),
+)
+def version_metadata(request):  # noqa: ARG001
+    return dict()
+
+
+@macro_config(
+    template="templates/version_summary.pt",
+    groups=GroupDef("version", after="subnavigation"),
+)
+def version_summary(request):  # noqa: ARG001
+    return dict()

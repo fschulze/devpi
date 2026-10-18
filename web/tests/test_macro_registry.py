@@ -45,4 +45,14 @@ def test_macros(dummyrequest, pyramidconfig):
         "user": [
             "user_index_list",
         ],
+        "version": [
+            "title",
+            "subnavigation",
+            "version_summary",
+            "version_metadata",
+            "merge_info",
+            "version_files",
+            "version_description",
+            "version_docs",
+        ],
     }
