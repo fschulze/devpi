@@ -1,0 +1,7 @@
+<section class="about">
+    <h4>About</h4>
+    <ul>
+        <li><a href="${request.route_url('search_help')}">How to search</a></li>
+        <li><a href="https://docs.devpi.net/">Documentation</a></li>
+    </ul>
+</section>

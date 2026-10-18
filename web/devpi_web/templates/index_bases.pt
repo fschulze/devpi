@@ -1,32 +1,36 @@
-<tal:bases condition="bases">
-<h2>inherited bases</h2>
-<ul>
-    <li tal:repeat="base bases">
-        <a href="${base.url}">${base.title}</a> (<a href="${base.simple_url}">simple</a>)
-    </li>
-</ul>
-</tal:bases>
+<aside class="index_bases" tal:condition="bases">
+    <h2>inherited bases</h2>
+    <ul>
+        <li tal:repeat="base bases">
+            <a href="${base.url}">${base.title}</a> (<a href="${base.simple_url}">simple</a>)
+        </li>
+    </ul>
+</aside>
 
 <tal:noinheritanceinfo condition="inheritance_info is None">
-<h2>whitelisted packages</h2>
-<ul class="whitelist" tal:condition="whitelist">
-    <li tal:repeat="name whitelist">${name}</li>
-</ul>
-<p tal:condition="not whitelist">No packages whitelisted.</p>
+<aside class="index_whitelist">
+    <h2>whitelisted packages</h2>
+    <ul class="whitelist" tal:condition="whitelist">
+        <li tal:repeat="name whitelist">${name}</li>
+    </ul>
+    <p tal:condition="not whitelist">No packages whitelisted.</p>
+</aside>
 </tal:noinheritanceinfo>
 
 <tal:inheritanceinfo condition="inheritance_info is not None">
-<script id="inheritance-info" type="application/json">${inheritance_info}</script>
-<h2>inheritance information</h2>
-<div class="infonote" tal:condition="inheritance_info.reasons">
-    <ul>
-        <li tal:repeat="reason inheritance_info.reasons">${reason}</li>
-    </ul>
-</div>
-<dl tal:condition="project_inheritance_rules is not None">
-    <dt><code>project_inheritance_rules</code></dt>
-    <dd><ul>
-        <li tal:repeat="rule project_inheritance_rules"><code>${rule}</code></li>
-    </ul></dd>
-</dl>
+<aside class="inheritance_info">
+    <script id="inheritance-info" type="application/json">${inheritance_info}</script>
+    <h2>inheritance information</h2>
+    <div class="infonote" tal:condition="inheritance_info.reasons">
+        <ul>
+            <li tal:repeat="reason inheritance_info.reasons">${reason}</li>
+        </ul>
+    </div>
+    <dl tal:condition="project_inheritance_rules is not None">
+        <dt><code>project_inheritance_rules</code></dt>
+        <dd><ul>
+            <li tal:repeat="rule project_inheritance_rules"><code>${rule}</code></li>
+        </ul></dd>
+    </dl>
+</aside>
 </tal:inheritanceinfo>

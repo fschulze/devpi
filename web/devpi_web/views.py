@@ -24,7 +24,6 @@ from devpi_web.doczip import docs_file_path
 from devpi_web.indexing import is_project_cached
 from devpi_web.main import navigation_version
 from email.utils import parsedate
-from html import escape
 from io import TextIOWrapper
 from operator import attrgetter
 from operator import itemgetter
@@ -443,10 +442,7 @@ class FileInfo:
 
     @cached_property
     def url(self):
-        url = url_for_entrypath(self.request, self.link.relpath)
-        if self.hash_spec:
-            url = f"{url}#{self.hash_spec}"
-        return url
+        return url_for_entrypath(self.request, self.link.relpath)
 
 
 def get_files_info(request, linkstore, *, show_toxresults=False):
@@ -925,7 +921,6 @@ def version_get(context, request):
     except stage.UpstreamError as e:
         log.error(e.msg)
         raise HTTPBadGateway(e.msg)
-    infos = []
     metadata = []
     skipped_keys = frozenset(
         ("description", "home_page", "name", "summary", "version"))
@@ -941,16 +936,12 @@ def version_get(context, request):
                     name=key, value=out_value, is_list=True, count=len(out_value)
                 )
             )
-            items = "\n".join(f"  <li>{escape(x)}</li>" for x in in_value)
-            out_value = f"<ul>\n{items}\n</ul>"
         else:
             if not in_value:
                 continue
             metadata.append(
                 MetadataItem(name=key, value=in_value, is_list=False, count=1)
             )
-            out_value = escape(in_value)
-        infos.append((escape(key), out_value))
     show_toxresults = stage.ixconfig["type"] not in {"mirror", "remote"}
     linkstore = stage.get_linkstore_perstage(name, version)
     files = get_files_info(request, linkstore, show_toxresults=show_toxresults)
@@ -985,8 +976,6 @@ def version_get(context, request):
                 title="Newer version available",
                 css_class="severe",
                 url=url))
-    # metadata_list_fields is only available on private indexes
-    metadata_list_fields = getattr(stage, "metadata_list_fields", ())
     return dict(
         _context=context,
         title=f"{stage.name}/: {name}-{version} metadata and description",
@@ -994,9 +983,7 @@ def version_get(context, request):
         summary=verdata.get("summary"),
         resolved_version=version,
         nav_links=nav_links,
-        infos=infos,
         metadata=metadata,
-        metadata_list_fields=frozenset(escape(x) for x in metadata_list_fields),
         files=files,
         blocked_by_mirror_whitelist=merge_info["blocked_remote_name"],
         merge_info=merge_info,

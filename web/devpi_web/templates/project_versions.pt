@@ -1,4 +1,5 @@
-<table class="versions" tal:condition="versions">
+<table class="main versions" tal:condition="versions">
+    <caption>Versions</caption>
     <thead>
         <tr>
             <th>Index</th>
@@ -7,7 +8,7 @@
         </tr>
     </thead>
     <tbody>
-        <tr tal:repeat="version versions">
+        <tr tal:repeat="version versions" class="${repeat.version.parity}">
             <td><a href="${version.index_url}">${version.index_title}</a></td>
             <td><a href="${version.url}">${version.title}</a></td>
             <td>

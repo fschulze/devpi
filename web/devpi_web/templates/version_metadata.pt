@@ -1,6 +1,12 @@
-<table class="projectinfos">
-    <tr tal:repeat="info infos" class="${info[0]}${' is_list' if info[0] in metadata_list_fields else ''}">
-        <td class="key">${info[0]}</td>
-        <td class="value" tal:content="structure info[1]"></td>
+<table class="main projectinfos">
+    <caption>Metadata</caption>
+    <tr tal:repeat="item metadata" class="${item.name}${' closed' if item.is_list and item.count &gt; 5 else ''}">
+        <th>${item.name}</th>
+        <td tal:condition="item.is_list">
+            <ul>
+                <li tal:repeat="value item.value">${value}</li>
+            </ul>
+        </td>
+        <td tal:condition="not item.is_list">${item.value}</td>
     </tr>
 </table>

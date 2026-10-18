@@ -18,6 +18,7 @@ def test_macros(dummyrequest, pyramidconfig):
             "index_bases",
         ],
         "main_footer": [
+            "footer_about",
             "footer_versions",
         ],
         "main_header": [

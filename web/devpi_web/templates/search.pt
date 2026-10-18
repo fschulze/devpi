@@ -1,6 +1,6 @@
 <metal:block use-macro="main_template" tal:define="main_class 'search'">
     <metal:content fill-slot="content-wrapper">
-        <div class="searchresults" tal:condition="result|None">
+        <main tal:condition="result|None">
             <dl>
                 <tal:item tal:repeat="item result['items']">
                     <dt class="packagename">
@@ -33,9 +33,9 @@
                     <a tal:omit-tag="not link.get('url')" tal:attributes="href link.get('url')">${link.get('title', '')}</a>
                 </li>
             </ul>
-        </div>
-        <div id="content" tal:condition="not result|None">
+        </main>
+        <main tal:condition="not result|None">
             <p>Your search <strong>${query}</strong> did not match anything.</p>
-        </div>
+        </main>
     </metal:content>
 </metal:block>

@@ -1,41 +1,44 @@
-<tal:packages condition="packages">
-<h2>in-stage latest packages, at least as recent as bases</h2>
-<table class="packages">
-    <thead>
-        <tr>
-            <th>Name</th>
-            <th>Version</th>
-            <th>Releases</th>
-            <th>Documentation</th>
+<aside class="index_packages">
+    <h2>in-stage latest packages, at least as recent as bases</h2>
+    <table class="main packages" tal:condition="packages">
+        <caption>Packages</caption>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Version</th>
+                <th>Releases</th>
+                <th>Documentation</th>
+            </tr>
+        </thead>
+        <tbody>
+        <tal:packages repeat="package packages">
+        <tr class="${repeat.package.parity}" tal:repeat="version_info package.versions">
+            <td>
+                <a tal:condition="repeat.version_info.start" href="${package.url}">${package.name}</a>
+            </td>
+            <td class="${'prerelease' if version_info.is_pre_release else 'stable'}">
+                <a href="${version_info.url}">${version_info.version}</a>
+            </td>
+            <td class="releases">
+                <table class="inlinetoxresults" tal:condition="version_info.files">
+                    <tr tal:repeat="file version_info.files">
+                    <tal:file define="toxresults file.get('toxresults', []);
+                                      toxresults_state file.get('toxresults_state', None)">
+                        <td><a href="${file.url}">${file.title}</a></td>
+                        <td class="status">
+                            <a tal:condition="toxresults_state is not None" href="${version_info.make_toxresults_url(basename=file.basename)}" class="${toxresults_state}">Tests ${toxresults_state}</a>
+                        </td>
+                    </tal:file>
+                    </tr>
+                </table>
+            </td>
+            <td>
+                <a tal:condition="version_info.docs" href="${version_info.docs.url}">${version_info.docs.name} ${version_info.docs.version}</a>
+                <span tal:condition="version_info.docs">(<a href="${version_info.docs.zip_url}">Download</a>)</span>
+            </td>
         </tr>
-    </thead>
-    <tbody>
-    <tal:packages repeat="package packages">
-    <tr class="${repeat.package.parity}" tal:repeat="version_info package.versions">
-        <td>
-            <a tal:condition="repeat.version_info.start" href="${package.url}">${package.name}</a>
-        </td>
-        <td class="${'prerelease' if version_info.is_pre_release else 'stable'}">
-            <a href="${version_info.url}">${version_info.version}</a>
-        </td>
-        <td>
-            <tal:files condition="version_info.files" repeat="file version_info.files">
-                <tal:file define="toxresults file.get('toxresults', []);
-                                  toxresults_state file.get('toxresults_state', None)">
-                    <a href="${file.url}">${file.title}</a>
-                    <tal:tests condition="toxresults_state is not None">
-                        <a href="${version_info.make_toxresults_url(basename=file.basename)}" class="${toxresults_state}">Tests ${toxresults_state}</a>
-                    </tal:tests>
-                    <br tal:condition="not repeat.file.end">
-                </tal:file>
-            </tal:files>
-        </td>
-        <td>
-            <a tal:condition="version_info.docs" href="${version_info.docs.url}">${version_info.docs.name} ${version_info.docs.version}</a>
-            <span tal:condition="version_info.docs">(<a href="${version_info.docs.zip_url}">Download</a>)</span>
-        </td>
-    </tr>
-    </tal:packages>
-    </tbody>
-</table>
-</tal:packages>
+        </tal:packages>
+        </tbody>
+    </table>
+    <p tal:condition="not packages">No packages uploaded.</p>
+</aside>
