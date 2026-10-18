@@ -2,4 +2,7 @@
     <metal:footerstart define-slot="footerstart" />
     <metal:macros use-macro="macros.render_group('main_footer')" />
     <metal:footerend define-slot="footerend" />
+    <a class="jumptotop" href="#body" title="Jump to top of page">
+        Jump to Top
+    </a>
 </footer>
