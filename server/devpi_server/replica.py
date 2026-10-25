@@ -26,6 +26,7 @@ from .views import H_MASTER_UUID
 from .views import H_PRIMARY_UUID
 from devpi_common.types import cached_property
 from devpi_common.url import URL
+from hashlib import sha256
 from pluggy import HookimplMarker
 from pyramid.httpexceptions import HTTPAccepted
 from pyramid.httpexceptions import HTTPBadRequest
@@ -117,7 +118,9 @@ class IndexType:
 
 
 def get_auth_serializer(config):
-    return itsdangerous.TimedSerializer(config.get_replica_secret())
+    return itsdangerous.TimedSerializer(
+        config.get_replica_secret(), signer_kwargs={"digest_method": sha256}
+    )
 
 
 def log_replica_token_error(request, msg):

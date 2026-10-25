@@ -1,0 +1,1 @@
+Use sha256 instead of sha1 for replica token signing.
