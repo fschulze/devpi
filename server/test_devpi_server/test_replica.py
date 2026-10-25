@@ -15,6 +15,7 @@ from devpi_server.replica import H_PRIMARY_UUID
 from devpi_server.replica import H_REPLICA_OUTSIDE_URL
 from devpi_server.replica import H_REPLICA_UUID
 from devpi_server.replica import PrimaryChangelogRequest
+from devpi_server.replica import get_auth_serializer
 from devpi_server.replica import proxy_view_to_primary
 from devpi_server.views import iter_remote_file_replica
 from pyramid.httpexceptions import HTTPNotFound
@@ -27,10 +28,7 @@ pytestmark = [pytest.mark.notransaction]
 
 @pytest.fixture
 def auth_serializer(xom):
-    import itsdangerous
-
-    return itsdangerous.TimedSerializer(
-        xom.config.get_replica_secret())
+    return get_auth_serializer(xom.config)
 
 
 @pytest.fixture
@@ -1398,7 +1396,6 @@ def test_pkg_read_permission(makemapp, maketestapp, makexom):
     from devpi_server.config import hookimpl
     from devpi_server.model import ACLList
     from webob.headers import ResponseHeaders
-    import itsdangerous
 
     class Plugin:
         @hookimpl
@@ -1414,7 +1411,7 @@ def test_pkg_read_permission(makemapp, maketestapp, makexom):
     xom.config.nodeinfo["role"] = "primary"
     testapp = maketestapp(xom)
     mapp = makemapp(testapp)
-    auth_serializer = itsdangerous.TimedSerializer(mapp.xom.config.get_replica_secret())
+    auth_serializer = get_auth_serializer(mapp.xom.config)
     uuid = "111"
     api = mapp.create_and_use("someuser/dev")
     mapp.upload_file_pypi("hello-1.0.tar.gz", b"content", "hello", "1.0")
