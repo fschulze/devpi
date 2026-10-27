@@ -108,6 +108,7 @@ class LocatedKeyDescriptor(Generic[KeyType, KeyTypeRO]):
             instance.keyfs,
             self.key_name,
             f"{self.location}/{self.name}" if self.location else self.name,
+            None,
             self.key_type,
         )
         # cache attribute
