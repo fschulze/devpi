@@ -1,0 +1,1 @@
+Fix some failing cases of check for relative paths when extracting archives on Windows.

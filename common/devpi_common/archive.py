@@ -86,7 +86,7 @@ class TarArchive(BaseArchive):
             return self._archive.extractfile(member)
 
     def extract(self, to_path=''):
-        to_path = Path(to_path).resolve(strict=False)
+        to_path = Path(to_path).resolve(strict=False).absolute()
         members = self._archive.getmembers()
         for member in members:
             target = to_path.joinpath(member.name).resolve(strict=False)
@@ -119,7 +119,7 @@ class ZipArchive(BaseArchive):
             raise self.FileNotExist(name)
 
     def extract(self, to_path=""):
-        basedir = Path(to_path).resolve(strict=False)
+        basedir = Path(to_path).resolve(strict=False).absolute()
         unzipfile = self._archive
         members = unzipfile.namelist()
         for name in members:
