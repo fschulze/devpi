@@ -4,7 +4,6 @@ from .keyfs import KeyfsTimeoutError
 from .keyfs_sqla_base import BaseStorage
 from .log import threadlog
 from .thread import current_thread
-from abc import abstractmethod
 from typing import TYPE_CHECKING
 from typing import overload
 import contextlib
@@ -53,7 +52,6 @@ def log_write_thread_trace() -> None:
 
 
 class LiteBaseStorage(BaseStorage):
-    Connection: Callable[[sa.engine.Connection, LiteBaseStorage], IStorageConnection]
     db_filename: str
 
     def __init__(
@@ -77,9 +75,17 @@ class LiteBaseStorage(BaseStorage):
         weakref.finalize(self, self.rw_engine.dispose)
         self.ensure_tables_exist()
 
-    @abstractmethod
     def ensure_tables_exist(self) -> None:
-        raise NotImplementedError
+        metadata_obj = sa.MetaData()
+        tables = self.define_tables(metadata_obj, sa.BINARY)
+        for name, table in tables.items():
+            setattr(self, name, table)
+        if not self.sqlpath.exists():
+            engine = sa.create_engine(
+                self._url(mode="rwc"), echo=False, poolclass=sa.NullPool
+            )
+            metadata_obj.create_all(engine)
+            engine.dispose()
 
     def _execute_conn_pragmas(self, conn: sa.Connection) -> None:
         c = conn.connection.cursor()
@@ -155,6 +161,9 @@ class LiteBaseStorage(BaseStorage):
         if closing:
             return contextlib.closing(conn)
         return conn
+
+    def perform_crash_recovery(self) -> None:
+        pass
 
     def _url(self, *, mode: str) -> str:
         return f"sqlite+pysqlite:///file:{self.sqlpath}?mode={mode}&timeout=30&uri=true"

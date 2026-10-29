@@ -10,7 +10,6 @@ from .keyfs_sqla_lite_base import LiteBaseStorage
 from .keyfs_types import StorageInfo
 from typing import TYPE_CHECKING
 from zope.interface import implementer
-import sqlalchemy as sa
 
 
 if TYPE_CHECKING:
@@ -38,27 +37,6 @@ class Connection(BaseConnection):
 class Storage(LiteBaseStorage):
     Connection = Connection
     db_filename = ".sqlite_alchemy"
-
-    def ensure_tables_exist(self) -> None:
-        metadata_obj = sa.MetaData()
-        tables = self.define_tables(metadata_obj, sa.BINARY)
-        for name, table in tables.items():
-            setattr(self, name, table)
-        if not self.sqlpath.exists():
-            engine = sa.create_engine(
-                self._url(mode="rwc"), echo=False, poolclass=sa.NullPool
-            )
-            metadata_obj.create_all(engine)
-            engine.dispose()
-
-    def _execute_conn_pragmas(self, conn: sa.Connection) -> None:
-        c = conn.connection.cursor()
-        c.execute("PRAGMA busy_timeout=1000")
-        c.execute("PRAGMA cache_size = 200000")
-        c.close()
-
-    def perform_crash_recovery(self) -> None:
-        pass
 
 
 @hookimpl

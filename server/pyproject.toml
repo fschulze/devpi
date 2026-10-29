@@ -81,6 +81,7 @@ devpi-server-remote = "devpi_server.model.remote"
 devpi-server-replica = "devpi_server.replica"
 devpi-server-view-auth = "devpi_server.view_auth"
 devpi-server-views = "devpi_server.views"
+devpi-server-sqla = "devpi_server.keyfs_sqla"
 devpi-server-sqla-lite = "devpi_server.keyfs_sqla_lite"
 devpi-server-sqla-lite-files = "devpi_server.keyfs_sqla_lite_files"
 
