@@ -31,7 +31,9 @@ from repoze.lru import LRUCache
 from sqlalchemy.ext.compiler import compiles
 from typing import TYPE_CHECKING
 from typing import TypeVar
+from typing import overload
 from zope.interface import implementer
+import contextlib
 import inspect
 import sqlalchemy as sa
 import time
@@ -40,18 +42,21 @@ import warnings
 
 if TYPE_CHECKING:
     from .interfaces import IIOFile
+    from .interfaces import IStorageConnection
     from .keyfs_types import KeyFSTypes
     from .keyfs_types import Record
     from collections.abc import Callable
     from collections.abc import Iterable
     from collections.abc import Iterator
     from collections.abc import Sequence
+    from contextlib import AbstractContextManager
     from pathlib import Path
     from sqlalchemy.sql.compiler import SQLCompiler
     from sqlalchemy.types import _Binary
     from types import TracebackType
     from typing import Any
     from typing import IO
+    from typing import Literal
     from typing import Self
 
     CacheKey = (
@@ -1159,7 +1164,9 @@ class Writer:
 
 
 class BaseStorage:
+    Connection: Callable[[sa.engine.Connection, BaseStorage], IStorageConnection]
     _keys: dict[str, LocatedKey | PatternedKey]
+    engine: sa.engine.base.Engine
 
     def __init__(
         self, basedir: Path, *, notify_on_commit: Callable, settings: dict
@@ -1250,6 +1257,31 @@ class BaseStorage:
             ulid_changelog_table.c.serial,
         )
         return tables
+
+    @overload
+    def get_connection(
+        self, *, closing: Literal[True], write: bool = False, timeout: float = 30
+    ) -> AbstractContextManager[IStorageConnection]:
+        pass
+
+    @overload
+    def get_connection(
+        self, *, closing: Literal[False], write: bool = False, timeout: float = 30
+    ) -> IStorageConnection:
+        pass
+
+    def get_connection(
+        self,
+        *,
+        closing: bool = True,
+        write: bool = False,  # noqa: ARG002 - API
+        timeout: float = 30,  # noqa: ARG002 - API
+    ) -> IStorageConnection | AbstractContextManager[IStorageConnection]:
+        sqlaconn = self.engine.connect()
+        conn = self.Connection(sqlaconn, self)
+        if closing:
+            return contextlib.closing(conn)
+        return conn
 
     @classmethod
     def process_settings(cls, settings: dict[str, Any]) -> dict[str, Any]:

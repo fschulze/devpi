@@ -20,9 +20,7 @@ from pluggy import HookimplMarker
 from sqlalchemy.dialects.postgresql import BYTEA
 from tempfile import SpooledTemporaryFile
 from typing import TYPE_CHECKING
-from typing import overload
 from zope.interface import implementer
-import contextlib
 import os
 import shutil
 import sqlalchemy as sa
@@ -33,13 +31,11 @@ import weakref
 if TYPE_CHECKING:
     from collections.abc import Callable
     from collections.abc import Sequence
-    from contextlib import AbstractContextManager
     from devpi_server.keyfs_types import FilePathInfo
     from pathlib import Path
     from pyramid.request import Request
     from sqlalchemy.types import _Binary
     from typing import IO
-    from typing import Literal
     from typing_extensions import Buffer
 
 
@@ -400,6 +396,7 @@ class Connection(BaseConnection):
 
 @implementer(IStorage)
 class Storage(BaseStorage):
+    Connection = Connection
     SSL_OPT_KEYS = ("ssl_check_hostname", "ssl_ca_certs", "ssl_certfile", "ssl_keyfile")
     database = "devpi"
     host = "localhost"
@@ -473,31 +470,6 @@ class Storage(BaseStorage):
         for name, table in tables.items():
             setattr(self, name, table)
         metadata_obj.create_all(self.engine)
-
-    @overload
-    def get_connection(
-        self, *, closing: Literal[True], write: bool = False, timeout: float = 30
-    ) -> AbstractContextManager[IStorageConnection]:
-        pass
-
-    @overload
-    def get_connection(
-        self, *, closing: Literal[False], write: bool = False, timeout: float = 30
-    ) -> IStorageConnection:
-        pass
-
-    def get_connection(
-        self,
-        *,
-        closing: bool = True,
-        write: bool = False,  # noqa: ARG002
-        timeout: float = 30,  # noqa: ARG002
-    ) -> IStorageConnection | AbstractContextManager[IStorageConnection]:
-        sqlaconn = self.engine.connect()
-        conn = Connection(sqlaconn, self)
-        if closing:
-            return contextlib.closing(conn)
-        return conn
 
     def perform_crash_recovery(self) -> None:
         pass

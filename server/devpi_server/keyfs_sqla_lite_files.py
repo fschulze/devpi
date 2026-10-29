@@ -202,21 +202,6 @@ class Storage(LiteBaseStorage):
         )
         return tables
 
-    def ensure_tables_exist(self) -> None:
-        metadata_obj = sa.MetaData()
-        tables = self.define_tables(metadata_obj, sa.BINARY)
-        for name, table in tables.items():
-            setattr(self, name, table)
-        if not self.sqlpath.exists():
-            engine = sa.create_engine(
-                self._url(mode="rwc"), echo=False, poolclass=sa.NullPool
-            )
-            metadata_obj.create_all(engine)
-            engine.dispose()
-
-    def perform_crash_recovery(self) -> None:
-        pass
-
 
 @hookimpl
 def devpiserver_describe_storage_backend(settings: dict) -> StorageInfo:
