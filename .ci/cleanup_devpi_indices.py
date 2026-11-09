@@ -56,11 +56,8 @@ def run() -> None:
                 )
             else:
                 all_dates = all_dates.union(dates)
-        now = dt.datetime.now(tz=dt.timezone.utc)
-        if all_dates:
-            date = dt.datetime(*max(all_dates), tzinfo=dt.timezone.utc)
-        else:
-            date = now
+        now = dt.datetime.now(tz=dt.UTC)
+        date = dt.datetime(*max(all_dates), tzinfo=dt.UTC) if all_dates else now
         if (now - date) > dt.timedelta(days=MAXDAYS):
             assert username
             assert indexname

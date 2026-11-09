@@ -9,7 +9,6 @@ from collections.abc import Hashable
 from typing import Generic
 from typing import TYPE_CHECKING
 from typing import TypeVar
-from typing import Union
 from typing import overload
 import contextlib
 import os.path
@@ -28,23 +27,23 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
     from typing import Any
     from typing import Literal
-    from typing_extensions import Self
+    from typing import Self
 
-    KeyFSTypesRO = Union[
-        bool,
-        bytes,
-        DictViewReadonly,
-        float,
-        frozenset,
-        int,
-        ListViewReadonly,
-        SetViewReadonly,
-        str,
-        TupleViewReadonly,
-    ]
+    KeyFSTypesRO = (
+        bool
+        | bytes
+        | DictViewReadonly
+        | float
+        | frozenset
+        | int
+        | ListViewReadonly
+        | SetViewReadonly
+        | str
+        | TupleViewReadonly
+    )
 
 
-KeyFSTypes = Union[bool, bytes, dict, float, frozenset, int, list, set, str, tuple]
+KeyFSTypes = bool | bytes | dict | float | frozenset | int | list | set | str | tuple
 KeyType = TypeVar("KeyType")
 
 
